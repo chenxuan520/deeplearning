@@ -32,6 +32,7 @@ double NNetwork::deriv_sigmoid(double x) {
 }
 double NNetwork::forward(vector<double> data) {
   // 前向传播
+  // x,y -> h1,h2 -> o1
   double sum_h1 = w1 * data[0] + w2 * data[1] + b1;
   double h1 = sigmoid(sum_h1);
   double sum_h2 = w3 * data[0] + w4 * data[1] + b2;
