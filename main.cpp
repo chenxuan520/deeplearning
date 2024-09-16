@@ -1,11 +1,55 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+class LossFunction {
+public:
+  virtual double AverageLoss(const std::vector<double> &target,
+                             const std::vector<double> &output) = 0;
+  virtual double Loss(double target, double output) = 0;
+  virtual double DerivLoss(double target, double output) = 0;
+};
+
+class MSELoss : public LossFunction {
+public:
+  double AverageLoss(const std::vector<double> &target,
+                     const std::vector<double> &output) {
+    double result = 0;
+    if (target.size() != output.size()) {
+      return -1;
+    }
+    for (int i = 0; i < target.size(); i++) {
+      result += Loss(target[i], output[i]);
+    }
+    result /= target.size();
+    return result;
+  }
+  double Loss(double target, double output) {
+    return (target - output) * (target - output);
+  }
+  double DerivLoss(double target, double output) {
+    return -2 * (target - output);
+  }
+};
+
+class ActivateFunction {
+public:
+  virtual double Activate(const double &input) = 0;
+  virtual double DerivActivate(const double &output) = 0;
+};
+
+class SigmoidActivate : public ActivateFunction {
+public:
+  double Activate(const double &input) { return 1 / (1 + exp(-input)); }
+  double DerivActivate(const double &output) { return output * (1 - output); }
+};
 
 class NeuralNetwork {
 public:
@@ -21,6 +65,9 @@ public:
     neuron_delta_.resize(layer.size());
     neuron_bias_.resize(layer.size());
     neuron_weight_.resize(layer.size());
+    loss_function_ = std::make_shared<MSELoss>();
+    activate_function_ = std::make_shared<SigmoidActivate>();
+
     for (int i = 0; i < layer.size(); i++) {
       for (int j = 0; j < layer[i]; j++) {
         neuron_bias_[i].push_back(0);
@@ -33,14 +80,20 @@ public:
     }
   }
   RC Train(const std::vector<std::vector<double>> &data,
-           const std::vector<std::vector<double>> &target, int train_time) {
+           const std::vector<std::vector<double>> &target, int train_time = 1,
+           int batch_num = 1,
+           std::function<void(double train_loss)> train_end_call = nullptr) {
     if (data.size() != target.size()) {
       err_msg_ = "[NeuralNetwork::Train] Invalid data input";
       return INVALID_DATA;
     }
     for (int i = 0; i < train_time; i++) {
       for (int j = 0; j < data.size(); j++) {
-        auto rc = BackPropagation(data[j], target[j]);
+        auto rc = ForwardPropagation(data[j]);
+        if (rc != SUCCESS) {
+          return rc;
+        }
+        rc = BackPropagation(data[j], target[j]);
         if (rc != SUCCESS) {
           return rc;
         }
@@ -56,31 +109,13 @@ public:
     result = neuron_output_[layer_.size() - 1];
     return SUCCESS;
   }
+
+public:
   inline std::string err_msg() { return err_msg_; }
 
 private:
-  double Sigmoid(const double x) {
-    // 激活函数
-    return 1 / (1 + exp(-x));
-  }
-  double DerivSigmoid(const double x) {
-    // 激活函数求导
-    double y = Sigmoid(x);
-    return y * (1 - y);
-  }
-  double SumMSEloss(const std::vector<double> &target) {
-    double result = 0;
-    for (int i = 0; i < target.size(); i++) {
-      result += MSEloss(target[i], neuron_output_[layer_.size() - 1][i]);
-    }
-    return result;
-  }
-  double MSEloss(const double x1, const double x2) {
-    return ((x1 - x2) * (x1 - x2)) / 2;
-  }
-  double DerivMSEloss(const double x1, const double x2) { return -(x1 - x2); }
   double CalcDelta(const double deriv_target, const double out) {
-    return deriv_target * out * (1 - out);
+    return deriv_target * activate_function_->DerivActivate(out);
   }
 
   RC UpdateNeuronOutput(const std::pair<int, int> &neuron_pos,
@@ -99,7 +134,7 @@ private:
     for (int i = 0; i < layer_[x - 1]; i++) {
       result += neuron_weight_[x][y][i] * neuron_output_[x - 1][i];
     }
-    result = Sigmoid(result);
+    result = activate_function_->Activate(result);
     neuron_output_[x][y] = result;
     return SUCCESS;
   }
@@ -114,7 +149,7 @@ private:
     }
     double deriv_target = 0;
     if (x == layer_.size() - 1) {
-      deriv_target = DerivMSEloss(target[y], neuron_output_[x][y]);
+      deriv_target = loss_function_->DerivLoss(target[y], neuron_output_[x][y]);
       result = CalcDelta(deriv_target, neuron_output_[x][y]);
     } else {
       for (int i = 0; i < layer_[x + 1]; i++) {
@@ -164,10 +199,7 @@ private:
       err_msg_ = "[NeuralNetwork::BackPropagation] Invalid data input";
       return INVALID_DATA;
     }
-    auto rc = ForwardPropagation(input);
-    if (rc != SUCCESS) {
-      return rc;
-    }
+    // ForwardPropagation has run before
     for (int i = layer_.size() - 1; i >= 0; i--) {
       for (int j = 0; j < layer_[i]; j++) {
         auto rc = UpdateNeuronDelta({i, j}, target);
@@ -188,6 +220,8 @@ private:
   }
 
 private:
+  std::shared_ptr<LossFunction> loss_function_ = nullptr;
+  std::shared_ptr<ActivateFunction> activate_function_ = nullptr;
   double learning_rate_;
   std::vector<int> layer_;
   std::vector<std::vector<double>> neuron_output_;
@@ -198,16 +232,16 @@ private:
 };
 
 int main() {
-  NeuralNetwork network((std::vector<int>() = {2, 1, 1}), 1);
+  NeuralNetwork network((std::vector<int>() = {2, 1, 1}), 0.2);
   std::vector<std::vector<double>> data = {{0, 0}, {0, 1}, {1, 0}, {1, 1}};
   std::vector<std::vector<double>> target = {{0}, {0}, {1}, {1}};
-  auto rc = network.Train(data, target, 1000);
+  auto rc = network.Train(data, target, 2000);
   if (rc != NeuralNetwork::SUCCESS) {
     std::cout << "Train failed" << std::endl;
     return -1;
   }
   std::cout << "Train success" << std::endl;
-  std::vector<double> test_data = {-1, 0}, result;
+  std::vector<double> test_data = {1, 1.2}, result;
   rc = network.Predict(test_data, result);
   if (rc != NeuralNetwork::SUCCESS) {
     std::cout << "Predict failed" << std::endl;
