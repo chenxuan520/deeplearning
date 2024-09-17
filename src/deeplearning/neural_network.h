@@ -20,11 +20,11 @@ public:
     NETWORK_STATUS_INIT,
   };
   struct NetworkParam {
-    std::vector<int> layer;
-    std::vector<std::vector<double>> neuron_bias;
-    std::vector<std::vector<std::vector<double>>> neuron_weight;
-    double learning_rate;
-    int rand_seed;
+    std::vector<int> layer_;
+    std::vector<std::vector<double>> neuron_bias_;
+    std::vector<std::vector<std::vector<double>>> neuron_weight_;
+    double learning_rate_;
+    int rand_seed_;
   };
 
 public:
@@ -67,13 +67,14 @@ public:
   RC Train(const std::vector<std::vector<double>> &data,
            const std::vector<std::vector<double>> &target, int epoch_num = 1,
            int batch_num = 1,
-           std::function<void(double train_loss)> batch_end_call = nullptr) {
+           std::function<void(const NeuralNetwork &network, double train_loss)>
+               batch_end_call = nullptr) {
     if (network_status_ != NETWORK_STATUS_INIT) {
       err_msg_ = "[NeuralNetwork::Train] Network not init";
       return NOT_INIT;
     }
     if (data.size() != target.size() || batch_num < 1) {
-      err_msg_ = "[NeuralNetwork::Train] Invalid data input";
+      err_msg_ = "[NeuralNetwork::Train] Invalid data input in size";
       return INVALID_DATA;
     }
 
@@ -93,13 +94,15 @@ public:
           return rc;
         }
         if (batch_end_call != nullptr) {
-          batch_end_call(loss_function_->AverageLoss(
-              neuron_output_[layer_.size() - 1], target[data_pos]));
+          batch_end_call(
+              *this, loss_function_->AverageLoss(
+                         neuron_output_[layer_.size() - 1], target[data_pos]));
         }
       }
     }
     return SUCCESS;
   }
+
   RC Predict(const std::vector<double> &data, std::vector<double> &result) {
     auto rc = ForwardPropagation(data);
     if (rc != SUCCESS) {
@@ -109,10 +112,24 @@ public:
     return SUCCESS;
   }
 
+  RC ExportNetworkParam(NetworkParam &param) {
+    if (network_status_ != NETWORK_STATUS_INIT) {
+      err_msg_ = "[NeuralNetwork::ExportNetworkParam] Network not init";
+      return NOT_INIT;
+    }
+    param.layer_ = layer_;
+    param.neuron_bias_ = neuron_bias_;
+    param.neuron_weight_ = neuron_weight_;
+    param.learning_rate_ = learning_rate_;
+    param.rand_seed_ = rand_seed_;
+    return SUCCESS;
+  }
+
 public:
   inline std::string err_msg() { return err_msg_; }
   inline double learning_rate() { return learning_rate_; }
   inline int rand_seed() { return rand_seed_; }
+  inline NetworkStatus network_status() { return network_status_; }
   inline void set_loss_function(LossType type) {
     loss_function_ = LossFactory::Create(type);
   }

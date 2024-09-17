@@ -11,7 +11,9 @@ int main() {
   std::vector<std::vector<double>> data = {{0, 0}, {0, 1}, {1, 0}, {1, 1}};
   std::vector<std::vector<double>> target = {{0}, {0}, {1}, {1}};
 
-  auto print_func = [](double loss_sum) { std::cout << loss_sum << std::endl; };
+  auto print_func = [](const NeuralNetwork &network, double loss_sum) {
+    std::cout << loss_sum << std::endl;
+  };
   auto rc = network.Train(data, target, 2000, 1, print_func);
   if (rc != NeuralNetwork::SUCCESS) {
     std::cout << "Train failed" << std::endl;
