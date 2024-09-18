@@ -6,8 +6,13 @@ namespace deeplearning {
 
 class SigmoidActivate : public ActivateFunction {
 public:
-  double Activate(const double &input) { return 1 / (1 + exp(-input)); }
-  double DerivActivate(const double &output) { return output * (1 - output); }
+  double Activate(const double &input) override {
+    return 1 / (1 + exp(-input));
+  }
+  double DerivActivate(const double &output) override {
+    return output * (1 - output);
+  }
+  ActivateType GetActivateType() override { return ACTIVATE_SIGMOID; }
 };
 
 } // namespace deeplearning

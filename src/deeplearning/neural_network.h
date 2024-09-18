@@ -23,10 +23,13 @@ public:
     std::vector<int> layer_;
     std::vector<std::vector<double>> neuron_bias_;
     std::vector<std::vector<std::vector<double>>> neuron_weight_;
+  };
+  struct NetworkOption {
     double learning_rate_;
     int rand_seed_;
+    LossType loss_type_;
+    ActivateType activate_type_;
   };
-
 public:
   NeuralNetwork() = default;
   NeuralNetwork(const std::vector<int> &layer, double learning_rate = 0.1) {
@@ -112,7 +115,7 @@ public:
     return SUCCESS;
   }
 
-  RC ExportNetworkParam(NetworkParam &param) {
+  RC ExportNetworkParam(NetworkParam &param,NetworkOption &option) {
     if (network_status_ != NETWORK_STATUS_INIT) {
       err_msg_ = "[NeuralNetwork::ExportNetworkParam] Network not init";
       return NOT_INIT;
@@ -120,8 +123,31 @@ public:
     param.layer_ = layer_;
     param.neuron_bias_ = neuron_bias_;
     param.neuron_weight_ = neuron_weight_;
-    param.learning_rate_ = learning_rate_;
-    param.rand_seed_ = rand_seed_;
+    option.learning_rate_ = learning_rate_;
+    option.rand_seed_ = rand_seed_;
+    option.loss_type_ = loss_function_->GetLossType();
+    option.activate_type_ = activate_function_->GetActivateType();
+    return SUCCESS;
+  }
+
+  RC ImportNetworkParam(const NetworkParam &param,const NetworkOption &option) {
+    if (network_status_ != NETWORK_STATUS_UNINIT) {
+      err_msg_ = "[NeuralNetwork::ImportNetworkParam] Network has init";
+      return NOT_INIT;
+    }
+    if (param.layer_.size() < 2) {
+      err_msg_ = "[NeuralNetwork::ImportNetworkParam] Invalid layer size";
+      return INVALID_DATA;
+    }
+    layer_ = param.layer_;
+    neuron_bias_ = param.neuron_bias_;
+    neuron_weight_ = param.neuron_weight_;
+    learning_rate_ = option.learning_rate_;
+    rand_seed_ = option.rand_seed_;
+    loss_function_ = LossFactory::Create(option.loss_type_);
+    activate_function_ = ActivateFactory::Create(option.activate_type_);
+
+    network_status_ = NETWORK_STATUS_INIT;
     return SUCCESS;
   }
 
@@ -148,7 +174,7 @@ private:
                         const std::vector<double> &input) {
     auto [x, y] = neuron_pos;
     double result = neuron_bias_[x][y];
-    if (x >= layer_.size() || x < 0 || y >= input.size() || y >= layer_[x] ||
+    if (x >= layer_.size() || x < 0 || y >= layer_[x] ||
         y < 0) {
       err_msg_ = "[NeuralNetwork::UpdateNeuronOutput] Invalid data input";
       return INVALID_DATA;

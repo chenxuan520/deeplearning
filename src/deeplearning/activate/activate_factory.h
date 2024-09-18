@@ -3,13 +3,8 @@
 #include "activate_base.h"
 #include "sigmoid_activate.h"
 #include <memory>
-#include <string>
 
 namespace deeplearning {
-
-enum ActivateType {
-  ACTIVATE_SIGMOID,
-};
 
 class ActivateFactory {
 public:

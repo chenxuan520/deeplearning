@@ -9,10 +9,11 @@ using namespace std;
 using namespace deeplearning;
 
 NeuralNetwork::NetworkParam demo_param = {};
+NeuralNetwork::NetworkOption demo_option = {};
 
 INIT(LoaderParam) {
   NeuralNetwork network((vector<int>() = {1, 2, 3}), 0.3);
-  auto rc = network.ExportNetworkParam(demo_param);
+  auto rc = network.ExportNetworkParam(demo_param, demo_option);
   if (rc != NeuralNetwork::SUCCESS) {
     DEBUG("Export failed");
     exit(-1);
@@ -24,15 +25,19 @@ TEST(Loader, ExportAndInport) {
   // delete file
   DEFER([=]() { remove(file_path.c_str()); });
 
-  auto rc = NeuralNetworkLoader::ExportParamToFile(demo_param, file_path);
+  auto rc = NeuralNetworkLoader::ExportParamToFile(demo_param, demo_option,
+                                                   file_path);
   MUST_EQUAL(rc, NeuralNetworkLoader::SUCCESS);
 
   NeuralNetwork::NetworkParam param;
-  rc = NeuralNetworkLoader::ImportParamFromFile(param, file_path);
+  NeuralNetwork::NetworkOption option;
+  rc = NeuralNetworkLoader::ImportParamFromFile(param, option, file_path);
   MUST_EQUAL(rc, NeuralNetworkLoader::SUCCESS);
 
-  MUST_EQUAL(param.rand_seed_, demo_param.rand_seed_);
-  MUST_EQUAL(param.learning_rate_, demo_param.learning_rate_);
+  MUST_EQUAL(option.rand_seed_, demo_option.rand_seed_);
+  MUST_EQUAL(option.learning_rate_, demo_option.learning_rate_);
+  MUST_EQUAL(option.activate_type_, demo_option.activate_type_);
+  MUST_EQUAL(option.loss_type_, demo_option.loss_type_);
 
   MUST_EQUAL(param.layer_.size(), demo_param.layer_.size());
   for (int i = 0; i < param.layer_.size(); i++) {

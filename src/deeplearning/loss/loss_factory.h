@@ -2,12 +2,8 @@
 #include "loss_base.h"
 #include "mse_loss.h"
 #include <memory>
-#include <vector>
 namespace deeplearning {
 
-enum LossType {
-  LOSS_MSE,
-};
 class LossFactory {
 public:
   static std::shared_ptr<LossFunction> Create(LossType loss_type) {

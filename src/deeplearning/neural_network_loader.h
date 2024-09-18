@@ -14,13 +14,21 @@ public:
 
 public:
   static RC ExportParamToFile(const NeuralNetwork::NetworkParam &param,
+                              const NeuralNetwork::NetworkOption &option,
                               const std::string &filename) {
     std::ofstream ofs(filename, std::ios::binary | std::ios::trunc);
     if (!ofs.is_open()) {
       return INPORT_ERROR;
     }
+
+    // write option
+    auto is_success = ofs.write((const char *)&option, sizeof(option)).good();
+    if (!is_success) {
+      return EXPORT_ERROR;
+    }
+    // write size
     ParamSizeMsg msg(param);
-    auto is_success = ofs.write((const char *)&msg, sizeof(msg)).good();
+    is_success = ofs.write((const char *)&msg, sizeof(msg)).good();
     if (!is_success) {
       return EXPORT_ERROR;
     }
@@ -63,20 +71,25 @@ public:
   }
 
   static RC ImportParamFromFile(NeuralNetwork::NetworkParam &param,
+                                NeuralNetwork::NetworkOption &option,
                                 const std::string &filename) {
     std::ifstream ifs(filename, std::ios::binary);
     if (!ifs.is_open()) {
       return INPORT_ERROR;
     }
-    ParamSizeMsg msg;
-    auto is_success = ifs.read((char *)&msg, sizeof(msg)).good();
+
+    // read option
+    auto is_success = ifs.read((char *)&option, sizeof(option)).good();
     if (!is_success) {
       return INPORT_ERROR;
     }
 
-    // read other
-    param.rand_seed_ = msg.rand_seed_;
-    param.learning_rate_ = msg.learning_rate_;
+    // read size
+    ParamSizeMsg msg;
+    is_success = ifs.read((char *)&msg, sizeof(msg)).good();
+    if (!is_success) {
+      return INPORT_ERROR;
+    }
 
     // read layer
     param.layer_.resize(msg.layer_size_);
@@ -127,8 +140,6 @@ private:
     int neuron_weight_size_;
     ParamSizeMsg() = default;
     ParamSizeMsg(const NeuralNetwork::NetworkParam &param) {
-      rand_seed_ = param.rand_seed_;
-      learning_rate_ = param.learning_rate_;
       layer_size_ = param.layer_.size();
       neuron_bias_size_ = param.neuron_bias_.size();
 

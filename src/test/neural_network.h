@@ -27,19 +27,24 @@ INIT(NeuralNetwork) {
   // y is random ,compare with y=3*e^(x/10)-x^2-x+2
   // create 10000 point
   auto func_calc = [](double x) -> double {
-    // return 3 * exp(double(x) / 10) - x * x - x + 2;
-    return x + 2;
+    return 2 * exp(double(x) / 10) - x * x - x + 2;
+    // return 30 * x + 2;
   };
+  auto func_y_create = [](double target_y) -> double {
+    return target_y + (-1 * (rand() % 2 == 0 ? 1 : -1)) * (rand() % 10000) +
+           (rand() % 100) / 100.0;
+  };
+
   std::ofstream file(demo_data_file_path);
   for (int i = 0; i < 10000; i++) {
     double x = rand() % 200 - 100 + (rand() % 100) / 100.0;
     double tmp_y = func_calc(x);
-    double y = tmp_y + (-1 * (rand() % 2 == 0)) * rand() % 100 +
-               (rand() % 100) / 100.0;
+    double y = func_y_create(tmp_y);
     demo_data.push_back({x, y});
     demo_data_target.push_back({tmp_y > y ? 1.0 : 0.0});
-    file << std::fixed << std::setprecision(4) << x << " " << y << " : "
-         << tmp_y << " " << (tmp_y > y ? 1.0 : 0.0) << std::endl;
+
+    file << std::fixed << std::setprecision(4) << x << " " << y << " " << tmp_y
+         << " " << (tmp_y > y ? 1.0 : 0.0) << std::endl;
   }
   file.close();
 
@@ -47,11 +52,11 @@ INIT(NeuralNetwork) {
   for (int i = 0; i < 1000; i++) {
     double x = rand() % 200 - 100 + (rand() % 100) / 100.0;
     double tmp_y = func_calc(x);
-    double y = tmp_y + (-1 * (rand() % 2 == 0)) * rand() % 100 +
-               (rand() % 100) / 100.0;
+    double y = func_y_create(tmp_y);
     demo_test.push_back({x, y});
     demo_test_target.push_back({tmp_y > y ? 1.0 : 0.0});
-    test_file << std::fixed << std::setprecision(4) << x << " " << y << " : "
+
+    test_file << std::fixed << std::setprecision(4) << x << " " << y << " "
               << tmp_y << " " << (tmp_y > y ? 1.0 : 0.0) << std::endl;
   }
   test_file.close();
@@ -59,19 +64,19 @@ INIT(NeuralNetwork) {
 
 END(NeuralNetwork) {
   // clean file
-  remove(demo_data_file_path.c_str());
-  remove(demo_test_file_path.c_str());
+  // remove(demo_data_file_path.c_str());
+  // remove(demo_test_file_path.c_str());
 }
 
 TEST(NeuralNetwork, TrainAndPredict) {
   NeuralNetwork demo_network;
-  demo_network.Init((vector<int>() = {2, 2, 2, 1}), 0.1);
+  demo_network.Init((vector<int>() = {2, 3, 3, 1}), 0.001);
   MUST_EQUAL(demo_network.network_status(), NeuralNetwork::NETWORK_STATUS_INIT);
 
   auto print_func = [](const NeuralNetwork &network, double loss_sum) {
-    // std::cout << "loss: " << loss_sum << std::endl;
+    std::cout << "loss: " << loss_sum << std::endl;
   };
-  auto rc = demo_network.Train(demo_data, demo_data_target, 200, 1, print_func);
+  auto rc = demo_network.Train(demo_data, demo_data_target, 100, 1, print_func);
   MUST_TRUE(rc == NeuralNetwork::SUCCESS, demo_network.err_msg());
 
   std::cout << "Train success" << std::endl;
