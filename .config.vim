@@ -25,9 +25,9 @@ let s:pwd=expand('%:p:h')
 let g:Term_project_task=[
 			\{
 			\'name'       : 'build',
-			\'command'    : 'g++ -O2 '.expand('%'),
+			\'command'    : './build.sh',
 			\'mode'       : 'quickfix',
-			\'path'       : s:root,
+			\'path'       : s:root.'/src',
 			\'close'      : 2,
 			\'type'       : 'split',
 			\'key'        : '\1',
@@ -36,9 +36,9 @@ let g:Term_project_task=[
 			\},
 			\{
 			\'name'       : 'run',
-			\'command'    : './a.out',
+			\'command'    : './bin/deeplearning',
 			\'mode'       : 'term',
-			\'path'       : s:root,
+			\'path'       : s:root.'/src',
 			\'close'      : 0,
 			\'type'       : 'vsplit',
 			\'key'        : '\2',
@@ -51,14 +51,13 @@ let g:Term_project_task=[
 			\'key'        : '\3',
 			\},
 			\{
-			\'name'       : 'debug',
-			\'command'    : 'g++ -g '.expand('%'),
-			\'mode'       : 'quickfix',
-			\'path'       : s:pwd,
-			\'close'      : 1,
-			\'type'       : 'split',
+			\'name'       : 'test',
+			\'command'    : 'rm ./test_bin;make;./test_bin',
+			\'mode'       : 'term',
+			\'path'       : s:root.'/src/test',
+			\'close'      : 0,
+			\'type'       : 'vsplit',
 			\'key'        : '\4',
-			\'end_script' : 'cclose|packadd termdebug|Termdebug a.out',
 			\},
 			\]
 
