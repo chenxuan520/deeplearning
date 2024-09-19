@@ -52,12 +52,22 @@ let g:Term_project_task=[
 			\},
 			\{
 			\'name'       : 'test',
-			\'command'    : 'rm ./test_bin;make;./test_bin',
+			\'command'    : './build.sh;./bin/test_bin',
 			\'mode'       : 'term',
-			\'path'       : s:root.'/src/test',
+			\'path'       : s:root.'/src',
 			\'close'      : 0,
 			\'type'       : 'vsplit',
 			\'key'        : '\4',
+			\},
+			\{
+			\'name'       : 'coc',
+			\'command'    : 'cmake .. -DCMAKE_EXPORT_COMPILE_COMMANDS=1;cp ./compile_commands.json ..',
+			\'mode'       : 'quickfix',
+			\'path'       : s:root.'/src/build',
+			\'close'      : 2,
+			\'end_script' : 'CocRestart',
+			\'type'       : 'split',
+			\'key'        : '\5',
 			\},
 			\]
 

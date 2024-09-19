@@ -72,12 +72,14 @@ TEST(NeuralNetwork, TrainAndPredict) {
   NeuralNetwork demo_network;
   demo_network.Init((vector<int>() = {2, 3, 3, 1}), 0.001);
   MUST_EQUAL(demo_network.network_status(), NeuralNetwork::NETWORK_STATUS_INIT);
+  auto rc = demo_network.set_loss_function(LossType::LOSS_CROSS_ENTROPY);
+  MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
 
   auto print_func = [](const NeuralNetwork &network, int epoch_num,
                        double loss_sum) {
     // std::cout << "loss: " << loss_sum << std::endl;
   };
-  auto rc = demo_network.Train(demo_data, demo_data_target, 100, 1, print_func);
+  rc = demo_network.Train(demo_data, demo_data_target, 100, 1, print_func);
   MUST_TRUE(rc == NeuralNetwork::SUCCESS, demo_network.err_msg());
 
   // calc right rate

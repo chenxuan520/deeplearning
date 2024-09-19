@@ -28,7 +28,7 @@ int main() {
 
   // step 2 create network
   NeuralNetwork demo_network;
-  auto rc = demo_network.Init(vector<int>{784, 100, 10}, 0.001);
+  auto rc = demo_network.Init(vector<int>{784, 16, 10}, 0.001);
   if (rc != NeuralNetwork::SUCCESS) {
     cout << "Init failed: " << demo_network.err_msg() << endl;
     return -1;
@@ -40,7 +40,7 @@ int main() {
                         double loss_sum) {
     static int count = 0;
     if (count++ % 100 == 0) {
-      std::cout << epoch_num << "loss: " << loss_sum << std::endl;
+      std::cout << epoch_num << " loss: " << loss_sum << std::endl;
     }
   };
   vector<vector<double>> train_target(mnist_data.train_data().size(),
@@ -48,7 +48,13 @@ int main() {
   for (int i = 0; i < mnist_data.train_labels().size(); i++) {
     train_target[i][int(mnist_data.train_labels()[i])] = 1;
   }
-  rc = demo_network.Train(mnist_data.train_data(), train_target, 5, 2,
+  // rc = demo_network.set_loss_function(LossType::LOSS_CROSS_ENTROPY);
+  // if (rc != NeuralNetwork::SUCCESS) {
+  //   cout << "set_loss_function failed: " << demo_network.err_msg() << endl;
+  //   return -1;
+  // }
+
+  rc = demo_network.Train(mnist_data.train_data(), train_target, 1, 2,
                           print_func);
   if (rc != NeuralNetwork::SUCCESS) {
     cout << "Train failed: " << demo_network.err_msg() << endl;

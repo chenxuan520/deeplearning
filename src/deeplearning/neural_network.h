@@ -101,8 +101,8 @@ public:
         if (each_train_end_call != nullptr) {
           each_train_end_call(
               *this, i,
-              loss_function_->AverageLoss(neuron_output_[layer_.size() - 1],
-                                          target[data_pos]));
+              loss_function_->AverageLoss(target[data_pos],
+                                          neuron_output_[layer_.size() - 1]));
         }
       }
     }
@@ -160,11 +160,13 @@ public:
   inline double learning_rate() { return learning_rate_; }
   inline int rand_seed() { return rand_seed_; }
   inline NetworkStatus network_status() { return network_status_; }
-  inline void set_loss_function(LossType type) {
+  inline RC set_loss_function(LossType type) {
     loss_function_ = LossFactory::Create(type);
     if (loss_function_ == nullptr) {
       err_msg_ = "[NeuralNetwork::set_loss_function] Invalid loss type";
+      return INVALID_DATA;
     }
+    return SUCCESS;
   }
   inline RC set_activate_function(ActivateType type) {
     activate_function_ = ActivateFactory::Create(type);
@@ -212,7 +214,9 @@ private:
     }
     double deriv_target = 0;
     if (x == layer_.size() - 1) {
-      deriv_target = loss_function_->DerivLoss(target[y], neuron_output_[x][y]);
+      deriv_target =
+          (double)(loss_function_->DerivLoss(target[y], neuron_output_[x][y])) /
+          (double)target.size();
       result = CalcDelta(deriv_target, neuron_output_[x][y]);
     } else {
       for (int i = 0; i < layer_[x + 1]; i++) {

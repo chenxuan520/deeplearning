@@ -1,4 +1,5 @@
 #pragma once
+#include "cross_entropy_loss.h"
 #include "loss_base.h"
 #include "mse_loss.h"
 #include <memory>
@@ -10,6 +11,8 @@ public:
     switch (loss_type) {
     case LOSS_MSE:
       return std::make_shared<MSELoss>();
+    case LOSS_CROSS_ENTROPY:
+      return std::make_shared<CrossEntropyLoss>();
     default:
       return nullptr;
     }
