@@ -1,0 +1,6 @@
+[submodule "src/third_party/cpptest"]
+	path = src/third_party/cpptest
+	url = https://gitee.com/chenxuan520/cpptest
+[submodule "src/third_party/matplotlib-cpp"]
+	path = src/third_party/matplotlib-cpp
+	url = https://gitee.com/openGPL/matplotlib-cpp

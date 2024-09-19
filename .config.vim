@@ -36,7 +36,7 @@ let g:Term_project_task=[
 			\},
 			\{
 			\'name'       : 'run',
-			\'command'    : './bin/deeplearning',
+			\'command'    : './bin/mnist',
 			\'mode'       : 'term',
 			\'path'       : s:root.'/src',
 			\'close'      : 0,

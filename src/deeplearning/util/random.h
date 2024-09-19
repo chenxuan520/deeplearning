@@ -1,7 +1,7 @@
 #pragma once
 #include <random>
 
-namespace util {
+namespace deeplearning {
 
 class Random {
 public:
@@ -14,4 +14,4 @@ private:
   std::uniform_int_distribution<int> distr;
 };
 
-} // namespace util
+} // namespace deeplearning

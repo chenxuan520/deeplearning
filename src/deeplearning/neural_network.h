@@ -1,7 +1,7 @@
 #pragma once
 #include "activate/activate_factory.h"
 #include "loss/loss_factory.h"
-#include "random.h"
+#include "util/random.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -30,6 +30,7 @@ public:
     LossType loss_type_;
     ActivateType activate_type_;
   };
+
 public:
   NeuralNetwork() = default;
   NeuralNetwork(const std::vector<int> &layer, double learning_rate = 0.1) {
@@ -70,8 +71,9 @@ public:
   RC Train(const std::vector<std::vector<double>> &data,
            const std::vector<std::vector<double>> &target, int epoch_num = 1,
            int batch_num = 1,
-           std::function<void(const NeuralNetwork &network, double train_loss)>
-               batch_end_call = nullptr) {
+           std::function<void(const NeuralNetwork &network, int epoch_num,
+                              double train_loss)>
+               each_train_end_call = nullptr) {
     if (network_status_ != NETWORK_STATUS_INIT) {
       err_msg_ = "[NeuralNetwork::Train] Network not init";
       return NOT_INIT;
@@ -82,7 +84,7 @@ public:
     }
 
     // init batch random
-    util::Random rand(0, batch_num, rand_seed_);
+    Random rand(0, batch_num, rand_seed_);
 
     for (int i = 0; i < epoch_num; i++) {
       for (int j = 0; j < data.size(); j += batch_num) {
@@ -96,10 +98,11 @@ public:
         if (rc != SUCCESS) {
           return rc;
         }
-        if (batch_end_call != nullptr) {
-          batch_end_call(
-              *this, loss_function_->AverageLoss(
-                         neuron_output_[layer_.size() - 1], target[data_pos]));
+        if (each_train_end_call != nullptr) {
+          each_train_end_call(
+              *this, i,
+              loss_function_->AverageLoss(neuron_output_[layer_.size() - 1],
+                                          target[data_pos]));
         }
       }
     }
@@ -115,7 +118,7 @@ public:
     return SUCCESS;
   }
 
-  RC ExportNetworkParam(NetworkParam &param,NetworkOption &option) {
+  RC ExportNetworkParam(NetworkParam &param, NetworkOption &option) {
     if (network_status_ != NETWORK_STATUS_INIT) {
       err_msg_ = "[NeuralNetwork::ExportNetworkParam] Network not init";
       return NOT_INIT;
@@ -130,7 +133,8 @@ public:
     return SUCCESS;
   }
 
-  RC ImportNetworkParam(const NetworkParam &param,const NetworkOption &option) {
+  RC ImportNetworkParam(const NetworkParam &param,
+                        const NetworkOption &option) {
     if (network_status_ != NETWORK_STATUS_UNINIT) {
       err_msg_ = "[NeuralNetwork::ImportNetworkParam] Network has init";
       return NOT_INIT;
@@ -158,9 +162,17 @@ public:
   inline NetworkStatus network_status() { return network_status_; }
   inline void set_loss_function(LossType type) {
     loss_function_ = LossFactory::Create(type);
+    if (loss_function_ == nullptr) {
+      err_msg_ = "[NeuralNetwork::set_loss_function] Invalid loss type";
+    }
   }
-  inline void set_activate_function(ActivateType type) {
+  inline RC set_activate_function(ActivateType type) {
     activate_function_ = ActivateFactory::Create(type);
+    if (activate_function_ == nullptr) {
+      err_msg_ = "[NeuralNetwork::set_activate_function] Invalid loss type";
+      return INVALID_DATA;
+    }
+    return SUCCESS;
   }
   inline void set_learning_rate(double rate) { learning_rate_ = rate; }
   inline void set_random_seed(int seed) { rand_seed_ = seed; }
@@ -174,8 +186,7 @@ private:
                         const std::vector<double> &input) {
     auto [x, y] = neuron_pos;
     double result = neuron_bias_[x][y];
-    if (x >= layer_.size() || x < 0 || y >= layer_[x] ||
-        y < 0) {
+    if (x >= layer_.size() || x < 0 || y >= layer_[x] || y < 0) {
       err_msg_ = "[NeuralNetwork::UpdateNeuronOutput] Invalid data input";
       return INVALID_DATA;
     }

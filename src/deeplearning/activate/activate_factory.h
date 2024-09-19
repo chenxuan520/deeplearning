@@ -2,6 +2,7 @@
 
 #include "activate_base.h"
 #include "sigmoid_activate.h"
+#include "relu_activate.h"
 #include <memory>
 
 namespace deeplearning {
@@ -12,6 +13,8 @@ public:
     switch (activate_type) {
     case ACTIVATE_SIGMOID:
       return std::make_shared<SigmoidActivate>();
+    case ACTIVATE_RELU:
+      return std::make_shared<ReluActivate>();
     default:
       return nullptr;
     }
