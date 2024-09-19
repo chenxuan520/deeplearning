@@ -4,6 +4,5 @@ build
 compile_commands.json
 .cache
 test_bin
-third_party
 demo.*
 *ubyte

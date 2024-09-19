@@ -1,5 +1,5 @@
 # cmake version
-cmake_minimum_required(VERSION 3.30.2)
+cmake_minimum_required(VERSION 3.22.1)
 # project name
 project(mnist)
 
