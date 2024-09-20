@@ -69,16 +69,15 @@ public:
   }
 
   RC Train(const std::vector<std::vector<double>> &data,
-           const std::vector<std::vector<double>> &target, int epoch_num = 1,
-           int batch_num = 1,
-           std::function<void(const NeuralNetwork &network, int epoch_num,
-                              double train_loss)>
-               each_train_end_call = nullptr) {
+           const std::vector<std::vector<double>> &target,
+           std::function<void(NeuralNetwork &network, int epoch_num)>
+               each_epoch_call = nullptr,
+           int epoch_num = 0, int batch_num = 1) {
     if (network_status_ != NETWORK_STATUS_INIT) {
       err_msg_ = "[NeuralNetwork::Train] Network not init";
       return NOT_INIT;
     }
-    if (data.size() != target.size() || batch_num < 1) {
+    if (data.size() != target.size() || batch_num <= 0) {
       err_msg_ = "[NeuralNetwork::Train] Invalid data input in size";
       return INVALID_DATA;
     }
@@ -91,6 +90,7 @@ public:
     Random::RandomShuffle(index_pos);
     auto max_batch_num = data.size() / batch_num;
 
+    epoch_num = epoch_num == 0 ? data.size() : epoch_num;
     for (int i = 0; i < epoch_num; i++) {
 
       auto init_batch_num = (i % max_batch_num) * batch_num;
@@ -105,19 +105,17 @@ public:
         if (rc != SUCCESS) {
           return rc;
         }
-
-        if (each_train_end_call != nullptr) {
-          each_train_end_call(
-              *this, i,
-              loss_function_->AverageLoss(target[data_pos],
-                                          neuron_output_[layer_.size() - 1]));
-        }
       }
 
       // update neuron
       auto rc = UpdateAllNeuron(batch_num);
       if (rc != SUCCESS) {
         return rc;
+      }
+
+      // callback
+      if (each_epoch_call != nullptr) {
+        each_epoch_call(*this, i);
       }
     }
     return SUCCESS;
@@ -129,6 +127,29 @@ public:
       return rc;
     }
     result = neuron_output_[layer_.size() - 1];
+    return SUCCESS;
+  }
+
+  RC CalcLoss(const std::vector<std::vector<double>> &data,
+              const std::vector<std::vector<double>> &target, double &loss) {
+    if (network_status_ != NETWORK_STATUS_INIT) {
+      err_msg_ = "[NeuralNetwork::Train] Network not init";
+      return NOT_INIT;
+    }
+    if (data.size() != target.size()) {
+      err_msg_ = "[NeuralNetwork::Train] Invalid data input in size";
+      return INVALID_DATA;
+    }
+    double loss_sum = 0;
+    for (int i = 0; i < data.size(); i++) {
+      auto rc = ForwardPropagation(data[i]);
+      if (rc != SUCCESS) {
+        return rc;
+      }
+      loss_sum += loss_function_->AverageLoss(
+          target[i], neuron_output_[layer_.size() - 1]);
+    }
+    loss = loss_sum / data.size();
     return SUCCESS;
   }
 
