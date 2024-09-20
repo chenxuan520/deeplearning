@@ -84,12 +84,19 @@ public:
     }
 
     // init batch random
-    Random rand(0, batch_num, rand_seed_);
+    std::vector<int> index_pos(data.size());
+    for (int i = 0; i < data.size(); i++) {
+      index_pos[i] = i;
+    }
+    Random::RandomShuffle(index_pos);
+    auto max_batch_num = data.size() / batch_num;
 
     for (int i = 0; i < epoch_num; i++) {
-      for (int j = 0; j < data.size(); j += batch_num) {
-        auto temp_pos = j + rand.CreateRandom();
-        auto data_pos = temp_pos < data.size() ? temp_pos : j;
+
+      auto init_batch_num = (i % max_batch_num) * batch_num;
+      for (int j = (i % max_batch_num) * batch_num;
+           j < init_batch_num + batch_num; j += 1) {
+        auto data_pos = j;
         auto rc = ForwardPropagation(data[data_pos]);
         if (rc != SUCCESS) {
           return rc;
@@ -98,12 +105,19 @@ public:
         if (rc != SUCCESS) {
           return rc;
         }
+
         if (each_train_end_call != nullptr) {
           each_train_end_call(
               *this, i,
               loss_function_->AverageLoss(target[data_pos],
                                           neuron_output_[layer_.size() - 1]));
         }
+      }
+
+      // update neuron
+      auto rc = UpdateAllNeuron(batch_num);
+      if (rc != SUCCESS) {
+        return rc;
       }
     }
     return SUCCESS;
@@ -204,6 +218,14 @@ private:
     return SUCCESS;
   }
 
+  void ClearNeuronDelta() {
+    for (int i = 0; i < layer_.size(); i++) {
+      for (int j = 0; j < layer_[i]; j++) {
+        neuron_delta_[i][j] = 0;
+      }
+    }
+  }
+
   RC UpdateNeuronDelta(const std::pair<int, int> &neuron_pos,
                        const std::vector<double> &target) {
     auto [x, y] = neuron_pos;
@@ -228,7 +250,24 @@ private:
     return SUCCESS;
   }
 
-  RC UpdateNeuron(const std::pair<int, int> &neuron_pos) {
+  RC UpdateAllNeuron(int batch_num = 1) {
+    if (layer_.size() == 0) {
+      err_msg_ = "[NeuralNetwork::UpdateAllNeuron] Invalid data input";
+      return INVALID_DATA;
+    }
+    for (int i = 0; i < layer_.size(); i++) {
+      for (int j = 0; j < layer_[i]; j++) {
+        auto rc = UpdateSingleNeuron({i, j}, batch_num);
+        if (rc != SUCCESS) {
+          return rc;
+        }
+      }
+    }
+    return SUCCESS;
+  }
+
+  RC UpdateSingleNeuron(const std::pair<int, int> &neuron_pos,
+                        int batch_num = 1) {
     auto [x, y] = neuron_pos;
     if (x >= layer_.size() || x < 0 || y >= layer_[x] || y < 0) {
       err_msg_ = "[NeuralNetwork::UpdateNeuron] Invalid data input";
@@ -237,11 +276,12 @@ private:
     if (x == 0) {
       return SUCCESS;
     }
+    double averg_delta = neuron_delta_[x][y] / (double)batch_num;
     for (int i = 0; i < layer_[x - 1]; i++) {
       neuron_weight_[x][y][i] -=
-          learning_rate_ * neuron_output_[x - 1][i] * neuron_delta_[x][y];
+          learning_rate_ * neuron_output_[x - 1][i] * averg_delta;
     }
-    neuron_bias_[x][y] -= learning_rate_ * neuron_delta_[x][y];
+    neuron_bias_[x][y] -= learning_rate_ * averg_delta;
     return SUCCESS;
   }
 
@@ -271,14 +311,6 @@ private:
     for (int i = layer_.size() - 1; i >= 0; i--) {
       for (int j = 0; j < layer_[i]; j++) {
         auto rc = UpdateNeuronDelta({i, j}, target);
-        if (rc != SUCCESS) {
-          return rc;
-        }
-      }
-    }
-    for (int i = 0; i < layer_.size(); i++) {
-      for (int j = 0; j < layer_[i]; j++) {
-        auto rc = UpdateNeuron({i, j});
         if (rc != SUCCESS) {
           return rc;
         }
