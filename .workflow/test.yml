@@ -1,0 +1,33 @@
+version: '1.0'
+name: pipeline-20240921
+displayName: test
+triggers:
+  trigger: auto
+  push:
+    branches:
+      precise:
+        - master
+stages:
+  - name: stage-a73a9b52
+    displayName: build
+    strategy: naturally
+    trigger: auto
+    executor: []
+    steps:
+      - step: execute@docker
+        name: execute_by_docker
+        displayName: 基于镜像的脚本执行
+        certificate: ''
+        image: ubuntu:22.04
+        command:
+          - sudo apt-get update
+          - sudo apt-get install -y build-essential cmake
+          - ''
+          - git submodule update --init --recursive --depth=1
+          - ''
+          - cd src
+          - ./build.sh
+          - ./bin/test_bin
+        notify: []
+        strategy:
+          retry: '0'
