@@ -3,6 +3,11 @@
 #include <iostream>
 #include <vector>
 
+#ifdef _MATPLOTLIB_CPP_LOAD_
+#include "matplotlibcpp.h"
+using namespace matplotlibcpp;
+#endif
+
 using namespace std;
 using namespace deeplearning;
 
@@ -46,6 +51,7 @@ int main() {
   }
 
   // step 3 train data
+  vector<double> train_loss_y, test_loss_y, train_loss_x, test_loss_x;
   auto print_func = [&](NeuralNetwork &network, int epoch_num) {
     static int count = 0;
     if (count++ % 10000 == 0) {
@@ -61,6 +67,10 @@ int main() {
         cout << "CalcLoss failed: " << demo_network.err_msg() << endl;
         return;
       }
+      train_loss_y.push_back(train_loss);
+      test_loss_y.push_back(test_loss);
+      train_loss_x.push_back(epoch_num);
+      test_loss_x.push_back(epoch_num);
       std::cout << "epoch: " << epoch_num << " train_loss: " << train_loss
                 << " test_loss: " << test_loss << std::endl;
     }
@@ -105,5 +115,11 @@ int main() {
   cout << " right count:" << right_count
        << " right rate: " << right_count * 1.0 / mnist_data.test_data().size()
        << endl;
+#ifdef _MATPLOTLIB_CPP_LOAD_
+  // draw pic
+  plot(test_loss_x, test_loss_y);
+  plot(train_loss_x, train_loss_y);
+  show();
+#endif
   return 0;
 }

@@ -25,7 +25,7 @@ let s:pwd=expand('%:p:h')
 let g:Term_project_task=[
 			\{
 			\'name'       : 'build',
-			\'command'    : './build.sh',
+			\'command'    : './build.sh true',
 			\'mode'       : 'quickfix',
 			\'path'       : s:root.'/src',
 			\'close'      : 2,
@@ -52,7 +52,7 @@ let g:Term_project_task=[
 			\},
 			\{
 			\'name'       : 'test',
-			\'command'    : './build.sh;./bin/test_bin',
+			\'command'    : './build.sh true;./bin/test_bin',
 			\'mode'       : 'term',
 			\'path'       : s:root.'/src',
 			\'close'      : 0,

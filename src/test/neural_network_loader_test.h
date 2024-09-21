@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../deeplearning/neural_network_loader.h"
+#include "neural_network_test.h"
 #include "test.h"
 #include <cstdlib>
 
@@ -24,8 +25,8 @@ TEST(Loader, ExportAndInport) {
   // delete file
   DEFER([=]() { remove(file_path.c_str()); });
 
-  auto rc = deeplearning::NeuralNetworkLoader::ExportParamToFile(demo_param, demo_option,
-                                                   file_path);
+  auto rc = deeplearning::NeuralNetworkLoader::ExportParamToFile(
+      demo_param, demo_option, file_path);
   MUST_EQUAL(rc, NeuralNetworkLoader::SUCCESS);
 
   NeuralNetwork::NetworkParam param;

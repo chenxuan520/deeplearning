@@ -14,6 +14,7 @@ public:
     SUCCESS,
     INVALID_DATA,
     NOT_INIT,
+    ALREADY_INIT,
   };
   enum NetworkStatus {
     NETWORK_STATUS_UNINIT,
@@ -33,6 +34,10 @@ public:
 
 public:
   NeuralNetwork() = default;
+  ~NeuralNetwork() = default;
+  NeuralNetwork(const NeuralNetwork &) = delete;
+  NeuralNetwork &operator=(const NeuralNetwork &) = delete;
+
   NeuralNetwork(const std::vector<int> &layer, double learning_rate = 0.1) {
     Init(layer, learning_rate);
   }
@@ -172,7 +177,7 @@ public:
                         const NetworkOption &option) {
     if (network_status_ != NETWORK_STATUS_UNINIT) {
       err_msg_ = "[NeuralNetwork::ImportNetworkParam] Network has init";
-      return NOT_INIT;
+      return ALREADY_INIT;
     }
     if (param.layer_.size() < 2) {
       err_msg_ = "[NeuralNetwork::ImportNetworkParam] Invalid layer size";
@@ -185,6 +190,40 @@ public:
     rand_seed_ = option.rand_seed_;
     loss_function_ = LossFactory::Create(option.loss_type_);
     activate_function_ = ActivateFactory::Create(option.activate_type_);
+
+    for (int i = 0; i < layer_.size(); i++) {
+      neuron_output_.push_back(std::vector<double>(layer_[i], 0));
+      neuron_delta_.push_back(std::vector<double>(layer_[i], 0));
+      for (int j = 0; j < layer_[i]; j++) {
+        if (i != 0) {
+          neuron_weight_.push_back(std::vector<std::vector<double>>(
+              layer_[i], std::vector<double>(layer_[i - 1], 0)));
+        }
+      }
+    }
+
+    network_status_ = NETWORK_STATUS_INIT;
+    return SUCCESS;
+  }
+
+  RC Clone(const NeuralNetwork &old) {
+    if (network_status_ != NETWORK_STATUS_UNINIT) {
+      err_msg_ = "[NeuralNetwork::Clone] Network has init";
+      return ALREADY_INIT;
+    }
+
+    layer_ = old.layer_;
+    neuron_bias_ = old.neuron_bias_;
+    neuron_weight_ = old.neuron_weight_;
+    neuron_delta_ = old.neuron_delta_;
+    neuron_output_ = old.neuron_output_;
+    learning_rate_ = old.learning_rate_;
+    rand_seed_ = old.rand_seed_;
+    network_status_ = old.network_status_;
+
+    loss_function_ = LossFactory::Create(old.loss_function_->GetLossType());
+    activate_function_ =
+        ActivateFactory::Create(old.activate_function_->GetActivateType());
 
     network_status_ = NETWORK_STATUS_INIT;
     return SUCCESS;

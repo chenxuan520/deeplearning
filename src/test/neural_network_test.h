@@ -1,7 +1,9 @@
 #pragma once
 
 #include "neural_network.h"
+#include "neural_network_loader.h"
 #include "test.h"
+
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
@@ -13,18 +15,24 @@
 using namespace std;
 using namespace deeplearning;
 
+#ifdef _MATPLOTLIB_CPP_LOAD_
+#include "matplotlibcpp.h"
+using namespace matplotlibcpp;
+#endif
+
 std::string demo_data_file_path;
 std::vector<std::vector<double>> demo_data;
 std::vector<std::vector<double>> demo_data_target;
 std::string demo_test_file_path;
 std::vector<std::vector<double>> demo_test;
 std::vector<std::vector<double>> demo_test_target;
+NeuralNetwork demo_network;
 
 INIT(NeuralNetwork) {
   srand(time(nullptr));
   demo_data_file_path = "demo.data";
   demo_test_file_path = "demo.test";
-  const int train_data_size = 30000;
+  const int train_data_size = 20000;
   const int test_data_size = 1000;
   // create test data, example func y=3*e^(x/10)-x^2-x-ln(x^2+1)+2
   // use random data x from -100.00 to 100.00(double)
@@ -99,15 +107,16 @@ END(NeuralNetwork) {
 }
 
 TEST(NeuralNetwork, TrainAndPredict) {
-  NeuralNetwork demo_network;
-  demo_network.Init((vector<int>() = {2, 3, 3, 1}), 0.01);
-  MUST_EQUAL(demo_network.network_status(), NeuralNetwork::NETWORK_STATUS_INIT);
-  auto rc = demo_network.set_loss_function(LossType::LOSS_CROSS_ENTROPY);
+  NeuralNetwork network;
+  network.Init((vector<int>() = {2, 3, 3, 1}), 0.01);
+  MUST_EQUAL(network.network_status(), NeuralNetwork::NETWORK_STATUS_INIT);
+  auto rc = network.set_loss_function(LossType::LOSS_CROSS_ENTROPY);
   MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
 
-  auto print_func = [](NeuralNetwork &network, int epoch_num) {
+  vector<double> train_loss_y, test_loss_y, train_loss_x, test_loss_x;
+  auto print_func = [&](NeuralNetwork &network, int epoch_num) {
     static int count = 0;
-    if (count++ % 100 == 0) {
+    if (count++ % 1000 == 0) {
       double train_loss = 0;
       auto rc = network.CalcLoss(demo_data, demo_data_target, train_loss);
       if (rc != NeuralNetwork::SUCCESS) {
@@ -120,18 +129,22 @@ TEST(NeuralNetwork, TrainAndPredict) {
         cout << "CalcLoss failed: " << network.err_msg() << endl;
         return;
       }
+      train_loss_y.push_back(train_loss);
+      test_loss_y.push_back(test_loss);
+      train_loss_x.push_back(epoch_num);
+      test_loss_x.push_back(epoch_num);
       std::cout << "epoch: " << epoch_num << " train_loss: " << train_loss
                 << " test_loss: " << test_loss << std::endl;
     }
   };
-  rc = demo_network.Train(demo_data, demo_data_target, print_func);
-  MUST_TRUE(rc == NeuralNetwork::SUCCESS, demo_network.err_msg());
+  rc = network.Train(demo_data, demo_data_target, print_func);
+  MUST_TRUE(rc == NeuralNetwork::SUCCESS, network.err_msg());
 
   // calc right rate
   int right_count = 0;
   for (int i = 0; i < demo_test.size(); i++) {
     std::vector<double> result;
-    rc = demo_network.Predict(demo_test[i], result);
+    rc = network.Predict(demo_test[i], result);
     if (rc != NeuralNetwork::SUCCESS) {
       MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
     }
@@ -141,7 +154,76 @@ TEST(NeuralNetwork, TrainAndPredict) {
       right_count++;
     }
   }
+
   DEBUG("right rate: " << right_count * 1.0 / demo_test.size());
   MUST_TRUE(right_count * 1.0 / demo_test.size() > 0.8,
             "train loss is too high");
+
+#ifdef _MATPLOTLIB_CPP_LOAD_
+  // draw pic
+  plot(test_loss_x, test_loss_y);
+  plot(train_loss_x, train_loss_y);
+  show();
+#endif
+
+  // clone
+  rc = demo_network.Clone(network);
+  MUST_TRUE(rc == NeuralNetwork::SUCCESS, demo_network.err_msg());
+}
+
+TEST(NeuralNetwork, CloneAndExport) {
+  MUST_EQUAL(demo_network.network_status(), NeuralNetwork::NETWORK_STATUS_INIT);
+
+  // predict
+  vector<double> result;
+  auto rc = demo_network.Predict(demo_data[0], result);
+  MUST_TRUE(rc == NeuralNetwork::SUCCESS, demo_network.err_msg());
+  // calc right rate
+  auto right_rate = [&](NeuralNetwork &demo_network) -> double {
+    int right_count = 0;
+    for (int i = 0; i < demo_test.size(); i++) {
+      std::vector<double> result;
+      rc = demo_network.Predict(demo_test[i], result);
+      if (rc != NeuralNetwork::SUCCESS) {
+        return -1;
+      }
+      if (result[0] > 0.5 && demo_test_target[i][0] > 0.5) {
+        right_count++;
+      } else if (result[0] < 0.5 && demo_test_target[i][0] < 0.5) {
+        right_count++;
+      }
+    }
+
+    return right_count * 1.0 / demo_test.size();
+  };
+
+  double right_count = right_rate(demo_network);
+  DEBUG("right rate: " << right_count);
+  MUST_TRUE(right_count > 0.8, "train loss is too high");
+
+  deeplearning::NeuralNetwork::NetworkParam param;
+  deeplearning::NeuralNetwork::NetworkOption option;
+  rc = demo_network.ExportNetworkParam(param, option);
+  MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
+
+  const std::string filename = "neural_network_test.param";
+  DEFER([=]() { remove(filename.c_str()); });
+
+  auto rcLoader =
+      NeuralNetworkLoader::ExportParamToFile(param, option, filename);
+  MUST_EQUAL(rcLoader, NeuralNetworkLoader::SUCCESS);
+
+  NeuralNetwork::NetworkParam param2;
+  NeuralNetwork::NetworkOption option2;
+  rcLoader =
+      NeuralNetworkLoader::ImportParamFromFile(param2, option2, filename);
+  MUST_EQUAL(rcLoader, NeuralNetworkLoader::SUCCESS);
+
+  NeuralNetwork demo_network2;
+  rc = demo_network2.ImportNetworkParam(param2, option2);
+  MUST_TRUE(rc == NeuralNetwork::SUCCESS, demo_network2.err_msg());
+  // predict
+  right_count = right_rate(demo_network2);
+  DEBUG("right rate: " << right_count);
+  MUST_TRUE(right_count > 0.8, "train loss is too high");
 }
