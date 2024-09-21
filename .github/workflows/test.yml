@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout code #这部分是为了从github自动clone代码
         uses: actions/checkout@v2
+        with:
+          submodules: true
       - name: Install build tools #这部分是安装依赖
         run: |
           sudo apt-get update
