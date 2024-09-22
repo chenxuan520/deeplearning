@@ -1,6 +1,7 @@
 // this file is to include all test header
 #include "neural_network_loader_test.h"
 #include "neural_network_test.h"
+#include "softmax/std_softmax_test.h"
 #include "test.h"
 
 ARGC_FUNC {

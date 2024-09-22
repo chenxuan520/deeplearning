@@ -5,7 +5,7 @@ namespace deeplearning {
 class MSELoss : public LossFunction {
 public:
   double Loss(double target, double output) override {
-    return (target - output) * (target - output);
+    return (1 / 2) * (target - output) * (target - output);
   }
   double DerivLoss(double target, double output) override {
     return -2 * (target - output);

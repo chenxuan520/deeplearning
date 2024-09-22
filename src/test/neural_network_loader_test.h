@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../deeplearning/neural_network_loader.h"
-#include "neural_network_test.h"
 #include "test.h"
 #include <cstdlib>
 
@@ -37,6 +36,7 @@ TEST(Loader, ExportAndInport) {
   MUST_EQUAL(option.rand_seed_, demo_option.rand_seed_);
   MUST_EQUAL(option.learning_rate_, demo_option.learning_rate_);
   MUST_EQUAL(option.activate_type_, demo_option.activate_type_);
+  MUST_EQUAL(option.softmax_type_, demo_option.softmax_type_);
   MUST_EQUAL(option.loss_type_, demo_option.loss_type_);
 
   MUST_EQUAL(param.layer_.size(), demo_param.layer_.size());

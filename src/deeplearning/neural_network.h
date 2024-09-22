@@ -1,6 +1,7 @@
 #pragma once
 #include "activate/activate_factory.h"
 #include "loss/loss_factory.h"
+#include "softmax/softmax_factory.h"
 #include "util/random.h"
 #include <functional>
 #include <memory>
@@ -30,6 +31,7 @@ public:
     int rand_seed_;
     LossType loss_type_;
     ActivateType activate_type_;
+    SoftmaxType softmax_type_;
   };
 
 public:
@@ -54,9 +56,11 @@ public:
     neuron_delta_.resize(layer.size());
     neuron_bias_.resize(layer.size());
     neuron_weight_.resize(layer.size());
+    rand_seed_ = 0;
+
+    softmax_function_ = SoftmaxFactory::Create(SOFTMAX_NONE);
     loss_function_ = LossFactory::Create(LOSS_MSE);
     activate_function_ = ActivateFactory::Create(ACTIVATE_SIGMOID);
-    rand_seed_ = 0;
 
     for (int i = 0; i < layer.size(); i++) {
       for (int j = 0; j < layer[i]; j++) {
@@ -166,10 +170,13 @@ public:
     param.layer_ = layer_;
     param.neuron_bias_ = neuron_bias_;
     param.neuron_weight_ = neuron_weight_;
+
     option.learning_rate_ = learning_rate_;
     option.rand_seed_ = rand_seed_;
+
     option.loss_type_ = loss_function_->GetLossType();
     option.activate_type_ = activate_function_->GetActivateType();
+    option.softmax_type_ = softmax_function_->GetSoftmaxType();
     return SUCCESS;
   }
 
@@ -188,8 +195,10 @@ public:
     neuron_weight_ = param.neuron_weight_;
     learning_rate_ = option.learning_rate_;
     rand_seed_ = option.rand_seed_;
+
     loss_function_ = LossFactory::Create(option.loss_type_);
     activate_function_ = ActivateFactory::Create(option.activate_type_);
+    softmax_function_ = SoftmaxFactory::Create(option.softmax_type_);
 
     for (int i = 0; i < layer_.size(); i++) {
       neuron_output_.push_back(std::vector<double>(layer_[i], 0));
@@ -224,6 +233,8 @@ public:
     loss_function_ = LossFactory::Create(old.loss_function_->GetLossType());
     activate_function_ =
         ActivateFactory::Create(old.activate_function_->GetActivateType());
+    softmax_function_ =
+        SoftmaxFactory::Create(old.softmax_function_->GetSoftmaxType());
 
     network_status_ = NETWORK_STATUS_INIT;
     return SUCCESS;
@@ -246,6 +257,14 @@ public:
     activate_function_ = ActivateFactory::Create(type);
     if (activate_function_ == nullptr) {
       err_msg_ = "[NeuralNetwork::set_activate_function] Invalid loss type";
+      return INVALID_DATA;
+    }
+    return SUCCESS;
+  }
+  inline RC set_softmax_function(SoftmaxType type) {
+    softmax_function_ = SoftmaxFactory::Create(type);
+    if (softmax_function_ == nullptr) {
+      err_msg_ = "[NeuralNetwork::set_softmax_function] Invalid loss type";
       return INVALID_DATA;
     }
     return SUCCESS;
@@ -358,6 +377,9 @@ private:
         }
       }
     }
+    // calc softmax
+    softmax_function_->Normalize(neuron_output_[layer_.size() - 1],
+                                 neuron_output_[layer_.size() - 1]);
     return SUCCESS;
   }
 
@@ -382,6 +404,7 @@ private:
 private:
   std::shared_ptr<LossFunction> loss_function_ = nullptr;
   std::shared_ptr<ActivateFunction> activate_function_ = nullptr;
+  std::shared_ptr<SoftmaxFunction> softmax_function_ = nullptr;
   NetworkStatus network_status_ = NETWORK_STATUS_UNINIT;
   int rand_seed_ = 0;
   double learning_rate_ = 0.1;

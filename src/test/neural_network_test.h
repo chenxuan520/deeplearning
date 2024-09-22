@@ -32,7 +32,7 @@ INIT(NeuralNetwork) {
   srand(time(nullptr));
   demo_data_file_path = "demo.data";
   demo_test_file_path = "demo.test";
-  const int train_data_size = 20000;
+  const int train_data_size = 60000;
   const int test_data_size = 1000;
   // create test data, example func y=3*e^(x/10)-x^2-x-ln(x^2+1)+2
   // use random data x from -100.00 to 100.00(double)
@@ -79,7 +79,11 @@ INIT(NeuralNetwork) {
     double stand_y = func_calc(x);
     double y = func_y_create(y_range);
     demo_data.push_back({x, y});
-    demo_data_target.push_back({stand_y > y ? 1.0 : 0.0});
+    if (stand_y > y) {
+      demo_data_target.push_back({1.0, 0.0});
+    } else {
+      demo_data_target.push_back({0.0, 1.0});
+    }
 
     file << std::fixed << std::setprecision(4) << x << " " << y << " "
          << stand_y << " " << (stand_y > y ? 1.0 : 0.0) << std::endl;
@@ -92,7 +96,11 @@ INIT(NeuralNetwork) {
     double tmp_y = func_calc(x);
     double y = func_y_create(y_range);
     demo_test.push_back({x, y});
-    demo_test_target.push_back({tmp_y > y ? 1.0 : 0.0});
+    if (tmp_y > y) {
+      demo_test_target.push_back({1.0, 0.0});
+    } else {
+      demo_test_target.push_back({0.0, 1.0});
+    }
 
     test_file << std::fixed << std::setprecision(4) << x << " " << y << " "
               << tmp_y << " " << (tmp_y > y ? 1.0 : 0.0) << std::endl;
@@ -108,10 +116,15 @@ END(NeuralNetwork) {
 
 TEST(NeuralNetwork, TrainAndPredict) {
   NeuralNetwork network;
-  network.Init((vector<int>() = {2, 3, 3, 1}), 0.01);
+  network.Init((vector<int>() = {2, 3, 3, 2}), 0.01);
   MUST_EQUAL(network.network_status(), NeuralNetwork::NETWORK_STATUS_INIT);
   auto rc = network.set_loss_function(LossType::LOSS_CROSS_ENTROPY);
   MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
+
+  // rc = network.set_softmax_function(SoftmaxType::SOFTMAX_STD);
+  // MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
+  // rc = network.set_activate_function(ActivateType::ACTIVATE_TANH);
+  // MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
 
   vector<double> train_loss_y, test_loss_y, train_loss_x, test_loss_x;
   auto print_func = [&](NeuralNetwork &network, int epoch_num) {
@@ -148,16 +161,12 @@ TEST(NeuralNetwork, TrainAndPredict) {
     if (rc != NeuralNetwork::SUCCESS) {
       MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
     }
-    if (result[0] > 0.5 && demo_test_target[i][0] > 0.5) {
+    if (result[0] > result[1] && demo_test_target[i][0] == 1.0) {
       right_count++;
-    } else if (result[0] < 0.5 && demo_test_target[i][0] < 0.5) {
+    } else if (result[0] < result[1] && demo_test_target[i][1] == 1.0) {
       right_count++;
     }
   }
-
-  DEBUG("right rate: " << right_count * 1.0 / demo_test.size());
-  MUST_TRUE(right_count * 1.0 / demo_test.size() > 0.8,
-            "train loss is too high");
 
 #ifdef _MATPLOTLIB_CPP_LOAD_
   // draw pic
@@ -165,6 +174,10 @@ TEST(NeuralNetwork, TrainAndPredict) {
   plot(train_loss_x, train_loss_y);
   show();
 #endif
+
+  DEBUG("right rate: " << right_count * 1.0 / demo_test.size());
+  MUST_TRUE(right_count * 1.0 / demo_test.size() > 0.8,
+            "train loss is too high");
 
   // clone
   rc = demo_network.Clone(network);
@@ -182,14 +195,14 @@ TEST(NeuralNetwork, CloneAndExport) {
   auto right_rate = [&](NeuralNetwork &demo_network) -> double {
     int right_count = 0;
     for (int i = 0; i < demo_test.size(); i++) {
-      std::vector<double> result;
+      std::vector<double> result(2, 0);
       rc = demo_network.Predict(demo_test[i], result);
       if (rc != NeuralNetwork::SUCCESS) {
         return -1;
       }
-      if (result[0] > 0.5 && demo_test_target[i][0] > 0.5) {
+      if (result[0] > result[1] && demo_test_target[i][0] > 0.5) {
         right_count++;
-      } else if (result[0] < 0.5 && demo_test_target[i][0] < 0.5) {
+      } else if (result[0] < result[1] && demo_test_target[i][1] > 0.5) {
         right_count++;
       }
     }

@@ -38,6 +38,7 @@ int main() {
     cout << "Init failed: " << demo_network.err_msg() << endl;
     return -1;
   }
+
   cout << "Init success begin train" << endl;
   vector<vector<double>> train_target(mnist_data.train_data().size(),
                                       vector<double>(10, 0));
@@ -83,7 +84,7 @@ int main() {
   }
 
   rc = demo_network.Train(mnist_data.train_data(), train_target, print_func,
-                          2 * mnist_data.train_data().size());
+                          mnist_data.train_data().size());
   if (rc != NeuralNetwork::SUCCESS) {
     cout << "Train failed: " << demo_network.err_msg() << endl;
     return -1;

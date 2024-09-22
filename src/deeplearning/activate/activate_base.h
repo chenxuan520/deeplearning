@@ -5,6 +5,7 @@ namespace deeplearning {
 enum ActivateType {
   ACTIVATE_SIGMOID,
   ACTIVATE_RELU,
+  ACTIVATE_TANH,
 };
 
 class ActivateFunction {

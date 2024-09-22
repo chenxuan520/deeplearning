@@ -1,8 +1,9 @@
 #pragma once
 
 #include "activate_base.h"
-#include "sigmoid_activate.h"
 #include "relu_activate.h"
+#include "sigmoid_activate.h"
+#include "tanh_activate.h"
 #include <memory>
 
 namespace deeplearning {
@@ -15,6 +16,8 @@ public:
       return std::make_shared<SigmoidActivate>();
     case ACTIVATE_RELU:
       return std::make_shared<ReluActivate>();
+    case ACTIVATE_TANH:
+      return std::make_shared<TanhActivate>();
     default:
       return nullptr;
     }
