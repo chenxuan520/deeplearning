@@ -22,5 +22,7 @@ if (ENABLE_DRAW)
 	link_libraries(${PYTHON_LIBRARIES})
 endif()
 
+install(DIRECTORY ./deeplearning DESTINATION include)
+
 add_subdirectory(${PROJECT_SOURCE_DIR}/test)
 add_subdirectory(${PROJECT_SOURCE_DIR}/demo/mnist)
