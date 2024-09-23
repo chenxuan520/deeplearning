@@ -170,8 +170,12 @@ TEST(NeuralNetwork, TrainAndPredict) {
 
 #ifdef _MATPLOTLIB_CPP_LOAD_
   // draw pic
-  plot(test_loss_x, test_loss_y);
-  plot(train_loss_x, train_loss_y);
+  xlabel("epoch");
+  ylabel("loss");
+  named_plot("test", test_loss_x, test_loss_y);
+  named_plot("train", train_loss_x, train_loss_y);
+  legend();
+  title("Demo NeuralNetwork");
   show();
 #endif
 

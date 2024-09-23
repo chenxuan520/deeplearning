@@ -48,7 +48,7 @@ int main() {
   vector<vector<double>> test_target(mnist_data.test_data().size(),
                                      vector<double>(10, 0));
   for (int i = 0; i < mnist_data.test_labels().size(); i++) {
-    test_target[i][int(mnist_data.test_labels()[i])] = 1;
+    test_target[i][int(mnist_data.test_labels()[i])] = 1.0;
   }
 
   // step 3 train data
@@ -84,7 +84,7 @@ int main() {
   }
 
   rc = demo_network.Train(mnist_data.train_data(), train_target, print_func,
-                          mnist_data.train_data().size());
+                          mnist_data.train_data().size(), 1);
   if (rc != NeuralNetwork::SUCCESS) {
     cout << "Train failed: " << demo_network.err_msg() << endl;
     return -1;
@@ -92,8 +92,8 @@ int main() {
   cout << "Train success begin predict" << endl;
 
   // step 4 test data
-  int right_count = 0;
-  for (int i = 0; i < mnist_data.test_data().size(); i++) {
+  int right_count = 0, test_date_size = mnist_data.test_data().size();
+  for (int i = 0; i < test_date_size; i++) {
     vector<double> result(10, 0);
     rc = demo_network.Predict(mnist_data.test_data()[i], result);
 
@@ -114,12 +114,16 @@ int main() {
     }
   }
   cout << " right count:" << right_count
-       << " right rate: " << right_count * 1.0 / mnist_data.test_data().size()
-       << endl;
+       << " right rate: " << right_count * 1.0 / test_date_size << endl;
+
 #ifdef _MATPLOTLIB_CPP_LOAD_
   // draw pic
-  plot(test_loss_x, test_loss_y);
-  plot(train_loss_x, train_loss_y);
+  xlabel("epoch");
+  ylabel("loss");
+  named_plot("test", test_loss_x, test_loss_y);
+  named_plot("train", train_loss_x, train_loss_y);
+  legend();
+  title("Mnist NeuralNetwork");
   show();
 #endif
   return 0;

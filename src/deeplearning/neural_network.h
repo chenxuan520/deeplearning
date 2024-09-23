@@ -1,6 +1,7 @@
 #pragma once
 #include "activate/activate_factory.h"
 #include "loss/loss_factory.h"
+#include "param_init/param_init_factory.h"
 #include "softmax/softmax_factory.h"
 #include "util/random.h"
 #include <functional>
@@ -61,6 +62,7 @@ public:
     softmax_function_ = SoftmaxFactory::Create(SOFTMAX_NONE);
     loss_function_ = LossFactory::Create(LOSS_MSE);
     activate_function_ = ActivateFactory::Create(ACTIVATE_SIGMOID);
+    param_init_function_ = ParamInitFactory::Create(PARAM_INIT_ZERO);
 
     for (int i = 0; i < layer.size(); i++) {
       for (int j = 0; j < layer[i]; j++) {
@@ -72,6 +74,8 @@ public:
         }
       }
     }
+
+    param_init_function_->InitParam(neuron_weight_, neuron_bias_);
 
     network_status_ = NETWORK_STATUS_INIT;
     return SUCCESS;
@@ -269,6 +273,18 @@ public:
     }
     return SUCCESS;
   }
+  inline RC set_param_init_function(ParamInitType type) {
+    if (network_status_ != NETWORK_STATUS_UNINIT) {
+      err_msg_ = "[NeuralNetwork::set_param_init_function] Network has init";
+      return ALREADY_INIT;
+    }
+    param_init_function_ = ParamInitFactory::Create(type);
+    if (param_init_function_ == nullptr) {
+      err_msg_ = "[NeuralNetwork::set_param_init_function] Invalid loss type";
+      return INVALID_DATA;
+    }
+    return SUCCESS;
+  }
   inline void set_learning_rate(double rate) { learning_rate_ = rate; }
   inline void set_random_seed(int seed) { rand_seed_ = seed; }
 
@@ -405,6 +421,8 @@ private:
   std::shared_ptr<LossFunction> loss_function_ = nullptr;
   std::shared_ptr<ActivateFunction> activate_function_ = nullptr;
   std::shared_ptr<SoftmaxFunction> softmax_function_ = nullptr;
+  std::shared_ptr<ParamInitFunction> param_init_function_ = nullptr;
+
   NetworkStatus network_status_ = NETWORK_STATUS_UNINIT;
   int rand_seed_ = 0;
   double learning_rate_ = 0.1;
