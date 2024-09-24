@@ -1,5 +1,6 @@
 #pragma once
 
+#include "matplot_draw.h"
 #include "neural_network.h"
 #include "neural_network_loader.h"
 #include "test.h"
@@ -179,6 +180,8 @@ TEST(NeuralNetwork, TrainAndPredict) {
   legend();
   title("Demo NeuralNetwork");
   show();
+  MatplotDraw::PrintBiasBar("bias", network.neuron_bias());
+
 #endif
 
   DEBUG("right rate: " << right_count * 1.0 / demo_test.size());
