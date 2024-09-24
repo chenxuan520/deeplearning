@@ -107,6 +107,10 @@ public:
     for (int i = 0; i < epoch_num; i++) {
 
       auto init_batch_num = (i % max_batch_num) * batch_num;
+      if (i % max_batch_num == 0) {
+        Random::RandomShuffle(index_pos);
+      }
+
       for (int j = (i % max_batch_num) * batch_num;
            j < init_batch_num + batch_num; j += 1) {
         auto data_pos = j;
@@ -249,6 +253,12 @@ public:
   inline double learning_rate() { return learning_rate_; }
   inline int rand_seed() { return rand_seed_; }
   inline NetworkStatus network_status() { return network_status_; }
+  inline const std::vector<std::vector<std::vector<double>>> &neuron_weight() {
+    return neuron_weight_;
+  }
+  inline const std::vector<std::vector<double>> &neuron_bias() {
+    return neuron_bias_;
+  }
   inline RC set_loss_function(LossType type) {
     loss_function_ = LossFactory::Create(type);
     if (loss_function_ == nullptr) {
@@ -274,15 +284,12 @@ public:
     return SUCCESS;
   }
   inline RC set_param_init_function(ParamInitType type) {
-    if (network_status_ != NETWORK_STATUS_UNINIT) {
-      err_msg_ = "[NeuralNetwork::set_param_init_function] Network has init";
-      return ALREADY_INIT;
-    }
     param_init_function_ = ParamInitFactory::Create(type);
     if (param_init_function_ == nullptr) {
       err_msg_ = "[NeuralNetwork::set_param_init_function] Invalid loss type";
       return INVALID_DATA;
     }
+    param_init_function_->InitParam(neuron_weight_, neuron_bias_);
     return SUCCESS;
   }
   inline void set_learning_rate(double rate) { learning_rate_ = rate; }

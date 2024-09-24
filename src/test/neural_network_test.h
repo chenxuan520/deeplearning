@@ -53,11 +53,11 @@ INIT(NeuralNetwork) {
   };
   auto func_y_create = [&](const std::pair<int, int> &range) -> double {
     return rand() % (range.second - range.first) + range.first +
-           decimal_point_create(3);
+           decimal_point_create(4);
   };
   auto func_x_create = [&](const std::pair<int, int> &range) -> double {
     return rand() % (range.second - range.first) + range.first +
-           decimal_point_create(3);
+           decimal_point_create(4);
   };
 
   // make x,y range
@@ -119,6 +119,8 @@ TEST(NeuralNetwork, TrainAndPredict) {
   network.Init((vector<int>() = {2, 3, 3, 2}), 0.01);
   MUST_EQUAL(network.network_status(), NeuralNetwork::NETWORK_STATUS_INIT);
   auto rc = network.set_loss_function(LossType::LOSS_CROSS_ENTROPY);
+  MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
+  rc = demo_network.set_param_init_function(ParamInitType::PARAM_INIT_XAVIER);
   MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
 
   // rc = network.set_softmax_function(SoftmaxType::SOFTMAX_STD);

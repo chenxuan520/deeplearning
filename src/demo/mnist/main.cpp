@@ -33,7 +33,8 @@ int main() {
 
   // step 2 create network
   NeuralNetwork demo_network;
-  auto rc = demo_network.Init(vector<int>{784, 16, 10}, 0.1);
+
+  auto rc = demo_network.Init(vector<int>{784, 16, 10}, 0.2);
   if (rc != NeuralNetwork::SUCCESS) {
     cout << "Init failed: " << demo_network.err_msg() << endl;
     return -1;
@@ -77,6 +78,11 @@ int main() {
     }
   };
 
+  rc = demo_network.set_param_init_function(ParamInitType::PARAM_INIT_XAVIER);
+  if (rc != NeuralNetwork::SUCCESS) {
+    cout << "set_loss_function failed: " << demo_network.err_msg() << endl;
+    return -1;
+  }
   rc = demo_network.set_loss_function(LossType::LOSS_CROSS_ENTROPY);
   if (rc != NeuralNetwork::SUCCESS) {
     cout << "set_loss_function failed: " << demo_network.err_msg() << endl;
@@ -84,7 +90,7 @@ int main() {
   }
 
   rc = demo_network.Train(mnist_data.train_data(), train_target, print_func,
-                          mnist_data.train_data().size(), 1);
+                          1.5 * mnist_data.train_data().size(), 1);
   if (rc != NeuralNetwork::SUCCESS) {
     cout << "Train failed: " << demo_network.err_msg() << endl;
     return -1;
@@ -126,5 +132,11 @@ int main() {
   title("Mnist NeuralNetwork");
   show();
 #endif
+
+  if (right_count * 1.0 / test_date_size < 0.8) {
+    cout << "right rate is too low" << endl;
+    return -1;
+  }
+
   return 0;
 }

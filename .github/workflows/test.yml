@@ -1,4 +1,4 @@
-name: build
+name: commit_test
 on:
   push: #设置触发规则
     branches:
@@ -16,11 +16,15 @@ jobs:
       - name: Install build tools #这部分是安装依赖
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake
+          sudo apt-get install -y build-essential cmake wget
+      - name: Download mnist data
+          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/t10k-labels-idx1-ubyte
+          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/train-labels-idx1-ubyte
+          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/t10k-images-idx3-ubyte
+          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/train-images-idx3-ubyte
       - name: Run test #需要执行的命令
         run: |
           cd src
           ./build.sh
           ./bin/test_bin
-
-
+          ./bin/mnist
