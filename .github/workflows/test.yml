@@ -19,10 +19,12 @@ jobs:
           sudo apt-get install -y build-essential cmake wget
       - name: Download mnist data
         run: |
-          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/t10k-labels-idx1-ubyte
-          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/train-labels-idx1-ubyte
-          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/t10k-images-idx3-ubyte
-          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/train-images-idx3-ubyte
+          cd src
+          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/t10k-labels-idx1-ubyte -O ./demo/mnist/mnist/t10k-labels-idx1-ubyte
+          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/train-labels-idx1-ubyte -O ./demo/mnist/mnist/train-labels-idx1-ubyte
+          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/t10k-images-idx3-ubyte -O ./demo/mnist/mnist/t10k-images-idx3-ubyte
+          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/train-images-idx3-ubyte -O ./demo/mnist/mnist/train-images-idx3-ubyte
+          cd ..
       - name: Run test #需要执行的命令
         run: |
           cd src
