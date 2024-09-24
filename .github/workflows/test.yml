@@ -20,6 +20,7 @@ jobs:
       - name: Download mnist data
         run: |
           cd src
+          mkdir -p ./demo/mnist/mnist
           wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/t10k-labels-idx1-ubyte -O ./demo/mnist/mnist/t10k-labels-idx1-ubyte
           wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/train-labels-idx1-ubyte -O ./demo/mnist/mnist/train-labels-idx1-ubyte
           wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/t10k-images-idx3-ubyte -O ./demo/mnist/mnist/t10k-images-idx3-ubyte
