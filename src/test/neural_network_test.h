@@ -15,11 +15,7 @@
 
 using namespace std;
 using namespace deeplearning;
-
-#ifdef _MATPLOTLIB_CPP_LOAD_
-#include "matplotlibcpp.h"
-using namespace matplotlibcpp;
-#endif
+using namespace drawtool;
 
 std::string demo_data_file_path;
 std::vector<std::vector<double>> demo_data;
@@ -171,18 +167,10 @@ TEST(NeuralNetwork, TrainAndPredict) {
     }
   }
 
-#ifdef _MATPLOTLIB_CPP_LOAD_
   // draw pic
-  xlabel("epoch");
-  ylabel("loss");
-  named_plot("test", test_loss_x, test_loss_y);
-  named_plot("train", train_loss_x, train_loss_y);
-  legend();
-  title("Demo NeuralNetwork");
-  show();
-  MatplotDraw::PrintBiasBar("bias", network.neuron_bias());
-
-#endif
+  drawtool::MatplotDraw::PrintLossResult("Demo NeuralNetwork", train_loss_x,
+                                         train_loss_y, test_loss_x, test_loss_y,
+                                         "epoch", "loss");
 
   DEBUG("right rate: " << right_count * 1.0 / demo_test.size());
   MUST_TRUE(right_count * 1.0 / demo_test.size() > 0.8,

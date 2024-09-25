@@ -46,6 +46,10 @@ public:
   }
 
   RC Init(const std::vector<int> &layer, double learning_rate = 0.1) {
+    if (network_status_ != NETWORK_STATUS_UNINIT) {
+      err_msg_ = "[NeuralNetwork::InitNetwork] Network has init";
+      return ALREADY_INIT;
+    }
     if (layer.size() < 2) {
       err_msg_ = "[NeuralNetwork::InitNetwork] Invalid layer size";
       return INVALID_DATA;
@@ -211,12 +215,6 @@ public:
     for (int i = 0; i < layer_.size(); i++) {
       neuron_output_.push_back(std::vector<double>(layer_[i], 0));
       neuron_delta_.push_back(std::vector<double>(layer_[i], 0));
-      for (int j = 0; j < layer_[i]; j++) {
-        if (i != 0) {
-          neuron_weight_.push_back(std::vector<std::vector<double>>(
-              layer_[i], std::vector<double>(layer_[i - 1], 0)));
-        }
-      }
     }
 
     network_status_ = NETWORK_STATUS_INIT;

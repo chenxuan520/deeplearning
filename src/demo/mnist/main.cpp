@@ -1,15 +1,13 @@
+#include "matplot_draw.h"
 #include "mnist_data.h"
 #include "neural_network.h"
+#include "neural_network_loader.h"
 #include <iostream>
 #include <vector>
 
-#ifdef _MATPLOTLIB_CPP_LOAD_
-#include "matplotlibcpp.h"
-using namespace matplotlibcpp;
-#endif
-
 using namespace std;
 using namespace deeplearning;
+using namespace drawtool;
 
 int main() {
   // step 1 load data
@@ -33,11 +31,44 @@ int main() {
 
   // step 2 create network
   NeuralNetwork demo_network;
+  auto rc = NeuralNetwork::SUCCESS;
+  std::string param_file_name = "./demo/mnist/mnist/demo.param";
 
-  auto rc = demo_network.Init(vector<int>{784, 16, 10}, 0.2);
-  if (rc != NeuralNetwork::SUCCESS) {
-    cout << "Init failed: " << demo_network.err_msg() << endl;
-    return -1;
+  // if exist param file, read from it ,or init
+  NeuralNetwork::NetworkParam demo_param = {};
+  NeuralNetwork::NetworkOption demo_option = {};
+  auto loader_rc = NeuralNetworkLoader::ImportParamFromFile(
+      demo_param, demo_option, param_file_name);
+
+  if (loader_rc == NeuralNetworkLoader::SUCCESS) {
+    auto rc = demo_network.ImportNetworkParam(demo_param, demo_option);
+    if (rc != NeuralNetwork::SUCCESS) {
+      cout << "ImportNetworkParam failed: " << demo_network.err_msg() << endl;
+      return -1;
+    }
+
+    demo_network.set_learning_rate(0.05);
+
+  } else {
+    auto rc = demo_network.Init(vector<int>{784, 20, 10}, 0.2);
+
+    if (rc != NeuralNetwork::SUCCESS) {
+      cout << "Init failed: " << demo_network.err_msg() << endl;
+      return -1;
+    }
+    cout << "Init success" << endl;
+
+    rc = demo_network.set_param_init_function(
+        ParamInitType::PARAM_INIT_UNIFORM_RANDOM);
+    if (rc != NeuralNetwork::SUCCESS) {
+      cout << "set_loss_function failed: " << demo_network.err_msg() << endl;
+      return -1;
+    }
+    rc = demo_network.set_loss_function(LossType::LOSS_CROSS_ENTROPY);
+    if (rc != NeuralNetwork::SUCCESS) {
+      cout << "set_loss_function failed: " << demo_network.err_msg() << endl;
+      return -1;
+    }
   }
 
   cout << "Init success begin train" << endl;
@@ -78,17 +109,6 @@ int main() {
     }
   };
 
-  rc = demo_network.set_param_init_function(ParamInitType::PARAM_INIT_XAVIER);
-  if (rc != NeuralNetwork::SUCCESS) {
-    cout << "set_loss_function failed: " << demo_network.err_msg() << endl;
-    return -1;
-  }
-  rc = demo_network.set_loss_function(LossType::LOSS_CROSS_ENTROPY);
-  if (rc != NeuralNetwork::SUCCESS) {
-    cout << "set_loss_function failed: " << demo_network.err_msg() << endl;
-    return -1;
-  }
-
   rc = demo_network.Train(mnist_data.train_data(), train_target, print_func,
                           1.5 * mnist_data.train_data().size(), 1);
   if (rc != NeuralNetwork::SUCCESS) {
@@ -122,19 +142,29 @@ int main() {
   cout << " right count:" << right_count
        << " right rate: " << right_count * 1.0 / test_date_size << endl;
 
-#ifdef _MATPLOTLIB_CPP_LOAD_
   // draw pic
-  xlabel("epoch");
-  ylabel("loss");
-  named_plot("test", test_loss_x, test_loss_y);
-  named_plot("train", train_loss_x, train_loss_y);
-  legend();
-  title("Mnist NeuralNetwork");
-  show();
-#endif
+  MatplotDraw::PrintLossResult("Mnist NeuralNetwork", train_loss_x,
+                               train_loss_y, test_loss_x, test_loss_y, "epoch",
+                               "loss");
 
   if (right_count * 1.0 / test_date_size < 0.8) {
     cout << "right rate is too low" << endl;
+    return -1;
+  }
+
+  // save param
+  NeuralNetwork::NetworkParam param;
+  NeuralNetwork::NetworkOption option;
+  rc = demo_network.ExportNetworkParam(param, option);
+  if (rc != NeuralNetwork::SUCCESS) {
+    cout << "ExportNetworkParam failed: " << demo_network.err_msg() << endl;
+    return -1;
+  }
+  cout << param.neuron_weight_.size() << endl;
+  auto rcLoader =
+      NeuralNetworkLoader::ExportParamToFile(param, option, param_file_name);
+  if (rcLoader != NeuralNetworkLoader::SUCCESS) {
+    cout << "ExportParamToFile failed: " << demo_network.err_msg() << endl;
     return -1;
   }
 

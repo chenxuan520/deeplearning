@@ -24,12 +24,14 @@ public:
     // write option
     auto is_success = ofs.write((const char *)&option, sizeof(option)).good();
     if (!is_success) {
+      ofs.close();
       return EXPORT_ERROR;
     }
     // write size
     ParamSizeMsg msg(param);
     is_success = ofs.write((const char *)&msg, sizeof(msg)).good();
     if (!is_success) {
+      ofs.close();
       return EXPORT_ERROR;
     }
     // write layer
@@ -37,6 +39,7 @@ public:
       auto is_success =
           ofs.write((const char *)&param.layer_[i], sizeof(int)).good();
       if (!is_success) {
+        ofs.close();
         return EXPORT_ERROR;
       }
     }
@@ -47,12 +50,13 @@ public:
             ofs.write((const char *)&param.neuron_bias_[i][j], sizeof(double))
                 .good();
         if (!is_success) {
+          ofs.close();
           return EXPORT_ERROR;
         }
       }
     }
     // write neuron weight
-    for (int i = 0; i < param.neuron_weight_.size(); i++) {
+    for (int i = 1; i < param.neuron_weight_.size(); i++) {
       for (int j = 0; j < param.neuron_weight_[i].size(); j++) {
         for (int k = 0; k < param.neuron_weight_[i][j].size(); k++) {
           auto is_success =
@@ -60,6 +64,7 @@ public:
                         sizeof(double))
                   .good();
           if (!is_success) {
+            ofs.close();
             return EXPORT_ERROR;
           }
         }
@@ -81,6 +86,7 @@ public:
     // read option
     auto is_success = ifs.read((char *)&option, sizeof(option)).good();
     if (!is_success) {
+      ifs.close();
       return INPORT_ERROR;
     }
 
@@ -88,6 +94,7 @@ public:
     ParamSizeMsg msg;
     is_success = ifs.read((char *)&msg, sizeof(msg)).good();
     if (!is_success) {
+      ifs.close();
       return INPORT_ERROR;
     }
 
@@ -96,6 +103,7 @@ public:
     for (int i = 0; i < msg.layer_size_; i++) {
       auto is_success = ifs.read((char *)&param.layer_[i], sizeof(int)).good();
       if (!is_success) {
+        ifs.close();
         return INPORT_ERROR;
       }
     }
@@ -107,6 +115,7 @@ public:
         auto is_success =
             ifs.read((char *)&param.neuron_bias_[i][j], sizeof(double)).good();
         if (!is_success) {
+          ifs.close();
           return INPORT_ERROR;
         }
       }
@@ -122,6 +131,7 @@ public:
               ifs.read((char *)&param.neuron_weight_[i][j][k], sizeof(double))
                   .good();
           if (!is_success) {
+            ifs.close();
             return INPORT_ERROR;
           }
         }
@@ -142,7 +152,6 @@ private:
     ParamSizeMsg(const NeuralNetwork::NetworkParam &param) {
       layer_size_ = param.layer_.size();
       neuron_bias_size_ = param.neuron_bias_.size();
-
       neuron_weight_size_ = param.neuron_weight_.size();
     }
   };

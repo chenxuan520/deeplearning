@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 # include dir add,split by<space>
 include_directories(../../deeplearning)
+include_directories(../../drawtool)
 
 # link dir add
 # link_directories()
