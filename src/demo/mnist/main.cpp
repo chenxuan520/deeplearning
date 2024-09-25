@@ -50,7 +50,7 @@ int main() {
     demo_network.set_learning_rate(0.05);
 
   } else {
-    auto rc = demo_network.Init(vector<int>{784, 20, 10}, 0.2);
+    auto rc = demo_network.Init(vector<int>{784, 20, 10});
 
     if (rc != NeuralNetwork::SUCCESS) {
       cout << "Init failed: " << demo_network.err_msg() << endl;
@@ -110,7 +110,7 @@ int main() {
   };
 
   rc = demo_network.Train(mnist_data.train_data(), train_target, print_func,
-                          1.5 * mnist_data.train_data().size(), 1);
+                          1.5 * mnist_data.train_data().size(), 1, 0.2);
   if (rc != NeuralNetwork::SUCCESS) {
     cout << "Train failed: " << demo_network.err_msg() << endl;
     return -1;

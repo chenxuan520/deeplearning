@@ -11,7 +11,7 @@ NeuralNetwork::NetworkParam demo_param = {};
 NeuralNetwork::NetworkOption demo_option = {};
 
 INIT(LoaderParam) {
-  NeuralNetwork network((vector<int>() = {1, 2, 3}), 0.3);
+  NeuralNetwork network((vector<int>() = {1, 2, 3}));
   network.set_param_init_function(ParamInitType::PARAM_INIT_XAVIER);
   auto rc = network.ExportNetworkParam(demo_param, demo_option);
   if (rc != NeuralNetwork::SUCCESS) {

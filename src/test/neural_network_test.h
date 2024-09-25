@@ -113,7 +113,7 @@ END(NeuralNetwork) {
 
 TEST(NeuralNetwork, TrainAndPredict) {
   NeuralNetwork network;
-  network.Init((vector<int>() = {2, 3, 3, 2}), 0.01);
+  network.Init((vector<int>() = {2, 3, 3, 2}));
   MUST_EQUAL(network.network_status(), NeuralNetwork::NETWORK_STATUS_INIT);
   auto rc = network.set_loss_function(LossType::LOSS_CROSS_ENTROPY);
   MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
@@ -149,6 +149,7 @@ TEST(NeuralNetwork, TrainAndPredict) {
                 << " test_loss: " << test_loss << std::endl;
     }
   };
+  network.set_learning_rate(0.01);
   rc = network.Train(demo_data, demo_data_target, print_func);
   MUST_TRUE(rc == NeuralNetwork::SUCCESS, network.err_msg());
 

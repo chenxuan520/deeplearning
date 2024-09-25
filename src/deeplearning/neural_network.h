@@ -41,11 +41,9 @@ public:
   NeuralNetwork(const NeuralNetwork &) = delete;
   NeuralNetwork &operator=(const NeuralNetwork &) = delete;
 
-  NeuralNetwork(const std::vector<int> &layer, double learning_rate = 0.1) {
-    Init(layer, learning_rate);
-  }
+  NeuralNetwork(const std::vector<int> &layer) { Init(layer); }
 
-  RC Init(const std::vector<int> &layer, double learning_rate = 0.1) {
+  RC Init(const std::vector<int> &layer) {
     if (network_status_ != NETWORK_STATUS_UNINIT) {
       err_msg_ = "[NeuralNetwork::InitNetwork] Network has init";
       return ALREADY_INIT;
@@ -55,12 +53,7 @@ public:
       return INVALID_DATA;
     }
 
-    learning_rate_ = learning_rate;
-    layer_ = layer;
-    neuron_output_.resize(layer.size());
-    neuron_delta_.resize(layer.size());
-    neuron_bias_.resize(layer.size());
-    neuron_weight_.resize(layer.size());
+    learning_rate_ = 0.1;
     rand_seed_ = 0;
 
     softmax_function_ = SoftmaxFactory::Create(SOFTMAX_NONE);
@@ -68,17 +61,7 @@ public:
     activate_function_ = ActivateFactory::Create(ACTIVATE_SIGMOID);
     param_init_function_ = ParamInitFactory::Create(PARAM_INIT_ZERO);
 
-    for (int i = 0; i < layer.size(); i++) {
-      for (int j = 0; j < layer[i]; j++) {
-        neuron_bias_[i].push_back(0);
-        neuron_delta_[i].push_back(0);
-        neuron_output_[i].push_back(0);
-        if (i != 0) {
-          neuron_weight_[i].push_back(std::vector<double>(layer[i - 1], 0));
-        }
-      }
-    }
-
+    InitParamWithLayer(layer);
     param_init_function_->InitParam(neuron_weight_, neuron_bias_);
 
     network_status_ = NETWORK_STATUS_INIT;
@@ -89,7 +72,7 @@ public:
            const std::vector<std::vector<double>> &target,
            std::function<void(NeuralNetwork &network, int epoch_num)>
                each_epoch_call = nullptr,
-           int epoch_num = 0, int batch_num = 1) {
+           int epoch_num = 0, int batch_num = 1, double learning_rate = 0) {
     if (network_status_ != NETWORK_STATUS_INIT) {
       err_msg_ = "[NeuralNetwork::Train] Network not init";
       return NOT_INIT;
@@ -97,6 +80,13 @@ public:
     if (data.size() != target.size() || batch_num <= 0) {
       err_msg_ = "[NeuralNetwork::Train] Invalid data input in size";
       return INVALID_DATA;
+    }
+
+    // init learning_rate
+    if (learning_rate != 0) {
+      learning_rate_ = learning_rate;
+    } else {
+      learning_rate_ = (learning_rate_ != 0) ? learning_rate_ : 0.1;
     }
 
     // init batch random
@@ -126,12 +116,12 @@ public:
         if (rc != SUCCESS) {
           return rc;
         }
-      }
 
-      // update neuron
-      auto rc = UpdateAllNeuron(batch_num);
-      if (rc != SUCCESS) {
-        return rc;
+        // update neuron
+        rc = UpdateAllNeuron(batch_num);
+        if (rc != SUCCESS) {
+          return rc;
+        }
       }
 
       // callback
@@ -296,6 +286,25 @@ public:
 private:
   double CalcDelta(const double deriv_target, const double out) {
     return deriv_target * activate_function_->DerivActivate(out);
+  }
+
+  void InitParamWithLayer(const std::vector<int> &layer) {
+    layer_ = layer;
+    neuron_output_.resize(layer.size());
+    neuron_delta_.resize(layer.size());
+    neuron_bias_.resize(layer.size());
+    neuron_weight_.resize(layer.size());
+
+    for (int i = 0; i < layer.size(); i++) {
+      for (int j = 0; j < layer[i]; j++) {
+        neuron_bias_[i].push_back(0);
+        neuron_delta_[i].push_back(0);
+        neuron_output_[i].push_back(0);
+        if (i != 0) {
+          neuron_weight_[i].push_back(std::vector<double>(layer[i - 1], 0));
+        }
+      }
+    }
   }
 
   RC UpdateNeuronOutput(const std::pair<int, int> &neuron_pos,
