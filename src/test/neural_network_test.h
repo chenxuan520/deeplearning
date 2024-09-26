@@ -126,7 +126,8 @@ TEST(NeuralNetwork, TrainAndPredict) {
   // MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
 
   vector<double> train_loss_y, test_loss_y, train_loss_x, test_loss_x;
-  auto print_func = [&](NeuralNetwork &network, int epoch_num) {
+  auto print_func = [&](NeuralNetwork &network, int epoch_num,
+                        bool &early_stop) {
     static int count = 0;
     if (count++ % 1000 == 0) {
       double train_loss = 0;
@@ -148,6 +149,9 @@ TEST(NeuralNetwork, TrainAndPredict) {
       std::cout << "epoch: " << epoch_num << " train_loss: " << train_loss
                 << " test_loss: " << test_loss << std::endl;
     }
+    // if (count > 30000) {
+    //   early_stop = true;
+    // }
   };
   network.set_learning_rate(0.01);
   rc = network.Train(demo_data, demo_data_target, print_func);

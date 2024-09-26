@@ -70,7 +70,8 @@ public:
 
   RC Train(const std::vector<std::vector<double>> &data,
            const std::vector<std::vector<double>> &target,
-           std::function<void(NeuralNetwork &network, int epoch_num)>
+           std::function<void(NeuralNetwork &network, int epoch_num,
+                              bool &early_stop)>
                each_epoch_call = nullptr,
            int epoch_num = 0, int batch_num = 1, double learning_rate = 0) {
     if (network_status_ != NETWORK_STATUS_INIT) {
@@ -118,15 +119,19 @@ public:
         }
 
         // update neuron
-        rc = UpdateAllNeuron(batch_num);
+        rc = UpdateAllNeuron();
         if (rc != SUCCESS) {
           return rc;
         }
       }
 
       // callback
+      auto early_stop = false;
       if (each_epoch_call != nullptr) {
-        each_epoch_call(*this, i);
+        each_epoch_call(*this, i, early_stop);
+        if (early_stop) {
+          break;
+        }
       }
     }
     return SUCCESS;
@@ -359,14 +364,14 @@ private:
     return SUCCESS;
   }
 
-  RC UpdateAllNeuron(int batch_num = 1) {
+  RC UpdateAllNeuron() {
     if (layer_.size() == 0) {
       err_msg_ = "[NeuralNetwork::UpdateAllNeuron] Invalid data input";
       return INVALID_DATA;
     }
     for (int i = 0; i < layer_.size(); i++) {
       for (int j = 0; j < layer_[i]; j++) {
-        auto rc = UpdateSingleNeuron({i, j}, batch_num);
+        auto rc = UpdateSingleNeuron({i, j});
         if (rc != SUCCESS) {
           return rc;
         }
@@ -375,8 +380,7 @@ private:
     return SUCCESS;
   }
 
-  RC UpdateSingleNeuron(const std::pair<int, int> &neuron_pos,
-                        int batch_num = 1) {
+  RC UpdateSingleNeuron(const std::pair<int, int> &neuron_pos) {
     auto [x, y] = neuron_pos;
     if (x >= layer_.size() || x < 0 || y >= layer_[x] || y < 0) {
       err_msg_ = "[NeuralNetwork::UpdateNeuron] Invalid data input";
@@ -385,7 +389,7 @@ private:
     if (x == 0) {
       return SUCCESS;
     }
-    double averg_delta = neuron_delta_[x][y] / (double)batch_num;
+    double averg_delta = neuron_delta_[x][y];
     for (int i = 0; i < layer_[x - 1]; i++) {
       neuron_weight_[x][y][i] -=
           learning_rate_ * neuron_output_[x - 1][i] * averg_delta;

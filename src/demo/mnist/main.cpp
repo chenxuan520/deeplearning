@@ -85,7 +85,7 @@ int main() {
 
   // step 3 train data
   vector<double> train_loss_y, test_loss_y, train_loss_x, test_loss_x;
-  auto print_func = [&](NeuralNetwork &network, int epoch_num) {
+  auto print_func = [&](NeuralNetwork &network, int epoch_num, bool &) {
     static int count = 0;
     if (count++ % 10000 == 0) {
       double train_loss = 0;

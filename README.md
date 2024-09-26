@@ -7,6 +7,7 @@
 -  `src/test` 为测试代码
 ## 使用demo
 -  `src/demo` 中有demo代码,可以参考
+    - mnist 为 mnist 数据集,使用代码demo默认配置下识别率约为91%
 ## Quick Start
 1. `mkdir build;cmake ..;sudo make install` 安装
 ```c++
@@ -37,3 +38,5 @@ int main() {
   std::cout << "Predict: " << result[0] << std::endl;
 }
 ```
+# TODO
+- [ ] 支持多种优化器
