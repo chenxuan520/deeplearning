@@ -153,7 +153,8 @@ TEST(NeuralNetwork, TrainAndPredict) {
     //   early_stop = true;
     // }
   };
-  network.set_learning_rate(0.01);
+  network.set_softmax_function(SoftmaxType::SOFTMAX_STD);
+  network.set_learning_rate(0.1);
   rc = network.Train(demo_data, demo_data_target, print_func);
   MUST_TRUE(rc == NeuralNetwork::SUCCESS, network.err_msg());
 

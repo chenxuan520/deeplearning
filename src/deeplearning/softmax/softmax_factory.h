@@ -1,8 +1,8 @@
 #pragma once
 
-#include "none_softmax.h"
+#include "softmax/none_softmax.h"
+#include "softmax/std_softmax.h"
 #include "softmax_base.h"
-#include "std_softmax.h"
 #include <memory>
 
 namespace deeplearning {

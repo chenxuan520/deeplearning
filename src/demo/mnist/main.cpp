@@ -109,6 +109,7 @@ int main() {
     }
   };
 
+  demo_network.set_softmax_function(SoftmaxType::SOFTMAX_STD);
   rc = demo_network.Train(mnist_data.train_data(), train_target, print_func,
                           1.5 * mnist_data.train_data().size(), 1, 0.2);
   if (rc != NeuralNetwork::SUCCESS) {

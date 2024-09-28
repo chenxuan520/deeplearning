@@ -7,6 +7,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 namespace deeplearning {
 
@@ -332,6 +333,26 @@ private:
     return SUCCESS;
   }
 
+  RC UpdateNeuronOutputSoftMax() {
+    if (layer_.size() < 2) {
+      err_msg_ =
+          "[NeuralNetwork::UpdateNeuronOutputSoftMax] Invalid data input";
+      return INVALID_DATA;
+    }
+    std::vector<double> output;
+    int now_layer = layer_.size() - 1;
+    int last_layer = layer_.size() - 2;
+    for (int i = 0; i < layer_[now_layer]; i++) {
+      double now = neuron_bias_[now_layer][i];
+      for (int j = 0; j < layer_[last_layer]; j++) {
+        now += neuron_weight_[now_layer][i][j] * neuron_output_[last_layer][j];
+      }
+      output.push_back(now);
+    }
+    softmax_function_->Normalize(output, neuron_output_[now_layer]);
+    return SUCCESS;
+  }
+
   void ClearNeuronDelta() {
     for (int i = 0; i < layer_.size(); i++) {
       for (int j = 0; j < layer_[i]; j++) {
@@ -350,10 +371,15 @@ private:
     }
     double deriv_target = 0;
     if (x == layer_.size() - 1) {
-      deriv_target =
-          (double)(loss_function_->DerivLoss(target[y], neuron_output_[x][y])) /
-          (double)target.size();
-      result = CalcDelta(deriv_target, neuron_output_[x][y]);
+      if (softmax_function_->GetSoftmaxType() == SOFTMAX_NONE) {
+        deriv_target = (double)(loss_function_->DerivLoss(
+                           target[y], neuron_output_[x][y])) /
+                       (double)target.size();
+        result = CalcDelta(deriv_target, neuron_output_[x][y]);
+      } else {
+        result = softmax_function_->CalcDelta(neuron_output_[x][y], target[y],
+                                              loss_function_);
+      }
     } else {
       for (int i = 0; i < layer_[x + 1]; i++) {
         deriv_target += neuron_weight_[x + 1][i][y] * neuron_delta_[x + 1][i];
@@ -411,9 +437,13 @@ private:
         }
       }
     }
-    // calc softmax
-    softmax_function_->Normalize(neuron_output_[layer_.size() - 1],
-                                 neuron_output_[layer_.size() - 1]);
+    // update if exist softmax
+    if (softmax_function_->GetSoftmaxType() != SOFTMAX_NONE) {
+      auto rc = UpdateNeuronOutputSoftMax();
+      if (rc != SUCCESS) {
+        return rc;
+      }
+    }
     return SUCCESS;
   }
 
