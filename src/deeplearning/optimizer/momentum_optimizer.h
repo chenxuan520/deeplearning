@@ -11,15 +11,15 @@ public:
     bias_velocity_.resize(layer.size());
     weight_velocity_.resize(layer.size());
 
-    // TODO
-    // for (int i = 0; i < layer.size(); i++) {
-    //   for (int j = 0; j < layer[i]; j++) {
-    //     bias_velocity_[i].push_back(0);
-    //     if (i != 0) {
-    //       weight_velocity_[i][j] = std::vector<double>(layer[i - 1], 0);
-    //     }
-    //   }
-    // }
+    for (int i = 0; i < layer.size(); i++) {
+      bias_velocity_[i].resize(layer[i], 0);
+      if (i != 0) {
+        weight_velocity_[i].resize(layer[i]);
+        for (int j = 0; j < layer[i]; j++) {
+          weight_velocity_[i][j].resize(layer[i - 1], 0);
+        }
+      }
+    }
   }
 
   double CalcChangeValue(double delta, double learning_rate,

@@ -60,6 +60,16 @@ let g:Term_project_task=[
 			\'key'        : '\4',
 			\},
 			\{
+			\'name'       : 'debug',
+			\'command'    : './build.sh false Debug',
+			\'mode'       : 'quickfix',
+			\'path'       : s:root.'/src',
+			\'close'      : 1,
+			\'end_script' : 'cclose|packadd termdebug|Termdebug ./bin/mnist',
+			\'type'       : 'split',
+			\'key'        : '\5',
+			\},
+			\{
 			\'name'       : 'coc',
 			\'command'    : 'cmake .. -DCMAKE_EXPORT_COMPILE_COMMANDS=1;cp ./compile_commands.json ..',
 			\'mode'       : 'quickfix',
@@ -67,7 +77,7 @@ let g:Term_project_task=[
 			\'close'      : 2,
 			\'end_script' : 'CocRestart',
 			\'type'       : 'split',
-			\'key'        : '\5',
+			\'key'        : '\6',
 			\},
 			\]
 

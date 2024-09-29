@@ -5,6 +5,9 @@ project(deeplearning)
 
 set(PROJECT_ROOT_PATH .)
 
+# default is Release
+set(CMAKE_BUILD_TYPE "Debug")
+
 # set check memory
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer")
 # link_libraries(-fsanitize=address -fsanitize=leak -fsanitize=undefined)

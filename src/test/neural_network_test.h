@@ -155,7 +155,7 @@ TEST(NeuralNetwork, TrainAndPredict) {
   };
   network.set_softmax_function(SoftmaxType::SOFTMAX_STD);
   network.set_learning_rate(0.1);
-  // network.set_optimizer_function(OptimizerType::OPTIMIZER_MOMENTUM);
+  network.set_optimizer_function(OptimizerType::OPTIMIZER_MOMENTUM);
   rc = network.Train(demo_data, demo_data_target, print_func);
   MUST_TRUE(rc == NeuralNetwork::SUCCESS, network.err_msg());
 

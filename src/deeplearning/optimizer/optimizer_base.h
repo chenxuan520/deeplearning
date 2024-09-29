@@ -7,7 +7,6 @@ namespace deeplearning {
 enum OptimizerType {
   OPTIMIZER_SGD,
   OPTIMIZER_MOMENTUM,
-  OPTIMIZER_ADAM,
 };
 
 class OptimizerFunction {
