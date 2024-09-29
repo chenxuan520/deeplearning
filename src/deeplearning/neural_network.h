@@ -1,6 +1,7 @@
 #pragma once
 #include "activate/activate_factory.h"
 #include "loss/loss_factory.h"
+#include "optimizer/optimizer_factory.h"
 #include "param_init/param_init_factory.h"
 #include "softmax/softmax_factory.h"
 #include "util/random.h"
@@ -34,6 +35,7 @@ public:
     LossType loss_type_;
     ActivateType activate_type_;
     SoftmaxType softmax_type_;
+    OptimizerType optimizer_type_;
   };
 
 public:
@@ -61,6 +63,7 @@ public:
     loss_function_ = LossFactory::Create(LOSS_MSE);
     activate_function_ = ActivateFactory::Create(ACTIVATE_SIGMOID);
     param_init_function_ = ParamInitFactory::Create(PARAM_INIT_ZERO);
+    optimizer_function_ = OptimizerFactory::Create(OPTIMIZER_SGD, layer_);
 
     InitParamWithLayer(layer);
     param_init_function_->InitParam(neuron_weight_, neuron_bias_);
@@ -185,6 +188,7 @@ public:
     option.loss_type_ = loss_function_->GetLossType();
     option.activate_type_ = activate_function_->GetActivateType();
     option.softmax_type_ = softmax_function_->GetSoftmaxType();
+    option.optimizer_type_ = optimizer_function_->GetOptimizerType();
     return SUCCESS;
   }
 
@@ -207,6 +211,9 @@ public:
     loss_function_ = LossFactory::Create(option.loss_type_);
     activate_function_ = ActivateFactory::Create(option.activate_type_);
     softmax_function_ = SoftmaxFactory::Create(option.softmax_type_);
+    param_init_function_ = ParamInitFactory::Create(PARAM_INIT_ZERO);
+    optimizer_function_ =
+        OptimizerFactory::Create(option.optimizer_type_, layer_);
 
     for (int i = 0; i < layer_.size(); i++) {
       neuron_output_.push_back(std::vector<double>(layer_[i], 0));
@@ -237,6 +244,10 @@ public:
         ActivateFactory::Create(old.activate_function_->GetActivateType());
     softmax_function_ =
         SoftmaxFactory::Create(old.softmax_function_->GetSoftmaxType());
+    param_init_function_ =
+        ParamInitFactory::Create(old.param_init_function_->GetParamInitType());
+    optimizer_function_ = OptimizerFactory::Create(
+        old.optimizer_function_->GetOptimizerType(), layer_);
 
     network_status_ = NETWORK_STATUS_INIT;
     return SUCCESS;
@@ -253,6 +264,9 @@ public:
   inline const std::vector<std::vector<double>> &neuron_bias() {
     return neuron_bias_;
   }
+
+  inline void set_learning_rate(double rate) { learning_rate_ = rate; }
+  inline void set_random_seed(int seed) { rand_seed_ = seed; }
   inline RC set_loss_function(LossType type) {
     loss_function_ = LossFactory::Create(type);
     if (loss_function_ == nullptr) {
@@ -264,7 +278,7 @@ public:
   inline RC set_activate_function(ActivateType type) {
     activate_function_ = ActivateFactory::Create(type);
     if (activate_function_ == nullptr) {
-      err_msg_ = "[NeuralNetwork::set_activate_function] Invalid loss type";
+      err_msg_ = "[NeuralNetwork::set_activate_function] Invalid activate type";
       return INVALID_DATA;
     }
     return SUCCESS;
@@ -272,7 +286,7 @@ public:
   inline RC set_softmax_function(SoftmaxType type) {
     softmax_function_ = SoftmaxFactory::Create(type);
     if (softmax_function_ == nullptr) {
-      err_msg_ = "[NeuralNetwork::set_softmax_function] Invalid loss type";
+      err_msg_ = "[NeuralNetwork::set_softmax_function] Invalid softmax type";
       return INVALID_DATA;
     }
     return SUCCESS;
@@ -280,14 +294,22 @@ public:
   inline RC set_param_init_function(ParamInitType type) {
     param_init_function_ = ParamInitFactory::Create(type);
     if (param_init_function_ == nullptr) {
-      err_msg_ = "[NeuralNetwork::set_param_init_function] Invalid loss type";
+      err_msg_ =
+          "[NeuralNetwork::set_param_init_function] Invalid param_init type";
       return INVALID_DATA;
     }
     param_init_function_->InitParam(neuron_weight_, neuron_bias_);
     return SUCCESS;
   }
-  inline void set_learning_rate(double rate) { learning_rate_ = rate; }
-  inline void set_random_seed(int seed) { rand_seed_ = seed; }
+  inline RC set_optimizer_function(OptimizerType type) {
+    optimizer_function_ = OptimizerFactory::Create(type, layer_);
+    if (optimizer_function_ == nullptr) {
+      err_msg_ =
+          "[NeuralNetwork::set_optimizer_function] Invalid optimizer type";
+      return INVALID_DATA;
+    }
+    return SUCCESS;
+  }
 
 private:
   double CalcDelta(const double deriv_target, const double out) {
@@ -415,12 +437,15 @@ private:
     if (x == 0) {
       return SUCCESS;
     }
-    double averg_delta = neuron_delta_[x][y];
+    double delta = neuron_delta_[x][y];
+    double change_value =
+        optimizer_function_->CalcChangeValue(delta, learning_rate_, neuron_pos);
     for (int i = 0; i < layer_[x - 1]; i++) {
-      neuron_weight_[x][y][i] -=
-          learning_rate_ * neuron_output_[x - 1][i] * averg_delta;
+      double delta_weight = delta * neuron_output_[x - 1][i];
+      neuron_weight_[x][y][i] -= optimizer_function_->CalcChangeValue(
+          delta_weight, learning_rate_, neuron_pos, i);
     }
-    neuron_bias_[x][y] -= learning_rate_ * averg_delta;
+    neuron_bias_[x][y] -= change_value;
     return SUCCESS;
   }
 
@@ -470,6 +495,7 @@ private:
   std::shared_ptr<ActivateFunction> activate_function_ = nullptr;
   std::shared_ptr<SoftmaxFunction> softmax_function_ = nullptr;
   std::shared_ptr<ParamInitFunction> param_init_function_ = nullptr;
+  std::shared_ptr<OptimizerFunction> optimizer_function_ = nullptr;
 
   NetworkStatus network_status_ = NETWORK_STATUS_UNINIT;
   int rand_seed_ = 0;

@@ -115,7 +115,7 @@ TEST(NeuralNetwork, TrainAndPredict) {
   NeuralNetwork network;
   network.Init((vector<int>() = {2, 3, 3, 2}));
   MUST_EQUAL(network.network_status(), NeuralNetwork::NETWORK_STATUS_INIT);
-  auto rc = network.set_loss_function(LossType::LOSS_CROSS_ENTROPY);
+  auto rc = network.set_loss_function(LossType::LOSS_MSE);
   MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
   rc = demo_network.set_param_init_function(ParamInitType::PARAM_INIT_XAVIER);
   MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
@@ -155,6 +155,7 @@ TEST(NeuralNetwork, TrainAndPredict) {
   };
   network.set_softmax_function(SoftmaxType::SOFTMAX_STD);
   network.set_learning_rate(0.1);
+  // network.set_optimizer_function(OptimizerType::OPTIMIZER_MOMENTUM);
   rc = network.Train(demo_data, demo_data_target, print_func);
   MUST_TRUE(rc == NeuralNetwork::SUCCESS, network.err_msg());
 

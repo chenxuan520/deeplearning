@@ -9,11 +9,11 @@ class CrossEntropyLoss : public LossFunction {
 public:
   CrossEntropyLoss() = default;
   virtual double Loss(double target, double output) override {
-    return -target * log(output) - (1 - target) * log(1 - output);
+    return -target * log(output) - (1.0 - target) * log(1.0 - output);
   }
 
   virtual double DerivLoss(double target, double output) override {
-    return (output - target) / (output * (1 - output));
+    return (output - target) / (output * (1.0 - output));
   }
 
   virtual LossType GetLossType() override { return LOSS_CROSS_ENTROPY; }

@@ -109,7 +109,7 @@ int main() {
     }
   };
 
-  demo_network.set_softmax_function(SoftmaxType::SOFTMAX_STD);
+  // demo_network.set_softmax_function(SoftmaxType::SOFTMAX_STD);
   rc = demo_network.Train(mnist_data.train_data(), train_target, print_func,
                           1.5 * mnist_data.train_data().size(), 1, 0.2);
   if (rc != NeuralNetwork::SUCCESS) {
@@ -161,13 +161,12 @@ int main() {
     cout << "ExportNetworkParam failed: " << demo_network.err_msg() << endl;
     return -1;
   }
-  cout << param.neuron_weight_.size() << endl;
-  auto rcLoader =
-      NeuralNetworkLoader::ExportParamToFile(param, option, param_file_name);
-  if (rcLoader != NeuralNetworkLoader::SUCCESS) {
-    cout << "ExportParamToFile failed: " << demo_network.err_msg() << endl;
-    return -1;
-  }
+  // auto rcLoader =
+  //     NeuralNetworkLoader::ExportParamToFile(param, option, param_file_name);
+  // if (rcLoader != NeuralNetworkLoader::SUCCESS) {
+  //   cout << "ExportParamToFile failed: " << demo_network.err_msg() << endl;
+  //   return -1;
+  // }
 
   return 0;
 }
