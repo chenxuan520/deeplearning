@@ -3,6 +3,7 @@
 #include "neural_network.h"
 #include "neural_network_loader.h"
 #include <iostream>
+#include <utility>
 #include <vector>
 
 using namespace std;
@@ -119,7 +120,10 @@ int main() {
   cout << "Train success begin predict" << endl;
 
   // step 4 test data
+  vector<pair<vector<double>, pair<int, int>>> test_error_data;
+  bool save_error_data = false;
   int right_count = 0, test_date_size = mnist_data.test_data().size();
+
   for (int i = 0; i < test_date_size; i++) {
     vector<double> result(10, 0);
     rc = demo_network.Predict(mnist_data.test_data()[i], result);
@@ -138,6 +142,12 @@ int main() {
     }
     if (max_index == mnist_data.test_labels()[i]) {
       right_count++;
+    } else {
+      if (save_error_data) {
+        test_error_data.push_back(
+            make_pair(mnist_data.test_data()[i],
+                      make_pair(mnist_data.test_labels()[i], max_index)));
+      }
     }
   }
   cout << " right count:" << right_count
@@ -168,5 +178,22 @@ int main() {
   //   return -1;
   // }
 
+  // save errorimg2file
+  if (save_error_data) {
+    std::string filename = "./demo/mnist/mnist/error_data.txt";
+    std::string result;
+    for (int i = 0; i < test_error_data.size(); i++) {
+      auto &data = test_error_data[i].first;
+      auto &label = test_error_data[i].second;
+      string data_str;
+      MnistData::DrawMnistImage(test_error_data[i].first, data_str,
+                                test_error_data[i].second.first,
+                                test_error_data[i].second.second);
+      result += data_str;
+    }
+    ofstream outfile(filename);
+    outfile << result;
+    outfile.close();
+  }
   return 0;
 }

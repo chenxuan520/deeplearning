@@ -38,5 +38,3 @@ int main() {
   std::cout << "Predict: " << result[0] << std::endl;
 }
 ```
-# TODO
-- [ ] 支持多种优化器 参考 https://zhuanlan.zhihu.com/p/261695487

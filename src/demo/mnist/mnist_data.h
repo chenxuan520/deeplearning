@@ -8,6 +8,7 @@ public:
   enum RC {
     SUCCESS,
     FILE_OPEN_ERROR,
+    DATA_FORMAT_ERROR,
   };
 
 public:
@@ -34,6 +35,29 @@ public:
     }
     return SUCCESS;
   }
+
+  static RC DrawMnistImage(const std::vector<double> &image,
+                           std::string &result, int label = -1,
+                           int predict = -1) {
+    if (image.size() != 784) {
+      return DATA_FORMAT_ERROR;
+    }
+    // print imgae with 16*16 to result
+    result = "+----------------------------+\n";
+    for (int i = 0; i < 28; i++) {
+      result += "|";
+      for (int j = 0; j < 28; j++)
+        result += image[i * 28 + j] > 0.5 ? "*" : " ";
+      result += "|\n";
+    }
+    result += "+----------------------------+\n";
+    if (label != -1 && predict != -1) {
+      result += "label: " + std::to_string(label) + "\n";
+      result += "predict: " + std::to_string(predict) + "\n";
+    }
+    return SUCCESS;
+  }
+
   const std::vector<std::vector<double>> &train_data() { return train_data_; }
   const std::vector<int> &train_labels() { return train_labels_; }
   const std::vector<std::vector<double>> &test_data() { return test_data_; }
