@@ -1,15 +1,19 @@
 # AGENTS.md
 
 本仓库是一个小型的 C++ 深度学习 / 神经网络学习项目。
-“库”的部分是纯头文件的（作为头文件安装），并附带一个演示（MNIST）和一个小型库内测试框架。
+当前仓库已经不是纯头文件库：`src/deeplearning/` 下同时包含头文件和 `.cpp` 实现，并通过 CMake 构建静态库。
+除原有的 MLP / MNIST 路线外，仓库现在还包含一个最小 Transformer / 字符级语言模型实验链路。
 
 在此仓库中未找到代理/编辑器规则文件（没有 `.cursor/rules/`，`.trae/rules/` 或 `.github/copilot-instructions.md`）。
 
 ## 1) 项目概述
 
 ### 项目简介
-- 一个最小化的、纯头文件的神经网络实现，位于 `src/deeplearning/` 下。
-- 示例程序位于 `src/demo/` 下（主要是 MNIST），测试位于 `src/test/` 下。
+- 一个最小化的 C++ 神经网络实现，核心库位于 `src/deeplearning/` 下。
+- 示例程序位于 `src/demo/` 下，目前包含：
+  - `mnist`：原有前馈网络示例
+  - `transformer_char`：最小字符级语言模型示例
+- 测试位于 `src/test/` 下。
 
 ### 核心架构
 
@@ -41,6 +45,27 @@
 - `src/deeplearning/neural_network_loader.h` 中的 `deeplearning::NeuralNetworkLoader` 提供模型参数的二进制导出/导入。
 - MNIST 演示使用它来缓存/加载 `demo.param` (`src/demo/mnist/main.cpp`)。
 
+**Transformer / 字符级语言模型**
+- `src/deeplearning/transformer/` 下提供最小 Transformer 相关模块：
+  - `TokenEmbedding`
+  - `PositionalEncoding`
+  - `LayerNorm`
+  - `SelfAttention`
+  - `TransformerBlock`
+  - `TransformerEncoder`
+  - `TransformerDecoder`
+  - `MiniTransformerLM`
+  - `MiniTransformerLMLoader`
+  - `CharacterTokenizer`
+  - `CharacterDataset`
+- `MiniTransformerLM` 目前支持：
+  - encoder / decoder 两种主干
+  - `block_num == 0/1/2` 的训练和生成测试路径
+  - greedy 生成与 `temperature/top-k/top-p` 采样生成
+  - next-token loss / perplexity 评估
+  - 模型保存/加载
+  - `MiniTransformerLM::Config` 统一描述模型结构与主干配置
+
 **可选绘图**
 - `src/drawtool/matplot_draw.h` 中的 `drawtool::MatplotDraw` 在使用 `_MATPLOTLIB_CPP_LOAD_` 编译时绘制损失曲线。
 - 该宏由 CMake 选项 `ENABLE_DRAW` 控制（见 `src/CMakeLists.txt`）。
@@ -65,12 +90,41 @@
 - 可执行文件配置为通过子项目中的 `EXECUTABLE_OUTPUT_PATH` 放置在 `src/bin/` 下：
   - 测试：`src/bin/test_bin`（来自 `src/test/CMakeLists.txt`）
   - MNIST 演示：`src/bin/mnist`（来自 `src/demo/mnist/CMakeLists.txt`）
+  - 字符级 Transformer 演示：`src/bin/transformer_char`（来自 `src/demo/transformer_char/CMakeLists.txt`）
 
 ### 运行
 
 **MNIST 演示**
 - 在工作目录 `src/` 下运行（`src/demo/mnist/main.cpp` 中的路径是相对的，如 `./demo/mnist/mnist/...`）：
   - `./bin/mnist`
+
+**Transformer 字符级演示**
+- 在工作目录 `src/` 下运行：
+  - `./bin/transformer_char`
+- 常用参数：
+  - `--prompt`
+  - `--generate-num`
+  - `--temperature`
+  - `--top-k`
+  - `--top-p`
+  - `--epochs`
+  - `--learning-rate`
+  - `--rand-seed`
+  - `--backbone encoder|decoder`
+  - `--model-dim`
+  - `--head-num`
+  - `--feed-forward-dim`
+  - `--block-num`
+  - `--context-size`
+  - `--block-learning-rate-scale`
+  - `--model-file`
+  - `--config-file`
+  - `--corpus`
+  - `--corpus-file`
+  - `--save-model`
+  - `--no-save-model`
+  - `--eval-only`
+  - `--force-train`
 
 **测试**
 - 在工作目录 `src/` 下运行：
@@ -80,7 +134,9 @@
   - 过滤由 `src/test/main.cpp` 中的 `REGEX_FILT_TEST(argv[1])` 实现。
 
 ### 安装
-- 头文件安装由 CMake 定义：`src/CMakeLists.txt` 中的 `install(DIRECTORY ./deeplearning DESTINATION include)`。
+- 安装由 CMake 定义：
+  - `install(TARGETS deeplearning DESTINATION lib)`
+  - `install(DIRECTORY ./deeplearning DESTINATION include FILES_MATCHING PATTERN "*.h")`
 - 仓库 README 展示了使用 `make install` 的安装流程：
   - `mkdir build; cmake ..; sudo make install`（从包含 CMakeLists 的目录运行：`src/`）。
 
@@ -121,6 +177,7 @@
 - 运行子集：
   - 传递一个 CLI 参数，它被视为 `std::regex` 与 `"<Group> <TestName>"` 匹配。
 - 一些测试在工作目录中创建和删除临时文件（例如 `demo.param`, `demo.data`, `demo.test`）。
+- `NeuralNetwork` 测试不再调用绘图弹窗；图像绘制保留在 demo 路径中。
 
 ## 5) 安全性
 

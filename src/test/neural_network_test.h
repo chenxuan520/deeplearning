@@ -26,7 +26,7 @@ std::vector<std::vector<double>> demo_test_target;
 NeuralNetwork demo_network;
 
 INIT(NeuralNetwork) {
-  srand(time(nullptr));
+  srand(1);
   demo_data_file_path = "demo.data";
   demo_test_file_path = "demo.test";
   const int train_data_size = 60000;
@@ -117,7 +117,7 @@ TEST(NeuralNetwork, TrainAndPredict) {
   MUST_EQUAL(network.network_status(), NeuralNetwork::NETWORK_STATUS_INIT);
   auto rc = network.set_loss_function(LossType::LOSS_MSE);
   MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
-  rc = demo_network.set_param_init_function(ParamInitType::PARAM_INIT_XAVIER);
+  rc = network.set_param_init_function(ParamInitType::PARAM_INIT_XAVIER);
   MUST_EQUAL(rc, NeuralNetwork::SUCCESS);
 
   // rc = network.set_softmax_function(SoftmaxType::SOFTMAX_STD);
@@ -173,11 +173,6 @@ TEST(NeuralNetwork, TrainAndPredict) {
       right_count++;
     }
   }
-
-  // draw pic
-  drawtool::MatplotDraw::PrintLossResult("Demo NeuralNetwork", train_loss_x,
-                                         train_loss_y, test_loss_x, test_loss_y,
-                                         "epoch", "loss");
 
   DEBUG("right rate: " << right_count * 1.0 / demo_test.size());
   MUST_TRUE(right_count * 1.0 / demo_test.size() > 0.8,

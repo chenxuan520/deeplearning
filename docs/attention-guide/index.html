@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>从神经网络到 Attention | deeplearning 项目讲解</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="hero" id="top">
+      <div class="hero__grid"></div>
+      <div class="hero__inner">
+        <p class="eyebrow">deeplearning / static guide</p>
+        <h1>从神经网络到 Attention</h1>
+        <p class="hero__lead">
+          这是一份面向初学者、但又尽量不失真的项目讲解站点。它一边解释你这个
+          C++ 小项目现在已经实现了什么，一边把“神经元、前向传播、反向传播、序列建模、self-attention、Transformer、字符级语言模型”连成一条直线。
+        </p>
+        <div class="hero__chips">
+          <span>HTML / CSS / JS 独立静态页</span>
+          <span>带交互动画</span>
+          <span>从直觉到代码映射</span>
+        </div>
+        <div class="hero__actions">
+          <a href="#project" class="button button--primary">先看项目全貌</a>
+          <a href="#attention-lab" class="button button--ghost">直接玩 Attention</a>
+        </div>
+      </div>
+    </header>
+
+    <nav class="toc">
+      <a href="#project">项目全貌</a>
+      <a href="#nn-road">神经网络路线</a>
+      <a href="#neuron-lab">神经元实验台</a>
+      <a href="#propagation-lab">传播动画</a>
+      <a href="#why-attention">为什么需要 Attention</a>
+      <a href="#attention-lab">Attention 实验台</a>
+      <a href="#repo-map">代码映射</a>
+      <a href="#lm-flow">语言模型链路</a>
+      <a href="#summary">总结</a>
+    </nav>
+
+    <main>
+      <section class="section" id="project">
+        <div class="section__heading reveal">
+          <p class="eyebrow">01 / 项目全貌</p>
+          <h2>这个项目现在到底是什么</h2>
+          <p>
+            它已经不是“只有一个 MLP 的小练习”了。现在它同时包含两条路线：
+            一条是传统前馈网络 + MNIST；另一条是最小 Transformer / 字符级语言模型实验链路。
+          </p>
+        </div>
+
+        <div class="card-grid reveal">
+          <article class="card">
+            <h3>MLP 路线</h3>
+            <p>
+              核心类是 <code>NeuralNetwork</code>。它负责多层全连接、激活函数、损失函数、优化器、参数初始化、训练与预测。
+            </p>
+            <ul>
+              <li>适合理解前向传播 / 反向传播</li>
+              <li>适合理解权重、偏置、loss、梯度下降</li>
+              <li>示例程序是 <code>src/demo/mnist</code></li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Transformer 路线</h3>
+            <p>
+              核心模块位于 <code>src/deeplearning/transformer</code>。已经有
+              embedding、位置编码、layer norm、self-attention、block、encoder、decoder、字符 tokenizer、dataset、语言模型与 loader。
+            </p>
+            <ul>
+              <li>支持 encoder / decoder 主干</li>
+              <li>支持训练、保存/加载、greedy 与采样生成</li>
+              <li>示例程序是 <code>src/demo/transformer_char</code></li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>为什么它很适合学习</h3>
+            <p>
+              因为它不是巨型框架，没有几十层抽象。你能顺着文件一路读到核心公式和数据流。
+            </p>
+            <ul>
+              <li>更接近“原理版”而不是“工业封装版”</li>
+              <li>适合理解 attention 在语言模型里怎么用</li>
+              <li>适合把概念和具体 C++ 代码对应起来</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="pipeline reveal">
+          <div class="pipeline__node">输入数据</div>
+          <div class="pipeline__arrow"></div>
+          <div class="pipeline__node">向量表示</div>
+          <div class="pipeline__arrow"></div>
+          <div class="pipeline__node">特征变换</div>
+          <div class="pipeline__arrow"></div>
+          <div class="pipeline__node">预测 / 生成</div>
+        </div>
+      </section>
+
+      <section class="section section--muted" id="nn-road">
+        <div class="section__heading reveal">
+          <p class="eyebrow">02 / 神经网络路线</p>
+          <h2>Attention 不是凭空出现的，它是神经网络演化出来的</h2>
+          <p>
+            如果你直接从 Transformer 开始，很容易只记住一堆名字：Q、K、V、softmax、multi-head。
+            但真正的理解通常来自一条很朴素的路线：<b>神经元 -> 多层网络 -> 梯度下降 -> 序列建模 -> Attention</b>。
+          </p>
+        </div>
+
+        <div class="timeline reveal">
+          <article class="timeline__item">
+            <span class="timeline__step">1</span>
+            <h3>先有神经元</h3>
+            <p>
+              一个神经元本质上做的事很简单：把几个输入按权重加起来，再过一个非线性函数。
+            </p>
+          </article>
+          <article class="timeline__item">
+            <span class="timeline__step">2</span>
+            <h3>再有多层网络</h3>
+            <p>
+              把很多神经元堆起来，就得到 MLP。它会一层一层提取更复杂的特征。
+            </p>
+          </article>
+          <article class="timeline__item">
+            <span class="timeline__step">3</span>
+            <h3>再有训练</h3>
+            <p>
+              网络做错了，就通过 loss 衡量错误，再通过反向传播把“哪里错了”传回每个参数。
+            </p>
+          </article>
+          <article class="timeline__item">
+            <span class="timeline__step">4</span>
+            <h3>遇到序列问题</h3>
+            <p>
+              当输入不再是固定向量，而是一个句子、一个 token 序列，旧的 MLP 方式就不够自然了。
+            </p>
+          </article>
+          <article class="timeline__item">
+            <span class="timeline__step">5</span>
+            <h3>Attention 出场</h3>
+            <p>
+              它解决的核心问题是：<b>当前 token 到底应该重点看序列里的谁？</b>
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="neuron-lab">
+        <div class="section__heading reveal">
+          <p class="eyebrow">03 / 神经元实验台</p>
+          <h2>先把一个神经元看懂，再谈 Attention</h2>
+          <p>
+            下面这个小实验件会把“输入、权重、偏置、加权求和、激活函数、输出”可视化出来。
+            你先把这一步看透，后面理解 attention 里的打分和加权求和会轻松很多。
+          </p>
+        </div>
+
+        <div class="lab reveal" id="neuronLab">
+          <div class="lab__controls">
+            <label>
+              输入 x1
+              <input type="range" min="-2" max="2" step="0.1" value="1.0" data-neuron="x1" />
+              <span class="lab__value" data-neuron-read="x1"></span>
+            </label>
+            <label>
+              输入 x2
+              <input type="range" min="-2" max="2" step="0.1" value="0.5" data-neuron="x2" />
+              <span class="lab__value" data-neuron-read="x2"></span>
+            </label>
+            <label>
+              权重 w1
+              <input type="range" min="-3" max="3" step="0.1" value="1.2" data-neuron="w1" />
+              <span class="lab__value" data-neuron-read="w1"></span>
+            </label>
+            <label>
+              权重 w2
+              <input type="range" min="-3" max="3" step="0.1" value="-0.8" data-neuron="w2" />
+              <span class="lab__value" data-neuron-read="w2"></span>
+            </label>
+            <label>
+              偏置 b
+              <input type="range" min="-3" max="3" step="0.1" value="0.4" data-neuron="b" />
+              <span class="lab__value" data-neuron-read="b"></span>
+            </label>
+            <label>
+              激活函数
+              <select data-neuron="activation">
+                <option value="sigmoid">Sigmoid</option>
+                <option value="relu">ReLU</option>
+                <option value="tanh">Tanh</option>
+              </select>
+            </label>
+          </div>
+          <div class="lab__viz">
+            <div class="formula-card">
+              <h3>当前计算</h3>
+              <p class="formula" data-neuron-formula></p>
+              <div class="meter">
+                <div class="meter__bar" data-neuron-bar></div>
+              </div>
+              <p class="explain" data-neuron-explain></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--muted" id="propagation-lab">
+        <div class="section__heading reveal">
+          <p class="eyebrow">04 / 传播动画</p>
+          <h2>把前向传播和反向传播看成“信息流动”就容易懂很多</h2>
+          <p>
+            初学神经网络时最容易卡住的两句话是：<b>前向传播到底在传什么？反向传播到底又在传什么？</b>
+            下面这个动画会把它们分开演示。你可以把前向传播想成“数据往前流、逐层算出预测”；把反向传播想成“误差信号往回流、告诉每一层该怎么改”。
+          </p>
+        </div>
+
+        <div class="propagation reveal" id="propagationLab">
+          <div class="propagation__controls">
+            <button class="button button--primary" type="button" data-prop-action="forward">播放前向传播</button>
+            <button class="button button--ghost" type="button" data-prop-action="backward">播放反向传播</button>
+            <button class="button button--ghost" type="button" data-prop-action="reset">重置</button>
+          </div>
+          <div class="propagation__stage">
+            <div class="propagation__left">
+              <div class="network" data-network-stage>
+                <div class="network__layer">
+                  <div class="network__title">输入层</div>
+                  <div class="network__node" data-node="input-0">x1</div>
+                  <div class="network__node" data-node="input-1">x2</div>
+                </div>
+                <div class="network__layer">
+                  <div class="network__title">隐藏层</div>
+                  <div class="network__node" data-node="hidden-0">h1</div>
+                  <div class="network__node" data-node="hidden-1">h2</div>
+                  <div class="network__node" data-node="hidden-2">h3</div>
+                </div>
+                <div class="network__layer">
+                  <div class="network__title">输出层</div>
+                  <div class="network__node" data-node="output-0">y</div>
+                </div>
+                <div class="network__pulse" data-network-pulse></div>
+              </div>
+
+              <div class="propagation-flow">
+                <div class="flow-box">
+                  <h4>数值流动</h4>
+                  <p class="flow-box__line" data-prop-values>
+                    x = [1.00, 0.50] -> h = [0.42, 0.73, 0.18] -> y = [0.81]
+                  </p>
+                </div>
+                <div class="flow-box">
+                  <h4>梯度流动</h4>
+                  <p class="flow-box__line" data-prop-grads>
+                    dL/dy = [-0.19] -> dL/dh = [-0.08, 0.03, 0.11] -> dL/dx = [0.04, -0.02]
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="propagation__notes">
+              <div class="formula-card">
+                <h3>当前阶段</h3>
+                <p class="formula" data-prop-title>还没有播放动画</p>
+                <p class="explain" data-prop-explain>
+                  点击上面的按钮，观察“数值”如何向前流动，以及“误差信号”如何向后流动。
+                </p>
+              </div>
+
+              <div class="propagation-change">
+                <h3>参数如何变化</h3>
+                <div class="change-list" data-prop-params>
+                  <div class="change-item">
+                    <strong>w(hidden,0)</strong>
+                    <span>0.80 -> 0.76</span>
+                  </div>
+                  <div class="change-item">
+                    <strong>w(out,0)</strong>
+                    <span>1.10 -> 1.06</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--muted" id="why-attention">
+        <div class="section__heading reveal">
+          <p class="eyebrow">05 / 为什么需要 Attention</p>
+          <h2>传统网络遇到序列时，真正难的不是“有很多词”，而是“相关词离得很远”</h2>
+          <p>
+            比如一句话里，当前词要不要关注另一个词，取决于语义关系，而不是物理距离。
+            这也是为什么 Transformer 的关键不是“更深”，而是“让 token 之间直接互相看”。
+          </p>
+        </div>
+
+        <div class="two-col reveal">
+          <article class="card card--accent">
+            <h3>没有 Attention 时</h3>
+            <p>
+              信息往往要沿着一条长链慢慢传，距离一远，就更容易丢失或被稀释。
+            </p>
+            <p>
+              你可以把它想成“传话游戏”：中间经过很多站，原始信息越来越模糊。
+            </p>
+          </article>
+          <article class="card card--accent">
+            <h3>有 Attention 时</h3>
+            <p>
+              当前 token 可以直接看整个序列，并自己决定谁重要、谁次要。
+            </p>
+            <p>
+              你可以把它想成“开会时先扫一眼全场，再决定该听谁”。
+            </p>
+          </article>
+        </div>
+
+        <div class="callout reveal">
+          <strong>一句话记忆：</strong>
+          Attention 的本质不是“更复杂的矩阵运算”，而是“给当前 token 一种主动分配注意力的能力”。
+        </div>
+      </section>
+
+      <section class="section" id="attention-lab">
+        <div class="section__heading reveal">
+          <p class="eyebrow">06 / Attention 实验台</p>
+          <h2>用一个可玩的例子理解 Q、K、V、softmax 和 mask</h2>
+          <p>
+            下面这个实验件会模拟一个小句子。你选择一个 query token，页面会自动计算它对其他 token 的关注分数、softmax 权重和最终加权结果。
+          </p>
+        </div>
+
+        <div class="attention-lab reveal" id="attentionLab">
+          <div class="attention-lab__toolbar">
+            <div class="token-picker" data-token-picker></div>
+            <label>
+              Temperature
+              <input type="range" min="0.4" max="2.0" step="0.1" value="1.0" data-attention="temperature" />
+              <span class="lab__value" data-attention-read="temperature"></span>
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" data-attention="causal" />
+              打开 causal mask（只能看自己和前文）
+            </label>
+          </div>
+
+          <div class="attention-lab__body">
+            <div class="sentence-strip" data-sentence-strip></div>
+            <div class="attention-grid">
+              <div class="attention-panel">
+                <h3>打分矩阵（Score）</h3>
+                <div class="matrix" data-score-matrix></div>
+              </div>
+              <div class="attention-panel">
+                <h3>归一化后权重（Softmax）</h3>
+                <div class="bars" data-softmax-bars></div>
+              </div>
+              <div class="attention-panel">
+                <h3>加权结果（Weighted Sum）</h3>
+                <div class="vector-box" data-attention-result></div>
+                <p class="explain" data-attention-explain></p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="multihead reveal" id="multiheadLab">
+          <div class="multihead__intro">
+            <h3>再往前一步：为什么要多头（Multi-Head）</h3>
+            <p>
+              单头 attention 只有一种“关注视角”。多头 attention 的想法是：
+              同一个 token，在不同子空间里可以学不同关系。
+              一个头可能更偏向“谁是主语”，另一个头可能更偏向“动作和宾语”，还有一个头可能更关注“位置或局部结构”。
+            </p>
+          </div>
+          <div class="multihead__grid">
+            <div class="multihead__panel">
+              <h3>头选择</h3>
+              <div class="token-picker" data-head-picker></div>
+              <p class="explain" data-head-summary></p>
+            </div>
+            <div class="multihead__panel">
+              <h3>每个头的注意力热度</h3>
+              <div class="head-heatmaps" data-head-heatmaps></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--muted" id="repo-map">
+        <div class="section__heading reveal">
+          <p class="eyebrow">07 / 代码映射</p>
+          <h2>概念和这个仓库的 C++ 代码怎么一一对应</h2>
+          <p>
+            学 attention 最容易卡住的地方，就是“听懂了课，但不知道代码里哪一块对应哪一个概念”。
+            这一节就是专门做这个映射。
+          </p>
+        </div>
+
+        <div class="mapping reveal">
+          <article class="mapping__item">
+            <h3>1. 神经网络基础</h3>
+            <p><code>src/deeplearning/neural_network.*</code></p>
+            <p>
+              这里是理解训练最好的入口。你会看到参数初始化、前向传播、反向传播、优化器更新这些最基础的东西。
+            </p>
+          </article>
+          <article class="mapping__item">
+            <h3>2. Self-Attention 核心</h3>
+            <p><code>src/deeplearning/transformer/self_attention.*</code></p>
+            <p>
+              这里能直接看到 Q/K/V 投影、score 计算、softmax、加权求和，以及 backward 的梯度链路。
+            </p>
+          </article>
+          <article class="mapping__item">
+            <h3>3. Transformer Block</h3>
+            <p><code>src/deeplearning/transformer/transformer_block.*</code></p>
+            <p>
+              这里把 attention、residual、layer norm、FFN 组合起来，你会看见“一个完整 block 到底长什么样”。
+            </p>
+          </article>
+          <article class="mapping__item">
+            <h3>4. 语言模型闭环</h3>
+            <p><code>src/deeplearning/transformer/mini_transformer_lm.*</code></p>
+            <p>
+              这里对应训练、评估、greedy 生成、sample 生成，是把 attention 变成“能出字”的关键一层。
+            </p>
+          </article>
+          <article class="mapping__item">
+            <h3>5. 数据与词表</h3>
+            <p><code>character_tokenizer.*</code> / <code>character_dataset.*</code></p>
+            <p>
+              它们把原始字符串切成 token，并进一步切成 next-token 训练样本。
+            </p>
+          </article>
+          <article class="mapping__item">
+            <h3>6. 可运行 demo</h3>
+            <p><code>src/demo/transformer_char/main.cpp</code></p>
+            <p>
+              这里是最完整的一条链：读语料、构建词表、训练模型、评估 loss/perplexity、保存、加载、生成、采样、打印 attention（如果打开开关）。
+            </p>
+          </article>
+        </div>
+
+        <div class="source-deep reveal">
+          <article class="source-card">
+            <h3>如果你想看 MLP 的训练骨架</h3>
+            <p><code>src/deeplearning/neural_network.cpp</code></p>
+            <ul>
+              <li><code>Train(...)</code>：训练总入口</li>
+              <li><code>ForwardPropagation(...)</code>：逐层前向</li>
+              <li><code>BackPropagation(...)</code>：逐层反向</li>
+              <li><code>UpdateAllNeuron()</code>：参数更新</li>
+            </ul>
+          </article>
+          <article class="source-card">
+            <h3>如果你想看 attention 的核心机械结构</h3>
+            <p><code>src/deeplearning/transformer/self_attention.cpp</code></p>
+            <ul>
+              <li><code>Forward(...)</code>：Q/K/V -> score -> softmax -> weighted sum</li>
+              <li><code>Backward(...)</code>：把输出梯度一路传回 Q/K/V 与投影权重</li>
+              <li><code>last_attention_weight()</code>：读取最近一次注意力权重</li>
+            </ul>
+          </article>
+          <article class="source-card">
+            <h3>如果你想看完整 Transformer block</h3>
+            <p><code>src/deeplearning/transformer/transformer_block.cpp</code></p>
+            <ul>
+              <li><code>Forward(...)</code>：attention -> residual -> norm -> FFN -> residual -> norm</li>
+              <li><code>Backward(...)</code>：把梯度沿着 block 结构反向拆开</li>
+            </ul>
+          </article>
+          <article class="source-card">
+            <h3>如果你想看字符级语言模型如何跑起来</h3>
+            <p><code>src/deeplearning/transformer/mini_transformer_lm.cpp</code></p>
+            <ul>
+              <li><code>TrainNextToken(...)</code>：next-token 训练</li>
+              <li><code>Generate(...)</code>：greedy 生成</li>
+              <li><code>GenerateSample(...)</code>：采样生成</li>
+              <li><code>CalcNextTokenLoss(...)</code> / <code>CalcPerplexity(...)</code>：评估</li>
+            </ul>
+          </article>
+          <article class="source-card">
+            <h3>如果你想看数据是怎么准备的</h3>
+            <p><code>character_tokenizer.cpp</code> / <code>character_dataset.cpp</code></p>
+            <ul>
+              <li><code>BuildVocabularyFromText(...)</code>：从文本构建词表</li>
+              <li><code>Encode(...)</code>：字符串转 token</li>
+              <li><code>BuildNextTokenSamples(...)</code>：切 next-token 样本</li>
+            </ul>
+          </article>
+          <article class="source-card">
+            <h3>如果你想看 demo 是怎样串起来的</h3>
+            <p><code>src/demo/transformer_char/main.cpp</code></p>
+            <ul>
+              <li>解析 CLI 参数</li>
+              <li>组装 <code>MiniTransformerLM::Config</code></li>
+              <li>训练 / 加载 / 评估 / 保存配置 / greedy / sampled</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="lm-flow">
+        <div class="section__heading reveal">
+          <p class="eyebrow">08 / 语言模型链路</p>
+          <h2>这个项目里，Attention 最终是怎么变成“下一个字符预测”的</h2>
+          <p>
+            Attention 不会直接输出文字，它先输出“上下文感知后的表示”，再由语言模型头把这个表示投影到词表维度，最后才得到“下一个 token 是谁”的概率分布。
+          </p>
+        </div>
+
+        <div class="flow-cards reveal">
+          <article class="flow-card">
+            <span>1</span>
+            <h3>Tokenizer</h3>
+            <p>把字符变成 token id。</p>
+          </article>
+          <article class="flow-card">
+            <span>2</span>
+            <h3>Embedding</h3>
+            <p>把离散 token 变成连续向量。</p>
+          </article>
+          <article class="flow-card">
+            <span>3</span>
+            <h3>Attention / Block</h3>
+            <p>让每个 token 读取上下文。</p>
+          </article>
+          <article class="flow-card">
+            <span>4</span>
+            <h3>LM Head</h3>
+            <p>把隐藏表示映射到词表打分。</p>
+          </article>
+          <article class="flow-card">
+            <span>5</span>
+            <h3>Greedy / Sample</h3>
+            <p>选出下一个 token。</p>
+          </article>
+        </div>
+
+        <div class="callout reveal">
+          <strong>真正要记住的是：</strong>
+          attention 不是最终答案，它是“让模型得到更好的上下文表示”的方法。真正输出 token 的，是 attention 后面的语言模型头与采样策略。
+        </div>
+      </section>
+
+      <section class="section section--muted" id="summary">
+        <div class="section__heading reveal">
+          <p class="eyebrow">09 / 总结</p>
+          <h2>这套小项目现在已经能帮助你理解什么</h2>
+        </div>
+
+        <div class="summary-grid reveal">
+          <article class="summary-card">
+            <h3>如果你想学神经网络基础</h3>
+            <p>
+              看 <code>NeuralNetwork</code> 路线，理解权重、偏置、激活函数、loss、梯度下降、训练与预测。
+            </p>
+          </article>
+          <article class="summary-card">
+            <h3>如果你想学 Attention 原理</h3>
+            <p>
+              看 <code>SelfAttention</code>、<code>TransformerBlock</code> 和上面的实验件，理解 score、softmax、mask、加权求和。
+            </p>
+          </article>
+          <article class="summary-card">
+            <h3>如果你想学语言模型是怎么跑起来的</h3>
+            <p>
+              看 <code>MiniTransformerLM</code>、demo 和训练/评估/采样链路，理解一个最小字符级生成系统。
+            </p>
+          </article>
+        </div>
+
+        <div class="footer-note reveal">
+          <p>
+            这不是工业级框架，但它已经足够揭示 attention 的核心机械结构。对于“想真正看懂原理”的人，这种可读、可跑、可改的小项目，往往比大框架更有教学价值。
+          </p>
+          <a href="#top" class="button button--ghost">回到顶部</a>
+        </div>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

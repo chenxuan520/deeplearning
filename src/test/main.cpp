@@ -3,6 +3,7 @@
 #include "neural_network_test.h"
 #include "softmax/std_softmax_test.h"
 #include "test.h"
+#include "transformer/transformer_test.h"
 
 ARGC_FUNC {
   if (argc == 2) {
