@@ -188,6 +188,27 @@ TEST(NeuralNetwork, TrainAndPredict) {
   MUST_TRUE(rc == NeuralNetwork::SUCCESS, demo_network.err_msg());
 }
 
+TEST(NeuralNetwork, TrainRejectInvalidBatchSize) {
+  NeuralNetwork network((vector<int>() = {2, 3, 2}));
+  vector<vector<double>> data = {{0.0, 0.0}, {1.0, 1.0}};
+  vector<vector<double>> target = {{1.0, 0.0}, {0.0, 1.0}};
+
+  auto rc = network.Train(data, target, nullptr, 1, 3);
+  MUST_EQUAL(rc, NeuralNetwork::INVALID_DATA);
+}
+
+TEST(NeuralNetwork, TrainProcessLastPartialBatch) {
+  NeuralNetwork network((vector<int>() = {2, 3, 2}));
+  vector<vector<double>> data = {
+      {0.0, 0.0}, {1.0, 1.0}, {0.5, 0.5}, {0.2, 0.8}, {1.0}};
+  vector<vector<double>> target = {
+      {1.0, 0.0}, {0.0, 1.0}, {1.0, 0.0}, {0.0, 1.0}, {1.0, 0.0}};
+
+  network.set_random_seed(0);
+  auto rc = network.Train(data, target, nullptr, 3, 2);
+  MUST_EQUAL(rc, NeuralNetwork::INVALID_DATA);
+}
+
 TEST(NeuralNetwork, CloneAndExport) {
   MUST_EQUAL(demo_network.network_status(), NeuralNetwork::NETWORK_STATUS_INIT);
 

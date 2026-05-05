@@ -3,13 +3,13 @@
 ## Author
 -  **chenxuan**
 ## 项目结构
--  `src/deeplearning` 为所需的所有头文件,包含即可使用
+-  `src/deeplearning` 为库头文件与实现源码
 -  `src/test` 为测试代码
 ## 使用demo
 -  `src/demo` 中有demo代码,可以参考
     - mnist 为 mnist 数据集,使用代码demo默认配置下识别率约为91%
 ## Quick Start
-1. `mkdir build;cmake ..;sudo make install` 安装
+1. `mkdir build;cmake ..;sudo make install` 安装头文件与库文件
 ```c++
 #include "deeplearning/neural_network.h"
 using namespace deeplearning;

@@ -11,7 +11,7 @@ enum OptimizerType {
 
 class OptimizerFunction {
 public:
-  OptimizerFunction(const std::vector<int> &layer) : layer_(layer) {}
+  OptimizerFunction(const std::vector<int> &layer);
   virtual double CalcChangeValue(double delta, double learning_rate,
                                  const std::pair<int, int> &pos,
                                  int weight_pos = -1) = 0;

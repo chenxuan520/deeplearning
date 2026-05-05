@@ -6,14 +6,10 @@ namespace deeplearning {
 
 class NoneSoftmax : public SoftmaxFunction {
 public:
-  void Normalize(const std::vector<double> &, std::vector<double> &) override {
-    return;
-  }
-  double CalcDelta(double, double, std::shared_ptr<LossFunction>) override {
-    return 0;
-  }
-  SoftmaxType GetSoftmaxType() override { return SOFTMAX_NONE; }
-
-private:
+  void Normalize(const std::vector<double> &input,
+                 std::vector<double> &output) override;
+  double CalcDelta(double output, double target,
+                   std::shared_ptr<LossFunction> loss_function) override;
+  SoftmaxType GetSoftmaxType() override;
 };
 } // namespace deeplearning

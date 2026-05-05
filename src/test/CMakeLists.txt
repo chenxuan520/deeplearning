@@ -3,18 +3,8 @@ cmake_minimum_required(VERSION 3.22.1)
 # project name
 project(test)
 
-# set c++ version
-set(CMAKE_CXX_STANDARD 17)
-
-# include dir add,split by<space>
-include_directories(../deeplearning)
-include_directories(../drawtool)
-include_directories(../third_party/cpptest)
-
-# link dir add
-# link_directories()
-
-
 # add source
 set(EXECUTABLE_OUTPUT_PATH ../../bin)
 add_executable(test_bin ./main.cpp ${DIR_SRCS})
+target_include_directories(test_bin PRIVATE ../third_party/cpptest)
+target_link_libraries(test_bin PRIVATE deeplearning drawtool)

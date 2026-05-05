@@ -6,13 +6,9 @@
 namespace deeplearning {
 class TanhActivate : public ActivateFunction {
 public:
-  double Activate(const double &input) override {
-    return (1 - exp(-2 * input)) / (1 + exp(-2 * input));
-  }
-  double DerivActivate(const double &output) override {
-    return 1 - output * output;
-  }
-  ActivateType GetActivateType() override { return ACTIVATE_TANH; }
+  double Activate(const double &input) override;
+  double DerivActivate(const double &output) override;
+  ActivateType GetActivateType() override;
 };
 
 } // namespace deeplearning

@@ -6,9 +6,8 @@ namespace deeplearning {
 
 class Random {
 public:
-  Random(int min_num, int max_num_not_include, int seed)
-      : gen(seed), distr(min_num, max_num_not_include - 1) {}
-  inline int CreateRandom() { return distr(gen); }
+  Random(int min_num, int max_num_not_include, int seed);
+  int CreateRandom();
 
 public:
   template <typename T> static void RandomShuffle(T &vec) {

@@ -1,0 +1,154 @@
+# AGENTS.md
+
+本仓库是一个小型的 C++ 深度学习 / 神经网络学习项目。
+“库”的部分是纯头文件的（作为头文件安装），并附带一个演示（MNIST）和一个小型库内测试框架。
+
+在此仓库中未找到代理/编辑器规则文件（没有 `.cursor/rules/`，`.trae/rules/` 或 `.github/copilot-instructions.md`）。
+
+## 1) 项目概述
+
+### 项目简介
+- 一个最小化的、纯头文件的神经网络实现，位于 `src/deeplearning/` 下。
+- 示例程序位于 `src/demo/` 下（主要是 MNIST），测试位于 `src/test/` 下。
+
+### 核心架构
+
+**NeuralNetwork (神经网络)**
+- 核心类型：`src/deeplearning/neural_network.h` 中的 `deeplearning::NeuralNetwork`。
+- 表示一个全连接的前馈网络，由层大小向量定义（`std::vector<int> layer_`）。
+- 参数存储为嵌套向量：
+  - 偏置：`std::vector<std::vector<double>> neuron_bias_`
+  - 权重：`std::vector<std::vector<std::vector<double>>> neuron_weight_`
+  - 前向输出：`neuron_output_`
+  - 反向传播 Delta：`neuron_delta_`
+
+**通过工厂模式的可插拔策略**
+网络组合了几个策略接口，每个接口都通过枚举 + 工厂进行选择：
+- 激活函数：`ActivateType` / `ActivateFactory` (`src/deeplearning/activate/activate_base.h`, `src/deeplearning/activate/activate_factory.h`)
+- 损失函数：`LossType` / `LossFactory` (`src/deeplearning/loss/loss_base.h`, `src/deeplearning/loss/loss_factory.h`)
+- Softmax：`SoftmaxType` / `SoftmaxFactory` (`src/deeplearning/softmax/softmax_base.h`, `src/deeplearning/softmax/softmax_factory.h`)
+- 参数初始化：`ParamInitType` / `ParamInitFactory` (`src/deeplearning/param_init/param_init_base.h`, `src/deeplearning/param_init/param_init_factory.h`)
+- 优化器：`OptimizerType` / `OptimizerFactory` (`src/deeplearning/optimizer/optimizer_base.h`, `src/deeplearning/optimizer/optimizer_factory.h`)
+
+`NeuralNetwork::Init()` 设置默认值（例如 `SOFTMAX_NONE`, `LOSS_MSE`, `ACTIVATE_SIGMOID`, `PARAM_INIT_ZERO`, `OPTIMIZER_SGD`）并初始化参数。
+
+**训练流程**
+- `Train(...)` 打乱数据索引，对每个样本运行 `ForwardPropagation()`（前向传播）和 `BackPropagation()`（反向传播），然后通过 `UpdateAllNeuron()` 更新权重/偏置。
+- 优化器集成发生在 `UpdateSingleNeuron()` 中，通过调用 `optimizer_function_->CalcChangeValue(...)` 来进行偏置和权重的更新。
+- 可选的每轮回调：`each_epoch_call(NeuralNetwork&, int epoch_num, bool& early_stop)`。
+
+**模型序列化**
+- `src/deeplearning/neural_network_loader.h` 中的 `deeplearning::NeuralNetworkLoader` 提供模型参数的二进制导出/导入。
+- MNIST 演示使用它来缓存/加载 `demo.param` (`src/demo/mnist/main.cpp`)。
+
+**可选绘图**
+- `src/drawtool/matplot_draw.h` 中的 `drawtool::MatplotDraw` 在使用 `_MATPLOTLIB_CPP_LOAD_` 编译时绘制损失曲线。
+- 该宏由 CMake 选项 `ENABLE_DRAW` 控制（见 `src/CMakeLists.txt`）。
+
+## 2) 构建与命令
+
+### 构建（CMake 项目根目录是 `src/`）
+顶级 CMakeLists 是 `src/CMakeLists.txt`。
+
+**通过脚本构建（仓库推荐）**
+- 从 `src/` 目录：
+  - `./build.sh [ENABLE_DRAW] [BUILD_TYPE]`
+  - `ENABLE_DRAW` 作为 `-DENABLE_DRAW=...` 传递给 CMake（如果省略，默认为 `false`）。
+  - `BUILD_TYPE` 如果提供，将变为 `-DCMAKE_BUILD_TYPE=<value>`（如果省略，则为空）。
+  - 脚本创建/使用 `src/build/` 并运行 `cmake ..` 然后 `make`。
+
+**手动构建**
+- 从 `src/` 目录：
+  - `mkdir -p build && cd build && cmake .. && make`
+
+### 输出
+- 可执行文件配置为通过子项目中的 `EXECUTABLE_OUTPUT_PATH` 放置在 `src/bin/` 下：
+  - 测试：`src/bin/test_bin`（来自 `src/test/CMakeLists.txt`）
+  - MNIST 演示：`src/bin/mnist`（来自 `src/demo/mnist/CMakeLists.txt`）
+
+### 运行
+
+**MNIST 演示**
+- 在工作目录 `src/` 下运行（`src/demo/mnist/main.cpp` 中的路径是相对的，如 `./demo/mnist/mnist/...`）：
+  - `./bin/mnist`
+
+**测试**
+- 在工作目录 `src/` 下运行：
+  - `./bin/test_bin`
+- 可选的单个参数启用测试/基准名称的正则过滤：
+  - `./bin/test_bin <regex>`
+  - 过滤由 `src/test/main.cpp` 中的 `REGEX_FILT_TEST(argv[1])` 实现。
+
+### 安装
+- 头文件安装由 CMake 定义：`src/CMakeLists.txt` 中的 `install(DIRECTORY ./deeplearning DESTINATION include)`。
+- 仓库 README 展示了使用 `make install` 的安装流程：
+  - `mkdir build; cmake ..; sudo make install`（从包含 CMakeLists 的目录运行：`src/`）。
+
+## 3) 代码风格
+
+### 本仓库可见的约定
+- 头文件使用 `#pragma once`。
+- 命名空间组织：
+  - 核心库：`namespace deeplearning { ... }`
+  - 绘图工具：`namespace drawtool { ... }`
+  - 测试框架：`namespace cpptest { ... }` (`src/third_party/cpptest/test.h`)
+- 命名：
+  - 类型/类：`PascalCase`（帕斯卡命名法，例如 `NeuralNetwork`, `SoftmaxFactory`）。
+  - 方法：`PascalCase`（例如 `Train`, `Predict`, `CalcLoss`）。
+  - 成员字段：尾随下划线（例如 `learning_rate_`, `neuron_weight_`）。
+- 错误处理：
+  - 许多操作返回 `RC` 枚举并设置字符串错误消息（`err_msg_`），例如 `NeuralNetwork::Train()`。
+  - 调用者通常检查返回代码并可能打印 `err_msg()`。
+
+### 扩展模式
+- 新的激活函数/损失函数/优化器等遵循现有模式：
+  - 实现相关的基础接口。
+  - 添加一个枚举值。
+  - 在相应的 `*Factory::Create(...)` switch 中注册它。
+
+## 4) 测试
+
+### 框架
+- 使用捆绑在 `src/third_party/cpptest/test.h` 中的基于宏的框架。
+- 本仓库使用的关键宏：
+  - `TEST(group, name)` 定义测试。
+  - `INIT(name)` / `END(name)` 通过静态生命周期定义全局设置/拆卸。
+  - `MUST_EQUAL(...)`, `MUST_TRUE(...)` 用于断言。
+  - `DEFER(...)` 用于清理。
+
+### 仓库约定
+- 测试主要是 `src/test/` 下的头文件，被 `src/test/main.cpp` 包含。
+- 运行子集：
+  - 传递一个 CLI 参数，它被视为 `std::regex` 与 `"<Group> <TestName>"` 匹配。
+- 一些测试在工作目录中创建和删除临时文件（例如 `demo.param`, `demo.data`, `demo.test`）。
+
+## 5) 安全性
+
+### 模型文件安全 (`*.param`)
+- `NeuralNetworkLoader` 通过以下方式读取/写入二进制格式：
+  - `NetworkOption` 作为原始字节 (`ofs.write((const char *)&option, sizeof(option))`)，
+  - 然后是大小 (`ParamSizeMsg`)，
+  - 然后是层/偏置/权重的原始 int/double (`src/deeplearning/neural_network_loader.h`)。
+- 将 `*.param` 文件视为不可信输入：
+  - 精心制作的文件可能通过大小字段强制进行非常大的分配，可能耗尽内存。
+  - 原始结构体写入使得格式对编译器/ABI 差异敏感。
+
+### 可选的 Python 链接
+- 当 `ENABLE_DRAW=ON` 时，CMake 定位并链接 Python (`src/CMakeLists.txt` 中的 `find_package(PythonInterp REQUIRED)`, `find_package(PythonLibs REQUIRED)`)。
+- 请记住，这会向构建中添加额外的原生依赖项和头文件。
+
+## 6) 配置
+
+### CMake 选项
+- `ENABLE_DRAW`（默认为 `OFF`）在 `src/CMakeLists.txt` 中：
+  - 添加包含路径 `src/third_party/matplotlib-cpp`。
+  - 定义 `_MATPLOTLIB_CPP_LOAD_` 和 `WITHOUT_NUMPY`。
+  - 查找 Python include/libs 并链接它们。
+
+### 构建类型和工具
+- `src/CMakeLists.txt` 将 `CMAKE_BUILD_TYPE` 设置为 `"Debug"`。
+- `src/build.sh` 可选地传递 `-DCMAKE_BUILD_TYPE=<value>`。
+- 存在用于 C++ 工具（例如 clangd）的签入 `src/compile_commands.json`。
+
+### Sanitizers (消毒剂)
+- `src/CMakeLists.txt` 包含注释掉的 Address/Leak/UB sanitizers 标志。

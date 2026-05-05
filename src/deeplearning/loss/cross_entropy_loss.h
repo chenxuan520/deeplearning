@@ -7,16 +7,10 @@ namespace deeplearning {
 
 class CrossEntropyLoss : public LossFunction {
 public:
-  CrossEntropyLoss() = default;
-  virtual double Loss(double target, double output) override {
-    return -target * log(output) - (1.0 - target) * log(1.0 - output);
-  }
-
-  virtual double DerivLoss(double target, double output) override {
-    return (output - target) / (output * (1.0 - output));
-  }
-
-  virtual LossType GetLossType() override { return LOSS_CROSS_ENTROPY; }
+  CrossEntropyLoss();
+  double Loss(double target, double output) override;
+  double DerivLoss(double target, double output) override;
+  LossType GetLossType() override;
 };
 
 } // namespace deeplearning

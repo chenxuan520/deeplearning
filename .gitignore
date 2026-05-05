@@ -6,3 +6,4 @@ compile_commands.json
 test_bin
 demo.*
 *ubyte
+.opencode/plugins/ttadk-track.js

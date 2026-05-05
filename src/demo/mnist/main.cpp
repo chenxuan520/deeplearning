@@ -17,6 +17,7 @@ int main() {
   char test_image_name[] = "./demo/mnist/mnist/t10k-images-idx3-ubyte";
   char test_label_name[] = "./demo/mnist/mnist/t10k-labels-idx1-ubyte";
 
+  double learning_rate = 0.2;
   MnistData mnist_data;
   auto rcMnist = mnist_data.LoadMnistData(train_image_name, train_label_name,
                                           test_image_name, test_label_name);
@@ -48,7 +49,7 @@ int main() {
       return -1;
     }
 
-    demo_network.set_learning_rate(0.05);
+    learning_rate = 0.02;
 
   } else {
     auto rc = demo_network.Init(vector<int>{784, 20, 10});
@@ -112,7 +113,8 @@ int main() {
 
   // demo_network.set_optimizer_function(OptimizerType::OPTIMIZER_MOMENTUM);
   rc = demo_network.Train(mnist_data.train_data(), train_target, print_func,
-                          1.5 * mnist_data.train_data().size(), 1, 0.2);
+                          1.5 * mnist_data.train_data().size(), 1,
+                          learning_rate);
   if (rc != NeuralNetwork::SUCCESS) {
     cout << "Train failed: " << demo_network.err_msg() << endl;
     return -1;
@@ -171,12 +173,12 @@ int main() {
     cout << "ExportNetworkParam failed: " << demo_network.err_msg() << endl;
     return -1;
   }
-  // auto rcLoader =
-  //     NeuralNetworkLoader::ExportParamToFile(param, option, param_file_name);
-  // if (rcLoader != NeuralNetworkLoader::SUCCESS) {
-  //   cout << "ExportParamToFile failed: " << demo_network.err_msg() << endl;
-  //   return -1;
-  // }
+  auto rcLoader =
+      NeuralNetworkLoader::ExportParamToFile(param, option, param_file_name);
+  if (rcLoader != NeuralNetworkLoader::SUCCESS) {
+    cout << "ExportParamToFile failed: " << demo_network.err_msg() << endl;
+    return -1;
+  }
 
   // save errorimg2file
   if (save_error_data) {
