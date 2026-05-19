@@ -315,7 +315,7 @@ const SelfAttention::Matrix &SelfAttention::output_weight() const {
   return output_weight_;
 }
 
-const SelfAttention::Tensor3D &SelfAttention::last_attention_weight() {
+const SelfAttention::Tensor3D &SelfAttention::last_attention_weight() const {
   return last_attention_weight_;
 }
 

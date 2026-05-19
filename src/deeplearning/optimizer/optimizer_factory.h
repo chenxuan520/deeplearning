@@ -1,6 +1,7 @@
 #pragma once
 
 #include "optimizer/optimizer_base.h"
+#include <memory>
 #include <vector>
 namespace deeplearning {
 

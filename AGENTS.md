@@ -65,6 +65,7 @@
   - next-token loss / perplexity 评估
   - 模型保存/加载
   - `MiniTransformerLM::Config` 统一描述模型结构与主干配置
+  - demo 可导出真实 attention 权重 JSON 供静态讲解页观察
 
 **可选绘图**
 - `src/drawtool/matplot_draw.h` 中的 `drawtool::MatplotDraw` 在使用 `_MATPLOTLIB_CPP_LOAD_` 编译时绘制损失曲线。
@@ -119,12 +120,23 @@
   - `--block-learning-rate-scale`
   - `--model-file`
   - `--config-file`
+  - `--attention-export-file`
   - `--corpus`
   - `--corpus-file`
   - `--save-model`
   - `--no-save-model`
   - `--eval-only`
   - `--force-train`
+
+**静态讲解页**
+- `docs/attention-guide/index.html` 是一个独立的 HTML/CSS/JS 静态讲解站。
+- 页面包含：
+  - 项目概览
+  - 神经元实验台
+  - 前向传播 / 反向传播分步动画
+  - 单头与多头 attention 可视化
+  - 公式与结构 hover 联动
+  - 真实 attention 权重 JSON 读取与逐步回放
 
 **测试**
 - 在工作目录 `src/` 下运行：

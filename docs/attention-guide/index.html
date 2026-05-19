@@ -219,29 +219,92 @@
 
         <div class="propagation reveal" id="propagationLab">
           <div class="propagation__controls">
-            <button class="button button--primary" type="button" data-prop-action="forward">播放前向传播</button>
-            <button class="button button--ghost" type="button" data-prop-action="backward">播放反向传播</button>
+            <button class="button button--primary" type="button" data-prop-action="set-forward">切到前向传播</button>
+            <button class="button button--ghost" type="button" data-prop-action="set-backward">切到反向传播</button>
+            <button class="button button--ghost" type="button" data-prop-action="prev">上一步</button>
+            <button class="button button--ghost" type="button" data-prop-action="next">下一步</button>
             <button class="button button--ghost" type="button" data-prop-action="reset">重置</button>
+            <label class="propagation__lr">
+              Learning Rate
+              <input type="range" min="0.02" max="1.00" step="0.01" value="0.20" data-prop-control="lr" />
+              <span class="lab__value" data-prop-read="lr"></span>
+            </label>
+            <div class="propagation__status" data-prop-status>当前模式：前向传播 / Step 0</div>
           </div>
           <div class="propagation__stage">
             <div class="propagation__left">
               <div class="network" data-network-stage>
+                <div class="network__edges">
+                  <div class="network__edge network__edge--i0h0" data-edge="w100"><span>w100</span></div>
+                  <div class="network__edge network__edge--i0h1" data-edge="w101"><span>w101</span></div>
+                  <div class="network__edge network__edge--i1h1" data-edge="w111"><span>w111</span></div>
+                  <div class="network__edge network__edge--i1h2" data-edge="w112"><span>w112</span></div>
+                  <div class="network__edge network__edge--h0o" data-edge="w200"><span>w200</span></div>
+                  <div class="network__edge network__edge--h1o" data-edge="w210"><span>w210</span></div>
+                  <div class="network__edge network__edge--h2o" data-edge="w220"><span>w220</span></div>
+                </div>
                 <div class="network__layer">
                   <div class="network__title">输入层</div>
-                  <div class="network__node" data-node="input-0">x1</div>
-                  <div class="network__node" data-node="input-1">x2</div>
+                  <div class="network__node-wrap">
+                    <div class="network__node" data-node="input-0">x1</div>
+                    <div class="network__meta">input0 = 1.00</div>
+                  </div>
+                  <div class="network__node-wrap">
+                    <div class="network__node" data-node="input-1">x2</div>
+                    <div class="network__meta">input1 = 0.50</div>
+                  </div>
                 </div>
                 <div class="network__layer">
                   <div class="network__title">隐藏层</div>
-                  <div class="network__node" data-node="hidden-0">h1</div>
-                  <div class="network__node" data-node="hidden-1">h2</div>
-                  <div class="network__node" data-node="hidden-2">h3</div>
+                  <div class="network__node-wrap">
+                    <div class="network__node" data-node="hidden-0">h1</div>
+                    <div class="network__meta">b10 = 0.10</div>
+                  </div>
+                  <div class="network__node-wrap">
+                    <div class="network__node" data-node="hidden-1">h2</div>
+                    <div class="network__meta">b11 = -0.05</div>
+                  </div>
+                  <div class="network__node-wrap">
+                    <div class="network__node" data-node="hidden-2">h3</div>
+                    <div class="network__meta">b12 = 0.08</div>
+                  </div>
                 </div>
                 <div class="network__layer">
                   <div class="network__title">输出层</div>
-                  <div class="network__node" data-node="output-0">y</div>
+                  <div class="network__node-wrap">
+                    <div class="network__node" data-node="output-0">y</div>
+                    <div class="network__meta">b20 = 0.20</div>
+                  </div>
                 </div>
                 <div class="network__pulse" data-network-pulse></div>
+              </div>
+
+              <div class="propagation-formula">
+                <div class="formula-card">
+                  <h3>当前公式</h3>
+                  <p class="formula" data-prop-formula-main>
+                    z = Wx + b
+                  </p>
+                  <p class="formula formula--sub" data-prop-formula-sub>
+                    a = \sigma(z)
+                  </p>
+                  <p class="explain" data-prop-formula-explain>
+                    前向传播时，最常见的模式是先做线性变换，再过激活函数。反向传播时，则会切到梯度链式法则。
+                  </p>
+                </div>
+
+                <div class="formula-card">
+                  <h3>链式法则拆解</h3>
+                  <p class="formula" data-prop-chain-main>
+                    dL/dW = dL/dy * dy/dz * dz/dW
+                  </p>
+                  <p class="formula formula--sub" data-prop-chain-sub>
+                    还没进入反向传播时，这里会显示“当前没有梯度拆解”。
+                  </p>
+                  <p class="explain" data-prop-chain-explain>
+                    链式法则的意思不是“突然多出很多公式”，而是把“总误差对某个参数的影响”拆成一段一段局部影响，再连乘起来。
+                  </p>
+                </div>
               </div>
 
               <div class="propagation-flow">
@@ -271,6 +334,9 @@
 
               <div class="propagation-change">
                 <h3>参数如何变化</h3>
+                <p class="explain" data-prop-lr-note>
+                  学习率越大，每一步改参数的幅度越大；学习率太小时会学得慢，太大又可能来回震荡。
+                </p>
                 <div class="change-list" data-prop-params>
                   <div class="change-item">
                     <strong>w(hidden,0)</strong>
@@ -349,6 +415,18 @@
 
           <div class="attention-lab__body">
             <div class="sentence-strip" data-sentence-strip></div>
+            <div class="attention-formula formula-card">
+              <h3>Attention 公式映射</h3>
+              <p class="formula" data-attention-formula-main>
+                score = Q · K / sqrt(d)
+              </p>
+              <p class="formula formula--sub" data-attention-formula-sub>
+                weight = softmax(score), output = sum(weight x V)
+              </p>
+              <p class="explain" data-attention-formula-explain>
+                hover 公式中的关键项，观察下面的 token、score、softmax 条和加权结果区域如何联动高亮。
+              </p>
+            </div>
             <div class="attention-grid">
               <div class="attention-panel">
                 <h3>打分矩阵（Score）</h3>
@@ -504,9 +582,46 @@
         </div>
       </section>
 
+      <section class="section" id="real-attention">
+        <div class="section__heading reveal">
+          <p class="eyebrow">08 / 真实权重</p>
+          <h2>把项目真实导出的 attention 权重也放进来观察</h2>
+          <p>
+            这里不再是教学示意矩阵，而是读取 demo 导出的真实 attention JSON。你可以用
+            <code>transformer_char --attention-export-file ...</code>
+            先导出，再在这里加载。
+          </p>
+        </div>
+
+        <div class="real-attention reveal">
+          <div class="real-attention__toolbar">
+            <label>
+              选择 attention JSON
+              <input type="file" accept=".json,application/json" data-real-attention-file />
+            </label>
+            <button class="button button--ghost" type="button" data-real-attention-load>
+              读取内置样例
+            </button>
+            <button class="button button--ghost" type="button" data-real-attention-prev>
+              上一步
+            </button>
+            <button class="button button--ghost" type="button" data-real-attention-next>
+              下一步
+            </button>
+            <div class="propagation__status" data-real-attention-step>
+              当前还没有生成步骤
+            </div>
+          </div>
+          <p class="explain" data-real-attention-status>
+            还没有加载真实权重。你可以选择一个导出的 JSON 文件，或尝试读取内置样例。
+          </p>
+          <div class="real-attention__content" data-real-attention-content></div>
+        </div>
+      </section>
+
       <section class="section" id="lm-flow">
         <div class="section__heading reveal">
-          <p class="eyebrow">08 / 语言模型链路</p>
+          <p class="eyebrow">09 / 语言模型链路</p>
           <h2>这个项目里，Attention 最终是怎么变成“下一个字符预测”的</h2>
           <p>
             Attention 不会直接输出文字，它先输出“上下文感知后的表示”，再由语言模型头把这个表示投影到词表维度，最后才得到“下一个 token 是谁”的概率分布。
@@ -549,7 +664,7 @@
 
       <section class="section section--muted" id="summary">
         <div class="section__heading reveal">
-          <p class="eyebrow">09 / 总结</p>
+          <p class="eyebrow">10 / 总结</p>
           <h2>这套小项目现在已经能帮助你理解什么</h2>
         </div>
 

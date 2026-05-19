@@ -30,10 +30,12 @@
 -  `src/demo/transformer_char` 提供一个最小字符级 demo
 -  该 demo 重点演示 `CharacterDataset -> 训练 -> 保存/加载 -> Generate` 这条最小可用链路
 -  当前 demo 默认走 decoder-only 路线，并演示多 block 训练
--  常用参数：`--prompt` `--generate-num` `--temperature` `--top-k` `--top-p` `--epochs` `--learning-rate` `--rand-seed` `--backbone` `--model-dim` `--head-num` `--feed-forward-dim` `--block-num` `--context-size` `--block-learning-rate-scale` `--model-file` `--config-file` `--corpus` `--corpus-file` `--save-model` `--no-save-model` `--eval-only` `--force-train`
+-  常用参数：`--prompt` `--generate-num` `--temperature` `--top-k` `--top-p` `--epochs` `--learning-rate` `--rand-seed` `--backbone` `--model-dim` `--head-num` `--feed-forward-dim` `--block-num` `--context-size` `--block-learning-rate-scale` `--model-file` `--config-file` `--attention-export-file` `--corpus` `--corpus-file` `--save-model` `--no-save-model` `--eval-only` `--force-train`
 -  示例：`./bin/transformer_char --prompt ab --generate-num 8 --temperature 0.7 --top-k 2 --top-p 0.9 --backbone decoder --block-num 2 --force-train`
 -  文件语料示例：`./bin/transformer_char --corpus-file ./demo/transformer_char/corpus.txt --prompt ab --force-train`
 -  仅评估已有模型：`./bin/transformer_char --eval-only --model-file transformer_char_demo.param --prompt ab`
+-  导出真实 attention 权重：`./bin/transformer_char --attention-export-file ./docs/attention-guide/attention-sample.json --force-train`
+-  项目讲解静态页：`docs/attention-guide/index.html`
 ## Quick Start
 1. `mkdir build;cmake ..;sudo make install` 安装头文件与库文件
 ```c++

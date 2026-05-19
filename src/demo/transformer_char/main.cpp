@@ -21,6 +21,7 @@ struct DemoOption {
   string prompt = "ab";
   string model_file = "transformer_char_demo.param";
   string config_file;
+  string attention_export_file;
   int generate_num = 6;
   int epoch_num = 1500;
   int rand_seed = 0;
@@ -59,6 +60,7 @@ void PrintUsage(const char *prog) {
        << "  --block-learning-rate-scale <double>\n"
        << "  --model-file <path>\n"
        << "  --config-file <path>\n"
+       << "  --attention-export-file <path>\n"
        << "  --corpus <text>\n"
        << "  --corpus-file <path>\n"
        << "  --save-model\n"
@@ -114,6 +116,8 @@ bool ParseArgs(int argc, char **argv, DemoOption &option) {
       option.model_file = need_value("--model-file");
     } else if (arg == "--config-file") {
       option.config_file = need_value("--config-file");
+    } else if (arg == "--attention-export-file") {
+      option.attention_export_file = need_value("--attention-export-file");
     } else if (arg == "--corpus") {
       option.corpus = need_value("--corpus");
     } else if (arg == "--corpus-file") {
@@ -203,6 +207,133 @@ bool WriteTextFile(const string &filename, const string &content) {
     return false;
   }
   ofs << content;
+  return ofs.good();
+}
+
+string JsonEscape(const string &text) {
+  string result;
+  result.reserve(text.size());
+  for (char ch : text) {
+    if (ch == '\\') {
+      result += "\\\\";
+    } else if (ch == '"') {
+      result += "\\\"";
+    } else if (ch == '\n') {
+      result += "\\n";
+    } else if (ch == '\r') {
+      result += "\\r";
+    } else {
+      result.push_back(ch);
+    }
+  }
+  return result;
+}
+
+void WriteJsonTokenArray(std::ofstream &ofs, const CharacterTokenizer &tokenizer,
+                         const vector<int> &token_ids) {
+  ofs << "[";
+  for (int i = 0; i < token_ids.size(); i++) {
+    if (i != 0) {
+      ofs << ", ";
+    }
+    string token(1, tokenizer.vocabulary()[token_ids[i]]);
+    ofs << '"' << JsonEscape(token) << '"';
+  }
+  ofs << "]";
+}
+
+void WriteJsonLayers(std::ofstream &ofs, const MiniTransformerLM &model) {
+  const auto &blocks = model.backbone_type() == MiniTransformerLM::BACKBONE_DECODER
+                           ? model.decoder().blocks()
+                           : model.encoder().blocks();
+  ofs << "[\n";
+  for (int layer = 0; layer < blocks.size(); layer++) {
+    if (layer != 0) {
+      ofs << ",\n";
+    }
+    ofs << "    {\n";
+    ofs << "      \"layer_index\": " << layer << ",\n";
+    ofs << "      \"heads\": [\n";
+    const auto &heads = blocks[layer].self_attention().last_attention_weight();
+    for (int head = 0; head < heads.size(); head++) {
+      if (head != 0) {
+        ofs << ",\n";
+      }
+      ofs << "        [\n";
+      for (int row = 0; row < heads[head].size(); row++) {
+        if (row != 0) {
+          ofs << ",\n";
+        }
+        ofs << "          [";
+        for (int col = 0; col < heads[head][row].size(); col++) {
+          if (col != 0) {
+            ofs << ", ";
+          }
+          ofs << heads[head][row][col];
+        }
+        ofs << "]";
+      }
+      ofs << "\n        ]";
+    }
+    ofs << "\n      ]\n";
+    ofs << "    }";
+  }
+  ofs << "\n  ]";
+}
+
+bool WriteAttentionJson(const string &filename, MiniTransformerLM &model,
+                        const CharacterTokenizer &tokenizer,
+                        const vector<int> &prompt_token_ids,
+                        const vector<int> &generated_token_ids) {
+  std::ofstream ofs(filename, std::ios::trunc);
+  if (!ofs.is_open()) {
+    return false;
+  }
+
+  ofs << "{\n";
+  ofs << "  \"backbone\": \""
+      << (model.backbone_type() == MiniTransformerLM::BACKBONE_DECODER ? "decoder"
+                                                                       : "encoder")
+      << "\",\n";
+  ofs << "  \"tokens\": ";
+  WriteJsonTokenArray(ofs, tokenizer, generated_token_ids);
+  ofs << ",\n";
+
+  vector<int> step_tokens = prompt_token_ids;
+  ofs << "  \"steps\": [\n";
+  int step_count = generated_token_ids.size() - prompt_token_ids.size();
+  for (int step = 0; step < step_count; step++) {
+    int next_token_id = 0;
+    if (model.PredictNextToken(step_tokens, next_token_id) != MiniTransformerLM::SUCCESS) {
+      return false;
+    }
+    if (step != 0) {
+      ofs << ",\n";
+    }
+    ofs << "    {\n";
+    ofs << "      \"step_index\": " << step << ",\n";
+    ofs << "      \"context_tokens\": ";
+    WriteJsonTokenArray(ofs, tokenizer, step_tokens);
+    ofs << ",\n";
+    ofs << "      \"predicted_token\": \""
+        << JsonEscape(string(1, tokenizer.vocabulary()[next_token_id])) << "\",\n";
+    ofs << "      \"layers\": ";
+    WriteJsonLayers(ofs, model);
+    ofs << "\n    }";
+    step_tokens.push_back(next_token_id);
+  }
+  ofs << "\n  ],\n";
+
+  MiniTransformerLM::Matrix final_logits;
+  if (model.Forward(generated_token_ids, final_logits,
+                    model.backbone_type() != MiniTransformerLM::BACKBONE_ENCODER) !=
+      MiniTransformerLM::SUCCESS) {
+    return false;
+  }
+  ofs << "  \"layers\": ";
+  WriteJsonLayers(ofs, model);
+  ofs << "\n";
+  ofs << "}\n";
   return ofs.good();
 }
 
@@ -411,6 +542,21 @@ int main(int argc, char **argv) {
     return -1;
   }
 
+  if (!option.attention_export_file.empty()) {
+    MiniTransformerLM::Matrix attention_logits;
+    rc = active_model->Forward(generated_token_ids, attention_logits,
+                               active_model->backbone_type() != MiniTransformerLM::BACKBONE_ENCODER);
+    if (rc != MiniTransformerLM::SUCCESS) {
+      cout << "Forward for attention export failed: " << active_model->err_msg() << endl;
+      return -1;
+    }
+    if (!WriteAttentionJson(option.attention_export_file, *active_model, tokenizer,
+                            token_ids, generated_token_ids)) {
+      cout << "Write attention export failed: " << option.attention_export_file << endl;
+      return -1;
+    }
+  }
+
   string first_sample_text;
   rc_tokenizer = tokenizer.Decode(input_samples[0], first_sample_text);
   if (rc_tokenizer != CharacterTokenizer::SUCCESS) {
@@ -431,6 +577,9 @@ int main(int argc, char **argv) {
   cout << "Greedy: " << generated_text << endl;
   cout << "Sampled: " << sampled_generated_text << endl;
   cout << "Config saved: " << option.config_file << endl;
+  if (!option.attention_export_file.empty()) {
+    cout << "Attention export: " << option.attention_export_file << endl;
+  }
   cout << "Model save: " << (option.save_model ? "on" : "off")
        << " eval_only: " << (option.eval_only ? "true" : "false") << endl;
   cout << "This demo trains, saves, reloads, and generates with a tiny "

@@ -36,7 +36,7 @@ public:
   const Matrix &key_weight() const;
   const Matrix &value_weight() const;
   const Matrix &output_weight() const;
-  const Tensor3D &last_attention_weight();
+  const Tensor3D &last_attention_weight() const;
 
 private:
   RC ValidateWeight(const Matrix &weight, const char *func_name);
