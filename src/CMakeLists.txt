@@ -53,3 +53,4 @@ install(DIRECTORY ./deeplearning DESTINATION include FILES_MATCHING PATTERN "*.h
 add_subdirectory(${PROJECT_SOURCE_DIR}/test)
 add_subdirectory(${PROJECT_SOURCE_DIR}/demo/mnist)
 add_subdirectory(${PROJECT_SOURCE_DIR}/demo/transformer_char)
+add_subdirectory(${PROJECT_SOURCE_DIR}/demo/optimizer_bench)
