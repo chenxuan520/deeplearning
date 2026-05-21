@@ -57,6 +57,11 @@ public:
 
   RC Predict(const std::vector<double> &data, std::vector<double> &result);
 
+  // 一次前向多个样本, 比循环调用 Predict 快很多 (单矩阵乘法 + 一次激活).
+  // result.size() == data.size(), result[i] 是第 i 个样本的输出.
+  RC PredictBatch(const std::vector<std::vector<double>> &data,
+                  std::vector<std::vector<double>> &result);
+
   RC CalcLoss(const std::vector<std::vector<double>> &data,
               const std::vector<std::vector<double>> &target, double &loss);
 
@@ -84,28 +89,21 @@ public:
   RC set_optimizer_function(OptimizerType type);
 
 private:
-  double CalcDelta(const double deriv_target, const double out);
-
   void InitParamWithLayer(const std::vector<int> &layer);
 
-  RC UpdateNeuronOutput(const std::pair<int, int> &neuron_pos,
-                        const std::vector<double> &input);
+  void ResizeBatchBuffers(int batch_size);
 
-  RC UpdateNeuronOutputSoftMax();
+  void ResetGradients();
 
-  void ClearNeuronDelta();
+  RC ForwardPropagationBatch(
+      const std::vector<std::vector<double>> &batch_data);
 
-  RC UpdateNeuronDelta(const std::pair<int, int> &neuron_pos,
-                       const std::vector<double> &target);
+  RC UpdateNeuronOutputBatchSoftMax();
 
-  RC UpdateAllNeuron();
+  RC BackPropagationBatch(
+      const std::vector<std::vector<double>> &batch_target);
 
-  RC UpdateSingleNeuron(const std::pair<int, int> &neuron_pos);
-
-  RC ForwardPropagation(const std::vector<double> &data);
-
-  RC BackPropagation(const std::vector<double> &input,
-                     const std::vector<double> &target);
+  RC ApplyGradient(int batch_size);
 
 private:
   std::shared_ptr<LossFunction> loss_function_ = nullptr;
@@ -118,10 +116,21 @@ private:
   int rand_seed_ = 0;
   double learning_rate_ = 0.1;
   std::vector<int> layer_;
-  std::vector<std::vector<double>> neuron_bias_;
-  std::vector<std::vector<std::vector<double>>> neuron_weight_;
-  std::vector<std::vector<double>> neuron_output_;
-  std::vector<std::vector<double>> neuron_delta_;
+
+  // 共享参数 (训练期间被 ApplyGradient 更新)
+  std::vector<std::vector<double>> neuron_bias_;            // [layer][neuron]
+  std::vector<std::vector<std::vector<double>>> neuron_weight_; // [layer][out][in]
+
+  // 批量前向/反向激活 (按 batch 重置)
+  std::vector<std::vector<std::vector<double>>> neuron_output_; // [layer][batch][neuron]
+  std::vector<std::vector<std::vector<double>>> neuron_delta_;  // [layer][batch][neuron]
+
+  // 批量梯度累加 (按 batch 重置, ApplyGradient 时取平均)
+  std::vector<std::vector<double>> grad_bias_;              // [layer][neuron]
+  std::vector<std::vector<std::vector<double>>> grad_weight_;   // [layer][out][in]
+
+  int batch_buffer_size_ = 0; // 当前 batch buffer 容量
+
   std::string err_msg_;
 };
 
