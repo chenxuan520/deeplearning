@@ -25,8 +25,14 @@ void XavierParamInitFunction::InitParam(
       continue;
     }
     double limit = std::sqrt(6.0 / (double)(fan_in + fan_out));
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937 gen;
+    if (seed_ < 0) {
+      std::random_device rd;
+      gen.seed(rd());
+    } else {
+      // 跨层加一个偏移, 避免每层用同一个序列产生相关参数.
+      gen.seed(static_cast<uint32_t>(seed_) + static_cast<uint32_t>(i) * 1469u);
+    }
     std::uniform_real_distribution<double> dis(-limit, limit);
     for (auto &w : weight[i]) {
       for (auto &w_ : w) {

@@ -12,8 +12,13 @@ NormalRandomParamInitFunction::NormalRandomParamInitFunction(double mean,
 void NormalRandomParamInitFunction::InitParam(
     std::vector<std::vector<std::vector<double>>> &weight,
     std::vector<std::vector<double>> &bias) {
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  std::mt19937 gen;
+  if (seed_ < 0) {
+    std::random_device rd;
+    gen.seed(rd());
+  } else {
+    gen.seed(static_cast<uint32_t>(seed_) + 0x517CC1B7u);
+  }
   std::normal_distribution<double> distr(mean_, stddev_);
 
   for (auto &w : weight) {

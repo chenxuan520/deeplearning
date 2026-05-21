@@ -28,8 +28,13 @@ void HeParamInitFunction::InitParam(
       continue;
     }
     double limit = std::sqrt(6.0 / (double)fan_in);
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937 gen;
+    if (seed_ < 0) {
+      std::random_device rd;
+      gen.seed(rd());
+    } else {
+      gen.seed(static_cast<uint32_t>(seed_) + static_cast<uint32_t>(i) * 2017u);
+    }
     std::uniform_real_distribution<double> dis(-limit, limit);
 
     for (auto &w : weight[i]) {
