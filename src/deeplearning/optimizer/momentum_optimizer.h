@@ -11,9 +11,13 @@ public:
 
   double CalcChangeValue(double delta, double learning_rate,
                          const std::pair<int, int> &pos,
-                         int weight_pos = -1) override;
+                         int weight_pos = -1,
+                         double param_value = 0.0) override;
 
   OptimizerType GetOptimizerType() override;
+
+  void set_momentum(double m) { momentum_ = m; }
+  double momentum() const { return momentum_; }
 
 private:
   std::vector<std::vector<std::vector<double>>> weight_velocity_;

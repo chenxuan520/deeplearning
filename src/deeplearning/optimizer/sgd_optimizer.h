@@ -9,7 +9,8 @@ public:
   SGDOptimizer(const std::vector<int> &layer);
   double CalcChangeValue(double delta, double learning_rate,
                          const std::pair<int, int> &pos,
-                          int weight_pos = -1) override;
+                         int weight_pos = -1,
+                         double param_value = 0.0) override;
   OptimizerType GetOptimizerType() override;
 };
 
