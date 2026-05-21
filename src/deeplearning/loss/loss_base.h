@@ -11,6 +11,8 @@ enum LossType {
 
 class LossFunction {
 public:
+  virtual ~LossFunction() = default;
+
   virtual double AverageLoss(const std::vector<double> &target,
                              const std::vector<double> &output);
 

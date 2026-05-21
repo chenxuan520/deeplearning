@@ -13,6 +13,8 @@ enum SoftmaxType {
 
 class SoftmaxFunction {
 public:
+  virtual ~SoftmaxFunction() = default;
+
   virtual void Normalize(const std::vector<double> &input,
                          std::vector<double> &output) = 0;
   virtual double CalcDelta(double output, double target,

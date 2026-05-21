@@ -1,6 +1,7 @@
 #pragma once
 #include "activate/activate_factory.h"
 #include "loss/loss_factory.h"
+#include "lr_scheduler/lr_scheduler_base.h"
 #include "optimizer/optimizer_factory.h"
 #include "param_init/param_init_factory.h"
 #include "softmax/softmax_factory.h"
@@ -87,6 +88,28 @@ public:
   RC set_softmax_function(SoftmaxType type);
   RC set_param_init_function(ParamInitType type);
   RC set_optimizer_function(OptimizerType type);
+  // 直接注入自定义优化器实例 (用于设置 Adam beta1/beta2、weight decay 等
+  // 超参). 比起 OptimizerType 枚举更灵活, 适合需要细调的场景.
+  RC set_optimizer_function(std::shared_ptr<OptimizerFunction> optimizer);
+
+  // 访问当前优化器, 用于设置 weight decay / beta / momentum 等超参.
+  // 返回 nullptr 表示尚未 Init / Import.
+  std::shared_ptr<OptimizerFunction> optimizer_function();
+
+  // 梯度裁剪:
+  //  - clip_norm > 0 时, 整体梯度 L2 范数超过阈值就按比例缩放 (全局裁剪)
+  //  - clip_value > 0 时, 每个梯度分量分别裁剪到 [-value, value]
+  // 二者可以同时开启 (先 by-value 再 by-norm).
+  void set_gradient_clip_norm(double max_norm);
+  void set_gradient_clip_value(double max_value);
+  double gradient_clip_norm() const { return grad_clip_norm_; }
+  double gradient_clip_value() const { return grad_clip_value_; }
+
+  // 学习率调度器: 设置之后, Train 会在每个 step 调用 scheduler->GetLR(step)
+  // 并通过 set_learning_rate 更新. 传 nullptr 表示禁用 (Train 仍按
+  // learning_rate_ / 入参覆盖的方式运作).
+  void set_lr_scheduler(std::shared_ptr<LRScheduler> scheduler);
+  std::shared_ptr<LRScheduler> lr_scheduler() { return lr_scheduler_; }
 
 private:
   void InitParamWithLayer(const std::vector<int> &layer);
@@ -104,6 +127,11 @@ private:
       const std::vector<std::vector<double>> &batch_target);
 
   RC ApplyGradient(int batch_size);
+
+  // 对累加好的 grad_bias_ / grad_weight_ 做就地裁剪.
+  // 调用前 grad 已经按 sum 累加 (未除 batch_size); 这里裁剪的是
+  // 平均后的梯度, 故先除 batch_size 再判定.
+  void ClipGradients(int batch_size);
 
 private:
   std::shared_ptr<LossFunction> loss_function_ = nullptr;
@@ -123,6 +151,7 @@ private:
 
   // 批量前向/反向激活 (按 batch 重置)
   std::vector<std::vector<std::vector<double>>> neuron_output_; // [layer][batch][neuron]
+  std::vector<std::vector<std::vector<double>>> neuron_preact_; // [layer][batch][neuron], 激活前 z
   std::vector<std::vector<std::vector<double>>> neuron_delta_;  // [layer][batch][neuron]
 
   // 批量梯度累加 (按 batch 重置, ApplyGradient 时取平均)
@@ -130,6 +159,13 @@ private:
   std::vector<std::vector<std::vector<double>>> grad_weight_;   // [layer][out][in]
 
   int batch_buffer_size_ = 0; // 当前 batch buffer 容量
+
+  // 梯度裁剪阈值 (<=0 表示关闭)
+  double grad_clip_norm_ = 0.0;
+  double grad_clip_value_ = 0.0;
+
+  // 可选 LR scheduler
+  std::shared_ptr<LRScheduler> lr_scheduler_;
 
   std::string err_msg_;
 };

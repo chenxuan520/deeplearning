@@ -1,6 +1,7 @@
 #include "neural_network.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace deeplearning {
 
@@ -75,6 +76,10 @@ NeuralNetwork::RC NeuralNetwork::Train(
       std::shuffle(index_pos.begin(), index_pos.end(), shuffle_gen);
     }
 
+    if (lr_scheduler_ != nullptr) {
+      learning_rate_ = lr_scheduler_->GetLR(i);
+    }
+
     // build batch (按 shuffle 后的索引顺序拷贝)
     std::vector<std::vector<double>> batch_data(B);
     std::vector<std::vector<double>> batch_target(B);
@@ -91,6 +96,9 @@ NeuralNetwork::RC NeuralNetwork::Train(
     rc = BackPropagationBatch(batch_target);
     if (rc != SUCCESS) {
       return rc;
+    }
+    if (grad_clip_norm_ > 0.0 || grad_clip_value_ > 0.0) {
+      ClipGradients(B);
     }
     rc = ApplyGradient(B);
     if (rc != SUCCESS) {
@@ -211,6 +219,7 @@ NeuralNetwork::RC NeuralNetwork::ImportNetworkParam(
   // batch buffer 留到第一次 forward/train 时按需 resize
   int L = (int)layer_.size();
   neuron_output_.assign(L, {});
+  neuron_preact_.assign(L, {});
   neuron_delta_.assign(L, {});
   batch_buffer_size_ = 0;
 
@@ -240,6 +249,7 @@ NeuralNetwork::RC NeuralNetwork::Clone(const NeuralNetwork &old) {
   neuron_weight_ = old.neuron_weight_;
   neuron_delta_ = old.neuron_delta_;
   neuron_output_ = old.neuron_output_;
+  neuron_preact_ = old.neuron_preact_;
   grad_bias_ = old.grad_bias_;
   grad_weight_ = old.grad_weight_;
   batch_buffer_size_ = old.batch_buffer_size_;
@@ -283,7 +293,12 @@ const std::vector<std::vector<double>> &NeuralNetwork::neuron_bias() {
 
 void NeuralNetwork::set_learning_rate(double rate) { learning_rate_ = rate; }
 
-void NeuralNetwork::set_random_seed(int seed) { rand_seed_ = seed; }
+void NeuralNetwork::set_random_seed(int seed) {
+  rand_seed_ = seed;
+  if (param_init_function_ != nullptr && seed != 0) {
+    param_init_function_->set_seed(seed);
+  }
+}
 
 NeuralNetwork::RC NeuralNetwork::set_loss_function(LossType type) {
   loss_function_ = LossFactory::Create(type);
@@ -318,6 +333,10 @@ NeuralNetwork::RC NeuralNetwork::set_param_init_function(ParamInitType type) {
     err_msg_ = "[NeuralNetwork::set_param_init_function] Invalid param_init type";
     return INVALID_DATA;
   }
+  // 已经显式设置过 seed 的就用它, 否则保持 -1 (random_device 模式).
+  if (rand_seed_ != 0) {
+    param_init_function_->set_seed(rand_seed_);
+  }
   param_init_function_->InitParam(neuron_weight_, neuron_bias_);
   return SUCCESS;
 }
@@ -339,6 +358,7 @@ void NeuralNetwork::InitParamWithLayer(const std::vector<int> &layer) {
   neuron_weight_.assign(L, {});
   // batch 缓冲 (按需 resize)
   neuron_output_.assign(L, {});
+  neuron_preact_.assign(L, {});
   neuron_delta_.assign(L, {});
   // 梯度累加缓冲
   grad_bias_.assign(L, {});
@@ -367,8 +387,12 @@ void NeuralNetwork::ResizeBatchBuffers(int batch_size) {
     }
   }
   int L = (int)layer_.size();
+  if ((int)neuron_preact_.size() != L) {
+    neuron_preact_.assign(L, {});
+  }
   for (int l = 0; l < L; l++) {
     neuron_output_[l].assign(batch_size, std::vector<double>(layer_[l], 0.0));
+    neuron_preact_[l].assign(batch_size, std::vector<double>(layer_[l], 0.0));
     neuron_delta_[l].assign(batch_size, std::vector<double>(layer_[l], 0.0));
   }
   batch_buffer_size_ = batch_size;
@@ -412,19 +436,21 @@ NeuralNetwork::RC NeuralNetwork::ForwardPropagationBatch(
     }
   }
 
-  // 1..L-1: 全连接前向 + 激活
+  // 1..L-1: 全连接前向 + 激活, 同时记录 pre-activation
   for (int l = 1; l < L; l++) {
     int out_dim = layer_[l];
     int in_dim = layer_[l - 1];
     for (int b = 0; b < B; b++) {
       const auto &in_vec = neuron_output_[l - 1][b];
       auto &out_vec = neuron_output_[l][b];
+      auto &pre_vec = neuron_preact_[l][b];
       for (int o = 0; o < out_dim; o++) {
         double z = neuron_bias_[l][o];
         const auto &w_row = neuron_weight_[l][o];
         for (int i = 0; i < in_dim; i++) {
           z += w_row[i] * in_vec[i];
         }
+        pre_vec[o] = z;
         out_vec[o] = activate_function_->Activate(z);
       }
     }
@@ -501,7 +527,9 @@ NeuralNetwork::RC NeuralNetwork::BackPropagationBatch(
         double dL = loss_function_->DerivLoss(batch_target[b][o],
                                               neuron_output_[last][b][o]) /
                     (double)out_dim;
-        delta = dL * activate_function_->DerivActivate(neuron_output_[last][b][o]);
+        delta = dL * activate_function_->DerivActivate(
+                         neuron_preact_[last][b][o],
+                         neuron_output_[last][b][o]);
       }
       neuron_delta_[last][b][o] = delta;
     }
@@ -515,7 +543,8 @@ NeuralNetwork::RC NeuralNetwork::BackPropagationBatch(
           sum += neuron_weight_[l + 1][k][o] * neuron_delta_[l + 1][b][k];
         }
         neuron_delta_[l][b][o] =
-            sum * activate_function_->DerivActivate(neuron_output_[l][b][o]);
+            sum * activate_function_->DerivActivate(neuron_preact_[l][b][o],
+                                                    neuron_output_[l][b][o]);
       }
     }
     // 3) 累加梯度: grad_bias += delta; grad_weight[o][i] += delta[o] * in[i]
@@ -544,13 +573,15 @@ NeuralNetwork::RC NeuralNetwork::ApplyGradient(int batch_size) {
   int L = (int)layer_.size();
   double inv_bs = 1.0 / (double)batch_size;
 
+  optimizer_function_->BeforeStep();
+
   for (int l = 1; l < L; l++) {
     int dim_l = layer_[l];
     int dim_lm1 = layer_[l - 1];
     for (int o = 0; o < dim_l; o++) {
       double avg_db = grad_bias_[l][o] * inv_bs;
       double bias_change = optimizer_function_->CalcChangeValue(
-          avg_db, learning_rate_, {l, o});
+          avg_db, learning_rate_, {l, o}, -1, neuron_bias_[l][o]);
       neuron_bias_[l][o] -= bias_change;
 
       auto &w_row = neuron_weight_[l][o];
@@ -558,12 +589,105 @@ NeuralNetwork::RC NeuralNetwork::ApplyGradient(int batch_size) {
       for (int i = 0; i < dim_lm1; i++) {
         double avg_dw = g_row[i] * inv_bs;
         double w_change = optimizer_function_->CalcChangeValue(
-            avg_dw, learning_rate_, {l, o}, i);
+            avg_dw, learning_rate_, {l, o}, i, w_row[i]);
         w_row[i] -= w_change;
       }
     }
   }
   return SUCCESS;
+}
+
+void NeuralNetwork::ClipGradients(int batch_size) {
+  if (batch_size <= 0) {
+    return;
+  }
+  int L = (int)layer_.size();
+  double inv_bs = 1.0 / (double)batch_size;
+
+  // by-value: 逐分量裁剪 (作用在平均梯度上, 等价于裁剪 grad/B 后再 *B)
+  if (grad_clip_value_ > 0.0) {
+    double thresh = grad_clip_value_;
+    for (int l = 1; l < L; l++) {
+      int dim_l = layer_[l];
+      int dim_lm1 = layer_[l - 1];
+      for (int o = 0; o < dim_l; o++) {
+        double avg = grad_bias_[l][o] * inv_bs;
+        if (avg > thresh) {
+          grad_bias_[l][o] = thresh * batch_size;
+        } else if (avg < -thresh) {
+          grad_bias_[l][o] = -thresh * batch_size;
+        }
+        auto &g_row = grad_weight_[l][o];
+        for (int i = 0; i < dim_lm1; i++) {
+          double a = g_row[i] * inv_bs;
+          if (a > thresh) {
+            g_row[i] = thresh * batch_size;
+          } else if (a < -thresh) {
+            g_row[i] = -thresh * batch_size;
+          }
+        }
+      }
+    }
+  }
+
+  // by-norm: 计算全局 L2 范数, 超阈值整体缩放.
+  if (grad_clip_norm_ > 0.0) {
+    double sq_sum = 0.0;
+    for (int l = 1; l < L; l++) {
+      int dim_l = layer_[l];
+      int dim_lm1 = layer_[l - 1];
+      for (int o = 0; o < dim_l; o++) {
+        double avg = grad_bias_[l][o] * inv_bs;
+        sq_sum += avg * avg;
+        const auto &g_row = grad_weight_[l][o];
+        for (int i = 0; i < dim_lm1; i++) {
+          double a = g_row[i] * inv_bs;
+          sq_sum += a * a;
+        }
+      }
+    }
+    double norm = std::sqrt(sq_sum);
+    if (norm > grad_clip_norm_ && norm > 0.0) {
+      double scale = grad_clip_norm_ / norm;
+      for (int l = 1; l < L; l++) {
+        int dim_l = layer_[l];
+        int dim_lm1 = layer_[l - 1];
+        for (int o = 0; o < dim_l; o++) {
+          grad_bias_[l][o] *= scale;
+          auto &g_row = grad_weight_[l][o];
+          for (int i = 0; i < dim_lm1; i++) {
+            g_row[i] *= scale;
+          }
+        }
+      }
+    }
+  }
+}
+
+void NeuralNetwork::set_gradient_clip_norm(double max_norm) {
+  grad_clip_norm_ = max_norm;
+}
+
+void NeuralNetwork::set_gradient_clip_value(double max_value) {
+  grad_clip_value_ = max_value;
+}
+
+void NeuralNetwork::set_lr_scheduler(std::shared_ptr<LRScheduler> scheduler) {
+  lr_scheduler_ = std::move(scheduler);
+}
+
+NeuralNetwork::RC NeuralNetwork::set_optimizer_function(
+    std::shared_ptr<OptimizerFunction> optimizer) {
+  if (optimizer == nullptr) {
+    err_msg_ = "[NeuralNetwork::set_optimizer_function] null optimizer";
+    return INVALID_DATA;
+  }
+  optimizer_function_ = std::move(optimizer);
+  return SUCCESS;
+}
+
+std::shared_ptr<OptimizerFunction> NeuralNetwork::optimizer_function() {
+  return optimizer_function_;
 }
 
 } // namespace deeplearning
