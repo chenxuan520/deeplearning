@@ -14,16 +14,18 @@
         <h1>从神经网络到 Attention</h1>
         <p class="hero__lead">
           这是一份面向初学者、但又尽量不失真的项目讲解站点。它一边解释你这个
-          C++ 小项目现在已经实现了什么，一边把“神经元、前向传播、反向传播、序列建模、self-attention、Transformer、字符级语言模型”连成一条直线。
+          C++ 小项目现在已经实现了什么，一边把“神经元、前向传播、反向传播、现代优化器、序列建模、self-attention、Transformer、字符级语言模型”连成一条直线。
         </p>
         <div class="hero__chips">
           <span>HTML / CSS / JS 独立静态页</span>
           <span>带交互动画</span>
           <span>从直觉到代码映射</span>
+          <span>含现代训练栈 (Adam / 调度器 / 裁剪)</span>
         </div>
         <div class="hero__actions">
           <a href="#project" class="button button--primary">先看项目全貌</a>
           <a href="#attention-lab" class="button button--ghost">直接玩 Attention</a>
+          <a href="#training-stack" class="button button--ghost">看现代训练栈</a>
         </div>
       </div>
     </header>
@@ -33,6 +35,7 @@
       <a href="#nn-road">神经网络路线</a>
       <a href="#neuron-lab">神经元实验台</a>
       <a href="#propagation-lab">传播动画</a>
+      <a href="#training-stack">现代训练栈</a>
       <a href="#why-attention">为什么需要 Attention</a>
       <a href="#attention-lab">Attention 实验台</a>
       <a href="#repo-map">代码映射</a>
@@ -46,8 +49,9 @@
           <p class="eyebrow">01 / 项目全貌</p>
           <h2>这个项目现在到底是什么</h2>
           <p>
-            它已经不是“只有一个 MLP 的小练习”了。现在它同时包含两条路线：
-            一条是传统前馈网络 + MNIST；另一条是最小 Transformer / 字符级语言模型实验链路。
+            它已经不是“只有一个 MLP 的小练习”了。现在它同时包含三条路线：
+            一条是传统前馈网络 + MNIST；一条是最小 Transformer / 字符级语言模型实验链路；
+            还有一条是现代训练栈 —— Adam / AdamW / RMSProp、学习率调度、梯度裁剪、GELU 激活等。
           </p>
         </div>
 
@@ -73,6 +77,18 @@
               <li>支持 encoder / decoder 主干</li>
               <li>支持训练、保存/加载、greedy 与采样生成</li>
               <li>示例程序是 <code>src/demo/transformer_char</code></li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>现代训练栈</h3>
+            <p>
+              五种优化器 (SGD / Momentum / RMSProp / Adam / AdamW), 四种 LR 调度 (Step /
+              Exp / Cosine / Warmup+Cosine), 梯度裁剪, 以及 LeakyReLU、GELU 等现代激活.
+            </p>
+            <ul>
+              <li>训练全程支持 <code>set_random_seed</code> 复现</li>
+              <li>L2 weight decay 一键开关</li>
+              <li>对比 demo: <code>src/demo/optimizer_bench</code></li>
             </ul>
           </article>
           <article class="card">
@@ -191,6 +207,8 @@
                 <option value="sigmoid">Sigmoid</option>
                 <option value="relu">ReLU</option>
                 <option value="tanh">Tanh</option>
+                <option value="leaky_relu">LeakyReLU (slope 0.01)</option>
+                <option value="gelu">GELU (Transformer 常用)</option>
               </select>
             </label>
           </div>
@@ -353,9 +371,118 @@
         </div>
       </section>
 
+      <section class="section" id="training-stack">
+        <div class="section__heading reveal">
+          <p class="eyebrow">05 / 现代训练栈</p>
+          <h2>把 SGD 升级成 Adam、加上调度器和裁剪，模型才训得动</h2>
+          <p>
+            前向 / 反向只是 "怎么算梯度"；真正决定 "训不训得收敛、训得多快、训完是不是过拟合"
+            的, 是优化器、学习率调度、参数初始化和梯度裁剪. 这一节把项目里已有的训练设施梳理一遍.
+          </p>
+        </div>
+
+        <div class="card-grid reveal">
+          <article class="card">
+            <h3>优化器 (Optimizer)</h3>
+            <p>
+              <code>src/deeplearning/optimizer/</code> 提供五种:
+            </p>
+            <ul>
+              <li><code>SGD</code> — 经典随机梯度下降, <code>w -= lr * g</code></li>
+              <li><code>Momentum</code> — 带动量, 在峡谷型 loss 上更稳</li>
+              <li><code>RMSProp</code> — 按梯度平方滑动平均自适应步长</li>
+              <li><code>Adam</code> — 一阶 + 二阶矩 + bias correction, 现代默认</li>
+              <li><code>AdamW</code> — 解耦的 weight decay, Transformer 标配</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>学习率调度 (LR Scheduler)</h3>
+            <p>
+              <code>src/deeplearning/lr_scheduler/</code> 让 lr 在训练过程中动态变化:
+            </p>
+            <ul>
+              <li><code>StepDecayLR</code> — 每 N 步乘 gamma</li>
+              <li><code>ExponentialDecayLR</code> — 每步乘 gamma</li>
+              <li><code>CosineAnnealingLR</code> — 余弦退火到 min_lr</li>
+              <li><code>WarmupCosineLR</code> — 先线性升温, 再余弦退火</li>
+            </ul>
+            <p class="explain">
+              注入方式: <code>net.set_lr_scheduler(std::make_shared&lt;CosineAnnealingLR&gt;(...))</code>.
+            </p>
+          </article>
+          <article class="card">
+            <h3>梯度裁剪 + L2</h3>
+            <p>
+              防止梯度爆炸 / 控制权重大小, 训 Transformer 几乎必备:
+            </p>
+            <ul>
+              <li><code>set_gradient_clip_norm(1.0)</code> — 全局 L2 范数裁剪</li>
+              <li><code>set_gradient_clip_value(0.5)</code> — 逐分量绝对值裁剪</li>
+              <li><code>optimizer-&gt;set_weight_decay(1e-4)</code> — L2 weight decay,
+                  Adam 走耦合, AdamW 走解耦, bias 不衰减</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>激活函数家族</h3>
+            <p>
+              <code>src/deeplearning/activate/</code> 新增了两个现代激活, 在
+              <a href="#neuron-lab">神经元实验台</a> 里可以直接切到它们看输出曲线:
+            </p>
+            <ul>
+              <li><code>LeakyReLU</code> — 负半轴留个小斜率 (0.01), 缓解 dead ReLU</li>
+              <li><code>GELU</code> — <code>x · Φ(x)</code>, BERT / GPT 类标配,
+                  比 ReLU 平滑, 训练 Transformer 收益明显</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>可复现性</h3>
+            <p>
+              所有随机参数初始化器 (Xavier / He / Uniform / Normal) 支持
+              <code>set_seed(int)</code>:
+            </p>
+            <ul>
+              <li><code>set_random_seed(42)</code> 后, 同样代码同样结果</li>
+              <li>seed 会自动透传给 param_init</li>
+              <li>训练 / 评估 / 对比都能 bit-wise 复现</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>对比 demo</h3>
+            <p>
+              <code>src/demo/optimizer_bench</code> 在同一 MLP 上跑所有 optimizer,
+              输出 wall-clock 和 acc:
+            </p>
+            <ul>
+              <li><code>./bin/optimizer_bench --skip-mnist</code> — 合成数据快速过</li>
+              <li><code>./bin/optimizer_bench --steps 3000 --batch 64</code> — MNIST 实测</li>
+              <li>MNIST 结果: Adam 系列普遍 96%+, SGD 95.7%</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="formula-card reveal" style="max-width: 900px; margin: 32px auto 0;">
+          <h3>把上面这些拼起来 — 一个 "现代" 训练循环长这样</h3>
+          <p class="formula" style="font-size: 14px; line-height: 1.5;">
+            net.set_random_seed(42);<br />
+            net.set_param_init_function(PARAM_INIT_HE);<br />
+            net.set_activate_function(ACTIVATE_GELU);<br />
+            net.set_optimizer_function(OPTIMIZER_ADAMW);<br />
+            net.optimizer_function()-&gt;set_weight_decay(1e-4);<br />
+            net.set_gradient_clip_norm(1.0);<br />
+            net.set_lr_scheduler(std::make_shared&lt;WarmupCosineLR&gt;(1e-3, 500, 10000));<br />
+            net.Train(data, target, callback, 10000, 64);
+          </p>
+          <p class="explain">
+            可以看到, 这跟 PyTorch 里 "Adam + cosine + clip + weight decay" 那套写法
+            概念上完全对得上 — 只是接口名是 C++ 而已. 真正理解了上面几个组件,
+            读 PyTorch / JAX 训练脚本就不用再死记参数名了.
+          </p>
+        </div>
+      </section>
+
       <section class="section section--muted" id="why-attention">
         <div class="section__heading reveal">
-          <p class="eyebrow">05 / 为什么需要 Attention</p>
+          <p class="eyebrow">06 / 为什么需要 Attention</p>
           <h2>传统网络遇到序列时，真正难的不是“有很多词”，而是“相关词离得很远”</h2>
           <p>
             比如一句话里，当前词要不要关注另一个词，取决于语义关系，而不是物理距离。
@@ -392,7 +519,7 @@
 
       <section class="section" id="attention-lab">
         <div class="section__heading reveal">
-          <p class="eyebrow">06 / Attention 实验台</p>
+          <p class="eyebrow">07 / Attention 实验台</p>
           <h2>用一个可玩的例子理解 Q、K、V、softmax 和 mask</h2>
           <p>
             下面这个实验件会模拟一个小句子。你选择一个 query token，页面会自动计算它对其他 token 的关注分数、softmax 权重和最终加权结果。
@@ -470,7 +597,7 @@
 
       <section class="section section--muted" id="repo-map">
         <div class="section__heading reveal">
-          <p class="eyebrow">07 / 代码映射</p>
+          <p class="eyebrow">08 / 代码映射</p>
           <h2>概念和这个仓库的 C++ 代码怎么一一对应</h2>
           <p>
             学 attention 最容易卡住的地方，就是“听懂了课，但不知道代码里哪一块对应哪一个概念”。
@@ -487,38 +614,62 @@
             </p>
           </article>
           <article class="mapping__item">
-            <h3>2. Self-Attention 核心</h3>
+            <h3>2. 优化器家族</h3>
+            <p><code>src/deeplearning/optimizer/</code></p>
+            <p>
+              SGD / Momentum / RMSProp / Adam / AdamW 都在这里, 都实现了同一个
+              <code>OptimizerFunction</code> 接口, 易于对比与替换.
+            </p>
+          </article>
+          <article class="mapping__item">
+            <h3>3. 学习率调度器</h3>
+            <p><code>src/deeplearning/lr_scheduler/</code></p>
+            <p>
+              Step / Exp / Cosine / WarmupCosine, 通过 <code>set_lr_scheduler</code> 注入,
+              训练每个 step 自动应用.
+            </p>
+          </article>
+          <article class="mapping__item">
+            <h3>4. 激活与初始化</h3>
+            <p><code>activate/</code> + <code>param_init/</code></p>
+            <p>
+              5 种激活 (Sigmoid / ReLU / Tanh / LeakyReLU / GELU), 5 种 init
+              (Zero / Uniform / Normal / Xavier / He, 全部支持 seed 复现).
+            </p>
+          </article>
+          <article class="mapping__item">
+            <h3>5. Self-Attention 核心</h3>
             <p><code>src/deeplearning/transformer/self_attention.*</code></p>
             <p>
               这里能直接看到 Q/K/V 投影、score 计算、softmax、加权求和，以及 backward 的梯度链路。
             </p>
           </article>
           <article class="mapping__item">
-            <h3>3. Transformer Block</h3>
+            <h3>6. Transformer Block</h3>
             <p><code>src/deeplearning/transformer/transformer_block.*</code></p>
             <p>
               这里把 attention、residual、layer norm、FFN 组合起来，你会看见“一个完整 block 到底长什么样”。
             </p>
           </article>
           <article class="mapping__item">
-            <h3>4. 语言模型闭环</h3>
+            <h3>7. 语言模型闭环</h3>
             <p><code>src/deeplearning/transformer/mini_transformer_lm.*</code></p>
             <p>
               这里对应训练、评估、greedy 生成、sample 生成，是把 attention 变成“能出字”的关键一层。
             </p>
           </article>
           <article class="mapping__item">
-            <h3>5. 数据与词表</h3>
+            <h3>8. 数据与词表</h3>
             <p><code>character_tokenizer.*</code> / <code>character_dataset.*</code></p>
             <p>
               它们把原始字符串切成 token，并进一步切成 next-token 训练样本。
             </p>
           </article>
           <article class="mapping__item">
-            <h3>6. 可运行 demo</h3>
-            <p><code>src/demo/transformer_char/main.cpp</code></p>
+            <h3>9. 可运行 demo</h3>
+            <p><code>src/demo/{mnist,transformer_char,optimizer_bench}/</code></p>
             <p>
-              这里是最完整的一条链：读语料、构建词表、训练模型、评估 loss/perplexity、保存、加载、生成、采样、打印 attention（如果打开开关）。
+              三个 demo: MNIST 手写识别, 字符级语言模型, 不同 optimizer 在同一架构下的对比.
             </p>
           </article>
         </div>
@@ -528,10 +679,29 @@
             <h3>如果你想看 MLP 的训练骨架</h3>
             <p><code>src/deeplearning/neural_network.cpp</code></p>
             <ul>
-              <li><code>Train(...)</code>：训练总入口</li>
-              <li><code>ForwardPropagation(...)</code>：逐层前向</li>
-              <li><code>BackPropagation(...)</code>：逐层反向</li>
-              <li><code>UpdateAllNeuron()</code>：参数更新</li>
+              <li><code>Train(...)</code>：训练总入口, 支持 scheduler / 梯度裁剪 / mini-batch</li>
+              <li><code>ForwardPropagationBatch(...)</code>：批量前向, 同时记录 pre-activation</li>
+              <li><code>BackPropagationBatch(...)</code>：批量反向, 累加梯度</li>
+              <li><code>ClipGradients(B)</code>：可选的 by-norm / by-value 裁剪</li>
+              <li><code>ApplyGradient(B)</code>：调 <code>optimizer-&gt;BeforeStep</code> + 逐参数更新</li>
+            </ul>
+          </article>
+          <article class="source-card">
+            <h3>如果你想看 Adam / AdamW 怎么实现</h3>
+            <p><code>src/deeplearning/optimizer/adam_optimizer.cpp</code></p>
+            <ul>
+              <li><code>BeforeStep()</code>：推进 step 计数, 算 bias correction</li>
+              <li><code>CalcChangeValue(...)</code>：m / v 滑动更新 + 自适应步长</li>
+              <li><code>adamw_optimizer.cpp</code>：继承 Adam, 但把 weight decay 解耦出来</li>
+            </ul>
+          </article>
+          <article class="source-card">
+            <h3>如果你想看学习率调度怎么写</h3>
+            <p><code>src/deeplearning/lr_scheduler/*.cpp</code></p>
+            <ul>
+              <li><code>StepDecayLR::GetLR(step)</code> — <code>base * gamma^(step/step_size)</code></li>
+              <li><code>CosineAnnealingLR::GetLR(step)</code> — 余弦退火公式</li>
+              <li><code>WarmupCosineLR::GetLR(step)</code> — 线性升温 + 余弦, Transformer 标配</li>
             </ul>
           </article>
           <article class="source-card">
@@ -579,12 +749,21 @@
               <li>训练 / 加载 / 评估 / 保存配置 / greedy / sampled</li>
             </ul>
           </article>
+          <article class="source-card">
+            <h3>如果你想看 optimizer 横评</h3>
+            <p><code>src/demo/optimizer_bench/main.cpp</code></p>
+            <ul>
+              <li>同一架构跑 SGD / Momentum / RMSProp / Adam / AdamW / Adam+Cosine</li>
+              <li><code>--skip-mnist</code> 用合成数据, 默认跑 MNIST</li>
+              <li>输出 wall-clock 时间 + train/test acc + loss trace</li>
+            </ul>
+          </article>
         </div>
       </section>
 
       <section class="section" id="real-attention">
         <div class="section__heading reveal">
-          <p class="eyebrow">08 / 真实权重</p>
+          <p class="eyebrow">09 / 真实权重</p>
           <h2>把项目真实导出的 attention 权重也放进来观察</h2>
           <p>
             这里不再是教学示意矩阵，而是读取 demo 导出的真实 attention JSON。你可以用
@@ -621,7 +800,7 @@
 
       <section class="section" id="lm-flow">
         <div class="section__heading reveal">
-          <p class="eyebrow">09 / 语言模型链路</p>
+          <p class="eyebrow">10 / 语言模型链路</p>
           <h2>这个项目里，Attention 最终是怎么变成“下一个字符预测”的</h2>
           <p>
             Attention 不会直接输出文字，它先输出“上下文感知后的表示”，再由语言模型头把这个表示投影到词表维度，最后才得到“下一个 token 是谁”的概率分布。
@@ -664,7 +843,7 @@
 
       <section class="section section--muted" id="summary">
         <div class="section__heading reveal">
-          <p class="eyebrow">10 / 总结</p>
+          <p class="eyebrow">11 / 总结</p>
           <h2>这套小项目现在已经能帮助你理解什么</h2>
         </div>
 
@@ -673,6 +852,13 @@
             <h3>如果你想学神经网络基础</h3>
             <p>
               看 <code>NeuralNetwork</code> 路线，理解权重、偏置、激活函数、loss、梯度下降、训练与预测。
+            </p>
+          </article>
+          <article class="summary-card">
+            <h3>如果你想学现代优化器</h3>
+            <p>
+              看 <code>optimizer/</code> 和 <code>lr_scheduler/</code>, 跑
+              <code>optimizer_bench</code>, 理解 Adam / AdamW 为什么比 SGD 收敛得快.
             </p>
           </article>
           <article class="summary-card">

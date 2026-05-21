@@ -28,18 +28,45 @@
 
 **通过工厂模式的可插拔策略**
 网络组合了几个策略接口，每个接口都通过枚举 + 工厂进行选择：
-- 激活函数：`ActivateType` / `ActivateFactory` (`src/deeplearning/activate/activate_base.h`, `src/deeplearning/activate/activate_factory.h`)
-- 损失函数：`LossType` / `LossFactory` (`src/deeplearning/loss/loss_base.h`, `src/deeplearning/loss/loss_factory.h`)
-- Softmax：`SoftmaxType` / `SoftmaxFactory` (`src/deeplearning/softmax/softmax_base.h`, `src/deeplearning/softmax/softmax_factory.h`)
-- 参数初始化：`ParamInitType` / `ParamInitFactory` (`src/deeplearning/param_init/param_init_base.h`, `src/deeplearning/param_init/param_init_factory.h`)
-- 优化器：`OptimizerType` / `OptimizerFactory` (`src/deeplearning/optimizer/optimizer_base.h`, `src/deeplearning/optimizer/optimizer_factory.h`)
+- 激活函数：`ActivateType` / `ActivateFactory` (`src/deeplearning/activate/`)
+  - `ACTIVATE_SIGMOID` / `ACTIVATE_RELU` / `ACTIVATE_TANH`
+  - `ACTIVATE_LEAKY_RELU` (默认 slope=0.01)
+  - `ACTIVATE_GELU` (erf 精确版本; Transformer/BERT 类常用)
+- 损失函数：`LossType` / `LossFactory` (`src/deeplearning/loss/`)
+- Softmax：`SoftmaxType` / `SoftmaxFactory` (`src/deeplearning/softmax/`)
+- 参数初始化：`ParamInitType` / `ParamInitFactory` (`src/deeplearning/param_init/`)
+  - 全部 `*_RANDOM` / `*_XAVIER` / `*_HE` 支持 `set_seed(int)`, NN `set_random_seed`
+    会自动透传 seed, 保证可复现.
+- 优化器：`OptimizerType` / `OptimizerFactory` (`src/deeplearning/optimizer/`)
+  - `OPTIMIZER_SGD` / `OPTIMIZER_MOMENTUM`
+  - `OPTIMIZER_RMSPROP` (Hinton)
+  - `OPTIMIZER_ADAM` (Kingma & Ba, 含 bias correction)
+  - `OPTIMIZER_ADAMW` (Loshchilov & Hutter, decoupled weight decay)
+  - 所有优化器都支持 `set_weight_decay(double)`; Adam/AdamW 区别在于 wd 与
+    adaptive step 的耦合方式.
+- 学习率调度: `LRScheduler` (`src/deeplearning/lr_scheduler/`)
+  - `StepDecayLR` / `ExponentialDecayLR` / `CosineAnnealingLR` / `WarmupCosineLR`
+  - 通过 `network.set_lr_scheduler(...)`, Train 会在每个 minibatch step 之前
+    调 `scheduler->GetLR(step)` 并更新 `learning_rate_`.
 
 `NeuralNetwork::Init()` 设置默认值（例如 `SOFTMAX_NONE`, `LOSS_MSE`, `ACTIVATE_SIGMOID`, `PARAM_INIT_ZERO`, `OPTIMIZER_SGD`）并初始化参数。
 
 **训练流程**
-- `Train(...)` 打乱数据索引，对每个样本运行 `ForwardPropagation()`（前向传播）和 `BackPropagation()`（反向传播），然后通过 `UpdateAllNeuron()` 更新权重/偏置。
-- 优化器集成发生在 `UpdateSingleNeuron()` 中，通过调用 `optimizer_function_->CalcChangeValue(...)` 来进行偏置和权重的更新。
+- `Train(...)` 打乱数据索引，按 `batch_num` 大小切 minibatch:
+  1. (如果有 scheduler) 用 `scheduler->GetLR(step)` 更新 lr
+  2. `ForwardPropagationBatch(batch)`: 同时记录 pre-activation (供 GELU 等用)
+     和 post-activation
+  3. `BackPropagationBatch(batch)`: 累加梯度到 `grad_bias_` / `grad_weight_`
+  4. (可选) `ClipGradients(B)`: 按 norm 或按 value 裁剪平均梯度
+  5. `ApplyGradient(B)`: 先调 `optimizer->BeforeStep()` (Adam 推进 t),
+     再对每个参数 `optimizer->CalcChangeValue(avg_grad, lr, pos, weight_pos, param_value)`
+     并把结果从参数里扣除.
 - 可选的每轮回调：`each_epoch_call(NeuralNetwork&, int epoch_num, bool& early_stop)`。
+
+**梯度裁剪**
+- `set_gradient_clip_norm(double)`: 全局 L2 范数裁剪 (按比例缩放)
+- `set_gradient_clip_value(double)`: 逐分量绝对值裁剪
+- 默认关闭 (设 ≤ 0). 两者可同时开, 先 by-value, 再 by-norm.
 
 **模型序列化**
 - `src/deeplearning/neural_network_loader.h` 中的 `deeplearning::NeuralNetworkLoader` 提供模型参数的二进制导出/导入。
@@ -92,6 +119,7 @@
   - 测试：`src/bin/test_bin`（来自 `src/test/CMakeLists.txt`）
   - MNIST 演示：`src/bin/mnist`（来自 `src/demo/mnist/CMakeLists.txt`）
   - 字符级 Transformer 演示：`src/bin/transformer_char`（来自 `src/demo/transformer_char/CMakeLists.txt`）
+  - 优化器对比 benchmark: `src/bin/optimizer_bench`（来自 `src/demo/optimizer_bench/CMakeLists.txt`）
 
 ### 运行
 
@@ -173,6 +201,15 @@
   - 实现相关的基础接口。
   - 添加一个枚举值。
   - 在相应的 `*Factory::Create(...)` switch 中注册它。
+- 新优化器额外注意:
+  - 如果需要 step 计数 (Adam 风格), 重载 `BeforeStep()`.
+  - 如果支持 weight decay, 在 `CalcChangeValue` 里根据 `weight_pos != -1` 判定
+    是否是 weight (只对 weight 衰减, bias 不动), 并按 Adam (L2-in-grad) 或
+    AdamW (decoupled) 选择耦合方式.
+- 新激活函数:
+  - 简单激活实现 `Activate` + `DerivActivate(output)` 即可.
+  - 需要 pre-activation 的复杂激活 (如 GELU) 额外重载
+    `DerivActivate(input, output)`, 默认会回退到 `DerivActivate(output)`.
 
 ## 4) 测试
 

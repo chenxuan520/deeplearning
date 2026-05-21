@@ -41,6 +41,22 @@ const neuronState = {
 function activate(value, name) {
   if (name === "relu") return Math.max(0, value)
   if (name === "tanh") return Math.tanh(value)
+  if (name === "leaky_relu") return value > 0 ? value : 0.01 * value
+  if (name === "gelu") {
+    // 精确 GELU = x * 0.5 * (1 + erf(x / sqrt(2)))
+    // JS 没自带 erf, 这里用一个常用近似 (Abramowitz & Stegun 7.1.26)
+    const sign = value < 0 ? -1 : 1
+    const ax = Math.abs(value / Math.SQRT2)
+    const t = 1 / (1 + 0.3275911 * ax)
+    const erfApprox =
+      sign *
+      (1 -
+        ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t +
+          0.254829592) *
+          t *
+          Math.exp(-ax * ax))
+    return 0.5 * value * (1 + erfApprox)
+  }
   return 1 / (1 + Math.exp(-value))
 }
 
