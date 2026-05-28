@@ -116,17 +116,15 @@ private:
 
       for (int i = 0; i < number_of_images; i++) {
         std::vector<double> tp;
+        tp.reserve(n_rows * n_cols);
         for (int r = 0; r < n_rows; r++) {
           for (int c = 0; c < n_cols; c++) {
             unsigned char image = 0;
             file.read((char *)&image, sizeof(image));
-            if (image != 0) {
-              image = 1;
-            }
-            tp.push_back(image);
+            tp.push_back(image / 255.0);
           }
         }
-        images.push_back(tp);
+        images.push_back(std::move(tp));
       }
     } else {
       err_msg_ = "File open error: " + filename;

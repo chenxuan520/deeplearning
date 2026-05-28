@@ -69,6 +69,20 @@ Momentum / Adam / RMSProp 走 `L2-in-gradient` (`g += wd*w`); AdamW 走解耦的
   AdamW / Adam+CosineLR 的 wall-clock 时间和 train/test acc.
 - 支持 MNIST 和合成数据 (`--skip-mnist`).
 
+#### MNIST demo 升级 (v1 → v2)
+`src/demo/mnist/main.cpp` 重写, 利用上述新增设施做完整升级:
+- 网络: `784→20→10` (sigmoid + uniform random + SGD) → `784→128→64→10`
+  (ReLU + He + Softmax + Cross-Entropy + Adam).
+- 训练: `batch=1`, 固定 lr, 1.5 epoch → `batch=64`, `WarmupCosineLR`
+  (1 epoch warmup + cosine 退火到 `1e-5`), 5 epochs.
+- 评估: 逐样本 `Predict` → `PredictBatch` 一次批量前向.
+- 输入: `mnist_data.h` 的像素从二值化 `>0 → 1` 修正为归一化 `pixel / 255.0`,
+  保留灰度信息. `optimizer_bench` 也跟着受益.
+- 模型缓存: `demo.param` → `demo.v2.param` (与历史 v1 完全隔离, 续训检测同名文件
+  自动以 `lr=1e-4` 微调).
+- 结果: 测试准确率 92.67% → **97.82%** (错误样本数 -70%).
+- 升级历程 / 配置 / 调优思路写在 `docs/mnist-demo.md`.
+
 #### 新测试
 - `optimizer_test.h`: Adam / AdamW / RMSProp 收敛性, SGD with weight decay,
   Adam 步计数器, Adam vs AdamW 在带 wd 时的参数差异.

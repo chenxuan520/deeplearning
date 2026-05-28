@@ -11,8 +11,12 @@
 ### 项目简介
 - 一个最小化的 C++ 神经网络实现，核心库位于 `src/deeplearning/` 下。
 - 示例程序位于 `src/demo/` 下，目前包含：
-  - `mnist`：原有前馈网络示例
+  - `mnist`：MNIST 手写数字 10 类分类示例。默认 `784→128→64→10` / ReLU + He +
+    Softmax + Cross-Entropy + Adam + `WarmupCosineLR`，batch=64，5 epochs，
+    测试准确率约 97.8%。详见 `docs/mnist-demo.md`。
   - `transformer_char`：最小字符级语言模型示例
+  - `optimizer_bench`：不同 optimizer 在 MNIST 上的对比 benchmark
+    （SGD / Momentum / Adam / AdamW / RMSProp / Adam+CosineLR）
 - 测试位于 `src/test/` 下。
 
 ### 核心架构
@@ -70,7 +74,8 @@
 
 **模型序列化**
 - `src/deeplearning/neural_network_loader.h` 中的 `deeplearning::NeuralNetworkLoader` 提供模型参数的二进制导出/导入。
-- MNIST 演示使用它来缓存/加载 `demo.param` (`src/demo/mnist/main.cpp`)。
+- MNIST 演示使用它来缓存/加载 `demo.v2.param` (`src/demo/mnist/main.cpp`)。
+  历史 v1 模型存为 `demo.param`（已不再被本 demo 读写，仅作历史参考）。
 
 **Transformer / 字符级语言模型**
 - `src/deeplearning/transformer/` 下提供最小 Transformer 相关模块：
@@ -126,6 +131,11 @@
 **MNIST 演示**
 - 在工作目录 `src/` 下运行（`src/demo/mnist/main.cpp` 中的路径是相对的，如 `./demo/mnist/mnist/...`）：
   - `./bin/mnist`
+- 输入像素由 `mnist_data.h` 内部归一化到 `[0,1]`（不是二值化），`optimizer_bench`
+  也共用同一份预处理。
+- 训练结束会把模型保存到 `./demo/mnist/mnist/demo.v2.param`；下一次运行检测到该
+  文件会自动加载续训（`lr` 自动降到 `1e-4` 微调）。想冷启动直接 `rm` 它。
+- 详细配置与升级历程见 `docs/mnist-demo.md`。
 
 **Transformer 字符级演示**
 - 在工作目录 `src/` 下运行：

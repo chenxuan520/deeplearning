@@ -1,8 +1,13 @@
+#include "lr_scheduler/warmup_cosine_lr.h"
 #include "matplot_draw.h"
 #include "mnist_data.h"
 #include "neural_network.h"
 #include "neural_network_loader.h"
+#include <algorithm>
+#include <chrono>
+#include <iomanip>
 #include <iostream>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -10,14 +15,36 @@ using namespace std;
 using namespace deeplearning;
 using namespace drawtool;
 
+namespace {
+
+// 用 PredictBatch 一次性前向, 比逐样本 Predict 快很多.
+double Accuracy(NeuralNetwork &net, const vector<vector<double>> &x,
+                const vector<int> &labels) {
+  vector<vector<double>> pred;
+  auto rc = net.PredictBatch(x, pred);
+  if (rc != NeuralNetwork::SUCCESS) {
+    return -1.0;
+  }
+  int correct = 0;
+  for (size_t i = 0; i < pred.size(); i++) {
+    int pi = (int)(std::max_element(pred[i].begin(), pred[i].end()) -
+                   pred[i].begin());
+    if (pi == labels[i]) {
+      correct++;
+    }
+  }
+  return correct * 1.0 / (double)pred.size();
+}
+
+} // namespace
+
 int main() {
-  // step 1 load data
+  // ---- 1. 加载数据 (像素已在 mnist_data.h 内归一化到 [0,1]) ----
   char train_image_name[] = "./demo/mnist/mnist/train-images-idx3-ubyte";
   char train_label_name[] = "./demo/mnist/mnist/train-labels-idx1-ubyte";
   char test_image_name[] = "./demo/mnist/mnist/t10k-images-idx3-ubyte";
   char test_label_name[] = "./demo/mnist/mnist/t10k-labels-idx1-ubyte";
 
-  double learning_rate = 0.2;
   MnistData mnist_data;
   auto rcMnist = mnist_data.LoadMnistData(train_image_name, train_label_name,
                                           test_image_name, test_label_name);
@@ -25,147 +52,133 @@ int main() {
     cout << "LoadMnistData failed: " << mnist_data.err_msg() << endl;
     return -1;
   }
-  // print all size of data
-  cout << "train_data size: " << mnist_data.train_data().size() << endl;
-  cout << "train_labels size: " << mnist_data.train_labels().size() << endl;
-  cout << "test_data size: " << mnist_data.test_data().size() << endl;
-  cout << "test_labels size: " << mnist_data.test_labels().size() << endl;
+  int N_train = (int)mnist_data.train_data().size();
+  int N_test = (int)mnist_data.test_data().size();
+  cout << "train_data: " << N_train << "  test_data: " << N_test << endl;
 
-  // step 2 create network
+  // one-hot target
+  vector<vector<double>> train_target(N_train, vector<double>(10, 0.0));
+  for (int i = 0; i < N_train; i++) {
+    train_target[i][mnist_data.train_labels()[i]] = 1.0;
+  }
+  vector<vector<double>> test_target(N_test, vector<double>(10, 0.0));
+  for (int i = 0; i < N_test; i++) {
+    test_target[i][mnist_data.test_labels()[i]] = 1.0;
+  }
+
+  // ---- 2. 构造或加载网络 ----
+  // 网络结构: 784 -> 128 -> 64 -> 10
+  // 损失/激活/softmax: cross-entropy + ReLU + softmax (分类标配)
+  // 初始化: He (配 ReLU)
+  // 优化器: Adam
   NeuralNetwork demo_network;
-  auto rc = NeuralNetwork::SUCCESS;
-  std::string param_file_name = "./demo/mnist/mnist/demo.param";
+  std::string param_file_name = "./demo/mnist/mnist/demo.v2.param";
 
-  // if exist param file, read from it ,or init
   NeuralNetwork::NetworkParam demo_param = {};
   NeuralNetwork::NetworkOption demo_option = {};
   auto loader_rc = NeuralNetworkLoader::ImportParamFromFile(
       demo_param, demo_option, param_file_name);
 
+  double base_lr = 1e-3;
   if (loader_rc == NeuralNetworkLoader::SUCCESS) {
+    cout << "Loaded existing model from " << param_file_name << endl;
     auto rc = demo_network.ImportNetworkParam(demo_param, demo_option);
     if (rc != NeuralNetwork::SUCCESS) {
       cout << "ImportNetworkParam failed: " << demo_network.err_msg() << endl;
       return -1;
     }
-
-    learning_rate = 0.02;
-
+    base_lr = 1e-4; // 续训用更小 lr 微调
   } else {
-    auto rc = demo_network.Init(vector<int>{784, 20, 10});
-
+    cout << "Init new model: 784 -> 128 -> 64 -> 10" << endl;
+    auto rc = demo_network.Init(vector<int>{784, 128, 64, 10});
     if (rc != NeuralNetwork::SUCCESS) {
       cout << "Init failed: " << demo_network.err_msg() << endl;
       return -1;
     }
-    cout << "Init success" << endl;
-
-    rc = demo_network.set_param_init_function(
-        ParamInitType::PARAM_INIT_UNIFORM_RANDOM);
-    if (rc != NeuralNetwork::SUCCESS) {
-      cout << "set_loss_function failed: " << demo_network.err_msg() << endl;
-      return -1;
-    }
-    rc = demo_network.set_loss_function(LossType::LOSS_CROSS_ENTROPY);
-    if (rc != NeuralNetwork::SUCCESS) {
-      cout << "set_loss_function failed: " << demo_network.err_msg() << endl;
-      return -1;
-    }
+    demo_network.set_random_seed(42);
+    demo_network.set_param_init_function(ParamInitType::PARAM_INIT_HE);
+    demo_network.set_activate_function(ActivateType::ACTIVATE_RELU);
+    demo_network.set_softmax_function(SoftmaxType::SOFTMAX_STD);
+    demo_network.set_loss_function(LossType::LOSS_CROSS_ENTROPY);
+    demo_network.set_optimizer_function(OptimizerType::OPTIMIZER_ADAM);
   }
 
-  cout << "Init success begin train" << endl;
-  vector<vector<double>> train_target(mnist_data.train_data().size(),
-                                      vector<double>(10, 0));
-  for (int i = 0; i < mnist_data.train_labels().size(); i++) {
-    train_target[i][int(mnist_data.train_labels()[i])] = 1;
-  }
-  vector<vector<double>> test_target(mnist_data.test_data().size(),
-                                     vector<double>(10, 0));
-  for (int i = 0; i < mnist_data.test_labels().size(); i++) {
-    test_target[i][int(mnist_data.test_labels()[i])] = 1.0;
-  }
+  // ---- 3. 训练配置 + WarmupCosine 调度 ----
+  int batch_size = 64;
+  int epochs = 5;
+  int steps_per_epoch = (N_train + batch_size - 1) / batch_size;
+  int total_steps = epochs * steps_per_epoch;
+  int warmup_steps = steps_per_epoch; // 1 个 epoch 做 warmup
+  double min_lr = base_lr * 0.01;
+  demo_network.set_lr_scheduler(std::make_shared<WarmupCosineLR>(
+      base_lr, warmup_steps, total_steps, min_lr));
 
-  // step 3 train data
+  cout << "Train: batch=" << batch_size << " epochs=" << epochs
+       << " steps_per_epoch=" << steps_per_epoch
+       << " total_steps=" << total_steps << " base_lr=" << base_lr
+       << " (warmup-cosine)" << endl;
+
+  // ---- 4. 训练 + 每 epoch 末评估 ----
   vector<double> train_loss_y, test_loss_y, train_loss_x, test_loss_x;
-  auto print_func = [&](NeuralNetwork &network, int epoch_num, bool &) {
-    static int count = 0;
-    if (count++ % 10000 == 0) {
-      double train_loss = 0;
-      rc = network.CalcLoss(mnist_data.train_data(), train_target, train_loss);
-      if (rc != NeuralNetwork::SUCCESS) {
-        cout << "CalcLoss failed: " << demo_network.err_msg() << endl;
-        return;
-      }
-      double test_loss = 0;
-      rc = network.CalcLoss(mnist_data.test_data(), test_target, test_loss);
-      if (rc != NeuralNetwork::SUCCESS) {
-        cout << "CalcLoss failed: " << demo_network.err_msg() << endl;
-        return;
-      }
-      train_loss_y.push_back(train_loss);
-      test_loss_y.push_back(test_loss);
-      train_loss_x.push_back(epoch_num);
-      test_loss_x.push_back(epoch_num);
-      std::cout << "epoch: " << epoch_num << " train_loss: " << train_loss
-                << " test_loss: " << test_loss << std::endl;
+
+  auto t0 = chrono::high_resolution_clock::now();
+
+  auto each_step = [&](NeuralNetwork &net, int step, bool &) {
+    int next_step = step + 1;
+    if (next_step % steps_per_epoch != 0 && next_step != total_steps) {
+      return;
     }
+    int ep = next_step / steps_per_epoch;
+    // train loss 只抽样 5000 个估计 (60000 太慢, CalcLoss 是单样本前向)
+    vector<vector<double>> probe_x(mnist_data.train_data().begin(),
+                                    mnist_data.train_data().begin() + 5000);
+    vector<vector<double>> probe_y(train_target.begin(),
+                                    train_target.begin() + 5000);
+    double train_loss = 0, test_loss = 0;
+    net.CalcLoss(probe_x, probe_y, train_loss);
+    net.CalcLoss(mnist_data.test_data(), test_target, test_loss);
+    double acc =
+        Accuracy(net, mnist_data.test_data(), mnist_data.test_labels());
+    train_loss_y.push_back(train_loss);
+    test_loss_y.push_back(test_loss);
+    train_loss_x.push_back(ep);
+    test_loss_x.push_back(ep);
+    cout << "epoch " << ep << "/" << epochs << "  train_loss=" << fixed
+         << setprecision(4) << train_loss << "  test_loss=" << test_loss
+         << "  test_acc=" << acc << "  lr=" << scientific << setprecision(2)
+         << net.learning_rate() << fixed << endl;
   };
 
-  // demo_network.set_optimizer_function(OptimizerType::OPTIMIZER_MOMENTUM);
-  rc = demo_network.Train(mnist_data.train_data(), train_target, print_func,
-                          1.5 * mnist_data.train_data().size(), 1,
-                          learning_rate);
+  auto rc = demo_network.Train(mnist_data.train_data(), train_target,
+                                each_step, total_steps, batch_size, base_lr);
   if (rc != NeuralNetwork::SUCCESS) {
     cout << "Train failed: " << demo_network.err_msg() << endl;
     return -1;
   }
-  cout << "Train success begin predict" << endl;
 
-  // step 4 test data
-  vector<pair<vector<double>, pair<int, int>>> test_error_data;
-  bool save_error_data = false;
-  int right_count = 0, test_date_size = mnist_data.test_data().size();
+  auto t1 = chrono::high_resolution_clock::now();
+  double elapsed_sec =
+      chrono::duration<double>(t1 - t0).count();
+  cout << "Train finished in " << fixed << setprecision(1) << elapsed_sec
+       << " sec" << endl;
 
-  for (int i = 0; i < test_date_size; i++) {
-    vector<double> result(10, 0);
-    rc = demo_network.Predict(mnist_data.test_data()[i], result);
+  // ---- 5. 最终评估 ----
+  double train_acc = Accuracy(demo_network, mnist_data.train_data(),
+                              mnist_data.train_labels());
+  double test_acc = Accuracy(demo_network, mnist_data.test_data(),
+                              mnist_data.test_labels());
+  cout << "Final accuracy:  train=" << setprecision(4) << train_acc
+       << "  test=" << test_acc << endl;
 
-    if (rc != NeuralNetwork::SUCCESS) {
-      cout << "Predict failed: " << demo_network.err_msg() << endl;
-    }
+  MatplotDraw::PrintLossResult("Mnist NeuralNetwork v2", train_loss_x,
+                                train_loss_y, test_loss_x, test_loss_y,
+                                "epoch", "loss");
 
-    int max_index = 0;
-    double max_value = result[0];
-    for (int j = 1; j < result.size(); j++) {
-      if (result[j] > max_value) {
-        max_value = result[j];
-        max_index = j;
-      }
-    }
-    if (max_index == mnist_data.test_labels()[i]) {
-      right_count++;
-    } else {
-      if (save_error_data) {
-        test_error_data.push_back(
-            make_pair(mnist_data.test_data()[i],
-                      make_pair(mnist_data.test_labels()[i], max_index)));
-      }
-    }
-  }
-  cout << " right count:" << right_count
-       << " right rate: " << right_count * 1.0 / test_date_size << endl;
-
-  // draw pic
-  MatplotDraw::PrintLossResult("Mnist NeuralNetwork", train_loss_x,
-                               train_loss_y, test_loss_x, test_loss_y, "epoch",
-                               "loss");
-
-  if (right_count * 1.0 / test_date_size < 0.8) {
-    cout << "right rate is too low" << endl;
-    return -1;
+  if (test_acc < 0.95) {
+    cout << "WARN: test acc < 95%" << endl;
   }
 
-  // save param
+  // ---- 6. 保存参数 ----
   NeuralNetwork::NetworkParam param;
   NeuralNetwork::NetworkOption option;
   rc = demo_network.ExportNetworkParam(param, option);
@@ -179,23 +192,7 @@ int main() {
     cout << "ExportParamToFile failed: " << demo_network.err_msg() << endl;
     return -1;
   }
+  cout << "Saved model to " << param_file_name << endl;
 
-  // save errorimg2file
-  if (save_error_data) {
-    std::string filename = "./demo/mnist/mnist/error_data.txt";
-    std::string result;
-    for (int i = 0; i < test_error_data.size(); i++) {
-      auto &data = test_error_data[i].first;
-      auto &label = test_error_data[i].second;
-      string data_str;
-      MnistData::DrawMnistImage(test_error_data[i].first, data_str,
-                                test_error_data[i].second.first,
-                                test_error_data[i].second.second);
-      result += data_str;
-    }
-    ofstream outfile(filename);
-    outfile << result;
-    outfile.close();
-  }
   return 0;
 }

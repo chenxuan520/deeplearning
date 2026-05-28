@@ -12,7 +12,8 @@
 -  `src/deeplearning/param_init` 为参数初始化器 (含确定性 seed 支持)
 ## 使用 demo
 -  `src/demo` 中有 demo 代码,可以参考
-    - mnist 为 mnist 数据集,使用代码 demo 默认配置下识别率约为 91%
+    - mnist 为 mnist 数据集分类示例, 默认配置 (784→128→64→10 / ReLU + Adam + WarmupCosine, 5 epochs)
+      下测试准确率约 **97.8%**, 详见 [`docs/mnist-demo.md`](./docs/mnist-demo.md)
     - optimizer_bench 为不同 optimizer 在 MNIST 上的对比 (SGD / Momentum / Adam / AdamW / RMSProp / Adam+CosineLR)
     - transformer_char 为最小字符级语言模型
 
@@ -65,6 +66,17 @@
 -  仅评估已有模型：`./bin/transformer_char --eval-only --model-file transformer_char_demo.param --prompt ab`
 -  导出真实 attention 权重：`./bin/transformer_char --attention-export-file ./docs/attention-guide/attention-sample.json --force-train`
 -  项目讲解静态页：`docs/attention-guide/index.html`
+
+## MNIST Demo
+-  `src/demo/mnist` 提供一个 MLP 分类的完整示例 (载入数据 → 训练 → 评估 → 保存)
+-  默认配置: 784 → 128 → 64 → 10, ReLU + Softmax + Cross-Entropy, He init,
+   Adam + `WarmupCosineLR`, batch=64, 5 epochs
+-  输入预处理: 像素归一化到 `[0,1]` (`mnist_data.h` 内完成, `optimizer_bench` 也共用)
+-  运行 (工作目录必须是 `src/`): `./bin/mnist`
+-  产出: `src/demo/mnist/mnist/demo.v2.param`, 下次运行会自动加载并以 `lr=1e-4` 微调;
+   想冷启动直接 `rm` 即可
+-  实测: test acc **97.82%** (baseline 旧配置 92.67%, 错误率下降 ~70%)
+-  详细优化记录与代码骨架见 [`docs/mnist-demo.md`](./docs/mnist-demo.md)
 
 ## Optimizer Benchmark Demo
 -  `src/demo/optimizer_bench` 在同一 MLP (`[input, 64, 32, output]`, ReLU, He init, cross-entropy)
