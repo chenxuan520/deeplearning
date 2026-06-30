@@ -161,29 +161,36 @@
     '  <div class="propagation__stage">' +
     '    <div class="propagation__left">' +
     '      <div class="network" data-network-stage>' +
-    '        <div class="network__edges">' +
-    '          <div class="network__edge network__edge--i0h0" data-edge="w100"><span>w100</span></div>' +
-    '          <div class="network__edge network__edge--i0h1" data-edge="w101"><span>w101</span></div>' +
-    '          <div class="network__edge network__edge--i1h1" data-edge="w111"><span>w111</span></div>' +
-    '          <div class="network__edge network__edge--i1h2" data-edge="w112"><span>w112</span></div>' +
-    '          <div class="network__edge network__edge--h0o" data-edge="w200"><span>w200</span></div>' +
-    '          <div class="network__edge network__edge--h1o" data-edge="w210"><span>w210</span></div>' +
-    '          <div class="network__edge network__edge--h2o" data-edge="w220"><span>w220</span></div>' +
-    '        </div>' +
-    '        <div class="network__layer">' +
-    '          <div class="network__title">输入层</div>' +
-    '          <div class="network__node-wrap"><div class="network__node" data-node="input-0">x1</div><div class="network__meta">input0 = 1.00</div></div>' +
-    '          <div class="network__node-wrap"><div class="network__node" data-node="input-1">x2</div><div class="network__meta">input1 = 0.50</div></div>' +
-    '        </div>' +
-    '        <div class="network__layer">' +
-    '          <div class="network__title">隐藏层</div>' +
-    '          <div class="network__node-wrap"><div class="network__node" data-node="hidden-0">h1</div><div class="network__meta">b10 = 0.10</div></div>' +
-    '          <div class="network__node-wrap"><div class="network__node" data-node="hidden-1">h2</div><div class="network__meta">b11 = -0.05</div></div>' +
-    '          <div class="network__node-wrap"><div class="network__node" data-node="hidden-2">h3</div><div class="network__meta">b12 = 0.08</div></div>' +
-    '        </div>' +
-    '        <div class="network__layer">' +
-    '          <div class="network__title">输出层</div>' +
-    '          <div class="network__node-wrap"><div class="network__node" data-node="output-0">y</div><div class="network__meta">b20 = 0.20</div></div>' +
+    '        <svg class="network__svg" aria-hidden="true">' +
+    '          <defs>' +
+    '            <marker id="prop-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">' +
+    '              <path d="M0,0 L8,4 L0,8 Z" fill="rgba(225,233,255,0.9)"></path>' +
+    '            </marker>' +
+    '            <marker id="prop-arrow-forward" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">' +
+    '              <path d="M0,0 L8,4 L0,8 Z" fill="#8ef0d1"></path>' +
+    '            </marker>' +
+    '            <marker id="prop-arrow-backward" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">' +
+    '              <path d="M0,0 L8,4 L0,8 Z" fill="#ff9a8f"></path>' +
+    '            </marker>' +
+    '          </defs>' +
+    '          <g data-network-edges></g>' +
+    '        </svg>' +
+    '        <div class="network__layers">' +
+    '          <div class="network__layer">' +
+    '            <div class="network__title">输入层</div>' +
+    '            <div class="network__node-wrap"><div class="network__node" data-node="input-0">x1</div><div class="network__meta">input0 = 1.00</div></div>' +
+    '            <div class="network__node-wrap"><div class="network__node" data-node="input-1">x2</div><div class="network__meta">input1 = 0.50</div></div>' +
+    '          </div>' +
+    '          <div class="network__layer">' +
+    '            <div class="network__title">隐藏层</div>' +
+    '            <div class="network__node-wrap"><div class="network__node" data-node="hidden-0">h1</div><div class="network__meta">b10 = 0.10</div></div>' +
+    '            <div class="network__node-wrap"><div class="network__node" data-node="hidden-1">h2</div><div class="network__meta">b11 = -0.05</div></div>' +
+    '            <div class="network__node-wrap"><div class="network__node" data-node="hidden-2">h3</div><div class="network__meta">b12 = 0.08</div></div>' +
+    '          </div>' +
+    '          <div class="network__layer">' +
+    '            <div class="network__title">输出层</div>' +
+    '            <div class="network__node-wrap"><div class="network__node" data-node="output-0">y</div><div class="network__meta">b20 = 0.20</div></div>' +
+    '          </div>' +
     '        </div>' +
     '        <div class="network__pulse" data-network-pulse></div>' +
     '      </div>' +
@@ -225,6 +232,105 @@
     root.innerHTML = PROP_TPL;
     var $ = function (s) { return root.querySelector(s); };
     var $$ = function (s) { return root.querySelectorAll(s); };
+    var SVG_NS = "http://www.w3.org/2000/svg";
+    var NETWORK_EDGES = [
+      { id: "w100", from: "input-0", to: "hidden-0", label: "w100" },
+      { id: "w101", from: "input-0", to: "hidden-1", label: "w101" },
+      { id: "w111", from: "input-1", to: "hidden-1", label: "w111" },
+      { id: "w112", from: "input-1", to: "hidden-2", label: "w112" },
+      { id: "w200", from: "hidden-0", to: "output-0", label: "w200" },
+      { id: "w210", from: "hidden-1", to: "output-0", label: "w210" },
+      { id: "w220", from: "hidden-2", to: "output-0", label: "w220" }
+    ];
+    var layoutTimer = null;
+
+    function buildNetworkEdges() {
+      var edgesGroup = $("[data-network-edges]");
+      if (!edgesGroup) return;
+      edgesGroup.innerHTML = "";
+      NETWORK_EDGES.forEach(function (def) {
+        var g = document.createElementNS(SVG_NS, "g");
+        g.setAttribute("class", "network__edge");
+        g.setAttribute("data-edge", def.id);
+        var line = document.createElementNS(SVG_NS, "line");
+        line.setAttribute("class", "network__edge-line");
+        line.setAttribute("marker-end", "url(#prop-arrow)");
+        var label = document.createElementNS(SVG_NS, "text");
+        label.setAttribute("class", "network__edge-label");
+        label.textContent = def.label;
+        g.appendChild(line);
+        g.appendChild(label);
+        edgesGroup.appendChild(g);
+      });
+    }
+
+    function layoutNetworkEdges() {
+      var stage = $("[data-network-stage]");
+      var svg = stage && stage.querySelector(".network__svg");
+      var edgesGroup = $("[data-network-edges]");
+      if (!stage || !svg || !edgesGroup) return;
+      var width = stage.clientWidth;
+      var height = stage.clientHeight;
+      if (width < 1 || height < 1) return;
+      svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+      svg.setAttribute("width", String(width));
+      svg.setAttribute("height", String(height));
+
+      function center(nodeId) {
+        var node = stage.querySelector('[data-node="' + nodeId + '"]');
+        if (!node) return null;
+        var stageRect = stage.getBoundingClientRect();
+        var nodeRect = node.getBoundingClientRect();
+        return {
+          x: nodeRect.left - stageRect.left + nodeRect.width / 2,
+          y: nodeRect.top - stageRect.top + nodeRect.height / 2,
+          r: nodeRect.width / 2
+        };
+      }
+
+      NETWORK_EDGES.forEach(function (def) {
+        var group = edgesGroup.querySelector('[data-edge="' + def.id + '"]');
+        var from = center(def.from);
+        var to = center(def.to);
+        if (!group || !from || !to) return;
+        var dx = to.x - from.x;
+        var dy = to.y - from.y;
+        var len = Math.hypot(dx, dy) || 1;
+        var ux = dx / len;
+        var uy = dy / len;
+        var x1 = from.x + ux * from.r;
+        var y1 = from.y + uy * from.r;
+        var x2 = to.x - ux * to.r;
+        var y2 = to.y - uy * to.r;
+        var mx = (x1 + x2) / 2 + uy * 14;
+        var my = (y1 + y2) / 2 - ux * 14;
+        var line = group.querySelector(".network__edge-line");
+        var label = group.querySelector(".network__edge-label");
+        if (line) {
+          line.setAttribute("x1", String(x1));
+          line.setAttribute("y1", String(y1));
+          line.setAttribute("x2", String(x2));
+          line.setAttribute("y2", String(y2));
+        }
+        if (label) {
+          label.setAttribute("x", String(mx));
+          label.setAttribute("y", String(my));
+          label.textContent = def.label;
+        }
+      });
+    }
+
+    function scheduleLayout() {
+      if (layoutTimer) clearTimeout(layoutTimer);
+      layoutTimer = setTimeout(function () {
+        layoutTimer = null;
+        requestAnimationFrame(layoutNetworkEdges);
+      }, 16);
+    }
+
+    buildNetworkEdges();
+    scheduleLayout();
+    window.addEventListener("resize", scheduleLayout);
 
     var state = { learningRate: 0.2 };
     var paramDefs = {
@@ -429,6 +535,7 @@
       refs.pulse.classList.add("is-visible");
       refs.pulse.classList.toggle("is-backward", mode === "backward");
       refs.pulse.style.transform = "translate(" + step.pulse.x + "%, " + step.pulse.y + "%)";
+      scheduleLayout();
       refs.title.textContent = step.title; refs.explain.textContent = step.explain;
       refs.fMain.innerHTML = step.formulaMain; refs.fSub.innerHTML = step.formulaSub; refs.fExp.textContent = step.formulaExplain;
       refs.cMain.innerHTML = step.chainMain; refs.cSub.innerHTML = step.chainSub; refs.cExp.textContent = step.chainExplain;
