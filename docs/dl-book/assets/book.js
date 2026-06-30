@@ -49,6 +49,118 @@
     return isNaN(n) ? -1 : n;
   }
 
+  function slugify(text, index) {
+    var base = String(text || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[：:]/g, " ")
+      .replace(/\s+/g, "-")
+      .replace(/[^\w\u4e00-\u9fff-]/g, "");
+    return base || "section-" + index;
+  }
+
+  function buildChapterRail(currentIdx) {
+    var aside = el("aside", "book-rail book-rail--chapters");
+    aside.setAttribute("aria-label", "章节导航");
+    aside.appendChild(el("div", "book-rail__title", "章节"));
+
+    var list = el("ol", "book-rail__list");
+    var lastPart = null;
+    CHAPTERS.forEach(function (ch, i) {
+      if (ch.part !== lastPart) {
+        lastPart = ch.part;
+        var part = el("li", "book-rail__part", ch.part);
+        list.appendChild(part);
+      }
+      var li = el("li");
+      var a = el("a", "book-rail__link" + (i === currentIdx ? " is-current" : ""));
+      a.href = ch.file;
+      a.appendChild(el("span", "book-rail__num", ch.num));
+      a.appendChild(el("span", "book-rail__name", ch.title));
+      li.appendChild(a);
+      list.appendChild(li);
+    });
+    aside.appendChild(list);
+    return aside;
+  }
+
+  function buildOutlineRail(inner) {
+    var aside = el("aside", "book-rail book-rail--outline");
+    aside.setAttribute("aria-label", "本章目录");
+    aside.appendChild(el("div", "book-rail__title", "本章"));
+
+    var list = el("ol", "book-rail__list book-rail__list--outline");
+    var headings = [].slice.call(inner.querySelectorAll("h2, h3"));
+    var usedIds = {};
+    var links = [];
+
+    headings.forEach(function (heading, index) {
+      if (heading.closest(".quiz")) return;
+      var text = heading.textContent.replace(/\s+/g, " ").trim();
+      if (!text) return;
+
+      var id = slugify(text, index);
+      while (usedIds[id]) id = id + "-" + index;
+      usedIds[id] = true;
+      heading.id = id;
+
+      var li = el("li", heading.tagName === "H3" ? "book-rail__outline-item book-rail__outline-item--sub" : "book-rail__outline-item");
+      var a = el("a", "book-rail__outline-link");
+      a.href = "#" + id;
+      a.textContent = text;
+      li.appendChild(a);
+      list.appendChild(li);
+      links.push({ link: a, heading: heading });
+    });
+
+    if (!links.length) {
+      aside.appendChild(el("p", "book-rail__empty", "本章暂无小节标题"));
+      return { aside: aside, links: [] };
+    }
+
+    aside.appendChild(list);
+    return { aside: aside, links: links };
+  }
+
+  function setupOutlineSpy(links) {
+    if (!links.length || !("IntersectionObserver" in window)) return;
+    var current = null;
+    function setCurrent(link) {
+      if (current === link) return;
+      if (current) current.classList.remove("is-current");
+      current = link;
+      if (current) current.classList.add("is-current");
+    }
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        links.forEach(function (item) {
+          if (item.heading === entry.target) setCurrent(item.link);
+        });
+      });
+    }, { rootMargin: "-20% 0px -65% 0px", threshold: 0 });
+    links.forEach(function (item) { obs.observe(item.heading); });
+    setCurrent(links[0].link);
+  }
+
+  function buildDesktopLayout(currentIdx) {
+    var chapter = document.querySelector(".chapter");
+    var inner = chapter && chapter.querySelector(".chapter__inner");
+    if (!chapter || !inner) return null;
+
+    var layout = el("div", "book-layout");
+    var main = el("div", "book-layout__main");
+    var outline = buildOutlineRail(inner);
+
+    layout.appendChild(buildChapterRail(currentIdx));
+    layout.appendChild(main);
+    layout.appendChild(outline.aside);
+    chapter.insertBefore(layout, inner);
+    main.appendChild(inner);
+    setupOutlineSpy(outline.links);
+    return main;
+  }
+
   // ---------- 目录抽屉 ----------
   function buildToc(currentIdx) {
     var backdrop = el("div", "book-toc-backdrop");
@@ -163,7 +275,7 @@
       nav.appendChild(p2);
     }
 
-    var host = document.querySelector(".chapter") || document.body;
+    var host = document.querySelector(".book-layout__main") || document.querySelector(".chapter") || document.body;
     host.appendChild(nav);
   }
 
@@ -259,6 +371,7 @@
     }
     var toc = buildToc(idx);
     var refs = buildHeader(idx, toc);
+    buildDesktopLayout(idx);
     buildPrevNext(idx);
     setupProgress(refs);
     setupKeyboard(idx);

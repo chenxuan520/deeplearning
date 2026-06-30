@@ -548,6 +548,174 @@ details[open] .quiz__q::after {
 }
 
 /* ============================================================= */
+/* 桌面端双栏导航: 左章节 / 右本章目录 (由 book.js 注入)          */
+/* ============================================================= */
+
+.book-layout {
+  display: contents;
+}
+
+.book-layout__main {
+  min-width: 0;
+}
+
+.book-rail {
+  display: none;
+}
+
+.book-rail__title {
+  margin: 0 0 0.85rem;
+  font-size: 0.76rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.book-rail__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.book-rail__part {
+  margin: 0.85rem 0 0.35rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  line-height: 1.35;
+}
+
+.book-rail__part:first-child {
+  margin-top: 0;
+}
+
+.book-rail__link,
+.book-rail__outline-link {
+  display: block;
+  padding: 0.45rem 0.55rem;
+  border-radius: 10px;
+  color: var(--text-soft);
+  border: 1px solid transparent;
+  line-height: 1.4;
+  font-size: 0.88rem;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.book-rail__link {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.book-rail__link:hover,
+.book-rail__outline-link:hover {
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+
+.book-rail__link.is-current,
+.book-rail__outline-link.is-current {
+  background: rgba(106, 195, 255, 0.14);
+  border-color: rgba(106, 195, 255, 0.35);
+  color: var(--text);
+}
+
+.book-rail__num {
+  flex: 0 0 auto;
+  width: 1.2rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  color: var(--primary);
+  font-size: 0.82rem;
+}
+
+.book-rail__name {
+  min-width: 0;
+}
+
+.book-rail__outline-item--sub {
+  padding-left: 0.65rem;
+}
+
+.book-rail__outline-item--sub .book-rail__outline-link {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.book-rail__outline-item--sub .book-rail__outline-link.is-current {
+  color: var(--text);
+}
+
+.book-rail__empty {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+@media (min-width: 1120px) {
+  .book-header__menu {
+    display: none;
+  }
+
+  .chapter {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  .book-layout {
+    display: grid;
+    grid-template-columns: 220px minmax(0, var(--reading-width)) minmax(180px, 220px);
+    gap: 2rem;
+    max-width: 1280px;
+    margin: 0 auto;
+    align-items: start;
+  }
+
+  .book-rail {
+    display: block;
+    position: sticky;
+    top: calc(var(--header-height) + 1.25rem);
+    max-height: calc(100vh - var(--header-height) - 2rem);
+    overflow: auto;
+    padding: 0.2rem 0.2rem 1rem 0;
+    scrollbar-width: thin;
+  }
+
+  .book-rail--chapters {
+    padding-right: 0.35rem;
+  }
+
+  .book-rail--outline {
+    padding-left: 0.35rem;
+    border-left: 1px solid var(--line);
+  }
+
+  .chapter__inner {
+    max-width: none;
+    margin: 0;
+  }
+
+  .chapter-nav {
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+
+@media (min-width: 1320px) {
+  .book-layout {
+    max-width: 1380px;
+    grid-template-columns: 240px minmax(0, 50rem) 240px;
+    gap: 2.4rem;
+  }
+}
+
+/* ============================================================= */
 /* 封面 / 目录页 (index.html)                                     */
 /* ============================================================= */
 
