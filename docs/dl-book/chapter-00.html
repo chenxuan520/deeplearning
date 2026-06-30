@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 0 章 · 导论:这本书到底在讲什么 | 深度学习入门</title>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body data-chapter="0">
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">第 0 章 · 打地基</p>
+        <h1>导论:这本书到底在讲什么</h1>
+
+        <p class="lead">
+          在写任何公式、任何代码之前,我们先花一章时间,把几个你之后会反复听到的词
+          ——<strong>模型、参数、训练、损失</strong>——用大白话讲清楚。
+          这一章没有任何数学,目标只有一个:让你对“深度学习在干嘛”建立一个<em>不慌</em>的直觉。
+        </p>
+
+        <section class="objectives reveal">
+          <h2>读完这一章,你会明白</h2>
+          <ul>
+            <li>“让机器学习”和“我们平时写程序”到底有什么本质区别;</li>
+            <li>一个“模型”说白了是什么东西,“参数”又是什么;</li>
+            <li>“训练”这件事,其实就是一个不断试错、不断微调的循环;</li>
+            <li>这本书会用什么顺序,带你从一个神经元走到大模型。</li>
+          </ul>
+        </section>
+
+        <h2>1. 先看一个老办法:我们平时是怎么写程序的</h2>
+        <p>
+          假设老板让你写个程序,自动判断一封邮件是不是垃圾邮件。
+          按传统编程的思路,你会去<strong>手写规则</strong>:
+        </p>
+        <ul>
+          <li>如果标题里有“免费”“中奖”,就 +1 分;</li>
+          <li>如果发件人不在通讯录里,就 +1 分;</li>
+          <li>如果全是大写字母,再 +1 分……分数够高就判为垃圾邮件。</li>
+        </ul>
+        <p>
+          这套办法的特点是:<strong>规则是你这个人想出来、亲手写进代码的</strong>。
+          但你很快会崩溃——垃圾邮件的花样太多了,你永远写不完规则,
+          而且改一条规则常常会误伤正常邮件。
+        </p>
+
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">换个角度想</span>
+          <p>
+            与其自己绞尽脑汁写规则,不如给程序看<strong>一大堆已经标好</strong>的邮件
+            (“这封是垃圾、这封正常、这封垃圾……”),
+            让它自己去<strong>总结规律</strong>。这就是“机器学习”最核心的思想转变:
+            <em>从“人写规则”变成“机器从例子里找规则”。</em>
+          </p>
+        </div>
+
+        <h2>2. 那么,“模型”到底是什么?</h2>
+        <p>
+          你可以把一个<span class="term">模型(model)</span>想成一台
+          <strong>带着许许多多旋钮的机器</strong>:你从一头塞进去“输入”,
+          它经过内部一通运算,从另一头吐出“输出”。
+        </p>
+
+        <div class="figure figure--reading reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">输入<small>一封邮件</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">模型<small>一堆旋钮 + 运算</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">输出<small>垃圾 / 正常</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">模型就是一个“输入 → 运算 → 输出”的盒子,盒子里的旋钮决定了它怎么算。</p>
+        </div>
+
+        <p>
+          这些“旋钮”,在深度学习里有个正式名字,叫<span class="term">参数(parameters)</span>。
+          后面你会经常看到两个具体的旋钮:
+        </p>
+        <ul>
+          <li><strong>权重(weight)</strong>:决定某个输入“有多重要”;</li>
+          <li><strong>偏置(bias)</strong>:相当于一个可调的“起始分 / 门槛”。</li>
+        </ul>
+        <p>
+          一个真实的大模型,可能有<strong>几十亿甚至上万亿个这样的旋钮</strong>。
+          但别怕,它们每一个的作用,都和我们第 1 章要拆开看的那一个神经元里的旋钮,
+          <em>本质上一模一样</em>。
+        </p>
+
+        <div class="callout callout--note reveal">
+          <span class="callout__title">一句话记住</span>
+          <p>模型 = 一个带着很多可调旋钮(参数)的函数。喂它输入,它给你输出。</p>
+        </div>
+
+        <h2>3. “训练”就是自动拧旋钮的过程</h2>
+        <p>
+          刚造出来的模型,旋钮都是<strong>乱拧</strong>的(随机初始化),所以它的输出基本是瞎猜。
+          “训练”要做的,就是<strong>自动地、一点一点地把旋钮拧到正确的位置</strong>,
+          让它的输出越来越接近正确答案。这个过程是一个循环:
+        </p>
+
+        <div class="figure figure--reading reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">① 预测<small>模型先猜一个</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">② 对答案<small>和正确答案比</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">③ 算差距<small>错得多离谱?</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">④ 微调旋钮<small>朝更对的方向</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">训练循环:预测 → 对答案 → 算差距 → 微调,然后回到第①步,周而复始成千上万次。</p>
+        </div>
+
+        <p>
+          这里出现了两个关键词,它们是整本书的主角:
+        </p>
+        <ul>
+          <li>
+            第 ③ 步“错得多离谱”,会被压缩成<strong>一个数字</strong>,叫
+            <span class="term">损失(loss)</span>。损失越大,说明模型现在错得越厉害。
+            (这是<a href="chapter-03.html">第 3 章</a>的主题。)
+          </li>
+          <li>
+            第 ④ 步“朝更对的方向微调”,靠的是<span class="term">梯度下降(gradient descent)</span>
+            和<span class="term">反向传播(backpropagation)</span>。
+            (这是<a href="chapter-04.html">第 4 章</a>和<a href="chapter-05.html">第 5 章</a>的主题。)
+          </li>
+        </ul>
+
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">这就是全书的灵魂</span>
+          <p>
+            后面所有看起来吓人的公式,几乎都在为这一件事服务:
+            <strong>“怎么知道该往哪个方向、拧多大幅度,才能让损失变小。”</strong>
+            只要你心里一直装着这个“训练循环”,就不会迷路。
+          </p>
+        </div>
+
+        <h2>4. 几个词,先混个脸熟</h2>
+        <p>下面这些词你现在不用背,扫一眼有个印象即可,后面每一个都会专门展开:</p>
+        <ul>
+          <li><span class="term">样本 / 数据(sample / data)</span>:一条用来学习的例子,比如“一封邮件”。</li>
+          <li><span class="term">特征(feature)</span>:描述样本的那些数字,比如邮件里各个词出现的次数。</li>
+          <li><span class="term">标签 / 目标(label / target)</span>:这条样本的正确答案,比如“是垃圾邮件”。</li>
+          <li><span class="term">前向传播(forward)</span>:把输入从头到尾算一遍,得到预测。</li>
+          <li><span class="term">反向传播(backward)</span>:把“错误”从输出反着传回去,算出每个旋钮该怎么调。</li>
+          <li><span class="term">学习率(learning rate)</span>:每次拧旋钮的“步子大小”。</li>
+          <li><span class="term">训练轮次(epoch / step)</span>:训练循环跑了多少遍。</li>
+        </ul>
+        <p>
+          有“标准答案(标签)”可学的这种设定,叫<span class="term">监督学习(supervised learning)</span>,
+          也是本书的主线。它就像有老师在旁边,每道题都告诉你对错。
+        </p>
+
+        <h2>5. 那“深度”学习,“深”在哪?</h2>
+        <p>
+          如果只有一层运算,模型能学的东西很有限。
+          <strong>“深度”指的是把很多层运算叠在一起</strong>——
+          上一层的输出,当作下一层的输入,一层层叠下去。
+        </p>
+        <p>
+          层数一多,神奇的事情发生了:网络能<strong>自动学出“有用的特征”</strong>。
+          还是垃圾邮件的例子,你不用再手动告诉它“看‘免费’这个词”,
+          深层网络自己就会从原始文字里,逐层提炼出越来越抽象、越来越有用的信号。
+          这正是它比“手写规则”强大的地方。
+        </p>
+
+        <h2>6. 这本书会怎么带你走</h2>
+        <p>我们会严格按照“从简单到复杂”的顺序,每一步都踩在上一步的肩膀上:</p>
+        <ul>
+          <li><strong>第一部分(第 1–2 章)</strong>:看懂<em>一个神经元</em>,再把它堆成一张网络,让数据向前流动。</li>
+          <li><strong>第二部分(第 3–6 章)</strong>:让网络“学起来”——衡量错误、梯度下降、反向传播,以及让训练真正稳定收敛的那些工程技巧。</li>
+          <li><strong>第三部分(第 7–9 章)</strong>:处理“一句话”这种序列数据,引出<em>注意力机制</em>,拼出完整的 <em>Transformer</em>。</li>
+          <li><strong>第四部分(第 10–11 章)</strong>:把它做成一个真能写字的<em>语言模型</em>,最后聊聊把它放大成<em>大模型</em>之后会发生什么。</li>
+        </ul>
+
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">怎么读最舒服</span>
+          <p>
+            1)<strong>先抓直觉,再抠细节</strong>:看不懂公式很正常,先把“这一步在干嘛”读懂,公式回头再看。<br />
+            2)<strong>一定要动手玩实验</strong>:书里每个可拖动的小实验,玩 30 秒胜过读三段文字。<br />
+            3)<strong>代码看不懂可以先跳过</strong>:每段代码都配了逐行讲解,但它是“加深理解”,不是“看懂前提”。
+          </p>
+        </div>
+
+        <section class="summary reveal">
+          <h2>小结</h2>
+          <ul>
+            <li>传统编程是“人写规则”;机器学习是“机器从例子里找规则”。</li>
+            <li>模型 = 一个带很多旋钮(参数:权重 + 偏置)的函数。</li>
+            <li>训练 = 不断“预测 → 对答案 → 算损失 → 微调旋钮”的循环。</li>
+            <li>损失是“错得多离谱”的一个数字;让损失变小,是后面所有数学的共同目标。</li>
+            <li>“深度”= 很多层叠在一起,从而能自动学出有用的特征。</li>
+          </ul>
+        </section>
+
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:用一句话说出“传统编程”和“机器学习”最大的区别。</summary>
+            <div class="quiz__a">
+              <p>传统编程是人把规则写进代码;机器学习是给程序大量“例子 + 答案”,让它自己把规则(参数)学出来。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:“训练一个模型”具体是在调整什么?</summary>
+            <div class="quiz__a">
+              <p>调整模型里的<strong>参数(旋钮)</strong>,主要是权重和偏置,让模型的输出尽量接近正确答案(即让损失变小)。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:为什么说“损失”是训练的指南针?</summary>
+            <div class="quiz__a">
+              <p>因为损失把“模型错得多离谱”量化成一个数字。有了这个数字,程序才知道当前好不好、调整之后有没有变得更好,从而决定旋钮该往哪个方向拧。</p>
+            </div>
+          </details>
+        </div>
+
+        <p class="muted">
+          准备好了吗?下一章我们就把那台“带旋钮的机器”拆到最小的一个零件——
+          <strong>一个神经元</strong>——看看它内部到底在算什么。
+        </p>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>

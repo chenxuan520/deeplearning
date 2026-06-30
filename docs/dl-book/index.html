@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>深度学习入门 · 从一个神经元到大模型</title>
+    <meta
+      name="description"
+      content="一本面向纯小白、循循善诱的中文深度学习入门电子书:从一个神经元讲到大模型原理,配图解、可交互实验与逐行 C++ 代码。"
+    />
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body data-cover>
+    <header class="cover">
+      <div class="cover__grid"></div>
+      <div class="cover__inner">
+        <p class="cover__eyebrow">从零开始 · 对照真实 C++ 实现</p>
+        <h1>深度学习入门</h1>
+        <p class="cover__lead">
+          一本写给「完全没接触过」的你的循循善诱小书。我们从<strong>一个神经元</strong>讲起,
+          一路把它搭成能写字的<strong>语言模型</strong>,再聊聊<strong>大模型</strong>背后的道理。
+          每个概念都配图、配可以动手玩的小实验,并对照一份不依赖任何大框架、从零写成的 C++ 实现。
+        </p>
+        <div class="cover__actions">
+          <a class="button button--primary" data-continue hidden href="chapter-00.html">开始阅读</a>
+          <a class="button button--ghost" href="#toc">直接看目录</a>
+        </div>
+        <p class="muted" style="margin-top: 1.4rem; font-size: 0.92rem">
+          阅读提示:每章按「直觉故事 → 图解/动手实验 → 适度数学 → 逐行代码 → 小结自测」推进,
+          看不懂公式没关系,先抓住直觉,再回头看细节。
+        </p>
+      </div>
+    </header>
+
+    <main class="toc-section" id="toc">
+      <h2>全书目录</h2>
+      <p class="toc-section__hint">12 章,从最朴素的直觉,一直走到大模型的原理。</p>
+
+      <p class="toc-part">第一部分 · 打地基</p>
+      <div class="toc-grid">
+        <a class="toc-card reveal" href="chapter-00.html">
+          <span class="toc-card__num">第 0 章</span>
+          <span class="toc-card__title">导论:这本书到底在讲什么</span>
+          <span class="toc-card__desc">不用任何数学,先用大白话搞懂「模型 / 参数 / 训练 / 数据」到底在干嘛。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-01.html">
+          <span class="toc-card__num">第 1 章</span>
+          <span class="toc-card__title">一个神经元</span>
+          <span class="toc-card__desc">加权求和 + 偏置 + 激活函数。深度学习里最小的那块积木。配可拖动的实验台。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-02.html">
+          <span class="toc-card__num">第 2 章</span>
+          <span class="toc-card__title">搭成网络:前向传播</span>
+          <span class="toc-card__desc">把神经元堆成层、层叠成网络,看数据怎么一层层向前流动算出预测。</span>
+        </a>
+      </div>
+
+      <p class="toc-part">第二部分 · 学习是怎么发生的</p>
+      <div class="toc-grid">
+        <a class="toc-card reveal" href="chapter-03.html">
+          <span class="toc-card__num">第 3 章</span>
+          <span class="toc-card__title">怎么衡量「错」:损失函数</span>
+          <span class="toc-card__desc">用一个数字衡量「模型错得多离谱」。MSE 与交叉熵,以及 softmax。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-04.html">
+          <span class="toc-card__num">第 4 章</span>
+          <span class="toc-card__title">怎么变「好」:梯度下降</span>
+          <span class="toc-card__desc">像在雾里下山一样,顺着最陡的方向一步步把损失降下去。学习率是步长。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-05.html">
+          <span class="toc-card__num">第 5 章</span>
+          <span class="toc-card__title">反向传播</span>
+          <span class="toc-card__desc">链式法则,把「错误」从输出层一路反着传回每一个参数。配前向/反向动画。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-06.html">
+          <span class="toc-card__num">第 6 章</span>
+          <span class="toc-card__title">让它真的训得动</span>
+          <span class="toc-card__desc">初始化、Adam、学习率调度、梯度裁剪——让训练真的收敛而不是发散。</span>
+        </a>
+      </div>
+
+      <p class="toc-part">第三部分 · 序列与 Transformer</p>
+      <div class="toc-grid">
+        <a class="toc-card reveal" href="chapter-07.html">
+          <span class="toc-card__num">第 7 章</span>
+          <span class="toc-card__title">为什么需要注意力</span>
+          <span class="toc-card__desc">处理一句话这种「序列」,普通网络卡在哪?注意力到底要解决什么问题。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-08.html">
+          <span class="toc-card__num">第 8 章</span>
+          <span class="toc-card__title">注意力机制</span>
+          <span class="toc-card__desc">Q / K / V、打分、softmax、causal mask、多头,一次讲透。配可玩的实验台。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-09.html">
+          <span class="toc-card__num">第 9 章</span>
+          <span class="toc-card__title">Transformer 的完整结构</span>
+          <span class="toc-card__desc">残差连接、LayerNorm、前馈网络、位置编码,拼成一块完整的 Transformer 积木。</span>
+        </a>
+      </div>
+
+      <p class="toc-part">第四部分 · 通往大模型</p>
+      <div class="toc-grid">
+        <a class="toc-card reveal" href="chapter-10.html">
+          <span class="toc-card__num">第 10 章</span>
+          <span class="toc-card__title">字符级语言模型</span>
+          <span class="toc-card__desc">tokenizer、embedding、预测下一个字、温度/top-k/top-p 采样、困惑度。配真实权重回放。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-11.html">
+          <span class="toc-card__num">第 11 章</span>
+          <span class="toc-card__title">通往大模型</span>
+          <span class="toc-card__desc">把小模型放大会发生什么?预训练、微调、RLHF、涌现、上下文窗口与对齐。</span>
+        </a>
+      </div>
+
+      <hr />
+      <p class="center muted">
+        配套代码:本书所有「逐行讲解」都对照仓库
+        <code>src/deeplearning/</code> 下的真实实现。想跑起来可参考各章末尾的运行提示。
+      </p>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>

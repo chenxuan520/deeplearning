@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 7 章 · 为什么需要注意力 | 深度学习入门</title>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body data-chapter="7">
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">第 7 章 · 序列与 Transformer</p>
+        <h1>为什么需要注意力</h1>
+
+        <p class="lead">
+          到目前为止,我们的网络处理的都是“一个固定长度的特征向量”。
+          可现实里最重要的一类数据——<strong>语言</strong>——长得不一样:它是一串
+          <strong>有先后、有长短、词与词还互相关联</strong>的<span class="term">序列</span>。
+          这一章我们先想清楚:处理序列,旧网络到底卡在哪?注意力又是来救什么场的?
+        </p>
+
+        <section class="objectives reveal">
+          <h2>读完这一章,你会明白</h2>
+          <ul>
+            <li>“序列”这种数据为什么对前面的网络是个难题;</li>
+            <li>两种朴素做法各自的硬伤(信息瓶颈 / 传话衰减);</li>
+            <li>真正难的不是“词多”,而是“相关的词可能离得很远”;</li>
+            <li>注意力的一句话核心:让每个词<strong>直接看全局,自己决定关注谁</strong>。</li>
+          </ul>
+        </section>
+
+        <h2>1. 新挑战:句子是一串会互相影响的词</h2>
+        <p>
+          一句话由许多 <span class="term">token</span>(可以先理解成“词”或“字”)按顺序组成。
+          它有两个让旧网络头疼的特点:<strong>长度不固定</strong>(有的句子三个词,有的三十个),
+          以及<strong>词之间有关系</strong>(谁修饰谁、谁指代谁)。固定大小的 MLP 一次只吃固定长度的向量,
+          天然不适合这种“弹性又互相纠缠”的输入。
+        </p>
+
+        <h2>2. 两种笨办法,各有硬伤</h2>
+        <p><strong>笨办法一:把整句话压成一个向量。</strong> 先把所有词的信息硬塞进一个固定大小的向量,再交给 MLP。问题是:句子越长,这个向量就越“挤”,细节被严重压缩——这叫<span class="term">信息瓶颈</span>。</p>
+        <p><strong>笨办法二:按顺序一个一个传。</strong> 像接力一样,把前面读到的信息一路往后递(这正是 RNN 的思路)。问题是:它像一场<strong>传话游戏</strong>,信息每经过一个词就被改写一点,等传到很远的地方,最初的内容早就模糊甚至丢失了。</p>
+
+        <h2>3. 真正的难点:相关的词,可能离得很远</h2>
+        <p>看这句话:</p>
+        <blockquote>小明把<strong>书</strong>放在桌子上,因为<strong>它</strong>太重了。</blockquote>
+        <p>
+          “它”指的是“书”还是“桌子”?要判断,模型必须把“它”和前面的“书”联系起来——
+          可它们之间隔了好几个词。<strong>难点不在于词多,而在于“该关联的词常常离得很远”。</strong>
+          按顺序传递的办法,在这种长距离依赖上特别吃力。
+        </p>
+
+        <h2>4. 注意力的核心想法</h2>
+        <p>
+          注意力(attention)换了个思路,简单得近乎暴力:<strong>不要再一站站传话了,
+          让每个词直接去看序列里所有的词,然后自己决定该重点关注谁。</strong>
+          “它”可以一眼扫过全句,发现自己和“书”最相关,于是把注意力大部分放在“书”上。
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 640 340" role="img" aria-label="传话式处理与注意力的对比">
+              <!-- 上: 传话链 -->
+              <text x="60" y="40" fill="#ffcf72" font-size="14">没有注意力:像传话游戏,远距离信息逐跳衰减</text>
+              <g>
+                <circle cx="90" cy="90" r="22" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" /><text x="90" y="95" text-anchor="middle" fill="#eef4ff" font-size="13">小明</text>
+                <circle cx="210" cy="90" r="22" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" /><text x="210" y="95" text-anchor="middle" fill="#eef4ff" font-size="13">书</text>
+                <circle cx="330" cy="90" r="22" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" /><text x="330" y="95" text-anchor="middle" fill="#eef4ff" font-size="13">桌子</text>
+                <circle cx="450" cy="90" r="22" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" /><text x="450" y="95" text-anchor="middle" fill="#eef4ff" font-size="13">因为</text>
+                <circle cx="570" cy="90" r="22" fill="rgba(255,143,163,0.18)" stroke="#ff8fa3" stroke-width="2" /><text x="570" y="95" text-anchor="middle" fill="#eef4ff" font-size="13">它</text>
+              </g>
+              <g stroke="#6f5a36" stroke-width="2" fill="none" marker-end="url(#a7)">
+                <line x1="112" y1="90" x2="188" y2="90" /><line x1="232" y1="90" x2="308" y2="90" />
+                <line x1="352" y1="90" x2="428" y2="90" /><line x1="472" y1="90" x2="548" y2="90" />
+              </g>
+              <!-- 下: 注意力 -->
+              <text x="60" y="200" fill="#8ef0d1" font-size="14">有注意力:“它”直接看全句,把注意力放在最相关的“书”上</text>
+              <g>
+                <circle cx="90" cy="260" r="22" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="2" /><text x="90" y="265" text-anchor="middle" fill="#eef4ff" font-size="13">小明</text>
+                <circle cx="210" cy="260" r="22" fill="rgba(142,240,209,0.22)" stroke="#8ef0d1" stroke-width="3" /><text x="210" y="265" text-anchor="middle" fill="#eef4ff" font-size="13">书</text>
+                <circle cx="330" cy="260" r="22" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="2" /><text x="330" y="265" text-anchor="middle" fill="#eef4ff" font-size="13">桌子</text>
+                <circle cx="450" cy="260" r="22" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="2" /><text x="450" y="265" text-anchor="middle" fill="#eef4ff" font-size="13">因为</text>
+                <circle cx="570" cy="260" r="22" fill="rgba(255,143,163,0.18)" stroke="#ff8fa3" stroke-width="2" /><text x="570" y="265" text-anchor="middle" fill="#eef4ff" font-size="13">它</text>
+              </g>
+              <g stroke="#8ef0d1" fill="none" stroke-linecap="round">
+                <line x1="551" y1="251" x2="229" y2="255" stroke-width="3.5" />
+                <line x1="552" y1="258" x2="108" y2="262" stroke-width="1.2" opacity="0.5" />
+                <line x1="551" y1="265" x2="349" y2="265" stroke-width="1.2" opacity="0.5" />
+                <line x1="552" y1="270" x2="469" y2="268" stroke-width="1.2" opacity="0.5" />
+              </g>
+              <defs>
+                <marker id="a7" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#6f5a36" /></marker>
+              </defs>
+            </svg>
+          </div>
+          <p class="figure__cap">上:信息沿链条逐跳衰减。下:“它”一步直达全句,粗线表示它把更多注意力分给了“书”。</p>
+        </div>
+
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">两个生活类比</span>
+          <p>
+            <strong>开会</strong>:一个人发言前,先扫一眼全场,决定主要听谁的、参考谁的,而不是只听旁边一个人耳语转述。<br />
+            <strong>查资料</strong>:你带着一个问题(query),扫过所有资料的标题(key),挑出最相关的几份,重点读它们的内容(value)。
+          </p>
+        </div>
+
+        <div class="callout callout--note reveal">
+          <span class="callout__title">一句话记住</span>
+          <p>注意力的本质,不是“更复杂的矩阵运算”,而是赋予每个词一种能力:<strong>主动地、按相关性,把注意力分配到序列里所有其他词上。</strong></p>
+        </div>
+
+        <section class="summary reveal">
+          <h2>小结</h2>
+          <ul>
+            <li>语言是序列:长度可变、词与词互相关联,固定大小的 MLP 天然不适合。</li>
+            <li>把整句压成一个向量 → 信息瓶颈;按顺序逐个传递 → 传话式的远距离衰减。</li>
+            <li>真正的难点是“相关的词可能离得很远”(如代词指代)。</li>
+            <li>注意力让每个词直接看全局、按相关性自己分配关注,从根上解决了长距离依赖。</li>
+          </ul>
+        </section>
+
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:为什么说“按顺序逐个传递”处理长句子有先天劣势?</summary>
+            <div class="quiz__a">
+              <p>因为信息像传话游戏一样要经过很多中间步骤,每一步都可能被改写或稀释,等传到很远的位置,最初的信息早已模糊。长距离依赖最容易在这种方式里丢失。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:用一句话概括注意力解决了什么核心问题?</summary>
+            <div class="quiz__a">
+              <p>让每个词都能直接“看到”序列里所有其他词,并按相关性自主决定关注谁,从而绕开了长距离信息传递的衰减问题。</p>
+            </div>
+          </details>
+        </div>
+
+        <p class="muted">
+          想法很美,但“直接看全局、决定关注谁”到底怎么用数字算出来?
+          下一章就把这台机器拆开:<strong>Q、K、V、打分、softmax、加权求和</strong>,一个都不少。
+        </p>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>

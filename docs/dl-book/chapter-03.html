@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 3 章 · 怎么衡量“错”:损失函数 | 深度学习入门</title>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body data-chapter="3">
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">第 3 章 · 学习是怎么发生的</p>
+        <h1>怎么衡量“错”:损失函数</h1>
+
+        <p class="lead">
+          网络现在能向前算出一个预测了,但它八成是错的。要让它“学”,第一步是给“错”
+          一个<strong>精确、可计算</strong>的定义——这就是<span class="term">损失函数(loss function)</span>。
+          它把“模型这次错得多离谱”压缩成<strong>一个数字</strong>。这个数字,就是后面所有优化的指南针。
+        </p>
+
+        <section class="objectives reveal">
+          <h2>读完这一章,你会明白</h2>
+          <ul>
+            <li>为什么需要把“错误”变成一个数字,以及它怎么指导训练;</li>
+            <li>回归任务用的<strong>均方误差(MSE)</strong>是怎么回事;</li>
+            <li>分类任务里,<strong>softmax</strong> 怎么把分数变成概率,<strong>交叉熵</strong>怎么衡量概率的差距;</li>
+            <li>“softmax + 交叉熵”为什么会得到一个特别漂亮的结果 <var>δ</var> = 预测 − 答案。</li>
+          </ul>
+        </section>
+
+        <h2>1. 为什么要把“错”变成一个数字</h2>
+        <p>
+          回忆第 0 章的训练循环:预测 → 对答案 → <strong>算差距</strong> → 微调。
+          这里的“算差距”,必须输出一个<strong>具体的数</strong>,程序才能比较“调整之前和之后,到底哪个更好”。
+        </p>
+        <p>
+          这个数,我们希望它满足两个朴素的要求:<strong>预测越接近答案,它越小</strong>;
+          <strong>完全正确时,它应该是 0(或最小)</strong>。剩下的,只是“用什么公式来算这个差距”而已。
+          不同任务,用不同的公式。
+        </p>
+
+        <h2>2. 回归任务:均方误差 MSE</h2>
+        <p>
+          如果模型要预测一个<strong>连续的数值</strong>(比如房价、温度),这叫<span class="term">回归</span>。
+          最自然的“差距”就是:预测值和真实值<strong>差多少,然后平方</strong>(平方是为了让正负差距都变成正贡献,并且惩罚大错):
+        </p>
+        <div class="mathblock reveal">
+          <var>L</var> = <span class="frac"><span>1</span><span>2</span></span> (<var>t</var> − <var>o</var>)<sup>2</sup>
+          <span class="label">t = 真实值(target),o = 模型输出(output)。差得越多,平方后涨得越快</span>
+        </div>
+        <p>看看它在代码里有多直白:</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/loss/mse_loss.cpp</figcaption>
+          <pre class="code-walk__code"><code>double MSELoss::Loss(double target, double output) {
+  return 0.5 * (target - output) * (target - output);   <b class="cw-tag">1</b>
+}
+
+double MSELoss::DerivLoss(double target, double output) {
+  return -2.0 * (target - output);                      <b class="cw-tag">2</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li><strong>Loss</strong>:就是上面的公式,算出“这一个输出错了多少”。</li>
+            <li><strong>DerivLoss</strong>:损失对输出的<em>导数</em>,反向传播要用它(第 5 章)。这里你只要先看懂它的<strong>符号</strong>:当 <var>o</var> 比 <var>t</var> 小,(t − o) 为正,导数为负——它在告诉网络“你预测得太低了,把输出往大调”。导数前面的常数(这里是 2)不影响方向,只是缩放,会被学习率吸收。</li>
+          </ol>
+        </figure>
+
+        <h2>3. 分类任务:先把分数变成“概率”</h2>
+        <p>
+          如果模型要从几个选项里<strong>选一个类别</strong>(比如这张图是 0–9 里的哪个数字),这叫<span class="term">分类</span>。
+          网络最后一层会对每个类别输出一个分数(叫 <span class="term">logits</span>),但这些分数可能是任意实数,
+          不能直接当“概率”。我们需要一个函数,把一组分数变成一组<strong>非负、且加起来等于 1</strong> 的概率——
+          这就是 <span class="term">softmax</span>:
+        </p>
+        <div class="mathblock reveal">
+          <var>p</var><sub>i</sub> = <span class="frac"><span>e<sup>z<sub>i</sub></sup></span><span>Σ<sub>j</sub> e<sup>z<sub>j</sub></sup></span></span>
+          <span class="label">先把每个分数取指数(保证为正),再除以所有指数之和(保证加起来为 1)</span>
+        </div>
+        <p>直觉:取指数会<strong>放大差距</strong>(分数高的更突出),除以总和则把它们归一化成概率。代码:</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/softmax/std_softmax.cpp · Normalize</figcaption>
+          <pre class="code-walk__code"><code>long double sum = 0;
+for (int i = 0; i &lt; input.size(); i++)
+  sum += std::exp(input[i]);                 <b class="cw-tag">1</b>
+
+for (int i = 0; i &lt; input.size(); i++)
+  output[i] = std::exp(input[i]) / sum;      <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>第一遍循环:把每个 logit 取指数 <code>exp</code>,全部加起来得到分母 <code>sum</code>。</li>
+            <li>第二遍循环:每个类别的概率 = 自己的指数 ÷ 总和。这样所有 <code>output[i]</code> 都在 (0, 1) 之间,且加起来正好是 1——一组合法的概率。</li>
+          </ol>
+        </figure>
+
+        <h2>4. 用交叉熵衡量两个概率的差距</h2>
+        <p>
+          现在模型给出了一组预测概率 <var>p</var>,而正确答案是一个“只有正确类是 1、其余是 0”的分布
+          <var>t</var>(叫 <span class="term">one-hot</span>)。怎么衡量这两组概率差多少?用
+          <span class="term">交叉熵(cross-entropy)</span>:
+        </p>
+        <div class="mathblock reveal">
+          <var>L</var> = − Σ<sub>i</sub> <var>t</var><sub>i</sub> log(<var>p</var><sub>i</sub>) = − log(<var>p</var><sub>正确类</sub>)
+          <span class="label">因为 t 只有正确类是 1,求和最后只剩“正确类的预测概率”那一项</span>
+        </div>
+        <p>
+          直觉非常顺:如果模型给<strong>正确类</strong>的概率很高(接近 1),log 接近 0,损失很小;
+          如果它给正确类的概率很低(接近 0),−log 会冲向<strong>很大</strong>——狠狠惩罚“自信地答错”。
+        </p>
+        <p>项目里实现的是<strong>二元</strong>交叉熵(配合 Sigmoid 输出,判断“是/不是”):</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/loss/cross_entropy_loss.cpp</figcaption>
+          <pre class="code-walk__code"><code>double CrossEntropyLoss::Loss(double target, double output) {
+  return -target * log(output)
+         - (1.0 - target) * log(1.0 - output);     <b class="cw-tag">1</b>
+}
+
+double CrossEntropyLoss::DerivLoss(double target, double output) {
+  return (output - target) / (output * (1.0 - output));  <b class="cw-tag">2</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>当真实标签 <code>target</code> = 1,只剩前半项 <code>-log(output)</code>:输出越接近 1 损失越小;当 <code>target</code> = 0,只剩后半项 <code>-log(1-output)</code>:输出越接近 0 损失越小。</li>
+            <li>导数看起来有点吓人(分母里有 <code>output(1-output)</code>),但下一节你会看到,它和 Sigmoid/softmax 的导数<strong>正好抵消</strong>,变得无比清爽。</li>
+          </ol>
+        </figure>
+
+        <h2>5. 一个美妙的巧合:δ = 预测 − 答案</h2>
+        <p>
+          单独看,交叉熵的导数和 softmax 的导数都挺丑。但当你把它们<strong>合在一起</strong>
+          (softmax 算概率 + 交叉熵算损失),中间那些复杂的项会奇迹般地约掉,
+          最后末层要往回传的“误差信号” <var>δ</var> 简洁到不可思议:
+        </p>
+        <div class="mathblock reveal">
+          <var>δ</var> = <var>p</var> − <var>t</var>
+          <span class="label">预测概率 减去 真实答案。就这么简单</span>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/softmax/std_softmax.cpp · CalcDelta</figcaption>
+          <pre class="code-walk__code"><code>double StdSoftmax::CalcDelta(double output, double target,
+                            std::shared_ptr&lt;LossFunction&gt; loss_function) {
+  switch (loss_function-&gt;GetLossType()) {
+  case LOSS_MSE:           return output - target;   <b class="cw-tag">1</b>
+  case LOSS_CROSS_ENTROPY: return output - target;   <b class="cw-tag">2</b>
+  }
+  return 0;
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>这就是上面说的 <var>δ</var> = <var>p</var> − <var>t</var>。它会作为反向传播的“起点”(第 5 章)。</li>
+            <li>直觉太顺了:预测概率比答案高多少,就往回传多少“正向误差”;低多少,就传多少“负向误差”。这也是为什么分类任务几乎总是用“softmax + 交叉熵”这对黄金搭档。</li>
+          </ol>
+        </figure>
+
+        <h2>6. 一批样本的损失,取个平均</h2>
+        <p>
+          训练时我们一次看很多样本,把每个样本、每个输出的损失加起来再求平均,得到这一批的整体损失:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/loss/loss_base.cpp · AverageLoss</figcaption>
+          <pre class="code-walk__code"><code>double LossFunction::AverageLoss(const std::vector&lt;double&gt; &amp;target,
+                                const std::vector&lt;double&gt; &amp;output) {
+  double result = 0;
+  for (int i = 0; i &lt; target.size(); i++)
+    result += Loss(target[i], output[i]);   <b class="cw-tag">1</b>
+  result /= target.size();                  <b class="cw-tag">2</b>
+  return result;
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>把每个输出维度的损失累加起来。</li>
+            <li>除以个数得到平均损失。整个训练的目标,就是让这个平均损失尽可能小。</li>
+          </ol>
+        </figure>
+
+        <section class="summary reveal">
+          <h2>小结</h2>
+          <ul>
+            <li>损失函数把“模型错得多离谱”变成一个数字:越准越小,完全正确时最小。</li>
+            <li>回归用<strong>均方误差 MSE</strong>:差值的平方。</li>
+            <li>分类先用 <strong>softmax</strong> 把分数变概率(非负、和为 1),再用<strong>交叉熵</strong>衡量与正确答案的差距,狠罚“自信地答错”。</li>
+            <li>“softmax + 交叉熵”的末层误差 <var>δ</var> = <var>p</var> − <var>t</var>,异常简洁,是分类的黄金搭档。</li>
+            <li><code>DerivLoss</code> 是损失对输出的导数,它是下一步“反向传播”的起点。</li>
+          </ul>
+        </section>
+
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:模型对正确类给出 0.99 的概率,和给出 0.01 的概率,交叉熵损失差别大吗?</summary>
+            <div class="quiz__a">
+              <p>差别巨大。−log(0.99) ≈ 0.01(几乎没损失);−log(0.01) ≈ 4.6(损失很大)。交叉熵会狠狠惩罚“自信地答错”,这正是我们想要的。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:softmax 为什么要先取指数,而不是直接把分数除以总和?</summary>
+            <div class="quiz__a">
+              <p>直接除以总和无法处理负分数(可能出现负概率),也无法保证“分数越高越突出”。取指数能把任意实数变成正数,并放大高分与低分的差距,再归一化就得到一组合理的概率。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:为什么分类几乎总是“softmax + 交叉熵”一起用?</summary>
+            <div class="quiz__a">
+              <p>除了它们各自合理,组合起来梯度还特别干净:末层误差 <var>δ</var> = <var>p</var> − <var>t</var>。计算简单、数值稳定,反向传播也更不容易出问题。</p>
+            </div>
+          </details>
+        </div>
+
+        <p class="muted">
+          有了“错得多少”这个数字,下一章我们就要回答那个核心问题:
+          <strong>该往哪个方向、走多大一步,才能让这个数字变小?</strong>——梯度下降登场。
+        </p>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>

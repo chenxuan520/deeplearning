@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 11 章 · 通往大模型 | 深度学习入门</title>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body data-chapter="11">
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">第 11 章 · 通往大模型</p>
+        <h1>通往大模型</h1>
+
+        <p class="lead">
+          你已经亲手把一个完整的语言模型从一个神经元拆到了底。最后这一章,我们站远一点:
+          把第 10 章那个小模型<strong>放大一万倍</strong>,会发生什么?
+          答案有点反高潮——<strong>核心原理几乎不变</strong>。大模型的“大”,主要大在规模、数据和一些工程技巧上。
+          理解了前面十章,你已经握住了大模型的钥匙。
+        </p>
+
+        <section class="objectives reveal">
+          <h2>读完这一章,你会明白</h2>
+          <ul>
+            <li>“规模化(scaling)”指的是放大什么,为什么越大越强;</li>
+            <li>预训练、微调、RLHF 这三步分别在做什么;</li>
+            <li>“涌现能力”“上下文窗口”“KV cache”这些热词到底指什么;</li>
+            <li>大模型的局限在哪,该如何理性看待它。</li>
+          </ul>
+        </section>
+
+        <h2>1. 先看一个惊人的事实:内核没变</h2>
+        <p>
+          GPT 这类模型,做的事和你第 10 章那个 mini LM<strong>一模一样</strong>:
+          <em>看着前文,预测下一个 token,然后自回归地一个个往下写</em>。
+          区别只在量级:
+        </p>
+        <div class="figure figure--reading reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">本书 mini LM<small>几千参数 · 几句话语料 · CPU 几秒</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">GPT-3<small>1750 亿参数 · 几千亿词 · 上千 GPU 训数周</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">同一套机制(Embedding + Transformer + 预测下一个 token),规模相差上亿倍。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">最重要的一句话</span>
+          <p>
+            大模型不是用了什么你没学过的“黑魔法”。它就是把你已经理解的
+            <strong>注意力、Transformer Block、预测下一个 token</strong> 堆得更深、喂得更多、训得更久。
+          </p>
+        </div>
+
+        <h2>2. 规模化(Scaling):大力真的出奇迹</h2>
+        <p>
+          研究者发现一个惊人规律——<span class="term">Scaling Law(规模定律)</span>:
+          当你<strong>同时</strong>放大三样东西——<strong>参数量、数据量、算力</strong>——模型的损失会沿着一条
+          平滑、可预测的曲线持续下降。也就是说,“做得更大”能<strong>可靠地</strong>换来“做得更好”。
+        </p>
+        <p>
+          这条规律是过去几年“军备竞赛”的底气:既然变大几乎稳赚,那就拼命变大。
+          也正是在不断放大的过程中,出现了下面这件更神奇的事。
+        </p>
+
+        <h2>3. 涌现能力:量变到质变</h2>
+        <p>
+          <span class="term">涌现能力(emergent abilities)</span>指的是:
+          某些能力在小模型上<strong>几乎为零</strong>,但当规模越过某个门槛后,会<strong>突然出现</strong>。比如:
+        </p>
+        <ul>
+          <li><strong>少样本学习(few-shot)</strong>:你在提示里给几个例子,它就能照着做新题,不需要重新训练;</li>
+          <li><strong>按步骤推理</strong>:让它“一步一步想”,复杂问题的正确率明显提高;</li>
+          <li><strong>遵循复杂指令</strong>:听懂并完成多步骤的任务。</li>
+        </ul>
+        <p>这些能力没有被任何人“显式编程”进去,而是在“预测下一个 token”这个朴素目标 + 巨大规模下,自己长出来的。</p>
+
+        <h2>4. 大模型是怎么炼成的:三步</h2>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">① 预训练<small>海量文本上预测下一个词</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">② 微调<small>用指令数据教它“听话”</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">③ RLHF<small>按人类偏好对齐</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">从“会接话的语料模型”到“有用的助手”,通常要走这三步。</p>
+        </div>
+
+        <h3>① 预训练(Pre-training)</h3>
+        <p>
+          在<strong>海量</strong>文本(整个互联网级别)上,做的就是第 10 章那件事:预测下一个词。
+          它<strong>不需要人工标注</strong>——文本本身就提供了答案(下一个词是什么是现成的),这叫
+          <span class="term">自监督</span>。这一步最烧钱、最耗时,但也是模型获得“通用语言能力和世界知识”的来源。
+        </p>
+
+        <h3>② 微调(Fine-tuning)</h3>
+        <p>
+          预训练完的模型“博学但不一定听话”。<span class="term">指令微调</span>用一批
+          “指令 + 理想回答”的数据继续训练,把它从“只会接着写”调教成“会回答你的问题、完成你的任务”。
+          这一步数据量小得多,但作用关键。
+        </p>
+
+        <h3>③ RLHF(基于人类反馈的强化学习)</h3>
+        <p>
+          为了让回答更<strong>有用、无害、诚实</strong>,还会用
+          <span class="term">RLHF</span>:先让人对模型的多个回答排序好坏,用这些偏好训练一个“打分模型”,
+          再用强化学习让大模型朝“人类更喜欢的回答”优化。今天聊天助手那种得体的语气和分寸,很多来自这一步。
+        </p>
+
+        <h2>5. 两个常被提到的工程词</h2>
+        <p>
+          <span class="term">上下文窗口(context window)</span>:模型一次最多能“看进去”多少 token。
+          早期 GPT 只有 2048,如今动辄十几万——窗口越大,能记住的上文越长。它受限于注意力的计算量
+          (回忆第 8 章:每个词要和所有词两两打分,长度翻倍计算量翻四倍)。
+        </p>
+        <p>
+          <span class="term">KV cache</span>:自回归生成时,每多写一个词,前面那些词的 Key、Value 其实
+          <strong>没变</strong>。把它们缓存下来,新词只需算自己的部分,就能避免大量重复计算,让生成快很多。
+          它直接建立在你第 8 章学的 Q/K/V 之上。
+        </p>
+
+        <h2>6. 清醒地看待它的局限</h2>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">大模型并不“无所不知”</span>
+          <p>
+            <strong>幻觉</strong>:它本质是在“预测最像样的下一个词”,所以会一本正经地编造看似合理、实则错误的内容。<br />
+            <strong>偏见</strong>:训练数据里的偏见会被它学进去。<br />
+            <strong>知识截止与不会真正“算”</strong>:它的知识停在训练数据那一刻,且并不真正理解,而是在做极其复杂的模式延续。
+          </p>
+        </div>
+        <p>
+          理解了原理,你就能更冷静地用它:把它当成一个<strong>极其强大但会犯错的概率文本生成器</strong>,
+          而不是一个全知的神谕。该核对的事实,仍然要核对。
+        </p>
+
+        <h2>7. 你已经走完了这条路</h2>
+        <p>回头看看你这一路搭起来的东西:</p>
+        <ul>
+          <li>从<strong>一个神经元</strong>的加权求和 + 激活(第 1 章),</li>
+          <li>到堆成<strong>网络</strong>、让数据<strong>前向</strong>流动(第 2 章),</li>
+          <li>用<strong>损失</strong>衡量错误、靠<strong>梯度下降</strong>和<strong>反向传播</strong>学习(第 3–5 章),</li>
+          <li>再用<strong>现代训练栈</strong>把它训稳(第 6 章),</li>
+          <li>用<strong>注意力</strong>处理序列、拼出<strong>Transformer</strong>(第 7–9 章),</li>
+          <li>最后做成会写字的<strong>语言模型</strong>(第 10 章)。</li>
+        </ul>
+        <p>
+          大模型,就是把这一整条链路,放到极致规模上的产物。
+          你手里这本书讲的每一个零件,都真实地活在那些上千亿参数的模型里。
+          <strong>从一个神经元到大模型,你已经把这条路,亲眼、亲手走了一遍。</strong>
+        </p>
+
+        <section class="summary reveal">
+          <h2>小结</h2>
+          <ul>
+            <li>大模型的内核 = 第 10 章的“预测下一个 token + 自回归”,只是规模大上亿倍。</li>
+            <li>Scaling Law:同时放大参数、数据、算力,性能可预测地提升。</li>
+            <li>三步炼成:预训练(自监督学语言)→ 指令微调(学听话)→ RLHF(按人类偏好对齐)。</li>
+            <li>涌现能力随规模出现;上下文窗口和 KV cache 都直接建立在注意力之上。</li>
+            <li>它强大但会幻觉、有偏见、有知识截止——当作“强大但会错的工具”理性使用。</li>
+          </ul>
+        </section>
+
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:GPT 的预训练目标,和本书第 10 章的 mini LM 有什么关系?</summary>
+            <div class="quiz__a">
+              <p>本质完全相同:都是“看前文、预测下一个 token”的自监督任务。区别只在数据规模、参数规模和算力——原理你已经在第 10 章亲手实现过了。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:为什么大模型会“一本正经地胡说八道(幻觉)”?</summary>
+            <div class="quiz__a">
+              <p>因为它的训练目标是“预测最像样、最连贯的下一个词”,而不是“说真话”。当它对某事实没有可靠依据时,仍会生成看起来通顺合理、实则错误的内容。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:KV cache 为什么能加速生成?它和哪一章的知识相关?</summary>
+            <div class="quiz__a">
+              <p>自回归生成时,已经出现的词的 Key/Value 不会改变,缓存起来就不必每步重算,新词只算自己的部分。它直接建立在第 8 章注意力的 Q/K/V 机制之上。</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="summary reveal" style="text-align:center">
+          <h2>全书完 · 谢谢你读到这里</h2>
+          <p>
+            你从一个最朴素的神经元出发,一步步理解了今天最前沿模型的核心原理。
+            接下来最好的学习方式,是去<strong>把配套的 C++ 代码跑起来、改一改</strong>:
+            调调激活函数、换换优化器、训训那个字符级语言模型,看看数字怎么变化。
+          </p>
+          <p class="muted">原理已经在你心里了,剩下的,交给好奇心和动手。</p>
+          <p style="margin-top:1.4rem"><a class="button button--primary" href="index.html">返回目录 / 重读某章</a></p>
+        </div>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>

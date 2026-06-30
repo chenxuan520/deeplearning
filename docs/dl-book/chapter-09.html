@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 9 章 · Transformer 的完整结构 | 深度学习入门</title>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body data-chapter="9">
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">第 9 章 · 序列与 Transformer</p>
+        <h1>Transformer 的完整结构</h1>
+
+        <p class="lead">
+          注意力是发动机,但光有发动机还开不了车。要把注意力堆成又深又能训的网络,
+          还需要几个关键配件:<strong>残差连接、LayerNorm、前馈网络</strong>,
+          再加上让模型知道词序的<strong>位置编码</strong>。把它们组装起来,就是一块完整的
+          <span class="term">Transformer Block</span>——今天所有大模型的基本积木。
+        </p>
+
+        <section class="objectives reveal">
+          <h2>读完这一章,你会明白</h2>
+          <ul>
+            <li>残差连接为什么能让“很深的网络”也训得动;</li>
+            <li>LayerNorm 在归一化什么,为什么能稳住训练;</li>
+            <li>前馈网络(FFN)在 attention 之后又补了什么;</li>
+            <li>位置编码怎么把“词的顺序”告诉模型,以及 encoder 和 decoder 的区别。</li>
+          </ul>
+        </section>
+
+        <h2>1. 残差连接:给信息和梯度修一条高速公路</h2>
+        <p>
+          网络一深,就容易“训不动”:梯度反传到前面几层时已经衰减得几乎为 0(梯度消失)。
+          <span class="term">残差连接(residual connection)</span>的解法简单得惊人——
+          让每个子层的输出<strong>加上它自己的输入</strong>:
+        </p>
+        <div class="mathblock reveal">
+          输出 = <var>x</var> + Sublayer(<var>x</var>)
+          <span class="label">不是用子层的输出替换 x,而是在 x 的基础上“加一个增量”</span>
+        </div>
+        <p>
+          这条“<var>x</var> +”的捷径有两个好处:① 梯度可以<strong>原路直通</strong>回前面的层(高速公路),
+          深网络也不怕梯度消失;② 每个子层只需要学“在原有基础上改进多少”,比从零学一个新表示容易得多。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/transformer_block.cpp · 残差(精简)</figcaption>
+          <pre class="code-walk__code"><code>last_residual_1_ = input;                          <b class="cw-tag">1</b>
+for (int i ...) for (int j ...)
+  last_residual_1_[i][j] += last_attention_output_[i][j];   <b class="cw-tag">2</b>
+attention_norm_.Forward(last_residual_1_, last_norm_1_);    <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>先把原始输入 <code>input</code> 留一份。</li>
+            <li>把注意力的输出<strong>加回</strong>到输入上——这就是 <var>x</var> + Attention(<var>x</var>)。</li>
+            <li>再交给 LayerNorm(下一节)。这种“子层 → 加残差 → 归一化”的三连,在 block 里会出现两次。</li>
+          </ol>
+        </figure>
+
+        <h2>2. LayerNorm:把每个词的特征“拉回正常范围”</h2>
+        <p>
+          训练中,各层数值的大小、波动会乱飘,拖慢甚至搞崩训练。<span class="term">LayerNorm(层归一化)</span>
+          对<strong>每一个词向量</strong>单独做标准化:减去均值、除以标准差,把它拉成“均值 0、波动 1”的分布,
+          再用两个可学习参数 <var>γ</var>(scale)和 <var>β</var>(bias)做微调:
+        </p>
+        <div class="mathblock reveal">
+          LN(<var>x</var>) = <span class="frac"><span><var>x</var> − μ</span><span>√(σ<sup>2</sup> + ε)</span></span> · <var>γ</var> + <var>β</var>
+          <span class="label">μ、σ² 是这个词向量自己的均值和方差;ε 防止除以 0;γ、β 可学习</span>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/layer_norm.cpp · Forward(精简)</figcaption>
+          <pre class="code-walk__code"><code>double mean = 0;
+for (double v : token) mean += v;
+mean /= feature_dim_;                                  <b class="cw-tag">1</b>
+
+double variance = 0;
+for (double v : token) variance += (v - mean) * (v - mean);
+variance /= feature_dim_;                              <b class="cw-tag">2</b>
+
+double denom = std::sqrt(variance + epsilon_);
+for (int i = 0; i &lt; feature_dim_; i++)
+  token[i] = ((token[i] - mean) / denom) * scale_[i] + bias_[i];  <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>算这个词向量所有维度的<strong>均值</strong> μ。</li>
+            <li>算<strong>方差</strong> σ²(各维度偏离均值的平方的平均)。</li>
+            <li>标准化(减均值、除标准差),再乘 <code>scale</code>(γ)、加 <code>bias</code>(β)。注意:它是对<em>每个词自己</em>归一化,和样本数无关,这正是它适合序列的原因。</li>
+          </ol>
+        </figure>
+
+        <h2>3. 前馈网络 FFN:逐个词再加工一次</h2>
+        <p>
+          注意力让每个词“看了全局”,但融合方式基本是线性加权。<span class="term">前馈网络(FFN)</span>
+          紧随其后,对<strong>每个词</strong>独立地做一次“放大 → 非线性 → 压缩”:先用一个矩阵升到更高维度(比如 4 倍),
+          过 ReLU,再压回原维度。这给了模型额外的非线性加工能力。
+        </p>
+        <div class="mathblock reveal">
+          FFN(<var>x</var>) = ReLU(<var>x</var> <var>W</var><sub>1</sub> + <var>b</var><sub>1</sub>) <var>W</var><sub>2</sub> + <var>b</var><sub>2</sub>
+          <span class="label">W₁ 把维度升上去,ReLU 加非线性,W₂ 再压回来</span>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/transformer_block.cpp · FFN(精简)</figcaption>
+          <pre class="code-walk__code"><code>hidden = ApplyLinear(norm_1, W1, b1);   // model_dim → ff_dim   <b class="cw-tag">1</b>
+for (double &amp;v : hidden) v = Relu(v);                          <b class="cw-tag">2</b>
+ff_output = ApplyLinear(hidden, W2, b2);  // ff_dim → model_dim <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>第一层线性:把每个词向量从 <code>model_dim</code> 升到更大的 <code>ff_dim</code>。</li>
+            <li>过 ReLU 加入非线性(第 1 章的老朋友)。</li>
+            <li>第二层线性:再压回 <code>model_dim</code>,方便接下来继续残差相加。每个词都独立走这一遍。</li>
+          </ol>
+        </figure>
+
+        <h2>4. 把它们拼成一块 Block</h2>
+        <p>一块标准 Transformer Block,就是“注意力 + 残差 + 归一化”和“FFN + 残差 + 归一化”这两段串起来:</p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 460 470" role="img" aria-label="Transformer Block 结构图">
+              <!-- 残差跳线 -->
+              <path d="M 95 70 L 60 70 L 60 150 L 196 150" fill="none" stroke="#8ef0d1" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#b9)" />
+              <path d="M 95 250 L 400 250 L 400 330 L 264 330" fill="none" stroke="#8ef0d1" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#b9)" />
+              <!-- 主干箭头 -->
+              <g stroke="#46587a" stroke-width="2" fill="none" marker-end="url(#m9)">
+                <line x1="230" y1="44" x2="230" y2="62" />
+                <line x1="230" y1="98" x2="230" y2="138" />
+                <line x1="230" y1="166" x2="230" y2="196" />
+                <line x1="230" y1="224" x2="230" y2="242" />
+                <line x1="230" y1="278" x2="230" y2="318" />
+                <line x1="230" y1="346" x2="230" y2="376" />
+                <line x1="230" y1="404" x2="230" y2="424" />
+              </g>
+              <text x="230" y="30" text-anchor="middle" fill="#8499bd" font-size="13">输入序列(每个词一个向量)</text>
+              <!-- Self-Attention -->
+              <rect x="130" y="64" width="200" height="36" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" />
+              <text x="230" y="87" text-anchor="middle" fill="#eef4ff" font-size="14">Self-Attention</text>
+              <!-- Add 1 -->
+              <circle cx="230" cy="152" r="15" fill="rgba(142,240,209,0.18)" stroke="#8ef0d1" stroke-width="2" /><text x="230" y="157" text-anchor="middle" fill="#eef4ff" font-size="15">＋</text>
+              <!-- Norm 1 -->
+              <rect x="130" y="198" width="200" height="30" rx="9" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="2" />
+              <text x="230" y="218" text-anchor="middle" fill="#eef4ff" font-size="13">LayerNorm</text>
+              <!-- FFN -->
+              <rect x="130" y="244" width="200" height="36" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" />
+              <text x="230" y="267" text-anchor="middle" fill="#eef4ff" font-size="14">Feed-Forward (FFN)</text>
+              <!-- Add 2 -->
+              <circle cx="230" cy="332" r="15" fill="rgba(142,240,209,0.18)" stroke="#8ef0d1" stroke-width="2" /><text x="230" y="337" text-anchor="middle" fill="#eef4ff" font-size="15">＋</text>
+              <!-- Norm 2 -->
+              <rect x="130" y="378" width="200" height="30" rx="9" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="2" />
+              <text x="230" y="398" text-anchor="middle" fill="#eef4ff" font-size="13">LayerNorm</text>
+              <text x="230" y="446" text-anchor="middle" fill="#8499bd" font-size="13">输出序列(可送入下一块 Block)</text>
+              <text x="46" y="120" fill="#8ef0d1" font-size="11">残差</text>
+              <text x="406" y="300" fill="#8ef0d1" font-size="11" text-anchor="end">残差</text>
+              <defs>
+                <marker id="m9" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#46587a" /></marker>
+                <marker id="b9" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" /></marker>
+              </defs>
+            </svg>
+          </div>
+          <p class="figure__cap">一块 Transformer Block:Self-Attention → 加残差 → LayerNorm → FFN → 加残差 → LayerNorm。</p>
+        </div>
+        <p>
+          关键在于:这块 Block 的<strong>输入和输出形状完全一样</strong>(都是“一串词向量”)。
+          所以它能像乐高一样<strong>一块叠一块</strong>:堆 6 块、12 块、96 块……越深,模型能力越强。
+          这正是“GPT-3 有 96 层”这类说法的含义。
+        </p>
+
+        <h2>5. 位置编码:告诉模型“谁在前谁在后”</h2>
+        <p>
+          注意力有个“缺陷”:它对所有位置一视同仁,<strong>本身并不知道词的先后顺序</strong>
+          ——把“狗咬人”和“人咬狗”打乱了它也分不清。解决办法是给每个位置造一个独特的“位置指纹”,
+          加到词向量上。经典做法用不同频率的<strong>正弦和余弦</strong>:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/positional_encoding.cpp(精简)</figcaption>
+          <pre class="code-walk__code"><code>double angle = pos / std::pow(10000.0, (double)i / model_dim);  <b class="cw-tag">1</b>
+encoding[pos][i]     = std::sin(angle);                         <b class="cw-tag">2</b>
+encoding[pos][i + 1] = std::cos(angle);
+// 之后: sequence[i][j] += encoding[i][j];                      <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>每个位置 <code>pos</code>、每个维度 <code>i</code> 对应一个角度;不同维度用不同频率(<code>10000</code> 的幂)。</li>
+            <li>偶数维用 sin,奇数维用 cos——这样每个位置都得到一串独一无二、且“相邻位置相近”的编码。</li>
+            <li>把位置编码<strong>加</strong>到词向量上,词向量从此既带“是什么词”也带“在第几位”的信息。</li>
+          </ol>
+        </figure>
+
+        <h2>6. Encoder 与 Decoder</h2>
+        <p>同样的 Block,按“能看到哪些词”分成两种用法:</p>
+        <ul>
+          <li><span class="pill">Encoder 编码器</span>不加 causal mask,每个词能看到<strong>整句</strong>(双向)。适合“理解”类任务(如 BERT)。</li>
+          <li><span class="pill">Decoder 解码器</span>加上 causal mask(第 8 章),每个词只能看到<strong>它之前</strong>的词。适合“生成”类任务——因为生成时本来就还没有后文。GPT 系列就是纯 decoder。</li>
+        </ul>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">本项目两种都支持</span>
+          <p>
+            配套的 <code>MiniTransformerLM</code> 用一个 <code>backbone</code> 配置在 encoder / decoder 之间切换。
+            下一章我们要做“预测下一个字”,用的就是带 causal mask 的 decoder 思路。
+          </p>
+        </div>
+
+        <section class="summary reveal">
+          <h2>小结</h2>
+          <ul>
+            <li><strong>残差连接</strong>(<var>x</var> + Sublayer(<var>x</var>)):给梯度修高速公路,让深网络训得动,每层只学“增量”。</li>
+            <li><strong>LayerNorm</strong>:对每个词向量减均值除标准差再缩放,稳住数值、加速收敛。</li>
+            <li><strong>FFN</strong>:对每个词独立做“升维 → ReLU → 降维”,补充非线性加工。</li>
+            <li>一块 Block = 注意力+残差+Norm,再 FFN+残差+Norm;输入输出同形,可无限堆叠。</li>
+            <li><strong>位置编码</strong>用 sin/cos 把词序加进向量;encoder 双向看全句,decoder 带 causal mask 只看前文。</li>
+          </ul>
+        </section>
+
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:残差连接 <var>x</var> + Sublayer(<var>x</var>) 为什么有助于训练很深的网络?</summary>
+            <div class="quiz__a">
+              <p>那条“+ x”的捷径让梯度在反向传播时能几乎无损地直通回前面的层,缓解梯度消失;同时每个子层只需学习“在输入基础上的增量”,优化更容易。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:为什么注意力机制需要额外的“位置编码”?</summary>
+            <div class="quiz__a">
+              <p>因为注意力对所有位置对称,本身分不清词的先后顺序。位置编码给每个位置一个独特指纹并加到词向量上,模型才能区分“狗咬人”和“人咬狗”。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:做“预测下一个词”的语言模型,应该用 encoder 还是 decoder?为什么?</summary>
+            <div class="quiz__a">
+              <p>用 decoder。因为生成时只能依赖已经出现的前文,必须用 causal mask 屏蔽未来;encoder 能看全句,会“偷看答案”,不适合自回归生成。</p>
+            </div>
+          </details>
+        </div>
+
+        <p class="muted">
+          积木齐了!下一章我们把 embedding、Transformer、再加一个“输出层”接起来,
+          做成一个真正能<strong>一个字一个字写下去</strong>的字符级语言模型,并看看它怎么采样、怎么评估。
+        </p>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>

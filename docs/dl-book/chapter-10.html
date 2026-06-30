@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 10 章 · 字符级语言模型 | 深度学习入门</title>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body data-chapter="10">
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">第 10 章 · 通往大模型</p>
+        <h1>字符级语言模型</h1>
+
+        <p class="lead">
+          现在把前面所有积木接起来,造一个真能<strong>一个字一个字写下去</strong>的模型。
+          它的任务朴素得出奇:<strong>看着前文,预测下一个字符</strong>。
+          但你会惊讶地发现——今天那些会聊天、会写代码的大模型,做的本质上就是这一件事,只是规模大得多。
+        </p>
+
+        <section class="objectives reveal">
+          <h2>读完这一章,你会明白</h2>
+          <ul>
+            <li>从文本到预测,数据要经过 tokenizer → embedding → Transformer → 输出层这一条完整链路;</li>
+            <li>“预测下一个字”怎么变成“写出一整段”(自回归生成);</li>
+            <li>greedy、temperature、top-k、top-p 这些采样策略各自的脾气;</li>
+            <li>怎么用困惑度(perplexity)评估一个语言模型的好坏。</li>
+          </ul>
+        </section>
+
+        <h2>1. 完整链路:从一句话到下一个字</h2>
+        <p>一个字符级语言模型,把一段文本变成“下一个字的概率”,要走这么一条流水线:</p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">文本<small>"hello wor"</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">Tokenizer<small>字符 → id</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">Embedding<small>id → 向量(+位置)</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">Transformer<small>融合上下文</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">LM Head<small>投影到词表</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">下一字概率<small>挑一个:'l'</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">每生成一个字,就把它接回输入,再走一遍这条流水线——这就是“自回归”。</p>
+        </div>
+
+        <h2>2. Tokenizer:把字符变成数字</h2>
+        <p>
+          模型只认数字,不认字符。<span class="term">Tokenizer(分词器)</span>负责两件事:
+          先扫一遍语料,给每个出现过的字符<strong>编一个 id</strong>(建词表);
+          之后就能在“字符串”和“id 序列”之间来回翻译。本书用最简单的<strong>字符级</strong>分词(一个字符一个 token)。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/character_tokenizer.cpp(精简)</figcaption>
+          <pre class="code-walk__code"><code>// 建词表: 每遇到一个没见过的字符, 就分配下一个 id
+for (char ch : text)
+  if (char_to_id.count(ch) == 0) {
+    char_to_id[ch] = vocabulary.size();
+    vocabulary.push_back(ch);                 <b class="cw-tag">1</b>
+  }
+
+// 编码: 把字符串翻译成 id 序列
+for (char ch : text)
+  token_ids.push_back(char_to_id[ch]);        <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>词表就是“字符 ↔ id”的一一对应。比如 'h'→0, 'e'→1, 'l'→2……词表大小 <code>vocab_size</code> 就是不同字符的个数。</li>
+            <li>编码:逐字符查表,得到一串整数。解码(<code>Decode</code>)则反过来,把 id 还原成字符。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">真实大模型用的是“子词”</span>
+          <p>
+            真实的 GPT 不是按单个字符,而是按<strong>子词(subword)</strong>切分(比如把 “playing” 切成 “play”+“ing”)。
+            原理完全一样,只是词表里的单位更大、更省。我们用字符级,是为了让原理一目了然。
+          </p>
+        </div>
+
+        <h2>3. Embedding:把 id 变成有含义的向量</h2>
+        <p>
+          id 只是个编号,本身没有含义(2 不比 1 “大”)。<span class="term">Embedding(词嵌入)</span>
+          给每个 id 配一个<strong>可学习的向量</strong>,训练中这些向量会逐渐学到语义(相近的字符向量也相近)。
+          它就是一张大查找表:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/token_embedding.cpp · Encode</figcaption>
+          <pre class="code-walk__code"><code>for (int token_id : token_ids)
+  output.push_back(embedding_table_[token_id]);   <b class="cw-tag">1</b></code></pre>
+          <ol class="code-walk__notes">
+            <li><code>embedding_table_</code> 是 <code>vocab_size × model_dim</code> 的表。拿 id 当行号<strong>查表</strong>,取出对应的向量。一串 id 就变成了一串向量,交给 Transformer。</li>
+          </ol>
+        </figure>
+        <p>在送进主干前,还会(可选地)给向量乘个缩放、加上第 9 章的位置编码:</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · EncodeSequence(精简)</figcaption>
+          <pre class="code-walk__code"><code>token_embedding_.Encode(token_ids, hidden);              <b class="cw-tag">1</b>
+if (scale_embedding_) hidden *= std::sqrt(model_dim_);
+PositionalEncoding::Apply(hidden);                       <b class="cw-tag">2</b>
+decoder_.Forward(hidden, encoded);  // 或 encoder_       <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>查表得到词向量。</li>
+            <li>加上位置编码,让模型知道每个字在第几位。</li>
+            <li>送进 Transformer 主干(decoder 带 causal mask),得到每个位置“看过上文”的表示 <code>encoded</code>。</li>
+          </ol>
+        </figure>
+
+        <h2>4. LM Head:把表示投影成“下一字概率”</h2>
+        <p>
+          主干输出的还是向量,得再过一个输出层(<span class="term">LM Head</span>),
+          把每个位置的向量投影到<strong>词表大小</strong>,得到对每个候选字符的打分(logits)。
+          再过 softmax,就是“下一个字是谁”的概率分布。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · Forward(精简)</figcaption>
+          <pre class="code-walk__code"><code>for (int pos = 0; pos &lt; encoded.size(); pos++)
+  for (int token_id = 0; token_id &lt; vocab_size_; token_id++) {
+    logits[pos][token_id] = output_bias_[token_id];
+    for (int dim = 0; dim &lt; model_dim_; dim++)
+      logits[pos][token_id] +=
+          output_weight_[token_id][dim] * encoded[pos][dim];   <b class="cw-tag">1</b>
+  }</code></pre>
+          <ol class="code-walk__notes">
+            <li>对每个位置,把它的向量和每个候选字符的权重做点积(还是“加权求和”),得到这个字符的分数。<code>vocab_size</code> 个分数,就是这个位置对“下一个字”的全部打分。</li>
+          </ol>
+        </figure>
+
+        <h2>5. 怎么挑下一个字:从 greedy 到采样</h2>
+        <p>有了概率分布,怎么挑出下一个字?最简单的是 <span class="term">greedy(贪心)</span>:永远挑概率最高的那个。</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · PredictNextToken(精简)</figcaption>
+          <pre class="code-walk__code"><code>token_id = 0;
+double best = logits[0];
+for (int i = 1; i &lt; logits.size(); i++)
+  if (logits[i] &gt; best) { best = logits[i]; token_id = i; }   <b class="cw-tag">1</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>就是取 argmax——分数最高的字符。简单,但<strong>太死板</strong>:同样的开头永远生成同样的、往往很重复无聊的内容。</li>
+          </ol>
+        </figure>
+        <p>更好的办法是<strong>带点随机性地采样</strong>,由三个旋钮控制:</p>
+        <ul>
+          <li><span class="pill">Temperature 温度</span>先把 logits 除以温度再 softmax。温度<strong>低</strong> → 分布更尖锐、更保守(接近 greedy);温度<strong>高</strong> → 分布更平、更大胆有创意(也更容易跑偏)。</li>
+          <li><span class="pill">top-k</span>只在概率最高的 <var>k</var> 个候选里抽,堵住长尾的奇怪字符。</li>
+          <li><span class="pill">top-p(核采样)</span>从高到低累加概率,只保留累积到 <var>p</var>(如 0.9)的那一小撮候选,再抽。</li>
+        </ul>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · SampleNextToken(精简)</figcaption>
+          <pre class="code-walk__code"><code>auto probs = SoftmaxWithTemperature(logits, temperature);   <b class="cw-tag">1</b>
+sort(order by probs desc);                                  <b class="cw-tag">2</b>
+// top-k: 最多保留前 k 个; top-p: 累积概率达到 p 就截断
+keep_count = ...;                                           <b class="cw-tag">3</b>
+// 在保留的候选里重新归一化, 按概率随机抽一个
+token_id = sample_from(filtered_probs);                     <b class="cw-tag">4</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>先按温度把 logits 变成概率。</li>
+            <li>按概率从高到低排序。</li>
+            <li>用 top-k / top-p 把候选裁剪成“最靠谱的一小撮”。</li>
+            <li>在这一小撮里按概率掷一次骰子,抽出下一个字。既有随机性,又不至于太离谱。</li>
+          </ol>
+        </figure>
+
+        <h2>6. 自回归:把刚写的字接回去,再写下一个</h2>
+        <p>
+          生成一整段的诀窍叫<span class="term">自回归(autoregressive)</span>:预测出一个字后,
+          把它<strong>追加到输入末尾</strong>,再用更长的上文预测下一个字,如此循环。
+          你看到的 ChatGPT “一个字一个字往外蹦”,就是这个循环在跑。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · Generate(精简)</figcaption>
+          <pre class="code-walk__code"><code>generated = prompt;
+for (int i = 0; i &lt; generate_num; i++) {
+  PredictNextToken(generated, token_id);   <b class="cw-tag">1</b>
+  generated.push_back(token_id);           <b class="cw-tag">2</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>用目前为止的全部内容,预测下一个字。</li>
+            <li>把它接到末尾,然后回到第 1 步——下一轮的“上文”就多了一个字。这就是自回归生成。</li>
+          </ol>
+        </figure>
+
+        <h2>7. 它学得好不好?用困惑度衡量</h2>
+        <p>
+          评估语言模型最常用的指标是<span class="term">困惑度(perplexity)</span>。它是“平均交叉熵损失”取指数:
+        </p>
+        <div class="mathblock reveal">
+          困惑度 = <var>e</var><sup>平均交叉熵损失</sup>
+          <span class="label">直觉:模型预测下一个字时,平均像在“多少个等可能选项”里纠结。越小越好</span>
+        </div>
+        <p>
+          比如困惑度 = 5,大致意思是模型每一步平均在 5 个候选里犹豫。完美模型困惑度接近 1(每次都笃定);乱猜的模型困惑度接近词表大小。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · 损失与困惑度(精简)</figcaption>
+          <pre class="code-walk__code"><code>loss_sum += -std::log(std::max(probs[target], 1e-12));   <b class="cw-tag">1</b>
+average_loss = loss_sum / N;
+perplexity = std::exp(average_loss);                     <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>对每个样本,取“正确的下一个字”被预测到的概率,算 −log(第 3 章的交叉熵)。<code>max(..., 1e-12)</code> 防止 log(0)。</li>
+            <li>平均损失取指数,就是困惑度。训练有效的话,你会看到它随训练稳步下降。</li>
+          </ol>
+        </figure>
+
+        <h2>8. 看真实模型的注意力(回放)</h2>
+        <p>
+          下面这个工具能读取本项目<strong>真实导出</strong>的 attention 权重(不是教学示意),
+          逐步回放生成时每一层、每个头的注意力。点“读取内置样例”,再用“上一步/下一步”观察:
+          模型每要写下一个字时,到底在“看”前文的哪些位置。
+        </p>
+        <div class="figure reveal">
+          <div data-lab="real-attention"></div>
+          <p class="figure__cap">若直接双击打开本页(file://)读取样例失败,请用本地静态服务器,或手动选择导出的 JSON 文件。</p>
+        </div>
+
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">自己跑一个</span>
+          <p>
+            配套项目里 <code>src/demo/transformer_char</code> 就是一个能训练、能生成的完整字符级语言模型。
+            编译后运行 <code>./bin/transformer_char --prompt "hello" --generate-num 100</code> 之类,
+            就能看到它根据你的提示往下写。各种采样参数(<code>--temperature</code>、<code>--top-k</code>、<code>--top-p</code>)都能在命令行调。
+          </p>
+        </div>
+
+        <section class="summary reveal">
+          <h2>小结</h2>
+          <ul>
+            <li>语言模型的任务:看前文,预测下一个字。链路 = Tokenizer → Embedding(+位置)→ Transformer → LM Head → 概率。</li>
+            <li>Tokenizer 把字符 ↔ id;Embedding 把 id 查表成可学习向量。</li>
+            <li>挑字:greedy(取最高)死板;采样(temperature / top-k / top-p)更自然有创意。</li>
+            <li>自回归:把生成的字接回输入,循环往下写——这就是大模型逐字输出的原理。</li>
+            <li>困惑度 = e^(平均交叉熵),衡量模型“平均在几个选项里纠结”,越低越好。</li>
+          </ul>
+        </section>
+
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:为什么 greedy 解码常常生成重复、无聊的内容?</summary>
+            <div class="quiz__a">
+              <p>因为它每一步都只挑概率最高的那个字,毫无随机性。相同的上文必然得到相同的输出,容易陷入“高概率但单调”的循环。引入温度和 top-k/top-p 采样能带来多样性。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:把 temperature 调得很高会怎样?调得很低呢?</summary>
+            <div class="quiz__a">
+              <p>很高:概率分布被抹平,采样更随机、更有创意,但也更容易语无伦次。很低:分布更尖锐,趋近 greedy,稳定但单调。常用值在 0.7–1.0 附近折中。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:困惑度从 20 降到 4 说明了什么?</summary>
+            <div class="quiz__a">
+              <p>说明模型对“下一个字”的预测从“平均在约 20 个候选里纠结”进步到“约 4 个里纠结”,即预测准了很多、更有把握。困惑度越低,语言模型通常越好。</p>
+            </div>
+          </details>
+        </div>
+
+        <p class="muted">
+          你已经亲手把一个完整的语言模型从零拆到底了。最后一章,我们站远一点看:
+          把这个小模型<strong>放大一万倍</strong>会发生什么?预训练、微调、RLHF、涌现……大模型的故事,就从这里开始。
+        </p>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+    <script src="assets/labs.js"></script>
+  </body>
+</html>
