@@ -43,7 +43,7 @@
         <h2>2. 卷积:一个小滤波器,在图上滑一遍</h2>
         <p>
           卷积的核心是一个很小的权重方块,叫<span class="term">卷积核 / 滤波器(kernel)</span>,比如 3×3。
-          它<strong>不看全图</strong>,只盖住图上的一小块(<strong>局部感受野</strong>),把这一小块和核<strong>做点积</strong>(第 1 章),
+          它<strong>不看全图</strong>,只盖住图上的一小块(<strong>局部感受野</strong>),把这一小块和核<strong>做<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a></strong>(<a class="xref" href="chapter-01.html">第 1 章</a>),
           得到一个数;然后<strong>滑到下一个位置</strong>再算一个数……滑遍全图,就得到一张新的图,叫<span class="term">特征图(feature map)</span>。
         </p>
         <div class="figure reveal">
@@ -86,7 +86,7 @@
   }</code></pre>
           <ol class="code-walk__notes">
             <li>核在图上滑动,每到一个位置,就把覆盖的小块和核做<strong>点积</strong>——和一个神经元干的事一模一样,只是<strong>只看局部</strong>。</li>
-            <li>加偏置、过激活(第 7 章),得到特征图上的一个像素。<strong>同一个核扫遍全图</strong>——这就是下一节的“权重共享”。</li>
+            <li>加偏置、过激活(<a class="xref" href="chapter-07.html">第 7 章</a>),得到特征图上的一个像素。<strong>同一个核扫遍全图</strong>——这就是下一节的“权重共享”。</li>
           </ol>
         </figure>
 
@@ -133,7 +133,7 @@
               <div class="pipe__box">全连接<small>汇总特征 → 分类</small></div>
             </div>
           </div>
-          <p class="figure__cap">越往深层,特征越抽象——从边缘,到部件,到整个物体。这正是第 0 章说的“网络自己逐层提炼特征”。</p>
+          <p class="figure__cap">越往深层,特征越抽象——从边缘,到部件,到整个物体。这正是<a class="xref" href="chapter-00.html">第 0 章</a>说的“网络自己逐层提炼特征”。</p>
         </div>
 
         <h2>6. 一眼看过经典结构</h2>
@@ -141,7 +141,7 @@
         <ul>
           <li><strong>LeNet(1998)</strong>:CNN 的鼻祖,就是用来识别手写数字(和本书的 MNIST 同一个任务)。</li>
           <li><strong>AlexNet(2012)</strong>:在 ImageNet 大赛上一鸣惊人,点燃了这一轮深度学习浪潮。</li>
-          <li><strong>ResNet(2015)</strong>:靠<strong>残差连接</strong>(还记得吗?第 17 章 Transformer 也用它)把网络堆到上百层还训得动。</li>
+          <li><strong>ResNet(2015)</strong>:靠<strong>残差连接</strong>(还记得吗?<a class="xref" href="chapter-17.html#4-把它们拼成一块-block">第 17 章 Transformer</a> 也用它)把网络堆到上百层还训得动。</li>
         </ul>
         <div class="callout callout--note reveal">
           <span class="callout__title">CNN、MLP、Transformer 什么关系?</span>

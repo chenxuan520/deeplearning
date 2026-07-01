@@ -41,7 +41,7 @@
           <span class="callout__title">所以我们要把数据分开考</span>
           <p>
             为了诚实地衡量泛化,数据会被分成<strong>训练集</strong>(用来学)和<strong>测试集</strong>(用来考,训练时绝不能碰)。
-            通常还留一份<strong>验证集</strong>用来边训边监控。怎么分、怎么用,是<strong>下一章(第 11 章)</strong>的主题;
+            通常还留一份<strong>验证集</strong>用来边训边监控。怎么分、怎么用,是<strong>下一章(<a class="xref" href="chapter-11.html">第 11 章</a>)</strong>的主题;
             这一章先聚焦“怎么让模型别把训练集背下来”。
           </p>
         </div>
@@ -85,13 +85,13 @@
         </div>
         <p>
           效果是把权重<strong>往 0 拉一把</strong>,模型变得更“平滑、克制”,不会为了迁就某几个训练样本而走极端,泛化通常更好。
-          在代码里,它就是第 8 章优化器接口的一个开关:
+          在代码里,它就是<a class="xref" href="chapter-08.html">第 8 章</a>优化器接口的一个开关:
         </p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/optimizer/optimizer_base.h</figcaption>
           <pre class="code-walk__code"><code>void set_weight_decay(double wd);   // 只对 weight 生效, bias 不衰减  <b class="cw-tag">1</b></code></pre>
           <ol class="code-walk__notes">
-            <li>给优化器设一个 <code>weight_decay</code>,训练时每步就会顺带把权重往 0 收一点。注意<strong>只惩罚权重、不惩罚 bias</strong>;Adam 与 AdamW 对它的耦合方式不同(第 8 章)。</li>
+            <li>给优化器设一个 <code>weight_decay</code>,训练时每步就会顺带把权重往 0 收一点。注意<strong>只惩罚权重、不惩罚 bias</strong>;Adam 与 AdamW 对它的耦合方式不同(<a class="xref" href="chapter-08.html">第 8 章</a>)。</li>
           </ol>
         </figure>
 
@@ -121,7 +121,7 @@
           还有一类正则化是<strong>在数据上做文章</strong>:</p>
         <ul>
           <li><span class="pill">数据增强 data augmentation</span>对训练样本做<strong>不改变含义的小变换</strong>,凭空造出更多样本。图像里常见:随机裁剪、翻转、旋转、调亮度——一张猫图转个角度还是猫,但模型见的“花样”更多了,自然更难死记。</li>
-          <li><span class="pill">更多真实数据</span><strong>最有效的正则化,往往就是喂更多数据</strong>。数据越多越杂,模型越没法靠背,只能去学真正通用的规律。这也是第 19 章“大力出奇迹”的伏笔:大模型能那么强,海量数据本身就是最强的抗过拟合手段。</li>
+          <li><span class="pill">更多真实数据</span><strong>最有效的正则化,往往就是喂更多数据</strong>。数据越多越杂,模型越没法靠背,只能去学真正通用的规律。这也是<a class="xref" href="chapter-19.html">第 19 章</a>“大力出奇迹”的伏笔:大模型能那么强,海量数据本身就是最强的抗过拟合手段。</li>
         </ul>
         <div class="callout callout--tip reveal">
           <span class="callout__title">正则化,一句话收束</span>

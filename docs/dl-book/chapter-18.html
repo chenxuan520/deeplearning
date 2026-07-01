@@ -24,7 +24,7 @@
           <h2>读完这一章,你会明白</h2>
           <ul>
             <li>从文本到预测,数据要经过 tokenizer → embedding → Transformer → 输出层这一条完整链路;</li>
-            <li><strong>模型到底怎么“学”</strong>:训练数据怎么造、损失怎么算、反向传播怎么一路更新到第 16 章那三个矩阵;</li>
+            <li><strong>模型到底怎么“学”</strong>:训练数据怎么造、损失怎么算、反向传播怎么一路更新到<a class="xref" href="chapter-16.html">第 16 章</a>那三个矩阵;</li>
             <li>“预测下一个字”怎么变成“写出一整段”(自回归生成);</li>
             <li>greedy、temperature、top-k、top-p 这些采样策略各自的脾气;</li>
             <li>怎么用困惑度(perplexity)评估一个语言模型的好坏。</li>
@@ -97,7 +97,7 @@ for (char ch : text)
             <li><code>embedding_table_</code> 是 <code>vocab_size × model_dim</code> 的表。拿 id 当行号<strong>查表</strong>,取出对应的向量。一串 id 就变成了一串向量,交给 Transformer。</li>
           </ol>
         </figure>
-        <p>在送进主干前,还会(可选地)给向量乘个缩放、加上第 17 章的位置编码:</p>
+        <p>在送进主干前,还会(可选地)给向量乘个缩放、加上<a class="xref" href="chapter-17.html">第 17 章</a>的位置编码:</p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · EncodeSequence(精简)</figcaption>
           <pre class="code-walk__code"><code>token_embedding_.Encode(token_ids, hidden);              <b class="cw-tag">1</b>
@@ -157,7 +157,7 @@ decoder_.Forward(hidden, encoded);  // 或 encoder_       <b class="cw-tag">3</b
           <span class="callout__title">“答案自带”有个名字,叫自监督</span>
           <p>
             这种<strong>从数据本身自动抠出答案</strong>、不用人工打标签的训练方式,叫<span class="term">自监督学习</span>。
-            正因为答案免费,才敢拿“整个互联网”当训练集——这也是大模型能被喂那么多数据的根本原因(第 19 章细讲)。
+            正因为答案免费,才敢拿“整个互联网”当训练集——这也是大模型能被喂那么多数据的根本原因(<a class="xref" href="chapter-19.html">第 19 章</a>细讲)。
           </p>
         </div>
 
@@ -165,9 +165,9 @@ decoder_.Forward(hidden, encoded);  // 或 encoder_       <b class="cw-tag">3</b
         <p>有了“输入 → 目标”样本,训练就是第 5、6 章那条老流水线,一步(step)做四件事:</p>
         <ol>
           <li><strong>前向</strong>:把输入跑一遍第 1 节的链路,得到对“下一个字”的概率分布 <code>probs</code>。</li>
-          <li><strong>算损失</strong>:看它给<strong>正确答案</strong>那个字打了多少概率,用交叉熵 <code>−log(probs[答案])</code> 量出“错得多离谱”(第 4 章)。答案概率越低,损失越大。</li>
-          <li><strong>反向传播</strong>:用链式法则把损失反着传回去,算出每个参数的梯度(第 6 章)。</li>
-          <li><strong>更新</strong>:每个参数沿梯度反方向挪一小步(第 5 章)。</li>
+          <li><strong>算损失</strong>:看它给<strong>正确答案</strong>那个字打了多少概率,用交叉熵 <code>−log(probs[答案])</code> 量出“错得多离谱”(<a class="xref" href="chapter-04.html">第 4 章</a>)。答案概率越低,损失越大。</li>
+          <li><strong>反向传播</strong>:用链式法则把损失反着传回去,算出每个参数的梯度(<a class="xref" href="chapter-06.html">第 6 章</a>)。</li>
+          <li><strong>更新</strong>:每个参数沿梯度反方向挪一小步(<a class="xref" href="chapter-05.html">第 5 章</a>)。</li>
         </ol>
         <p>
           softmax + 交叉熵的梯度还是那个漂亮结果:<strong>预测概率分布,减去“正确答案的 one-hot”</strong>。
@@ -186,15 +186,15 @@ decoder_.Backward(grad_encoded, grad_hidden, lr);  // 或 encoder_    <b class="
 // ... 最后再更新 embedding_table ...                                <b class="cw-tag">4</b></code></pre>
           <ol class="code-walk__notes">
             <li>前向拿到概率,算这条样本的交叉熵损失。</li>
-            <li>softmax + 交叉熵的梯度 = <code>probs − one-hot(答案)</code>,和第 6 章、MNIST 里用的<strong>是同一个式子</strong>。</li>
-            <li>关键一步:把梯度传进 Transformer 主干。<code>decoder_.Backward</code> 会一层层调用每块 Block 的反向,<strong>其中就包含第 16 章那段 self-attention 的 <code>Backward</code></strong>——<var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub> 正是在这里被更新的!</li>
+            <li>softmax + 交叉熵的梯度 = <code>probs − one-hot(答案)</code>,和<a class="xref" href="chapter-06.html">第 6 章</a>、MNIST 里用的<strong>是同一个式子</strong>。</li>
+            <li>关键一步:把梯度传进 Transformer 主干。<code>decoder_.Backward</code> 会一层层调用每块 Block 的反向,<strong>其中就包含<a class="xref" href="chapter-16.html">第 16 章</a>那段 self-attention 的 <code>Backward</code></strong>——<var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub> 正是在这里被更新的!</li>
             <li>最后连词嵌入表也一起更新。于是<strong>从输出层、到每块 Transformer、到 embedding,全网参数都被这同一个损失“拧”了一下</strong>。</li>
           </ol>
         </figure>
         <div class="callout callout--tip reveal">
-          <span class="callout__title">这就接上了第 16 章留的扣子</span>
+          <span class="callout__title">这就接上了<a class="xref" href="chapter-16.html">第 16 章</a>留的扣子</span>
           <p>
-            第 16 章问“那三个矩阵怎么训练出来的”,完整答案就在这里:损失从“预测下一个字对不对”产生,
+            <a class="xref" href="chapter-16.html">第 16 章</a>问“那三个矩阵怎么训练出来的”,完整答案就在这里:损失从“预测下一个字对不对”产生,
             顺着反向传播的“电流”流过输出层、流过每一块 Transformer,最后流进 <var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub>,
             把它们朝“让预测更准”的方向挪一点点。<strong>练一次挪一点,练亿万次,矩阵就学会了该关注谁。</strong>
           </p>
@@ -280,7 +280,7 @@ for (int i = 0; i &lt; generate_num; i++) {
 average_loss = loss_sum / N;
 perplexity = std::exp(average_loss);                     <b class="cw-tag">2</b></code></pre>
           <ol class="code-walk__notes">
-            <li>对每个样本,取“正确的下一个字”被预测到的概率,算 −log(第 4 章的交叉熵)。<code>max(..., 1e-12)</code> 防止 log(0)。</li>
+            <li>对每个样本,取“正确的下一个字”被预测到的概率,算 −log(<a class="xref" href="chapter-04.html#4-用交叉熵衡量两个概率的差距">第 4 章的交叉熵</a>)。<code>max(..., 1e-12)</code> 防止 log(0)。</li>
             <li>平均损失取指数,就是困惑度。训练有效的话,你会看到它随训练稳步下降。</li>
           </ol>
         </figure>
@@ -310,7 +310,7 @@ perplexity = std::exp(average_loss);                     <b class="cw-tag">2</b>
           <ul>
             <li>语言模型的任务:看前文,预测下一个字。链路 = Tokenizer → Embedding(+位置)→ Transformer → LM Head → 概率。</li>
             <li>Tokenizer 把字符 ↔ id;Embedding 把 id 查表成可学习向量。</li>
-            <li>训练:滑动窗口造“输入 → 下一字”样本(自监督);交叉熵损失反向传播,一路更新到第 16 章的 Q/K/V 矩阵和词嵌入。</li>
+            <li>训练:滑动窗口造“输入 → 下一字”样本(自监督);交叉熵损失反向传播,一路更新到<a class="xref" href="chapter-16.html">第 16 章</a>的 Q/K/V 矩阵和词嵌入。</li>
             <li>挑字:greedy(取最高)死板;采样(temperature / top-k / top-p)更自然有创意。</li>
             <li>自回归:把生成的字接回输入,循环往下写——这就是大模型逐字输出的原理。</li>
             <li>困惑度 = e^(平均交叉熵),衡量模型“平均在几个选项里纠结”,越低越好。</li>

@@ -13,6 +13,25 @@
     <link rel="stylesheet" href="assets/diagrams.css" />
   </head>
   <body data-cover>
+    <a
+      class="github-corner"
+      href="https://github.com/chenxuan520/deeplearning"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="在 GitHub 上查看源码"
+    >
+      <svg viewBox="0 0 250 250" aria-hidden="true">
+        <path class="github-corner__ribbon" d="M0 0l115 115h15l12 27 108 108V0z" />
+        <path
+          class="github-corner__arm"
+          d="M128 109c-15-9-9-19-9-19 3-7 2-11 2-11-1-7 3-2 3-2 4 5 2 11 2 11-3 10 5 15 9 16"
+        />
+        <path
+          class="github-corner__body"
+          d="M115 115s4 2 5 0l14-14c3-2 6-3 8-3-8-11-15-24 2-41 5-5 10-7 16-7 1-2 3-7 12-11 0 0 5 3 7 16 4 2 8 5 12 9s7 8 9 12c14 3 17 7 17 7-4 8-9 11-11 11 0 6-2 11-7 16-16 16-30 10-41 2 0 3-1 7-5 11l-12 11c-1 1 1 5 1 5z"
+        />
+      </svg>
+    </a>
     <header class="cover">
       <div class="cover__grid"></div>
       <div class="cover__inner">
@@ -30,6 +49,12 @@
         <p class="muted" style="margin-top: 1.4rem; font-size: 0.92rem">
           阅读提示:每章按「直觉故事 → 图解/动手实验 → 适度数学 → 逐行代码 → 小结自测」推进,
           看不懂公式没关系,先抓住直觉,再回头看细节。
+        </p>
+        <p class="muted" style="margin-top: 0.6rem; font-size: 0.88rem">
+          在线版:
+          <a class="xref" href="https://chenxuan520.github.io/deeplearning/" target="_blank" rel="noopener">chenxuan520.github.io/deeplearning</a>
+          · 源码:
+          <a class="xref" href="https://github.com/chenxuan520/deeplearning" target="_blank" rel="noopener">GitHub</a>
         </p>
       </div>
     </header>
@@ -178,16 +203,12 @@
         <a class="toc-card reveal" href="chapter-23.html">
           <span class="toc-card__num">第 23 章</span>
           <span class="toc-card__title">mini-LM 实战:把第四、五部分跑起来</span>
-          <span class="toc-card__desc">逐行精读 <code>src/demo/transformer_char</code>:分词→建模→训练→生成,看注意力/Transformer/采样如何落到代码。全书完。</span>
+          <span class="toc-card__desc">逐行精读 <code>src/demo/transformer_char</code>:分词→建模→训练→生成,看注意力/Transformer/采样如何落到代码。</span>
         </a>
-      </div>
-
-      <p class="toc-part">附录</p>
-      <div class="toc-grid">
-        <a class="toc-card reveal" href="glossary.html">
-          <span class="toc-card__num">术语表</span>
-          <span class="toc-card__title">名词速查:黑话一句话解释</span>
-          <span class="toc-card__desc">MLP/CNN/RNN/Transformer/token/embedding/Adam/RLHF/MoE… 每个术语一句话讲清,并跳到对应章节。</span>
+        <a class="toc-card toc-card--appendix reveal" href="glossary.html">
+          <span class="toc-card__num">附录</span>
+          <span class="toc-card__title">术语表</span>
+          <span class="toc-card__desc">70 个名词一句话讲清,每个都链到对应章节。读到不认识的词,随时翻。</span>
         </a>
       </div>
 

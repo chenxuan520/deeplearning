@@ -63,7 +63,7 @@ for (auto &amp;w : weight[i])
         </figure>
 
         <h2>2. 优化器进化史:从 SGD 到 AdamW</h2>
-        <p>第 5 章的朴素 SGD(<var>w</var> ← <var>w</var> − <var>η</var>·梯度)能用,但有两个毛病:在“狭长峡谷”地形里来回横跳,在“平坦”地段又走得太慢。后面几代优化器,就是在逐个修补它。</p>
+        <p><a class="xref" href="chapter-05.html">第 5 章</a>的朴素 SGD(<var>w</var> ← <var>w</var> − <var>η</var>·梯度)能用,但有两个毛病:在“狭长峡谷”地形里来回横跳,在“平坦”地段又走得太慢。后面几代优化器,就是在逐个修补它。</p>
 
         <h3>第一步加“惯性”:Momentum</h3>
         <p>
@@ -107,7 +107,7 @@ double m_hat = m / bias_correction1_;            <b class="cw-tag">4</b>
 double v_hat = v / bias_correction2_;
 return learning_rate * m_hat / (std::sqrt(v_hat) + epsilon_);  <b class="cw-tag">5</b></code></pre>
           <ol class="code-walk__notes">
-            <li>每步开始,计步器 <code>step_</code> 加 1,并算好这一步的偏差修正系数(这就是第 5 章 <code>BeforeStep</code> 对 SGD 是空操作、对 Adam 却有事做的原因)。</li>
+            <li>每步开始,计步器 <code>step_</code> 加 1,并算好这一步的偏差修正系数(这就是<a class="xref" href="chapter-05.html">第 5 章</a> <code>BeforeStep</code> 对 SGD 是空操作、对 Adam 却有事做的原因)。</li>
             <li>更新一阶矩 <var>m</var>:梯度的滑动平均,提供“方向/惯性”。</li>
             <li>更新二阶矩 <var>v</var>:梯度<strong>平方</strong>的滑动平均,衡量这个参数最近的活跃程度。</li>
             <li>偏差修正:训练初期 <var>m</var>、<var>v</var> 还很小,除以 (1−βᵗ) 把它们放大到合理水平。</li>
@@ -136,7 +136,7 @@ return adaptive;</code></pre>
 
         <h2>3. 学习率不必一成不变:调度器</h2>
         <p>
-          第 5 章我们用固定学习率,但更聪明的做法是让它<strong>随训练进程变化</strong>:
+          <a class="xref" href="chapter-05.html">第 5 章</a>我们用固定学习率,但更聪明的做法是让它<strong>随训练进程变化</strong>:
         </p>
         <ul>
           <li><strong>Warmup(热身)</strong>:开头几步用很小的学习率慢慢升上来,避免刚开始参数还很乱时一脚踩空、直接训崩;</li>
@@ -222,7 +222,7 @@ net.Train(data, target, callback, 10000, 64);</code></pre>
           <ul>
             <li><strong>初始化</strong>:不能全 0(对称性);随机且按 fan-in 缩放(He/Xavier),避免信号爆炸或消失。</li>
             <li><strong>优化器</strong>:SGD → 加惯性的 Momentum → 自适应步长的 Adam → 解耦正则的 AdamW。</li>
-            <li><strong>学习率调度</strong>:warmup 热身防早期训崩,cosine 退火让后期稳稳收敛。</li>
+            <li><strong><a class="xref" href="chapter-09.html#3-学习率不必一成不变-调度器">学习率调度</a></strong>:warmup 热身防早期训崩,cosine 退火让后期稳稳收敛。</li>
             <li><strong>梯度裁剪</strong>:给梯度大小设上限,防止某一步爆炸把训练带飞;weight decay 抑制过拟合。</li>
           </ul>
         </section>

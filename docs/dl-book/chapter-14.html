@@ -25,7 +25,7 @@
           <ul>
             <li>为什么最朴素的 <strong>one-hot</strong> 表示又<strong>浪费</strong>又<strong>不懂语义</strong>;</li>
             <li><strong>分布式表示</strong>:用一个稠密向量当词的“语义坐标”;</li>
-            <li>怎么用<strong>点积/余弦</strong>衡量两个词有多相近(回到第 1 章);</li>
+            <li>怎么用<strong><a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦</strong>衡量两个词有多相近(<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">回到第 1 章</a>);</li>
             <li><strong>word2vec</strong> 怎么靠“看上下文”把词向量学出来(CBOW / skip-gram);</li>
             <li>为什么会有 <em>国王−男人+女人≈女王</em> 这种神奇的向量算术,以及它和大模型 embedding 层的关系。</li>
           </ul>
@@ -41,7 +41,7 @@
         <h2>2. one-hot 的两个毛病</h2>
         <ul>
           <li><strong>维度爆炸、极其稀疏</strong>:真实词表动辄几万几十万,每个词就是一个几万维、只有一个 1 的向量,又大又空。</li>
-          <li><strong>完全不懂语义</strong>:任意两个不同词的向量都<strong>互相垂直</strong>,点积恒为 0(第 1 章)。也就是说,在 one-hot 眼里,
+          <li><strong>完全不懂语义</strong>:任意两个不同词的向量都<strong>互相垂直</strong>,点积恒为 0(<a class="xref" href="chapter-01.html">第 1 章</a>)。也就是说,在 one-hot 眼里,
           “猫”和“狗”的相似度,跟“猫”和“苹果”的相似度<strong>一样都是 0</strong>——它把词与词之间的关系全丢了。</li>
         </ul>
         <div class="callout callout--warn reveal">
@@ -61,7 +61,7 @@
 
         <h2>4. 语义相近 = 向量相近</h2>
         <p>
-          有了向量,就能用第 1 章的<strong>点积 / 余弦相似度</strong>衡量两个词有多像:<strong>方向越接近,越相似</strong>。
+          有了向量,就能用<a class="xref" href="chapter-01.html">第 1 章</a>的<strong><a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a> / 余弦相似度</strong>衡量两个词有多像:<strong>方向越接近,越相似</strong>。
           训练的目标,就是把语义相近的词“<strong>挤</strong>”到相近的方向上。画到二维平面上,大概是这样:
         </p>
         <div class="figure reveal">
@@ -99,7 +99,7 @@
         </ul>
         <p>
           训练中,为了把这些完形填空做对,模型被迫把<strong>常出现在相似语境</strong>的词,调整到<strong>相近的向量方向</strong>——
-          语义就这样“<strong>无中生有</strong>”地长了出来。这其实就是第 11 章说的<strong>自监督</strong>:答案(被遮的词)文本里现成就有,不用人标。
+          语义就这样“<strong>无中生有</strong>”地长了出来。这其实就是<a class="xref" href="chapter-11.html">第 11 章</a>说的<strong>自监督</strong>:答案(被遮的词)文本里现成就有,不用人标。
         </p>
 
         <h2>6. 神奇的向量算术</h2>
@@ -118,7 +118,7 @@
         <h2>7. 从 word2vec 到大模型的 embedding 层</h2>
         <p>
           今天的大模型里,词嵌入以<span class="term">embedding 层</span>的形式存在:它就是一张<strong>可学习的查找表</strong>——
-          每个 token 的 id 对应表里的一行向量(第 18 章会看到它的代码)。有两点值得记住:
+          每个 token 的 id 对应表里的一行向量(<a class="xref" href="chapter-18.html">第 18 章</a>会看到它的代码)。有两点值得记住:
         </p>
         <ul>
           <li><strong>可以“拿来就用”</strong>:别人在海量语料上训好的词向量(如经典的 GloVe)能<strong>直接下载复用</strong>,这叫<span class="term">迁移学习</span>——省掉从零训练的巨大成本。</li>
@@ -127,8 +127,8 @@
         <div class="callout callout--note reveal">
           <span class="callout__title">一条线串起来</span>
           <p>
-            <strong>one-hot</strong>(离散、无语义)→ <strong>词嵌入</strong>(稠密、有语义坐标)→ <strong>用点积比相似度</strong>(第 1 章)→
-            <strong>注意力用 Q·K 打分</strong>(第 16 章)→ <strong>大模型的 embedding 层</strong>(第 18 章)。词向量,是整条 NLP 链路的起点。
+            <strong>one-hot</strong>(离散、无语义)→ <strong>词嵌入</strong>(稠密、有语义坐标)→ <strong>用点积比相似度</strong>(<a class="xref" href="chapter-01.html">第 1 章</a>)→
+            <strong><a class="xref" href="chapter-16.html#5-为什么点积能当相关性">注意力用 Q·K 打分</a></strong>(<a class="xref" href="chapter-16.html">第 16 章</a>)→ <strong>大模型的 embedding 层</strong>(<a class="xref" href="chapter-18.html">第 18 章</a>)。词向量,是整条 NLP 链路的起点。
           </p>
         </div>
 
@@ -136,7 +136,7 @@
           <h2>小结</h2>
           <ul>
             <li><strong>one-hot</strong> 又大又空,且任意两词都正交、毫无相似度——丢了语义。</li>
-            <li><strong>词嵌入</strong>用稠密低维向量当“语义坐标”,意思相近 → 向量相近(点积/余弦衡量)。</li>
+            <li><strong>词嵌入</strong>用稠密低维向量当“语义坐标”,意思相近 → 向量相近(<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦衡量)。</li>
             <li><strong>word2vec</strong> 基于“近朱者赤”,用 CBOW/skip-gram 的完形填空自监督地学出词向量。</li>
             <li>词向量能做<strong>算术</strong>:国王−男人+女人≈女王,语义关系变成几何关系。</li>
             <li>大模型的 <strong>embedding 层</strong>就是可学习查找表,可迁移复用,也可端到端一起训。</li>

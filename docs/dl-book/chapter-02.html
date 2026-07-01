@@ -192,7 +192,7 @@
           <p>
             最早的激活函数是图里那条虚线——<span class="term">阶跃函数(step)</span>:输入过 0 就输出 1,否则 0,
             完美对应“神经元要么点亮、要么不亮”。但它有个致命伤:在 0 处<strong>是断的、不可导</strong>,
-            没法做第 6 章要讲的反向传播(要求处处能求导)。于是人们换成了平滑的 Sigmoid——既非线性,又处处可导。
+            没法做<a class="xref" href="chapter-06.html">第 6 章</a>要讲的反向传播(要求处处能求导)。于是人们换成了平滑的 Sigmoid——既非线性,又处处可导。
             这也是为什么后来的激活函数几乎都是“平滑曲线”:<strong>能求导,才能学习</strong>。
           </p>
         </div>
@@ -201,7 +201,7 @@
         <h2>6. 对照真实代码:激活函数是怎么实现的</h2>
         <p>
           在本书配套的 C++ 项目里,每个激活函数都实现两个方法:<code>Activate</code>(前向,把 z 变成输出)
-          和 <code>DerivActivate</code>(它的导数,留着第 6 章反向传播时用)。先看最经典的 Sigmoid:
+          和 <code>DerivActivate</code>(它的导数,留着<a class="xref" href="chapter-06.html">第 6 章</a>反向传播时用)。先看最经典的 Sigmoid:
         </p>
 
         <figure class="code-walk reveal">
@@ -215,7 +215,7 @@ double SigmoidActivate::DerivActivate(const double &amp;output) {
 }</code></pre>
           <ol class="code-walk__notes">
             <li><strong>前向</strong>:这一行就是 Sigmoid 的全部。输入 <var>z</var> 很大时 <code>exp(-z)</code> 趋近 0,输出趋近 1;<var>z</var> 很小(很负)时输出趋近 0;<var>z</var> = 0 时正好是 0.5。所以它把任意实数“压”进了 (0, 1)。</li>
-            <li><strong>导数</strong>:Sigmoid 有个非常漂亮的性质——它的导数可以直接用<em>输出</em> <var>a</var> 表示,即 <var>a</var>(1 − <var>a</var>),完全不用再碰输入。这让反向传播算起来特别省事(细节见第 6 章)。</li>
+            <li><strong>导数</strong>:Sigmoid 有个非常漂亮的性质——它的导数可以直接用<em>输出</em> <var>a</var> 表示,即 <var>a</var>(1 − <var>a</var>),完全不用再碰输入。这让反向传播算起来特别省事(细节见<a class="xref" href="chapter-06.html">第 6 章</a>)。</li>
           </ol>
         </figure>
 
@@ -265,7 +265,7 @@ double GeluActivate::DerivActivate(const double &amp;input,
           <p>
             你可能发现 GELU 有<strong>两个</strong> <code>DerivActivate</code>:一个只接收 <code>output</code>,一个同时接收 <code>input</code> 和 <code>output</code>。
             原因是:像 Sigmoid 那样能“只用输出就算出导数”的激活很省事,但 GELU 做不到,它必须知道原始的 <var>z</var>(也就是 <code>input</code>)才能算准导数。
-            所以项目里前向时顺手把每一层的 <var>z</var> 都存了下来——这个伏笔到第 6 章会用上。
+            所以项目里前向时顺手把每一层的 <var>z</var> 都存了下来——这个伏笔到<a class="xref" href="chapter-06.html">第 6 章</a>会用上。
           </p>
         </div>
 

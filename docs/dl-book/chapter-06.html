@@ -15,7 +15,7 @@
         <h1>反向传播</h1>
 
         <p class="lead">
-          第 5 章我们知道了“朝梯度反方向走”就能降低损失。可网络动辄成千上万个参数,
+          <a class="xref" href="chapter-05.html">第 5 章</a>我们知道了“朝梯度反方向走”就能降低损失。可网络动辄成千上万个参数,
           这么多梯度怎么算?<span class="term">反向传播(backpropagation)</span>就是那个高效算法。
           它常被传得很神秘,但其实只是一个东西:<strong>链式法则</strong>,加一点耐心。
         </p>
@@ -25,7 +25,7 @@
           <ul>
             <li>链式法则的直觉:把“最终的错”一段段分配责任回去;</li>
             <li>反向传播的三步:从输出误差出发 → 逐层往回传 → 算出每个权重的梯度;</li>
-            <li>为什么前向时要存下每层的 <var>z</var>(第 3 章那个伏笔);</li>
+            <li>为什么前向时要存下每层的 <var>z</var>(<a class="xref" href="chapter-03.html#5-逐行读懂前向传播">第 3 章那个伏笔</a>);</li>
             <li>逐行读懂真实的反向传播实现。</li>
           </ul>
         </section>
@@ -103,9 +103,9 @@
         <p>反向传播的起点是<strong>最后一层</strong>。它的 <var>δ</var> 由“损失对输出的导数”乘上“激活函数的导数”得到:</p>
         <div class="mathblock reveal">
           <var>δ</var><sub>末层</sub> = <span class="frac"><span>∂<var>L</var></span><span>∂<var>a</var></span></span> · <var>f</var>′(<var>z</var>)
-          <span class="label">用到了第 4 章的 DerivLoss 和第 2 章的 DerivActivate</span>
+          <span class="label">用到了<a class="xref" href="chapter-04.html#4-用交叉熵衡量两个概率的差距">第 4 章的 DerivLoss</a> 和<a class="xref" href="chapter-02.html#5-几种常见的激活函数">第 2 章的 DerivActivate</a></span>
         </div>
-        <p>还记得第 4 章那个美妙巧合吗?如果用 softmax + 交叉熵,这一步直接简化成 <var>δ</var> = <var>p</var> − <var>t</var>。</p>
+        <p>还记得<a class="xref" href="chapter-04.html">第 4 章</a>那个美妙巧合吗?如果用 softmax + 交叉熵,这一步直接简化成 <var>δ</var> = <var>p</var> − <var>t</var>。</p>
 
         <h3>第二步:把误差一层层往回传</h3>
         <p>有了后一层的 <var>δ</var>,前一层的 <var>δ</var> 就能算出来:把后一层的责任,按连接它们的权重“分摊”回来,再乘上本层激活的导数:</p>
@@ -147,7 +147,7 @@
 neuron_delta_[last][b][o] = delta;                                       <b class="cw-tag">4</b></code></pre>
           <ol class="code-walk__notes">
             <li>若是 softmax + 交叉熵,直接用那个漂亮结果 <var>δ</var> = <var>p</var> − <var>t</var>。</li>
-            <li>否则,先算损失对输出的导数 <code>DerivLoss</code>(第 4 章)。</li>
+            <li>否则,先算损失对输出的导数 <code>DerivLoss</code>(<a class="xref" href="chapter-04.html">第 4 章</a>)。</li>
             <li>再乘上激活函数的导数 <code>DerivActivate</code>。注意它<strong>同时</strong>用到了 <code>preact</code>(也就是前向存下的 <var>z</var>)和 <code>output</code>——这就是第 2、3 章埋的伏笔:有些激活(如 GELU)必须知道 <var>z</var> 才能求导。</li>
             <li>把末层每个神经元的 <var>δ</var> 存进 <code>neuron_delta_</code>,作为往回传的起点。</li>
           </ol>
@@ -189,16 +189,16 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
 }</code></pre>
           <ol class="code-walk__notes">
             <li>偏置的梯度,就是这个神经元的 <var>δ</var> 本身(对应公式 ∂<var>L</var>/∂<var>b</var> = <var>δ</var>)。</li>
-            <li>权重的梯度,是 <var>δ</var> 乘以“上一层对应的输入”(对应 ∂<var>L</var>/∂<var>w</var> = <var>δ</var>·<var>a</var>)。注意是 <code>+=</code>:一批里每个样本都累加进来,最后在 <code>ApplyGradient</code> 里除以 <code>B</code> 取平均(第 5 章)。</li>
+            <li>权重的梯度,是 <var>δ</var> 乘以“上一层对应的输入”(对应 ∂<var>L</var>/∂<var>w</var> = <var>δ</var>·<var>a</var>)。注意是 <code>+=</code>:一批里每个样本都累加进来,最后在 <code>ApplyGradient</code> 里除以 <code>B</code> 取平均(<a class="xref" href="chapter-05.html">第 5 章</a>)。</li>
           </ol>
         </figure>
 
         <div class="callout callout--note reveal">
           <span class="callout__title">前向 + 反向 = 一次完整的训练步</span>
           <p>
-            把这一章和前几章串起来:<strong>前向</strong>算出预测(第 3 章)→ <strong>损失</strong>衡量错误(第 4 章)→
-            <strong>反向</strong>算出每个参数的梯度(本章)→ <strong>优化器</strong>按梯度更新参数(第 5 章)。
-            这四步循环成千上万次,网络就“学”会了。这就是第 0 章那个训练循环的完整真相。
+            把这一章和前几章串起来:<strong>前向</strong>算出预测(<a class="xref" href="chapter-03.html">第 3 章</a>)→ <strong>损失</strong>衡量错误(<a class="xref" href="chapter-04.html">第 4 章</a>)→
+            <strong>反向</strong>算出每个参数的梯度(本章)→ <strong>优化器</strong>按梯度更新参数(<a class="xref" href="chapter-05.html">第 5 章</a>)。
+            这四步循环成千上万次,网络就“学”会了。这就是<a class="xref" href="chapter-00.html#3-训练就是自动拧旋钮的过程">第 0 章那个训练循环</a>的完整真相。
           </p>
         </div>
 
@@ -206,7 +206,7 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
           <span class="callout__title">常见误区:反向传播 ≠ 更新参数</span>
           <p>
             反向传播只做一件事——<strong>算出每个参数的梯度</strong>(“该往哪调、调多少”的建议)。
-            至于<strong>真正怎么挪参数</strong>,是<strong>优化器</strong>的活儿(第 8 章):SGD 直接 <code>w −= 学习率 × 梯度</code>,
+            至于<strong>真正怎么挪参数</strong>,是<strong>优化器</strong>的活儿(<a class="xref" href="chapter-08.html">第 8 章</a>):SGD 直接 <code>w −= 学习率 × 梯度</code>,
             Adam 则用动量 + 自适应步长。所以“反传”和“更新”是<strong>两个步骤</strong>,别混为一谈——
             在很多框架里它们也确实是分开的两次调用(先 <code>backward()</code> 求梯度,再 <code>optimizer.step()</code> 更新)。
           </p>

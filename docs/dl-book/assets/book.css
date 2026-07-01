@@ -312,6 +312,19 @@ a:hover {
   color: var(--text);
 }
 
+/* 跨章引用链接 */
+a.xref {
+  color: var(--primary);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(106, 195, 255, 0.45);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+a.xref:hover {
+  color: #9dd8ff;
+  border-bottom-color: rgba(157, 216, 255, 0.85);
+}
+
 /* 行内代码与术语 */
 .chapter code {
   padding: 0.1rem 0.4rem;
@@ -780,6 +793,69 @@ details[open] .quiz__q::after {
   margin-bottom: 0.5rem;
 }
 
+/* GitHub 右上角角标 (封面页, tholman/github-corners 官方路径) */
+.github-corner {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 200;
+  width: 80px;
+  height: 80px;
+  border: 0;
+}
+
+.github-corner svg {
+  display: block;
+  width: 80px;
+  height: 80px;
+}
+
+.github-corner__ribbon {
+  fill: #f6f8fa;
+}
+
+.github-corner__arm,
+.github-corner__body {
+  fill: #24292f;
+}
+
+.github-corner__arm {
+  transform-origin: 130px 106px;
+}
+
+.github-corner:hover .github-corner__arm {
+  animation: github-corner-wave 560ms ease-in-out;
+}
+
+@keyframes github-corner-wave {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20%,
+  60% {
+    transform: rotate(-20deg);
+  }
+  40%,
+  80% {
+    transform: rotate(8deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .github-corner:hover .github-corner__arm {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .github-corner,
+  .github-corner svg {
+    width: 64px;
+    height: 64px;
+  }
+}
+
 .button {
   display: inline-flex;
   align-items: center;
@@ -876,6 +952,20 @@ details[open] .quiz__q::after {
   color: var(--text-soft);
   font-size: 0.92rem;
   line-height: 1.6;
+}
+
+.toc-card--appendix {
+  border-style: dashed;
+  background: rgba(142, 240, 209, 0.04);
+}
+
+.toc-card--appendix .toc-card__num {
+  color: var(--accent);
+}
+
+.toc-card--appendix:hover {
+  border-color: rgba(142, 240, 209, 0.35);
+  background: rgba(142, 240, 209, 0.08);
 }
 
 /* ============================================================= */

@@ -102,7 +102,7 @@
         <ol>
           <li><strong>打分(比相关性)</strong>:拿我的 Query,和<em>每个</em>词的 Key 做<strong>点积</strong>。点积越大 = 越“对得上” = 越相关。</li>
           <li><strong>缩放(除以 √<var>d</var>)</strong>:把每个分数除以 √<var>d</var>(<var>d</var> 是向量维度)。维度一大,点积容易冲得很大,缩放让它别太极端。</li>
-          <li><strong>softmax(变成权重)</strong>:把一排分数压成一排<strong>加起来等于 1</strong> 的权重(第 4 章学过)。这就是那组“加权平均”的权重。</li>
+          <li><strong>softmax(变成权重)</strong>:把一排分数压成一排<strong>加起来等于 1</strong> 的权重(<a class="xref" href="chapter-04.html">第 4 章</a>学过)。这就是那组“加权平均”的权重。</li>
           <li><strong>加权求和(混合内容)</strong>:用这排权重,对所有词的 Value 做加权平均,得到当前词的<strong>新向量</strong>。</li>
         </ol>
         <div class="mathblock reveal">
@@ -205,7 +205,7 @@
             “它”原本只是个空洞的代词,经过注意力后,它的新向量变成了 <strong>[0.96, 0.04]</strong>,
             几乎和“猫”的 Value <strong>[1, 0]</strong> 一模一样!换句话说,
             <strong>注意力让“它”这个词吸收了“猫”的内容——代词指代关系,就这样被解开了。</strong>
-            这正是第 15 章开头那个“它到底指谁”难题的答案,而它只用了一次加权平均。
+            这正是<a class="xref" href="chapter-15.html">第 15 章</a>开头那个“它到底指谁”难题的答案,而它只用了一次加权平均。
           </p>
         </div>
 
@@ -347,8 +347,8 @@ for (int col = 0; col &lt; n; col++)
         <div class="callout callout--tip reveal">
           <span class="callout__title">回头看,全是老朋友</span>
           <p>
-            注意力听起来高大上,但拆开后:<strong>点积</strong>(第 2 章加权求和)、<strong>softmax</strong>(第 4 章)、
-            <strong>加权求和</strong>(还是第 2 章)。它真正的新意只有一个——
+            注意力听起来高大上,但拆开后:<strong>点积</strong>(<a class="xref" href="chapter-02.html">第 2 章</a>加权求和)、<strong>softmax</strong>(<a class="xref" href="chapter-04.html">第 4 章</a>)、
+            <strong>加权求和</strong>(还是<a class="xref" href="chapter-02.html">第 2 章</a>)。它真正的新意只有一个——
             <em>让权重由“Query 和 Key 的相关性”当场算出来</em>,而不是固定写死。
           </p>
         </div>
@@ -364,7 +364,7 @@ for (int col = 0; col &lt; n; col++)
         <p>注意力里有两种“数”,新手最容易把它们搅成一团:</p>
         <ul>
           <li><strong>注意力权重</strong>(手算出的那排 [0.93, 0.01, 0.06]):是每次前向<strong>当场用 Q·K 算出来的</strong>,换个句子就变,<strong>不是参数、不用存、也不用训</strong>。</li>
-          <li><strong>三个投影矩阵</strong> <var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub>(还有输出矩阵 <var>W</var><sub>O</sub>):才是<strong>真正的参数</strong>,和第 2 章那些“权重旋钮”一模一样,要靠训练慢慢调、要存进模型文件。</li>
+          <li><strong>三个投影矩阵</strong> <var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub>(还有输出矩阵 <var>W</var><sub>O</sub>):才是<strong>真正的参数</strong>,和<a class="xref" href="chapter-02.html">第 2 章</a>那些“权重旋钮”一模一样,要靠训练慢慢调、要存进模型文件。</li>
         </ul>
         <p>
           一句话:<strong>被训练的从来不是权重,而是“生产权重的那三个矩阵”。</strong>
@@ -375,9 +375,9 @@ for (int col = 0; col &lt; n; col++)
         <p>这三个矩阵和网络里其它所有参数一样,走的还是第 5、6 章那条流水线:</p>
         <ol>
           <li><strong>前向</strong>:用当前矩阵算一遍注意力,一路算到模型的<strong>最终输出</strong>(比如“下一个字的概率”)。</li>
-          <li><strong>算损失</strong>:拿输出和“正确答案”比,得到一个误差(第 4 章的损失函数)。</li>
-          <li><strong>反向传播</strong>:用链式法则(第 6 章)把误差<strong>反着传回去</strong>,一直传到 <var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub>,算出“每个矩阵元素该往哪边改”(梯度)。</li>
-          <li><strong>微调</strong>:沿梯度反方向,把每个矩阵元素挪一小步(梯度下降,第 5 章)。</li>
+          <li><strong>算损失</strong>:拿输出和“正确答案”比,得到一个误差(<a class="xref" href="chapter-04.html">第 4 章</a>的损失函数)。</li>
+          <li><strong>反向传播</strong>:用链式法则(<a class="xref" href="chapter-06.html">第 6 章</a>)把误差<strong>反着传回去</strong>,一直传到 <var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub>,算出“每个矩阵元素该往哪边改”(梯度)。</li>
+          <li><strong>微调</strong>:沿梯度反方向,把每个矩阵元素挪一小步(梯度下降,<a class="xref" href="chapter-05.html">第 5 章</a>)。</li>
         </ol>
         <p>这样“挪一小步”重复亿万次,三个矩阵就从最初的随机数,长成了“懂得该关注谁”的样子。</p>
 
@@ -393,7 +393,7 @@ for (int col = 0; col &lt; n; col++)
           </p>
         </div>
 
-        <p>这几步落到真实代码里,就是 <code>Backward</code> 结尾的四行——和第 2 章“参数 = 参数 − 学习率 × 梯度”一字不差:</p>
+        <p>这几步落到真实代码里,就是 <code>Backward</code> 结尾的四行——和<a class="xref" href="chapter-02.html">第 2 章</a>“参数 = 参数 − 学习率 × 梯度”一字不差:</p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/transformer/self_attention.cpp · Backward(更新参数)</figcaption>
           <pre class="code-walk__code"><code>for (int out = 0; out &lt; model_dim_; out++)
@@ -404,7 +404,7 @@ for (int col = 0; col &lt; n; col++)
     output_weight_[out][in] -= learning_rate * grad_output_weight[out][in];  <b class="cw-tag">2</b>
   }</code></pre>
           <ol class="code-walk__notes">
-            <li>对三个矩阵的<strong>每个元素</strong>都做“减去 学习率 × 梯度”——这正是第 5 章的梯度下降。<code>grad_query_weight</code> 就是前面用链式法则一层层算回来的梯度。</li>
+            <li>对三个矩阵的<strong>每个元素</strong>都做“减去 学习率 × 梯度”——这正是<a class="xref" href="chapter-05.html">第 5 章</a>的梯度下降。<code>grad_query_weight</code> 就是前面用链式法则一层层算回来的梯度。</li>
             <li><var>W</var><sub>O</sub>(多头拼接后的输出矩阵)也一并更新。<strong>四个矩阵,全靠同一个损失的“反馈”来调</strong>。</li>
           </ol>
         </figure>
@@ -415,7 +415,7 @@ for (int col = 0; col &lt; n; col++)
             你可能追问:反向传播的起点是“损失”,可注意力自己并不产生损失啊?没错。
             损失来自<strong>整个模型的最终任务</strong>——比如语言模型的“预测下一个字对不对”。
             注意力只是这条长链上的一环,损失的“反馈电流”会依次流过输出层、每一块 Transformer,
-            最后流进这三个矩阵。<strong>整条链路怎么被同一个损失一起训练</strong>,正是第 18 章“怎么学”那一节要拆开讲的事。
+            最后流进这三个矩阵。<strong>整条链路怎么被同一个损失一起训练</strong>,正是<a class="xref" href="chapter-18.html">第 18 章</a>“怎么学”那一节要拆开讲的事。
           </p>
         </div>
 

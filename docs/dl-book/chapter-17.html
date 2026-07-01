@@ -107,7 +107,7 @@ for (double &amp;v : hidden) v = Relu(v);                          <b class="cw-
 ff_output = ApplyLinear(hidden, W2, b2);  // ff_dim → model_dim <b class="cw-tag">3</b></code></pre>
           <ol class="code-walk__notes">
             <li>第一层线性:把每个词向量从 <code>model_dim</code> 升到更大的 <code>ff_dim</code>。</li>
-            <li>过 ReLU 加入非线性(第 2 章的老朋友)。</li>
+            <li>过 ReLU 加入非线性(<a class="xref" href="chapter-02.html">第 2 章</a>的老朋友)。</li>
             <li>第二层线性:再压回 <code>model_dim</code>,方便接下来继续残差相加。每个词都独立走这一遍。</li>
           </ol>
         </figure>
@@ -186,7 +186,7 @@ encoding[pos][i + 1] = std::cos(angle);
         <p>同样的 Block,按“能看到哪些词”分成两种用法:</p>
         <ul>
           <li><span class="pill">Encoder 编码器</span>不加 causal mask,每个词能看到<strong>整句</strong>(双向)。适合“理解”类任务(如 BERT)。</li>
-          <li><span class="pill">Decoder 解码器</span>加上 causal mask(第 16 章),每个词只能看到<strong>它之前</strong>的词。适合“生成”类任务——因为生成时本来就还没有后文。GPT 系列就是纯 decoder。</li>
+          <li><span class="pill">Decoder 解码器</span>加上 causal mask(<a class="xref" href="chapter-16.html">第 16 章</a>),每个词只能看到<strong>它之前</strong>的词。适合“生成”类任务——因为生成时本来就还没有后文。GPT 系列就是纯 decoder。</li>
         </ul>
         <div class="callout callout--note reveal">
           <span class="callout__title">本项目两种都支持</span>
@@ -307,22 +307,22 @@ encoding[pos][i + 1] = std::cos(angle);
         <h3>顺着数据流走一遍</h3>
         <p><strong>左边这座塔是编码器(Encoder),负责“读懂输入”:</strong></p>
         <ol>
-          <li><strong>输入嵌入 + 位置编码</strong>:把输入每个词查成向量(第 18 章),⊕ 上位置编码(第 5 节),让它既知道“是什么词”又知道“在第几位”。</li>
+          <li><strong>输入嵌入 + 位置编码</strong>:把输入每个词查成向量(<a class="xref" href="chapter-18.html">第 18 章</a>),⊕ 上位置编码(第 5 节),让它既知道“是什么词”又知道“在第几位”。</li>
           <li><strong>N× 编码器块</strong>:每块 = 自注意力 → Add &amp; Norm → 前馈网络 → Add &amp; Norm(第 1–4 节);堆 N 层(原论文 N=6),越堆理解越深。</li>
           <li><strong>编码器输出</strong>:一串“看过全句上下文”的向量,原样送给右边的解码器备用。</li>
         </ol>
         <p><strong>右边这座塔是解码器(Decoder),负责“一个词一个词生成输出”:</strong></p>
         <ol>
-          <li><strong>输出嵌入 + 位置编码</strong>:把“到目前为止已生成的词”嵌入 + 位置编码。注意底部写着 <span class="term">Outputs(shifted right,右移一位)</span>——预测第 <var>t</var> 个词时,喂进去的是第 1…<var>t</var>−1 个词,这正是第 18 章的 teacher forcing。</li>
-          <li><strong>掩码自注意力</strong>:带 causal mask 的自注意力,保证生成时<strong>只能看前文、不能偷看未来</strong>(第 16 章)。</li>
+          <li><strong>输出嵌入 + 位置编码</strong>:把“到目前为止已生成的词”嵌入 + 位置编码。注意底部写着 <span class="term">Outputs(shifted right,右移一位)</span>——预测第 <var>t</var> 个词时,喂进去的是第 1…<var>t</var>−1 个词,这正是<a class="xref" href="chapter-18.html">第 18 章</a>的 teacher forcing。</li>
+          <li><strong>掩码自注意力</strong>:带 causal mask 的自注意力,保证生成时<strong>只能看前文、不能偷看未来</strong>(<a class="xref" href="chapter-16.html">第 16 章</a>)。</li>
           <li><strong>交叉注意力(cross-attention)</strong>:关键一环——它一边看解码器自己的状态,一边<strong>回头查阅编码器的输出</strong>(下面细讲)。</li>
           <li><strong>前馈网络</strong>,再 Add &amp; Norm;同样堆 N 层。</li>
-          <li><strong>Linear + Softmax</strong>:最顶上把解码器输出投影到词表大小、过 softmax,得到“下一个词的概率”——这就是第 18 章的 LM Head。</li>
+          <li><strong>Linear + Softmax</strong>:最顶上把解码器输出投影到词表大小、过 softmax,得到“下一个词的概率”——这就是<a class="xref" href="chapter-18.html">第 18 章</a>的 LM Head。</li>
         </ol>
 
         <h3>全图的“三种注意力”,一次看懂</h3>
         <p>
-          很多人卡在“怎么突然冒出三个 Multi-Head Attention?”其实它们是<strong>同一套机制(第 16 章)</strong>,只是<strong>Q、K、V 来自哪里</strong>不同。
+          很多人卡在“怎么突然冒出三个 Multi-Head Attention?”其实它们是<strong>同一套机制(<a class="xref" href="chapter-16.html">第 16 章</a>)</strong>,只是<strong>Q、K、V 来自哪里</strong>不同。
           这张表,是读懂整张图的钥匙:
         </p>
         <div class="table-wrap reveal">
@@ -357,8 +357,8 @@ encoding[pos][i + 1] = std::cos(angle);
         <div class="callout callout--note reveal">
           <span class="callout__title">为什么如今大模型多是 decoder-only?</span>
           <p>
-            因为“预测下一个 token”这一个目标,既逼它学会理解、又逼它学会生成,而且训练数据全是现成的文本(自监督,第 19 章)。
-            于是最简洁的 decoder-only 反而最能<strong>吃满规模红利</strong>。你在第 18 章亲手搭的那个字符级模型,正是一个 decoder-only 的迷你版。
+            因为“预测下一个 token”这一个目标,既逼它学会理解、又逼它学会生成,而且训练数据全是现成的文本(自监督,<a class="xref" href="chapter-19.html">第 19 章</a>)。
+            于是最简洁的 decoder-only 反而最能<strong>吃满规模红利</strong>。你在<a class="xref" href="chapter-18.html">第 18 章</a>亲手搭的那个字符级模型,正是一个 decoder-only 的迷你版。
           </p>
         </div>
 

@@ -41,15 +41,15 @@
         </p>
         <ul>
           <li><span class="pill">zero-shot 零样本</span>直接下命令:“把下面这段翻译成英文”。</li>
-          <li><span class="pill">few-shot 少样本</span>先给<strong>几个示范</strong>再出题:“中文→英文:猫→cat;狗→dog;鸟→?”。给了例子,它照葫芦画瓢的成功率大增(这正是第 19 章说的“涌现”能力之一)。</li>
+          <li><span class="pill">few-shot 少样本</span>先给<strong>几个示范</strong>再出题:“中文→英文:猫→cat;狗→dog;鸟→?”。给了例子,它照葫芦画瓢的成功率大增(这正是<a class="xref" href="chapter-19.html">第 19 章</a>说的“涌现”能力之一)。</li>
           <li><span class="pill">思维链 CoT</span>加一句“<strong>一步一步想</strong>”,让它把推理过程写出来。别小看这句话——复杂题目的正确率往往因此明显提高,因为它把“一步到位猜答案”变成了“顺着写、边写边推”。</li>
         </ul>
         <div class="callout callout--tip reveal">
           <span class="callout__title">采样参数也在你手里</span>
           <p>
-            第 18 章的 <strong>temperature / top-k / top-p</strong> 通常也开放给你调。要<strong>稳定、确定</strong>的答案
+            <a class="xref" href="chapter-18.html">第 18 章</a>的 <strong>temperature / top-k / top-p</strong> 通常也开放给你调。要<strong>稳定、确定</strong>的答案
             (如改代码、抽取信息),把温度调低;要<strong>发散、有创意</strong>的内容(如头脑风暴),把温度调高。
-            道理和第 18 章完全一样,只是换了个使用场景。
+            道理和<a class="xref" href="chapter-18.html">第 18 章</a>完全一样,只是换了个使用场景。
           </p>
         </div>
 
@@ -66,7 +66,7 @@
 
         <h2>2. RAG:给模型接一块“外挂知识库”</h2>
         <p>
-          第 19 章说过大模型的两个硬伤:<strong>知识截止</strong>(不知道最新的事)和<strong>幻觉</strong>(没依据也敢编)。
+          <a class="xref" href="chapter-19.html">第 19 章</a>说过大模型的两个硬伤:<strong>知识截止</strong>(不知道最新的事)和<strong>幻觉</strong>(没依据也敢编)。
           最实用的解药叫 <span class="term">RAG(检索增强生成)</span>——不重新训练,而是<strong>先查资料,再让它带着资料回答</strong>。
         </p>
         <div class="figure reveal">
@@ -86,21 +86,21 @@
         <p>它的核心机制,处处都是你学过的东西:</p>
         <ol>
           <li>把你的文档切成<strong>小片段(chunk)</strong>,每段几百字;</li>
-          <li>用第 19 章的<strong>词嵌入</strong>把每段变成向量,存进“向量库”;</li>
-          <li>提问时,把问题也变成向量,用<strong>向量相似度(点积/余弦)</strong>找出最相关的几段;</li>
+          <li>用<a class="xref" href="chapter-19.html">第 19 章</a>的<strong>词嵌入</strong>把每段变成向量,存进“向量库”;</li>
+          <li>提问时,把问题也变成向量,用<strong>向量相似度(<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦)</strong>找出最相关的几段;</li>
           <li>把这几段和问题<strong>一起</strong>塞进提示,让模型“看着材料”回答。</li>
         </ol>
         <div class="callout callout--note reveal">
           <span class="callout__title">为什么 RAG 能治幻觉</span>
           <p>
             把它想成<strong>从“闭卷”变“开卷”</strong>:闭卷时模型只能凭记忆(容易编),开卷时正确资料就摆在上下文里,
-            它只需<strong>照着答</strong>。这也解释了为什么片段不能太大——太大既降低检索精度,又可能撑爆上下文窗口(第 19 章)。
+            它只需<strong>照着答</strong>。这也解释了为什么片段不能太大——太大既降低检索精度,又可能撑爆上下文窗口(<a class="xref" href="chapter-19.html">第 19 章</a>)。
           </p>
         </div>
 
         <h2>3. 工具调用:让模型学会“借外力”</h2>
         <p>
-          大模型不擅长精确计算,也查不到实时数据(第 19 章)。那就<strong>别让它硬算</strong>——让它调用外部工具。
+          大模型不擅长精确计算,也查不到实时数据(<a class="xref" href="chapter-19.html">第 19 章</a>)。那就<strong>别让它硬算</strong>——让它调用外部工具。
           这套机制最早叫 <span class="term">function calling(函数调用)</span>:
         </p>
         <ol>
@@ -154,7 +154,7 @@
         <div class="callout callout--warn reveal">
           <span class="callout__title">几条实用底线</span>
           <p>
-            <strong>· 关键事实要核对</strong>:它会一本正经地编(第 19 章的幻觉),涉及数字、引用、法律医疗等,务必自己复核。<br />
+            <strong>· 关键事实要核对</strong>:它会一本正经地编(<a class="xref" href="chapter-19.html">第 19 章</a>的幻觉),涉及数字、引用、法律医疗等,务必自己复核。<br />
             <strong>· 小心提示注入</strong>:让它读的网页/文档里可能藏着“骗它执行的指令”,给 Agent 授予真实权限(删文件、付款)时要谨慎。<br />
             <strong>· 注意隐私</strong>:别把敏感信息随手贴进第三方模型。<br />
             <strong>· 它没有立场也没有真正的“懂”</strong>:它在做极其复杂的模式延续,语气再笃定也不等于正确。
@@ -186,7 +186,7 @@
           <details class="quiz__item">
             <summary class="quiz__q">问题 2:RAG 为什么能缓解幻觉和知识截止?它用到了哪些前面的知识?</summary>
             <div class="quiz__a">
-              <p>它先从知识库检索出相关资料,连同问题一起给模型,让它“看着材料答”而非凭记忆编,同时资料可以是最新的。用到的正是第 19 章的词嵌入,和第 8/11 章的向量点积/相似度检索。</p>
+              <p>它先从知识库检索出相关资料,连同问题一起给模型,让它“看着材料答”而非凭记忆编,同时资料可以是最新的。用到的正是<a class="xref" href="chapter-19.html">第 19 章</a>的词嵌入,和第 8/11 章的向量点积/相似度检索。</p>
             </div>
           </details>
           <details class="quiz__item">
@@ -202,7 +202,7 @@
           <p>
             从一个神经元到大模型的<strong>原理主干</strong>,到这里就全通了。不过本书还留了最后一部分——
             <strong>第六部分 · 代码实战</strong>:接下来两章,我们对着仓库里两份真实的 C++ 程序,把整本书从头到尾在代码里对一遍号。
-            <strong>第 22 章</strong>精读 MNIST(兑现第一、二部分),<strong>第 23 章</strong>精读字符级语言模型(兑现第四、五部分)。
+            <strong><a class="xref" href="chapter-22.html">第 22 章</a></strong>精读 MNIST(兑现第一、二部分),<strong><a class="xref" href="chapter-23.html">第 23 章</a></strong>精读字符级语言模型(兑现第四、五部分)。
             读完,你就真正走通了“<strong>从仓库 C++ 代码到大模型</strong>”这条完整的路。
           </p>
         </div>

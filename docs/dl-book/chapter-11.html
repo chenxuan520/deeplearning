@@ -32,7 +32,7 @@
         </section>
 
         <h2>1. 三个数据集:学、调、考</h2>
-        <p>要诚实地评估泛化(第 10 章),必须把数据分成互不重叠的三份,各司其职:</p>
+        <p>要诚实地评估泛化(<a class="xref" href="chapter-10.html">第 10 章</a>),必须把数据分成互不重叠的三份,各司其职:</p>
         <ul>
           <li><span class="pill">训练集 train</span>用来<strong>学</strong>——反向传播更新参数,只用它。</li>
           <li><span class="pill">验证集 val</span>用来<strong>调</strong>——边训边监控、选超参数(学习率、层数)、决定何时 early stop。它不参与更新参数,但你会“照着它做决定”。</li>
@@ -112,7 +112,7 @@
           </p>
         </div>
         <p>
-          回归任务(预测数值)则看 <strong>MSE / MAE</strong>(第 4 章);语言模型看<strong>困惑度</strong>(第 18 章)。
+          回归任务(预测数值)则看 <strong>MSE / MAE</strong>(<a class="xref" href="chapter-04.html">第 4 章</a>);语言模型看<strong>困惑度</strong>(<a class="xref" href="chapter-18.html">第 18 章</a>)。
           指标要<strong>配任务</strong>选,没有万能的一个数。
         </p>
 
@@ -123,7 +123,7 @@
         </p>
         <ul>
           <li><strong>归一化到 [0,1]</strong>:减最小值、除以范围。MNIST 的像素(0~255)就是这么除以 255 变成 [0,1] 的。</li>
-          <li><strong>标准化(zero-mean)</strong>:减均值、除标准差,变成“均值 0、标准差 1”。(是不是很眼熟?LayerNorm 就是这套,第 17 章。)</li>
+          <li><strong>标准化(zero-mean)</strong>:减均值、除标准差,变成“均值 0、标准差 1”。(是不是很眼熟?LayerNorm 就是这套,<a class="xref" href="chapter-17.html">第 17 章</a>。)</li>
         </ul>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/demo/mnist/mnist_data.h(思路)</figcaption>
@@ -137,9 +137,9 @@ pixel_value = raw_pixel / 255.0;                <b class="cw-tag">1</b></code></
         <h2>6. 训练不动?一份排查清单</h2>
         <p>真上手训练,十有八九会遇到“不对劲”。按这个顺序排查,能解决大部分问题:</p>
         <ul>
-          <li><strong>损失是 NaN / 直接发散</strong> → 学习率太大,先调小 10 倍;检查有没有忘了归一化;考虑梯度裁剪(第 9 章)。</li>
-          <li><strong>损失几乎不降</strong> → 学习率太小,或模型太弱/激活选错(第 7 章);先确认能在<strong>一小撮数据上过拟合</strong>(连背都背不下来,说明代码有 bug)。</li>
-          <li><strong>训练降、验证不降甚至回升</strong> → 过拟合,上正则化(第 10 章):weight decay、Dropout、early stop、更多数据。</li>
+          <li><strong>损失是 NaN / 直接发散</strong> → 学习率太大,先调小 10 倍;检查有没有忘了归一化;考虑梯度裁剪(<a class="xref" href="chapter-09.html">第 9 章</a>)。</li>
+          <li><strong>损失几乎不降</strong> → 学习率太小,或模型太弱/激活选错(<a class="xref" href="chapter-07.html">第 7 章</a>);先确认能在<strong>一小撮数据上过拟合</strong>(连背都背不下来,说明代码有 bug)。</li>
+          <li><strong>训练降、验证不降甚至回升</strong> → 过拟合,上正则化(<a class="xref" href="chapter-10.html">第 10 章</a>):weight decay、Dropout、early stop、更多数据。</li>
           <li><strong>训练/验证差距很大又都不好</strong> → 可能数据有问题(标签错、泄漏、分布不一致),回头查数据。</li>
         </ul>
         <div class="callout callout--tip reveal">

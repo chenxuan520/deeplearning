@@ -268,3 +268,43 @@
 
 ### Sanitizers (消毒剂)
 - `src/CMakeLists.txt` 包含注释掉的 Address/Leak/UB sanitizers 标志。
+
+## 7) 交互式电子书 (`docs/dl-book/`)
+
+配套深度学习入门电子书，静态站点位于 `docs/dl-book/`，共 24 章 + 术语表，含交互示意图与实验台。
+
+### 链接
+- **在线阅读 (GitHub Pages)**: https://chenxuan520.github.io/deeplearning/
+- **GitHub 仓库**: https://github.com/chenxuan520/deeplearning
+- **Gitee 仓库** (`origin`): https://gitee.com/chenxuan520/deeplearning
+
+### 双远程与线上部署（重要）
+本仓库配置了两个 git remote：
+- `origin` → Gitee
+- `github` → GitHub（**GitHub Pages 的部署来源**）
+
+**修改 `docs/dl-book/` 后要让线上站点更新，必须推送到 `github` 远程。** 只推 `origin` 不会触发 Pages 部署：
+
+```bash
+git push github master
+# 或两个远程一起推
+git push origin master && git push github master
+```
+
+自动部署工作流：`.github/workflows/dl-book-pages.yml`  
+触发条件：`master` 分支上 `docs/dl-book/**` 或该 workflow 文件有变更。
+
+### 本地预览
+```bash
+cd docs/dl-book && python3 -m http.server 8765
+# 浏览器打开 http://localhost:8765/index.html
+```
+
+### 跨章链接约定
+书中提到其他章节的具体内容时，应在**文字上直接链到对应小节标题**，不要只写“第 N 章”：
+
+```html
+<a class="xref" href="chapter-01.html#5-导数-斜率告诉你往哪走会变大">导数</a>
+```
+
+小节锚点 id 由 `docs/dl-book/assets/book.js` 里的 `slugify()` 根据 h2/h3 标题自动生成（小写、冒号变空格、空白变连字符、去掉标点）。新增或改标题后需重新核对锚点是否仍正确。

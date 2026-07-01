@@ -35,7 +35,7 @@
         <h2>1. 序列:顺序很重要,还得记住前文</h2>
         <p>
           “狗咬人”和“人咬狗”用的字一样,顺序不同意思就反了;要判断“它太重了”里的“它”指谁,得<strong>回看前文</strong>。
-          这类数据有两个特点:<strong>长度不固定</strong>、<strong>元素间有顺序和依赖</strong>。固定大小的 MLP(第 3 章)一次只吃固定长度、
+          这类数据有两个特点:<strong>长度不固定</strong>、<strong>元素间有顺序和依赖</strong>。固定大小的 MLP(<a class="xref" href="chapter-03.html">第 3 章</a>)一次只吃固定长度、
           还把顺序信息丢了,天然不适合。我们需要一种能“<strong>边读边记</strong>”的结构。
         </p>
 
@@ -86,9 +86,9 @@
 
         <h2>3. 怎么训练:按时间反向传播(BPTT)</h2>
         <p>
-          展开之后,RNN 就变成了一个<strong>很深的网络</strong>(有几个词就有几层)。训练它,依然是第 6 章的反向传播,
+          展开之后,RNN 就变成了一个<strong>很深的网络</strong>(有几个词就有几层)。训练它,依然是<a class="xref" href="chapter-06.html#2-反向传播的三步">第 6 章的反向传播</a>,
           只不过要<strong>沿着时间一路传回去</strong>,所以叫 <span class="term">BPTT(Backpropagation Through Time,按时间反向传播)</span>。
-          道理没变,还是链式法则(第 1 章),只是链条特别长。
+          道理没变,还是<a class="xref" href="chapter-01.html#6-链式法则-复合函数怎么求导">链式法则</a>(<a class="xref" href="chapter-01.html">第 1 章</a>),只是链条特别长。
         </p>
 
         <h2>4. 两个硬伤</h2>
@@ -96,7 +96,7 @@
         <div class="callout callout--warn reveal">
           <span class="callout__title">硬伤一:长依赖会“失忆”(梯度消失/爆炸)</span>
           <p>
-            信息像一场<strong>传话游戏</strong>:每传一步,梯度都要乘一次权重和激活的导数(第 7 章)。乘的次数一多,
+            信息像一场<strong>传话游戏</strong>:每传一步,梯度都要乘一次权重和激活的导数(<a class="xref" href="chapter-07.html">第 7 章</a>)。乘的次数一多,
             梯度要么<strong>越乘越小、趋近 0(消失)</strong>,要么<strong>越乘越大、炸掉(爆炸)</strong>。结果就是
             <strong>隔得远的词之间,依赖关系几乎学不到</strong>——而“它 ↔ 前文某个名词”这种长距离关联恰恰最重要。
           </p>
@@ -105,14 +105,14 @@
           <span class="callout__title">硬伤二:没法并行,训练慢</span>
           <p>
             要算第 5 个词的隐藏状态,<strong>必须先等第 4 个算完</strong>——天生<strong>串行</strong>。这就没法把工作切开
-            丢给一堆 GPU 同时算(第 20 章),在超长序列、超大数据上慢得要命。这一点,后来<strong>直接决定了它的命运</strong>。
+            丢给一堆 GPU 同时算(<a class="xref" href="chapter-20.html">第 20 章</a>),在超长序列、超大数据上慢得要命。这一点,后来<strong>直接决定了它的命运</strong>。
           </p>
         </div>
 
         <h2>5. LSTM:给记忆装上“门”</h2>
         <p>
           为了缓解“失忆”,<span class="term">LSTM(长短期记忆网络)</span>给 RNN 加了一条<strong>专门的记忆传送带
-          (cell state)</strong>,并用三个<strong>“门”</strong>来精细地管理它。门就是一个输出 0~1 的小开关(用 Sigmoid,第 7 章),
+          (cell state)</strong>,并用三个<strong>“门”</strong>来精细地管理它。门就是一个输出 0~1 的小开关(用 Sigmoid,<a class="xref" href="chapter-07.html">第 7 章</a>),
           0 = 关掉、1 = 放行:
         </p>
         <ul>
@@ -139,7 +139,7 @@
           <p>
             <strong>注意力 / Transformer</strong>(第四部分)换了个思路:不再一站站传话,而是让<strong>每个词直接看全序列</strong>——
             长依赖一步直达(治“失忆”),而且所有位置<strong>可以同时算</strong>(治“串行”)。于是它几乎全面取代了 RNN/LSTM,
-            成了今天大模型的地基。带着 RNN 这两个短板去读第 15 章,你会立刻明白注意力“妙在哪”。
+            成了今天大模型的地基。带着 RNN 这两个短板去读<a class="xref" href="chapter-15.html">第 15 章</a>,你会立刻明白注意力“妙在哪”。
           </p>
         </div>
 

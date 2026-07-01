@@ -15,7 +15,7 @@
         <h1>通往大模型:原理与训练</h1>
 
         <p class="lead">
-          你已经亲手把一个完整的语言模型从一个神经元拆到了底。现在我们站远一点,看看把第 18 章那个小模型
+          你已经亲手把一个完整的语言模型从一个神经元拆到了底。现在我们站远一点,看看把<a class="xref" href="chapter-18.html">第 18 章</a>那个小模型
           <strong>放大一万倍</strong>会发生什么。这一章讲清楚三件事:大模型<strong>怎么读懂文字</strong>(分词与词嵌入)、
           <strong>为什么越大越强</strong>(规模定律与涌现)、以及<strong>是怎么“炼”出来的</strong>(预训练 → 微调 → 对齐 → 蒸馏)。
           至于它靠什么硬件跑起来、你又该怎么用好它,留给第 20、21 章。
@@ -36,7 +36,7 @@
 
         <h2>1. 先看一个惊人的事实:内核没变</h2>
         <p>
-          GPT、DeepSeek 这类模型,做的事和你第 18 章那个 mini LM <strong>一模一样</strong>:
+          GPT、DeepSeek 这类模型,做的事和你<a class="xref" href="chapter-18.html">第 18 章</a>那个 mini LM <strong>一模一样</strong>:
           <em>看着前文,预测下一个 token,然后自回归地一个个往下写</em>。区别只在量级:
         </p>
         <div class="figure figure--reading reveal">
@@ -62,8 +62,8 @@
 
         <h2>2. 第一步:把文字切成 token(分词与 BPE)</h2>
         <p>
-          第 18 章我们用的是最简单的<strong>字符级</strong>分词——一个字一个 token。真实大模型嫌它太浪费:
-          英文一个单词能拆成好几个字符,序列变得很长,而注意力的计算量随长度<strong>平方</strong>增长(第 16 章),很不划算。
+          <a class="xref" href="chapter-18.html">第 18 章</a>我们用的是最简单的<strong>字符级</strong>分词——一个字一个 token。真实大模型嫌它太浪费:
+          英文一个单词能拆成好几个字符,序列变得很长,而注意力的计算量随长度<strong>平方</strong>增长(<a class="xref" href="chapter-16.html">第 16 章</a>),很不划算。
           于是它们用<strong>子词(subword)</strong>分词,最常见的算法叫 <span class="term">BPE(Byte Pair Encoding)</span>。
         </p>
         <div class="callout callout--analogy reveal">
@@ -94,7 +94,7 @@
 
         <h2>3. 词嵌入:给每个词一个“语义坐标”</h2>
         <p>
-          token 的 id 只是个编号(2 不比 1 “大”)。第 18 章讲过,<span class="term">词嵌入(embedding)</span>
+          token 的 id 只是个编号(2 不比 1 “大”)。<a class="xref" href="chapter-18.html">第 18 章</a>讲过,<span class="term">词嵌入(embedding)</span>
           给每个 id 配一个可学习的<strong>多维向量</strong>。这里我们把这件事的“妙处”讲透,因为它是大模型能“懂语义”的地基。
         </p>
         <div class="callout callout--analogy reveal">
@@ -108,7 +108,7 @@
         <p>
           那怎么用数学衡量“两个向量意思有多近”?一个直觉是算它们的<strong>距离</strong>,但训练中向量会被整体拉伸缩放,
           距离不稳。更稳的是看<strong>方向(夹角)</strong>:两个向量夹角越小,就认为语义越接近。而衡量夹角的工具,
-          正是你在第 16 章反复用的<span class="term">点积</span>——<strong>点积越大,夹角越小,语义越相近</strong>。
+          正是你在<a class="xref" href="chapter-16.html">第 16 章</a>反复用的<span class="term">点积</span>——<strong>点积越大,夹角越小,语义越相近</strong>。
         </p>
         <div class="mathblock reveal">
           相似度 ≈ cos(夹角) = <span class="frac"><span><var>a</var> · <var>b</var></span><span>|<var>a</var>| |<var>b</var>|</span></span>
@@ -143,7 +143,7 @@
         </div>
         <p>
           顺便建立一个数量级直觉:<strong>参数量 ≈ 网络里连线(权重)的总数</strong>。1750 亿参数,就是 1750 亿个
-          第 2 章那样的“权重旋钮”。它们全部存成小数,这也是为什么模型文件动辄几十上百 GB。
+          <a class="xref" href="chapter-02.html">第 2 章</a>那样的“权重旋钮”。它们全部存成小数,这也是为什么模型文件动辄几十上百 GB。
         </p>
 
         <h3>那到底该配多少数据、多少算力?</h3>
@@ -161,7 +161,7 @@
             训练要烧多少算力(浮点运算次数 FLOPs),有个广为流传的估算:<strong>FLOPs ≈ 6 × 参数量 × 训练 token 数</strong>。
             它告诉你一件扎心的事:参数和数据<strong>任意一个翻倍,算力就翻倍</strong>——两个都想涨,成本是<strong>相乘</strong>着往上冲的。
             这也是为什么训一个前沿大模型动辄要<strong>上千张 GPU、烧数百万美元、跑好几周</strong>:不是钱多烧得慌,是这条曲线逼的
-            (硬件账细算见第 20 章)。
+            (硬件账细算见<a class="xref" href="chapter-20.html">第 20 章</a>)。
           </p>
         </div>
 
@@ -208,7 +208,7 @@
 
         <h3>① 预训练(Pre-training):自监督地读遍互联网</h3>
         <p>
-          在<strong>海量</strong>文本(互联网级别)上,做的就是第 18 章那件事:预测下一个词。它最妙的一点是
+          在<strong>海量</strong>文本(互联网级别)上,做的就是<a class="xref" href="chapter-18.html">第 18 章</a>那件事:预测下一个词。它最妙的一点是
           <strong>不需要人工标注</strong>——因为“下一个词是什么”文本里现成就有,把后文盖住让模型猜即可。
           这种“答案自带、不用人工打标签”的方式叫<span class="term">自监督学习</span>。这一步最烧钱、最耗时,
           却是模型获得“通用语言能力 + 世界知识”的来源。
@@ -228,7 +228,7 @@
           预训练完的模型“博学但不一定听话”——你问它问题,它可能只顾着把你的话<em>接着往下写</em>,而不是回答。
           <span class="term">指令微调(SFT,Supervised Fine-Tuning)</span>用一批“<strong>指令 + 理想回答</strong>”的高质量数据继续训练,
           把它从“只会接话”调成“会回答你的问题、完成你的任务”。这一步数据量小得多,但作用关键。
-          注意:它用的还是第 18 章那套“预测下一个 token + 交叉熵 + 反向传播”,<strong>只是把训练数据从“互联网文本”换成了“标准问答范文”</strong>,并没有换算法。
+          注意:它用的还是<a class="xref" href="chapter-18.html">第 18 章</a>那套“预测下一个 token + 交叉熵 + 反向传播”,<strong>只是把训练数据从“互联网文本”换成了“标准问答范文”</strong>,并没有换算法。
         </p>
         <div class="callout callout--analogy reveal">
           <span class="callout__title">一条 SFT 数据长什么样</span>
@@ -275,9 +275,9 @@
           (即“软目标”)——因为“它觉得‘吃饭’概率 0.6、‘干饭’0.2、‘用膳’0.05”这种<strong>细微的偏好</strong>本身就是宝贵知识。
         </p>
         <div class="callout callout--tip reveal">
-          <span class="callout__title">这里用上了第 18 章的温度</span>
+          <span class="callout__title">这里用上了<a class="xref" href="chapter-18.html">第 18 章</a>的温度</span>
           <p>
-            蒸馏时常把 softmax 的<strong>温度调高</strong>(第 18 章),让那些低概率但有意义的选项“显形”,
+            蒸馏时常把 softmax 的<strong>温度调高</strong>(<a class="xref" href="chapter-18.html">第 18 章</a>),让那些低概率但有意义的选项“显形”,
             学生才学得到这些“隐藏知识”。DeepSeek 就曾用 R1 蒸馏出多个小模型(如
             <code>DeepSeek-R1-Distill-Qwen-14B</code>,140 亿参数)开源给社区——学生虽小,却继承了老师不少本事。
           </p>
@@ -287,11 +287,11 @@
           <span class="callout__title">训练黑话速查(这些词在哪都会遇到)</span>
           <p>
             <strong>· epoch(轮次)</strong>:把全部训练数据完整过一遍叫一个 epoch;要读好几遍(常读常新),但每遍会打乱顺序防“死记硬背”。<br />
-            <strong>· batch(批)</strong>:一次喂进去的一小撮样本(第 5 章)。<br />
+            <strong>· batch(批)</strong>:一次喂进去的一小撮样本(<a class="xref" href="chapter-05.html">第 5 章</a>)。<br />
             <strong>· step(步)/迭代</strong>:用一个 batch 更新一次参数,叫一步。<br />
             <strong>· 超参数</strong>:不是模型自己学的参数,而是<strong>你手动设定</strong>的旋钮——学习率、层数、batch 大小等(第 5、9 章)。“超”只是“在模型参数之外”的意思,不神秘。<br />
             <strong>· 泛化</strong>:在<strong>没见过</strong>的数据上也表现好,就叫泛化能力强(适应力强)。<br />
-            <strong>· 过拟合 / 欠拟合</strong>:过拟合 = 训练集很好、测试集很差(“死记硬背”);欠拟合 = 训练集都学不好(模型太弱或没训够)。第 9 章讲过怎么缓解。
+            <strong>· 过拟合 / 欠拟合</strong>:过拟合 = 训练集很好、测试集很差(“死记硬背”);欠拟合 = 训练集都学不好(模型太弱或没训够)。<a class="xref" href="chapter-09.html">第 9 章</a>讲过怎么缓解。
           </p>
         </div>
 
@@ -304,7 +304,7 @@
         <h3>推理模型:先“想很久”,再作答</h3>
         <p>
           以 OpenAI o1、DeepSeek-R1 为代表的<span class="term">推理模型(reasoning model)</span>,核心变化是:
-          在给出最终答案前,先自己生成一大段<strong>思维链</strong>(第 21 章会细讲),一步步推演,想清楚了再回答。
+          在给出最终答案前,先自己生成一大段<strong>思维链</strong>(<a class="xref" href="chapter-21.html">第 21 章</a>会细讲),一步步推演,想清楚了再回答。
           相当于把“一步一步想”从<strong>你来提示</strong>,变成了模型<strong>天生就会、而且能想很长</strong>。
         </p>
         <ul>
@@ -322,13 +322,13 @@
         <h3>更长的上下文</h3>
         <p>
           早期模型一次只能读几千 token,如今动辄支持几十万甚至上百万——你能把一整本书、一个代码仓库丢进去让它一起看。
-          难点在第 16 章那句话:注意力计算量随长度<strong>平方</strong>增长,所以需要稀疏注意力等优化(第 20 章)才扛得住。
+          难点在<a class="xref" href="chapter-16.html">第 16 章</a>那句话:注意力计算量随长度<strong>平方</strong>增长,所以需要稀疏注意力等优化(<a class="xref" href="chapter-20.html">第 20 章</a>)才扛得住。
         </p>
 
         <h3>更省的架构、更强的“手脚”</h3>
         <ul>
-          <li><strong>MoE(混合专家)</strong>:每次只激活一部分“专家”子网络,用更少的实际计算撑起更大的参数量(第 20 章细讲)。DeepSeek-V3 就是典型。</li>
-          <li><strong>Agent(智能体)</strong>:让模型学会调用工具、上网、写代码、多步做事,从“会聊天”变成“能办事”(第 21 章细讲)。</li>
+          <li><strong>MoE(混合专家)</strong>:每次只激活一部分“专家”子网络,用更少的实际计算撑起更大的参数量(<a class="xref" href="chapter-20.html">第 20 章</a>细讲)。DeepSeek-V3 就是典型。</li>
+          <li><strong>Agent(智能体)</strong>:让模型学会调用工具、上网、写代码、多步做事,从“会聊天”变成“能办事”(<a class="xref" href="chapter-21.html">第 21 章</a>细讲)。</li>
         </ul>
         <div class="callout callout--note reveal">
           <span class="callout__title">万变不离其宗</span>
@@ -356,19 +356,19 @@
         </div>
         <p>
           好消息是:这些局限大多有<strong>工程解法</strong>——给它接上实时检索(RAG)、外部工具(function calling)、
-          让它调用计算器或搜索引擎。这些正是第 21 章的主题。把它当成一个
+          让它调用计算器或搜索引擎。这些正是<a class="xref" href="chapter-21.html">第 21 章</a>的主题。把它当成一个
           <strong>强大但会犯错的概率文本生成器</strong>,而不是全知神谕,你就能用得又稳又好。
         </p>
 
         <h2>9. 你已经走通了主干</h2>
         <p>回头看看这一路搭起来的东西:</p>
         <ul>
-          <li>从<strong>一个神经元</strong>的加权求和 + 激活(第 2 章),</li>
-          <li>到堆成<strong>网络(MLP)</strong>、让数据<strong>前向</strong>流动(第 3 章),</li>
+          <li>从<strong>一个神经元</strong>的加权求和 + 激活(<a class="xref" href="chapter-02.html">第 2 章</a>),</li>
+          <li>到堆成<strong>网络(MLP)</strong>、让数据<strong>前向</strong>流动(<a class="xref" href="chapter-03.html">第 3 章</a>),</li>
           <li>用<strong>损失</strong>衡量错误、靠<strong>梯度下降</strong>和<strong>反向传播</strong>学习(第 4–6 章),</li>
-          <li>再用<strong>现代训练栈</strong>把它训稳(第 9 章),</li>
+          <li>再用<strong>现代训练栈</strong>把它训稳(<a class="xref" href="chapter-09.html">第 9 章</a>),</li>
           <li>用<strong>注意力</strong>处理序列、拼出<strong>Transformer</strong>(第 15–17 章),</li>
-          <li>做成会写字的<strong>语言模型</strong>(第 18 章),</li>
+          <li>做成会写字的<strong>语言模型</strong>(<a class="xref" href="chapter-18.html">第 18 章</a>),</li>
           <li>最后放大成<strong>大模型</strong>,并学会它是怎么训练、为何有局限(本章)。</li>
         </ul>
         <p>
@@ -379,9 +379,9 @@
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>大模型内核 = 第 18 章的“预测下一个 token + 自回归”,只是规模大上亿倍。</li>
+            <li>大模型内核 = <a class="xref" href="chapter-18.html">第 18 章</a>的“预测下一个 token + 自回归”,只是规模大上亿倍。</li>
             <li>真实分词用 BPE/子词:高频组合合并成一个 token,存进词表;词表大小是权衡。</li>
-            <li>词嵌入把词变成“语义坐标”,点积/余弦相似度衡量语义远近;词向量可迁移复用。</li>
+            <li>词嵌入把词变成“语义坐标”,<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦相似度衡量语义远近;词向量可迁移复用。</li>
             <li>Scaling Law:参数、数据、算力一起放大,性能可预测提升;超过门槛会“涌现”新能力。</li>
             <li>预训练(自监督)练出底座能力;后训练(SFT → RLHF/DPO → 蒸馏)把它调成好用的助手,这也是 base 与 chat 模型的区别。</li>
             <li>最近方向:推理模型(先想很久再答)、多模态、长上下文、MoE——内核仍是 token + Transformer + 预测下一个 token。</li>
@@ -400,7 +400,7 @@
           <details class="quiz__item">
             <summary class="quiz__q">问题 2:为什么用“向量夹角/点积”而不是“距离”来衡量词的语义相似度?</summary>
             <div class="quiz__a">
-              <p>因为训练中向量会被整体拉伸或缩放,距离会“强烈波动”,不稳定;而方向(夹角)更能反映本质的语义关系。点积/余弦相似度只看方向,点积越大夹角越小、语义越近。</p>
+              <p>因为训练中向量会被整体拉伸或缩放,距离会“强烈波动”,不稳定;而方向(夹角)更能反映本质的语义关系。<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦相似度只看方向,点积越大夹角越小、语义越近。</p>
             </div>
           </details>
           <details class="quiz__item">

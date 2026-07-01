@@ -41,15 +41,15 @@
         <h2>2. 两种老办法,各有硬伤</h2>
         <p><strong>老办法一:把整句话压成一个向量。</strong> 先把所有词的信息硬塞进一个固定大小的向量,再交给前面学的 MLP。问题是:句子越长,这个向量就越“挤”,细节被严重压缩——这叫<span class="term">信息瓶颈</span>。</p>
         <p>
-          <strong>老办法二:按顺序一个一个传,也就是上一部分的 RNN。</strong> 它用隐藏状态把“记忆”一路往后递(第 13 章)。
+          <strong>老办法二:按顺序一个一个传,也就是上一部分的 RNN。</strong> 它用隐藏状态把“记忆”一路往后递(<a class="xref" href="chapter-13.html">第 13 章</a>)。
           思路很自然,但我们已经看到它的<strong>两个硬伤</strong>:
         </p>
         <ul>
-          <li><strong>远距离会“失忆”</strong>:信息像传话游戏,每传一步就被改写一点,隔得远的词之间依赖几乎学不到(梯度消失,第 13 章)。</li>
-          <li><strong>快不起来</strong>:严格<strong>串行</strong>,第 5 个词的隐藏状态得等第 4 个算完,没法拆给一堆 GPU 同时算——训大模型时是致命瓶颈(第 20 章)。</li>
+          <li><strong>远距离会“失忆”</strong>:信息像传话游戏,每传一步就被改写一点,隔得远的词之间依赖几乎学不到(梯度消失,<a class="xref" href="chapter-13.html">第 13 章</a>)。</li>
+          <li><strong>快不起来</strong>:严格<strong>串行</strong>,第 5 个词的隐藏状态得等第 4 个算完,没法拆给一堆 GPU 同时算——训大模型时是致命瓶颈(<a class="xref" href="chapter-20.html">第 20 章</a>)。</li>
         </ul>
         <p>
-          LSTM(第 13 章)用门控缓解了“失忆”,但“<strong>串行慢</strong>”始终没解决。我们真正想要的,是一个
+          LSTM(<a class="xref" href="chapter-13.html">第 13 章</a>)用门控缓解了“失忆”,但“<strong>串行慢</strong>”始终没解决。我们真正想要的,是一个
           <strong>既能一步连接远处、又能并行</strong>的新思路。
         </p>
 

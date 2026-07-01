@@ -87,7 +87,7 @@
         </ul>
         <p>
           一个真实的大模型,可能有<strong>几十亿甚至上万亿个这样的旋钮</strong>。
-          但别怕,它们每一个的作用,都和我们第 2 章要拆开看的那一个神经元里的旋钮,
+          但别怕,它们每一个的作用,都和我们<a class="xref" href="chapter-02.html">第 2 章</a>要拆开看的那一个神经元里的旋钮,
           <em>本质上一模一样</em>。
         </p>
 
@@ -189,6 +189,12 @@
           这意味着书里讲的每一个概念——神经元、激活函数、反向传播、注意力——你都能在代码里翻到它<strong>真正是怎么算的</strong>,
           而不是被一句 <code>import</code> 藏起来。仓库的结构是这样的:
         </p>
+        <p class="muted">
+          在线阅读:
+          <a class="xref" href="https://chenxuan520.github.io/deeplearning/" target="_blank" rel="noopener">chenxuan520.github.io/deeplearning</a>
+          · 源码:
+          <a class="xref" href="https://github.com/chenxuan520/deeplearning" target="_blank" rel="noopener">github.com/chenxuan520/deeplearning</a>
+        </p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">仓库结构(精简)</figcaption>
           <pre class="code-walk__code"><code>deeplearning/
@@ -198,11 +204,11 @@
 │  │  ├─ activate/              激活函数 ReLU/Sigmoid/GELU…
 │  │  ├─ loss/  softmax/        损失函数 与 softmax
 │  │  ├─ optimizer/             SGD / Momentum / Adam / AdamW
-│  │  ├─ lr_scheduler/          学习率调度
+│  │  ├─ lr_scheduler/          <a class="xref" href="chapter-09.html#3-学习率不必一成不变-调度器">学习率调度</a>
 │  │  └─ transformer/           注意力 / Block / mini 语言模型
 │  ├─ demo/                  <b class="cw-tag">2</b>  可运行的示例程序
-│  │  ├─ mnist/                 手写数字识别   (第 22 章精读)
-│  │  ├─ transformer_char/      字符级语言模型 (第 23 章精读)
+│  │  ├─ mnist/                 手写数字识别   (<a class="xref" href="chapter-22.html">第 22 章</a>精读)
+│  │  ├─ transformer_char/      字符级语言模型 (<a class="xref" href="chapter-23.html">第 23 章</a>精读)
 │  │  └─ optimizer_bench/       优化器对比
 │  └─ test/                     单元测试
 └─ docs/dl-book/             <b class="cw-tag">3</b>  你正在读的这本书</code></pre>
@@ -219,14 +225,14 @@
               <tr><th>书里的概念</th><th>代码里的真身</th><th>章节</th></tr>
             </thead>
             <tbody>
-              <tr><td>一个神经元 · 激活函数</td><td><code>activate/</code> + <code>neural_network</code></td><td>第 2 章</td></tr>
-              <tr><td>网络 · 前向传播</td><td><code>neural_network</code>(ForwardPropagation)</td><td>第 3 章</td></tr>
-              <tr><td>损失 · softmax</td><td><code>loss/</code> + <code>softmax/</code></td><td>第 4 章</td></tr>
+              <tr><td>一个神经元 · 激活函数</td><td><code>activate/</code> + <code>neural_network</code></td><td><a class="xref" href="chapter-02.html">第 2 章</a></td></tr>
+              <tr><td>网络 · 前向传播</td><td><code>neural_network</code>(ForwardPropagation)</td><td><a class="xref" href="chapter-03.html">第 3 章</a></td></tr>
+              <tr><td>损失 · softmax</td><td><code>loss/</code> + <code>softmax/</code></td><td><a class="xref" href="chapter-04.html">第 4 章</a></td></tr>
               <tr><td>梯度下降 · 反向传播</td><td><code>neural_network</code>(BackPropagation)</td><td>第 5–6 章</td></tr>
-              <tr><td>优化器 · 学习率调度</td><td><code>optimizer/</code> + <code>lr_scheduler/</code></td><td>第 9 章</td></tr>
+              <tr><td>优化器 · <a class="xref" href="chapter-09.html#3-学习率不必一成不变-调度器">学习率调度</a></td><td><code>optimizer/</code> + <code>lr_scheduler/</code></td><td><a class="xref" href="chapter-09.html">第 9 章</a></td></tr>
               <tr><td>注意力 · 多头</td><td><code>transformer/self_attention</code></td><td>第 15–16 章</td></tr>
-              <tr><td>Transformer Block</td><td><code>transformer/transformer_block</code>、<code>layer_norm</code></td><td>第 17 章</td></tr>
-              <tr><td>分词 · 词嵌入 · 生成</td><td><code>transformer/</code>(tokenizer / embedding / LM)</td><td>第 18 章</td></tr>
+              <tr><td>Transformer Block</td><td><code>transformer/transformer_block</code>、<code>layer_norm</code></td><td><a class="xref" href="chapter-17.html">第 17 章</a></td></tr>
+              <tr><td>分词 · 词嵌入 · 生成</td><td><code>transformer/</code>(tokenizer / embedding / LM)</td><td><a class="xref" href="chapter-18.html">第 18 章</a></td></tr>
             </tbody>
           </table>
           <p class="calc-table__cap">每一章末尾都有对应的“逐行代码”讲解;想跑起来,照第 22、23 章的运行提示即可。</p>
@@ -277,7 +283,7 @@
 
         <p class="muted">
           准备好了吗?<strong>下一章</strong>先花一点点篇幅,把后面会用到的数学——向量、点积、矩阵、导数、链式法则——
-          用大白话过一遍(已经熟的话可直接跳到<strong>第 2 章「一个神经元」</strong>),再正式开拆那台“带旋钮的机器”。
+          用大白话过一遍(已经熟的话可直接跳到<strong><a class="xref" href="chapter-02.html">第 2 章</a>「一个神经元」</strong>),再正式开拆那台“带旋钮的机器”。
         </p>
       </div>
     </main>

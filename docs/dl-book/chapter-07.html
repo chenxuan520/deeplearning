@@ -15,7 +15,7 @@
         <h1>激活函数全家福</h1>
 
         <p class="lead">
-          第 2 章我们说过,一个神经元 = <strong>加权求和 + 一个激活函数</strong>。那个不起眼的激活函数,
+          <a class="xref" href="chapter-02.html">第 2 章</a>我们说过,一个神经元 = <strong>加权求和 + 一个激活函数</strong>。那个不起眼的激活函数,
           其实是让神经网络<strong>拥有“威力”的关键开关</strong>——没有它,再深的网络也退化成一条直线。
           这一章把常见的几个激活函数摆到一起:看它们的<strong>曲线、导数、脾气</strong>,以及到底该用哪个。
         </p>
@@ -55,7 +55,7 @@
         </p>
         <ul>
           <li><strong>形状</strong>:它把输入“压”成什么样(压到 0~1?还是砍掉负数?);</li>
-          <li><strong>斜率(导数)</strong>:曲线在各处有多陡。<strong>斜率≈0 的地方,梯度会“断流”</strong>——因为反向传播要乘上这个导数(第 6 章的链式法则),导数接近 0,传回去的梯度就几乎消失了。</li>
+          <li><strong>斜率(导数)</strong>:曲线在各处有多陡。<strong>斜率≈0 的地方,梯度会“断流”</strong>——因为反向传播要乘上这个导数(<a class="xref" href="chapter-06.html#1-链式法则-一段段地追责任">第 6 章的链式法则</a>),导数接近 0,传回去的梯度就几乎消失了。</li>
         </ul>
         <div class="figure reveal">
           <div class="diagram">
@@ -138,13 +138,13 @@
           <li><strong>默认从 ReLU 开始</strong>:简单、快、够用,大多数情况先上它。</li>
           <li>担心<strong>死亡 ReLU</strong>(比如很深、或调大了学习率)→ 换 <strong>LeakyReLU</strong>。</li>
           <li>做 <strong>Transformer / 语言模型</strong> → 用 <strong>GELU</strong>(和主流保持一致)。</li>
-          <li><strong>输出层</strong>要“概率”→ 用 Sigmoid(二分类)或 Softmax(多分类,第 4 章);<strong>隐藏层一般不用</strong> Sigmoid/Tanh(容易梯度消失)。</li>
+          <li><strong>输出层</strong>要“概率”→ 用 Sigmoid(二分类)或 Softmax(多分类,<a class="xref" href="chapter-04.html">第 4 章</a>);<strong>隐藏层一般不用</strong> Sigmoid/Tanh(容易梯度消失)。</li>
         </ul>
 
         <h2>5. 在代码里长什么样</h2>
         <p>
           本仓库把激活函数抽象成一个统一接口:每个激活至少实现“<strong>正向 <code>Activate</code></strong>”和
-          “<strong>求导 <code>DerivActivate</code></strong>”两件事。反向传播时(第 6 章),就是要乘上这个导数。
+          “<strong>求导 <code>DerivActivate</code></strong>”两件事。反向传播时(<a class="xref" href="chapter-06.html">第 6 章</a>),就是要乘上这个导数。
         </p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/activate/activate_base.h(精简)</figcaption>
@@ -162,13 +162,13 @@ class ActivateFunction {
           <ol class="code-walk__notes">
             <li>五种激活各是一个子类,用一个枚举 + 工厂(<code>ActivateFactory</code>)来选,想加新激活只要照抄这套模式。</li>
             <li><code>Activate</code> 是正向:输入 <var>z</var>,输出激活后的值。ReLU 就是一句 <code>max(0, x)</code>。</li>
-            <li><code>DerivActivate</code> 是求导,反向传播要用它。Sigmoid/ReLU 用输出就能算导数;<strong>GELU 需要额外知道输入 <var>z</var></strong>,所以多了一个 2 参版本(第 6 章埋过这个伏笔)。</li>
+            <li><code>DerivActivate</code> 是求导,反向传播要用它。Sigmoid/ReLU 用输出就能算导数;<strong>GELU 需要额外知道输入 <var>z</var></strong>,所以多了一个 2 参版本(<a class="xref" href="chapter-06.html">第 6 章</a>埋过这个伏笔)。</li>
           </ol>
         </figure>
         <div class="callout callout--note reveal">
           <span class="callout__title">和梯度的关系,一句话串起来</span>
           <p>
-            反向传播时(第 6 章),每经过一个激活函数,就要<strong>乘一次它的导数</strong>。所以“导数会不会变成 0”
+            反向传播时(<a class="xref" href="chapter-06.html">第 6 章</a>),每经过一个激活函数,就要<strong>乘一次它的导数</strong>。所以“导数会不会变成 0”
             直接决定“梯度能不能传回去”——这正是我们挑激活函数时最在意的事,也是 ReLU 打败 Sigmoid 的根本原因。
           </p>
         </div>

@@ -80,7 +80,7 @@
         <ul>
           <li><strong>参数</strong>本身(那 1750 亿个权重);</li>
           <li>每个参数的<strong>梯度</strong>(反向传播算出的更新量,和参数一样多);</li>
-          <li>优化器的<strong>状态</strong>(比如 Adam 要为每个参数多存两个量,第 9 章);</li>
+          <li>优化器的<strong>状态</strong>(比如 Adam 要为每个参数多存两个量,<a class="xref" href="chapter-09.html">第 9 章</a>);</li>
           <li>前向时的<strong>激活值</strong>(留着反向传播用,第 3、6 章)。</li>
         </ul>
         <p>
@@ -173,8 +173,8 @@
         <h2>7. 推理提速:让它“回答得快”</h2>
         <p>训练是一次性的苦工,推理(你每次提问)却要天天做、追求又快又省。几个关键招数:</p>
         <ul>
-          <li><span class="pill">KV cache</span>最重要的一招。自回归生成时(第 18 章),每多写一个词,<strong>前面那些词的 Key、Value 并不会变</strong>
-          (第 16 章)。把它们缓存下来,新词只算自己的部分,省掉海量重复计算,生成因此快很多。它直接建立在你学过的 Q/K/V 之上。</li>
+          <li><span class="pill">KV cache</span>最重要的一招。自回归生成时(<a class="xref" href="chapter-18.html">第 18 章</a>),每多写一个词,<strong>前面那些词的 Key、Value 并不会变</strong>
+          (<a class="xref" href="chapter-16.html">第 16 章</a>)。把它们缓存下来,新词只算自己的部分,省掉海量重复计算,生成因此快很多。它直接建立在你学过的 Q/K/V 之上。</li>
           <li><span class="pill">批处理(batching)</span>把很多用户的请求<strong>攒成一批</strong>一起算,充分喂饱 GPU 的上万个核,提高吞吐。</li>
           <li><span class="pill">量化</span>推理用低精度权重(第 4 节),又快又省显存。</li>
         </ul>
@@ -188,7 +188,7 @@
 
         <h3>① 到底把什么换成了“专家”?</h3>
         <p>
-          回忆第 17 章:一块 Transformer Block = 注意力 + 前馈网络(FFN)。MoE 动的<strong>不是注意力,而是那层 FFN</strong>——
+          回忆<a class="xref" href="chapter-17.html">第 17 章</a>:一块 Transformer Block = 注意力 + 前馈网络(FFN)。MoE 动的<strong>不是注意力,而是那层 FFN</strong>——
           把原来<strong>一个</strong> FFN,换成<strong>并排的许多个</strong>结构相同的 FFN,每一个就叫一个<span class="term">专家(expert)</span>。
           注意力照旧由所有 token 共享;真正“分家”的只是 FFN 这一层。
         </p>
@@ -264,7 +264,7 @@ for (e : top)                          // 只计算被选中的专家
           <ol class="code-walk__notes">
             <li>门控网络就是一个小小的线性层 <code>W_gate</code>,把 token 映射成“对每个专家的偏好分”。</li>
             <li>取 top-k(这里 k=2)——<strong>“稀疏”正来自这一步</strong>:N 个专家每次只点亮 k 个。</li>
-            <li>每个被选中的专家是一个<strong>完整 FFN(第 17 章)</strong>,各自输出再按门控分加权相加。</li>
+            <li>每个被选中的专家是一个<strong>完整 FFN(<a class="xref" href="chapter-17.html">第 17 章</a>)</strong>,各自输出再按门控分加权相加。</li>
             <li>关键:算力只花在 k 个专家上,<strong>和专家总数 N 无关</strong>——这就是“参数多、算得少”。</li>
           </ol>
         </figure>
@@ -298,10 +298,10 @@ for (e : top)                          // 只计算被选中的专家
 
         <h2>9. 稀疏注意力:不必“人人都聊”</h2>
         <p>
-          第 16 章的注意力是“<strong>稠密</strong>”的:每个 token 都要和其他<strong>所有</strong> token 两两打分。
+          <a class="xref" href="chapter-16.html">第 16 章</a>的注意力是“<strong>稠密</strong>”的:每个 token 都要和其他<strong>所有</strong> token 两两打分。
           长度为 <var>n</var>,计算量就是 <var>n</var>×<var>n</var>——长度翻倍,计算和显存<strong>翻四倍</strong>。
           <var>n</var>=1000 时是百万对还好,可长上下文动辄 <var>n</var>=十万,那就是<strong>百亿量级</strong>的两两打分
-          (还得每层、每个头都来一遍),这正是第 19 章“长上下文难”的根子。
+          (还得每层、每个头都来一遍),这正是<a class="xref" href="chapter-19.html">第 19 章</a>“长上下文难”的根子。
         </p>
         <p>
           <span class="term">稀疏注意力(sparse attention)</span>的想法很朴素:<strong>没必要人人都聊</strong>。
@@ -375,7 +375,7 @@ for (e : top)                          // 只计算被选中的专家
           <span class="callout__title">DeepSeek-V3.2 的稀疏注意力(DSA)</span>
           <p>
             它用一个叫<strong>“闪电索引器(lightning indexer)”</strong>的小模块,为每个 query 飞快选出 top-k 个最该看的历史 token,
-            只对这 top-k 算注意力。说白了,就是把第 18 章的 <strong>top-k</strong> 思想从“挑下一个字”搬到了“挑该关注的 token”上,
+            只对这 top-k 算注意力。说白了,就是把<a class="xref" href="chapter-18.html">第 18 章</a>的 <strong>top-k</strong> 思想从“挑下一个字”搬到了“挑该关注的 token”上,
             让长上下文推理成本大幅下降。
           </p>
         </div>
@@ -427,7 +427,7 @@ for (e : top)                          // 只计算被选中的专家
           <details class="quiz__item">
             <summary class="quiz__q">问题 3:KV cache 为什么能加速生成?它依赖哪一章的知识?</summary>
             <div class="quiz__a">
-              <p>自回归生成时,已经出现的词的 Key/Value 不会改变,缓存起来就不必每步重算,新词只算自己的部分。它直接建立在第 16 章注意力的 Q/K/V 机制之上。</p>
+              <p>自回归生成时,已经出现的词的 Key/Value 不会改变,缓存起来就不必每步重算,新词只算自己的部分。它直接建立在<a class="xref" href="chapter-16.html">第 16 章</a>注意力的 Q/K/V 机制之上。</p>
             </div>
           </details>
           <details class="quiz__item">

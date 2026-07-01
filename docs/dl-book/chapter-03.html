@@ -59,8 +59,8 @@
           </p>
           <ul>
             <li><span class="pill">MLP 多层感知机</span>最朴素:层层全连接。适合固定长度的输入(一张图、一行特征)。<strong>本书第 2–9 章的主角。</strong></li>
-            <li><span class="pill">CNN 卷积网络</span>擅长图像:用一个小窗口在图片上滑动、找局部花纹(边缘、纹理)。<strong>第 12 章的主角。</strong></li>
-            <li><span class="pill">RNN 循环网络</span>擅长序列:像接力一样一个词一个词地读,把“记忆”往后传。<strong>第 13 章会细讲它的思路和短板。</strong></li>
+            <li><span class="pill">CNN 卷积网络</span>擅长图像:用一个小窗口在图片上滑动、找局部花纹(边缘、纹理)。<strong><a class="xref" href="chapter-12.html">第 12 章</a>的主角。</strong></li>
+            <li><span class="pill">RNN 循环网络</span>擅长序列:像接力一样一个词一个词地读,把“记忆”往后传。<strong><a class="xref" href="chapter-13.html">第 13 章</a>会细讲它的思路和短板。</strong></li>
             <li><span class="pill">Transformer</span>今天大模型的主流:靠“注意力”让每个词直接看全局,又快又强。<strong>第 15–17 章的主角。</strong></li>
           </ul>
           <p>它们的“零件”(神经元、权重、激活、损失、梯度下降)完全一样,只是搭法不同。学透 MLP,后面都是变体。</p>
@@ -145,7 +145,7 @@
           下面这个动画,把一个 2 → 3 → 1 的网络画了出来。请先点
           <strong>“切到前向传播”</strong>,然后反复点 <strong>“下一步”</strong>,
           observe 数据是怎么从输入层,逐层算到输出层的。
-          (反向传播的部分先不用管,那是第 6 章的内容,这里你可以只看前向。)
+          (反向传播的部分先不用管,那是<a class="xref" href="chapter-06.html">第 6 章</a>的内容,这里你可以只看前向。)
         </p>
 
         <div class="figure reveal">
@@ -203,7 +203,7 @@ for (int l = 1; l &lt; L; l++) {
             <li><code>in_vec</code> 指向<strong>上一层的输出</strong>——当前层的输入,就是上一层的输出,前向传播的精髓。</li>
             <li>每个神经元先用自己的偏置 <var>b</var> 作为 <var>z</var> 的起点(对应公式里的 <code>+ b</code>)。</li>
             <li>把上一层每个输出乘对应权重,逐个累加进 <var>z</var>。这三层循环 <code>l / o / i</code> 念作:“第 l 层的第 o 个神经元,收集来自上一层第 i 个输入的贡献”——正是 <var>z</var> = <var>Σ w·x</var> + <var>b</var>。</li>
-            <li>把激活前的 <var>z</var> 存进 <code>neuron_preact_</code>。还记得第 2 章的伏笔吗?反向传播算梯度时要用到它。</li>
+            <li>把激活前的 <var>z</var> 存进 <code>neuron_preact_</code>。还记得<a class="xref" href="chapter-02.html">第 2 章</a>的伏笔吗?反向传播算梯度时要用到它。</li>
             <li><var>z</var> 过激活函数,得到这个神经元的输出;它马上会成为下一层的 <code>in_vec</code>,继续向前流。</li>
           </ol>
         </figure>
@@ -250,7 +250,7 @@ for (int l = 1; l &lt; L; l++) {
           <details class="quiz__item">
             <summary class="quiz__q">问题 3:为什么前向时要特地把每层的 <var>z</var> 存进 <code>neuron_preact_</code>?</summary>
             <div class="quiz__a">
-              <p>因为第 6 章反向传播算梯度时,需要每个神经元“激活前的净输入 <var>z</var>”来计算激活函数的导数(尤其是像 GELU 这种必须用 input 才能求导的激活)。前向时顺手存好,反向时直接取用。</p>
+              <p>因为<a class="xref" href="chapter-06.html">第 6 章</a>反向传播算梯度时,需要每个神经元“激活前的净输入 <var>z</var>”来计算激活函数的导数(尤其是像 GELU 这种必须用 input 才能求导的激活)。前向时顺手存好,反向时直接取用。</p>
             </div>
           </details>
         </div>

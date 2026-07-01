@@ -15,7 +15,7 @@
         <h1>怎么变“好”:梯度下降</h1>
 
         <p class="lead">
-          上一章我们把“错”变成了一个数字——损失。现在的问题非常具体:
+          上一章我们把“错”变成了一个数字——<a class="xref" href="chapter-04.html#1-为什么要把错变成一个数字">损失</a>。现在的问题非常具体:
           <strong>该把每个参数往哪个方向、调多大,才能让这个数字变小?</strong>
           答案是深度学习的发动机:<span class="term">梯度下降(gradient descent)</span>。
         </p>
@@ -75,7 +75,7 @@
         <h2>2. “梯度”就是最陡的方向</h2>
         <p>
           “脚下最陡的方向”,在数学里有个名字叫<span class="term">梯度(gradient)</span>。
-          它其实就是损失对每个参数的<strong>导数</strong>:导数告诉你“这个参数动一点点,损失会朝哪边变、变多快”。
+          它其实就是损失对每个参数的<strong><a class="xref" href="chapter-01.html#5-导数-斜率告诉你往哪走会变大">导数</a></strong>:导数告诉你“这个参数动一点点,损失会朝哪边变、变多快”。
         </p>
         <ul>
           <li>导数为<strong>正</strong>:增大这个参数,损失会上升 → 所以我们要<strong>减小</strong>它;</li>
@@ -105,7 +105,7 @@
           <p>
             下一章的“前向 / 反向传播动画”里有一个 <strong>Learning Rate 滑块</strong>,
             你可以拖动它,观察同样的梯度下,参数每一步被改动的幅度如何随学习率变化。
-            到第 9 章我们还会让学习率在训练过程中<strong>动态变化</strong>(学习率调度)。
+            到<a class="xref" href="chapter-09.html">第 9 章</a>我们还会让学习率在训练过程中<strong>动态变化</strong>(<a class="xref" href="chapter-09.html#3-学习率不必一成不变-调度器">学习率调度</a>)。
           </p>
         </div>
 
@@ -128,8 +128,8 @@ BackPropagationBatch(batch_target);    <b class="cw-tag">3</b>
 ApplyGradient(B);                      <b class="cw-tag">4</b></code></pre>
           <ol class="code-walk__notes">
             <li>打乱顺序,避免模型“记住样本的排列”,让每一批都更有代表性。</li>
-            <li>对这一小批做前向传播,得到预测(第 3 章)。</li>
-            <li>反向传播,算出这一批里每个参数的梯度(第 6 章马上讲)。</li>
+            <li>对这一小批做<a class="xref" href="chapter-03.html#2-前向传播-数据一层层往前流">前向传播</a>,得到预测(<a class="xref" href="chapter-03.html">第 3 章</a>)。</li>
+            <li>反向传播,算出这一批里每个参数的梯度(<a class="xref" href="chapter-06.html">第 6 章</a>马上讲)。</li>
             <li>用算好的梯度更新一次参数。<code>B</code> 是这批的样本数,用来把梯度取平均。</li>
           </ol>
         </figure>
@@ -144,7 +144,7 @@ if (weight_pos != -1 &amp;&amp; weight_decay_ != 0.0)
 return learning_rate * g;                          <b class="cw-tag">3</b></code></pre>
           <ol class="code-walk__notes">
             <li><code>delta</code> 就是这个参数的梯度(由反向传播算出)。</li>
-            <li>(可选)weight decay / L2 正则:把权重稍微往 0 拉一点,抑制过拟合;注意只对权重做,偏置不动(<code>weight_pos != -1</code> 才进来)。第 9 章细讲。</li>
+            <li>(可选)weight decay / L2 正则:把权重稍微往 0 拉一点,抑制过拟合;注意只对权重做,偏置不动(<code>weight_pos != -1</code> 才进来)。<a class="xref" href="chapter-10.html#3-l2-正则-权重衰减">第 10 章</a>细讲。</li>
             <li>返回“这一步要改变的量” = 学习率 × 梯度。这正是更新公式里的 <var>η</var>·梯度。</li>
           </ol>
         </figure>
@@ -158,7 +158,7 @@ double w_change = optimizer_function_-&gt;CalcChangeValue(
     avg_dw, learning_rate_, {l, o}, i, w_row[i]);
 w_row[i] -= w_change;                               <b class="cw-tag">3</b></code></pre>
           <ol class="code-walk__notes">
-            <li>先通知优化器“新的一步开始了”。对 SGD 这是空操作;但对 Adam 这类优化器,它会在这里推进内部的计步器(第 9 章)。</li>
+            <li>先通知优化器“新的一步开始了”。对 SGD 这是空操作;但对 Adam 这类优化器,它会在这里推进内部的计步器(<a class="xref" href="chapter-09.html">第 9 章</a>)。</li>
             <li>把累加的梯度乘以 <code>1/B</code>,得到这一批的<strong>平均梯度</strong>。</li>
             <li>算出改变量,再从参数里<strong>减掉</strong>它——这一行,就是 <var>w</var> ← <var>w</var> − <var>η</var>·梯度 的代码版本。</li>
           </ol>
@@ -169,7 +169,7 @@ w_row[i] -= w_change;                               <b class="cw-tag">3</b></cod
           <p>
             真实的损失地形坑坑洼洼,梯度下降可能停在某个“局部谷底”而不是最深的那个。
             但好消息是:在深度学习里,绝大多数局部谷底的效果都已经足够好,
-            而且后面第 9 章的动量、Adam 等技巧,能帮我们更稳地走下去。
+            而且后面<a class="xref" href="chapter-08.html#3-momentum-给下山加惯性">第 8 章的动量</a>、<a class="xref" href="chapter-08.html#5-adam-把两者合体默认之选">Adam</a> 等技巧,能帮我们更稳地走下去。
           </p>
         </div>
 
@@ -213,7 +213,7 @@ w_row[i] -= w_change;                               <b class="cw-tag">3</b></cod
 
         <p class="muted">
           我们一直说“反向传播会算出梯度”,但它到底怎么算?下一章就来揭开这个让无数初学者头疼、
-          其实只是“链式法则 + 一点耐心”的过程。
+          其实只是“<a class="xref" href="chapter-01.html#6-链式法则-复合函数怎么求导">链式法则</a> + 一点耐心”的过程。
         </p>
       </div>
     </main>
