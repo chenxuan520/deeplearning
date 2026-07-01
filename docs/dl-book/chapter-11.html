@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 11 章 · 通往大模型 | 深度学习入门</title>
+    <title>第 11 章 · 评估与数据 | 深度学习入门</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -11,193 +11,161 @@
   <body data-chapter="11">
     <main class="chapter">
       <div class="chapter__inner">
-        <p class="chapter__eyebrow">第 11 章 · 通往大模型</p>
-        <h1>通往大模型</h1>
+        <p class="chapter__eyebrow">第 11 章 · 学习是怎么发生的</p>
+        <h1>评估与数据</h1>
 
         <p class="lead">
-          你已经亲手把一个完整的语言模型从一个神经元拆到了底。最后这一章,我们站远一点:
-          把第 10 章那个小模型<strong>放大一万倍</strong>,会发生什么?
-          答案有点反高潮——<strong>核心原理几乎不变</strong>。大模型的“大”,主要大在规模、数据和一些工程技巧上。
-          理解了前面十章,你已经握住了大模型的钥匙。
+          上一章反复提到“训练集、验证集、看指标”。这一章把这件事讲透:数据该<strong>怎么分</strong>、
+          模型好不好该<strong>怎么量</strong>(为什么只看“准确率”会被骗)、数据进模型前要<strong>怎么预处理</strong>,
+          以及训练不动时的一份<strong>排查清单</strong>。这是把模型<strong>做对</strong>、而不只是<strong>跑起来</strong>的关键一章。
         </p>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>“规模化(scaling)”指的是放大什么,为什么越大越强;</li>
-            <li>预训练、微调、RLHF 这三步分别在做什么;</li>
-            <li>“涌现能力”“上下文窗口”“KV cache”这些热词到底指什么;</li>
-            <li>大模型的局限在哪,该如何理性看待它。</li>
+            <li><strong>train / val / test</strong> 三个数据集各自的职责,以及“测试集不能碰”的铁律;</li>
+            <li>数据少时怎么用<strong>交叉验证</strong>把每一条数据都用足;</li>
+            <li>为什么<strong>只看准确率会骗人</strong>,以及<strong>精确率 / 召回 / F1 / 混淆矩阵</strong>怎么读;</li>
+            <li>数据为什么要<strong>归一化</strong>(对照 MNIST 的 <code>[0,1]</code> 预处理);</li>
+            <li>训练“不降 / 发散 / 过拟合”时的一份<strong>调试清单</strong>。</li>
           </ul>
         </section>
 
-        <h2>1. 先看一个惊人的事实:内核没变</h2>
-        <p>
-          GPT 这类模型,做的事和你第 10 章那个 mini LM<strong>一模一样</strong>:
-          <em>看着前文,预测下一个 token,然后自回归地一个个往下写</em>。
-          区别只在量级:
-        </p>
-        <div class="figure figure--reading reveal">
-          <div class="diagram">
-            <div class="pipe">
-              <div class="pipe__box">本书 mini LM<small>几千参数 · 几句话语料 · CPU 几秒</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">GPT-3<small>1750 亿参数 · 几千亿词 · 上千 GPU 训数周</small></div>
-            </div>
-          </div>
-          <p class="figure__cap">同一套机制(Embedding + Transformer + 预测下一个 token),规模相差上亿倍。</p>
-        </div>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">最重要的一句话</span>
-          <p>
-            大模型不是用了什么你没学过的“黑魔法”。它就是把你已经理解的
-            <strong>注意力、Transformer Block、预测下一个 token</strong> 堆得更深、喂得更多、训得更久。
-          </p>
-        </div>
-
-        <h2>2. 规模化(Scaling):大力真的出奇迹</h2>
-        <p>
-          研究者发现一个惊人规律——<span class="term">Scaling Law(规模定律)</span>:
-          当你<strong>同时</strong>放大三样东西——<strong>参数量、数据量、算力</strong>——模型的损失会沿着一条
-          平滑、可预测的曲线持续下降。也就是说,“做得更大”能<strong>可靠地</strong>换来“做得更好”。
-        </p>
-        <p>
-          这条规律是过去几年“军备竞赛”的底气:既然变大几乎稳赚,那就拼命变大。
-          也正是在不断放大的过程中,出现了下面这件更神奇的事。
-        </p>
-
-        <h2>3. 涌现能力:量变到质变</h2>
-        <p>
-          <span class="term">涌现能力(emergent abilities)</span>指的是:
-          某些能力在小模型上<strong>几乎为零</strong>,但当规模越过某个门槛后,会<strong>突然出现</strong>。比如:
-        </p>
+        <h2>1. 三个数据集:学、调、考</h2>
+        <p>要诚实地评估泛化(第 10 章),必须把数据分成互不重叠的三份,各司其职:</p>
         <ul>
-          <li><strong>少样本学习(few-shot)</strong>:你在提示里给几个例子,它就能照着做新题,不需要重新训练;</li>
-          <li><strong>按步骤推理</strong>:让它“一步一步想”,复杂问题的正确率明显提高;</li>
-          <li><strong>遵循复杂指令</strong>:听懂并完成多步骤的任务。</li>
+          <li><span class="pill">训练集 train</span>用来<strong>学</strong>——反向传播更新参数,只用它。</li>
+          <li><span class="pill">验证集 val</span>用来<strong>调</strong>——边训边监控、选超参数(学习率、层数)、决定何时 early stop。它不参与更新参数,但你会“照着它做决定”。</li>
+          <li><span class="pill">测试集 test</span>用来<strong>考</strong>——<strong>最终一考</strong>,模拟“真实世界的新数据”。训练和调参全程<strong>绝不能碰</strong>,否则等于提前看了考题,分数不作数。</li>
         </ul>
-        <p>这些能力没有被任何人“显式编程”进去,而是在“预测下一个 token”这个朴素目标 + 巨大规模下,自己长出来的。</p>
-
-        <h2>4. 大模型是怎么炼成的:三步</h2>
         <div class="figure reveal">
           <div class="diagram">
-            <div class="pipe">
-              <div class="pipe__box">① 预训练<small>海量文本上预测下一个词</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">② 微调<small>用指令数据教它“听话”</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">③ RLHF<small>按人类偏好对齐</small></div>
-            </div>
+            <svg viewBox="0 0 460 90" role="img" aria-label="数据集划分比例示意">
+              <rect x="30" y="30" width="300" height="34" rx="6" fill="rgba(142,240,209,0.22)" stroke="#8ef0d1" stroke-width="1.5" />
+              <text x="180" y="52" text-anchor="middle" fill="#eef4ff" font-size="12">训练集 train(~80%)</text>
+              <rect x="334" y="30" width="46" height="34" rx="6" fill="rgba(106,195,255,0.2)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="357" y="52" text-anchor="middle" fill="#eef4ff" font-size="10">val</text>
+              <rect x="384" y="30" width="46" height="34" rx="6" fill="rgba(255,207,114,0.2)" stroke="#ffcf72" stroke-width="1.5" />
+              <text x="407" y="52" text-anchor="middle" fill="#eef4ff" font-size="10">test</text>
+            </svg>
           </div>
-          <p class="figure__cap">从“会接话的语料模型”到“有用的助手”,通常要走这三步。</p>
+          <p class="figure__cap">一种常见比例(80/10/10)。数据越多,val/test 的比例可以越小。关键是三份<strong>互不重叠</strong>。</p>
+        </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">最隐蔽的坑:数据泄漏(data leakage)</span>
+          <p>
+            如果测试集的信息<strong>偷偷</strong>进了训练(比如用全量数据算归一化参数、或同一张图既在训练又在测试),
+            你会得到一个虚高的分数,上线却翻车。<strong>预处理的统计量只能从训练集算</strong>,再套用到 val/test——这是纪律。
+          </p>
         </div>
 
-        <h3>① 预训练(Pre-training)</h3>
+        <h2>2. 数据太少?交叉验证</h2>
         <p>
-          在<strong>海量</strong>文本(整个互联网级别)上,做的就是第 10 章那件事:预测下一个词。
-          它<strong>不需要人工标注</strong>——文本本身就提供了答案(下一个词是什么是现成的),这叫
-          <span class="term">自监督</span>。这一步最烧钱、最耗时,但也是模型获得“通用语言能力和世界知识”的来源。
+          数据很少时,单独切一块出来当验证集太奢侈。<span class="term">K 折交叉验证</span>的做法:把数据平分成 K 份,
+          <strong>轮流</strong>拿其中 1 份当验证、其余 K−1 份训练,做 K 次,再把 K 次的成绩<strong>取平均</strong>。
+          这样每条数据都当过一次“考题”,评估更稳、也更省数据。代价是要训 K 次,算力换可靠。
         </p>
 
-        <h3>② 微调(Fine-tuning)</h3>
+        <h2>3. 只看“准确率”会骗人</h2>
         <p>
-          预训练完的模型“博学但不一定听话”。<span class="term">指令微调</span>用一批
-          “指令 + 理想回答”的数据继续训练,把它从“只会接着写”调教成“会回答你的问题、完成你的任务”。
-          这一步数据量小得多,但作用关键。
+          <span class="term">准确率(accuracy)</span> = 猜对的比例,直观,但在<strong>类别不平衡</strong>时会严重误导。举个例子:
         </p>
-
-        <h3>③ RLHF(基于人类反馈的强化学习)</h3>
-        <p>
-          为了让回答更<strong>有用、无害、诚实</strong>,还会用
-          <span class="term">RLHF</span>:先让人对模型的多个回答排序好坏,用这些偏好训练一个“打分模型”,
-          再用强化学习让大模型朝“人类更喜欢的回答”优化。今天聊天助手那种得体的语气和分寸,很多来自这一步。
-        </p>
-
-        <h2>5. 两个常被提到的工程词</h2>
-        <p>
-          <span class="term">上下文窗口(context window)</span>:模型一次最多能“看进去”多少 token。
-          早期 GPT 只有 2048,如今动辄十几万——窗口越大,能记住的上文越长。它受限于注意力的计算量
-          (回忆第 8 章:每个词要和所有词两两打分,长度翻倍计算量翻四倍)。
-        </p>
-        <p>
-          <span class="term">KV cache</span>:自回归生成时,每多写一个词,前面那些词的 Key、Value 其实
-          <strong>没变</strong>。把它们缓存下来,新词只需算自己的部分,就能避免大量重复计算,让生成快很多。
-          它直接建立在你第 8 章学的 Q/K/V 之上。
-        </p>
-
-        <h2>6. 清醒地看待它的局限</h2>
         <div class="callout callout--warn reveal">
-          <span class="callout__title">大模型并不“无所不知”</span>
+          <span class="callout__title">一个“99% 准确率”的废物模型</span>
           <p>
-            <strong>幻觉</strong>:它本质是在“预测最像样的下一个词”,所以会一本正经地编造看似合理、实则错误的内容。<br />
-            <strong>偏见</strong>:训练数据里的偏见会被它学进去。<br />
-            <strong>知识截止与不会真正“算”</strong>:它的知识停在训练数据那一刻,且并不真正理解,而是在做极其复杂的模式延续。
+            假设 1000 笔交易里只有 10 笔是欺诈。有个模型偷懒,<strong>无脑判所有交易都正常</strong>——
+            它的准确率是 <strong>990/1000 = 99%</strong>,看着很牛。可它<strong>一笔欺诈都没抓到</strong>,毫无用处。
+            准确率被“正常样本太多”给稀释了。这时就需要更细的指标。
+          </p>
+        </div>
+
+        <h2>4. 混淆矩阵、精确率、召回、F1</h2>
+        <p>
+          把“预测”和“实际”交叉列成一张 2×2 表,就是<span class="term">混淆矩阵</span>。以“抓欺诈”为例(欺诈=阳性):
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th></th><th>预测:欺诈</th><th>预测:正常</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>实际:欺诈</td><td class="is-hot">TP 真阳(抓对了)</td><td class="is-cold">FN 漏报(放跑了)</td></tr>
+              <tr><td>实际:正常</td><td class="is-cold">FP 误报(冤枉了)</td><td class="is-hot">TN 真阴(放对了)</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">TP/FP/FN/TN 四个格子,是下面所有指标的原料。</p>
+        </div>
+        <div class="mathblock reveal">
+          精确率 = <span class="frac"><span>TP</span><span>TP + FP</span></span> &nbsp;&nbsp;&nbsp; 召回率 = <span class="frac"><span>TP</span><span>TP + FN</span></span> &nbsp;&nbsp;&nbsp; F1 = 2 · <span class="frac"><span>精确率 · 召回率</span><span>精确率 + 召回率</span></span>
+          <span class="label">precision:抓的里有多少是真的;recall:真的里抓到了多少;F1:两者的调和平均</span>
+        </div>
+        <ul>
+          <li><strong>精确率(查准)</strong>:模型报“欺诈”的那些里,<strong>有多少真是欺诈</strong>。低了 = 老是误报冤枉好人。</li>
+          <li><strong>召回率(查全)</strong>:所有真欺诈里,<strong>被抓到了多少</strong>。低了 = 老是漏报放跑坏人。</li>
+          <li><strong>F1</strong>:精确率和召回率的<strong>调和平均</strong>,想“两个都不太差”时看它。</li>
+        </ul>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">查准和查全常常“按下葫芦浮起瓢”</span>
+          <p>
+            把判定门槛调严,报得少而准(精确率↑),但会漏掉更多(召回率↓);调松则相反。选哪个更重要看场景:
+            <strong>抓欺诈/查癌症宁可误报也别漏</strong>(重召回);<strong>垃圾邮件宁可漏也别把重要邮件误杀</strong>(重精确)。
           </p>
         </div>
         <p>
-          理解了原理,你就能更冷静地用它:把它当成一个<strong>极其强大但会犯错的概率文本生成器</strong>,
-          而不是一个全知的神谕。该核对的事实,仍然要核对。
+          回归任务(预测数值)则看 <strong>MSE / MAE</strong>(第 4 章);语言模型看<strong>困惑度</strong>(第 18 章)。
+          指标要<strong>配任务</strong>选,没有万能的一个数。
         </p>
 
-        <h2>7. 你已经走完了这条路</h2>
-        <p>回头看看你这一路搭起来的东西:</p>
-        <ul>
-          <li>从<strong>一个神经元</strong>的加权求和 + 激活(第 1 章),</li>
-          <li>到堆成<strong>网络</strong>、让数据<strong>前向</strong>流动(第 2 章),</li>
-          <li>用<strong>损失</strong>衡量错误、靠<strong>梯度下降</strong>和<strong>反向传播</strong>学习(第 3–5 章),</li>
-          <li>再用<strong>现代训练栈</strong>把它训稳(第 6 章),</li>
-          <li>用<strong>注意力</strong>处理序列、拼出<strong>Transformer</strong>(第 7–9 章),</li>
-          <li>最后做成会写字的<strong>语言模型</strong>(第 10 章)。</li>
-        </ul>
+        <h2>5. 数据预处理:先把数据“摆正”</h2>
         <p>
-          大模型,就是把这一整条链路,放到极致规模上的产物。
-          你手里这本书讲的每一个零件,都真实地活在那些上千亿参数的模型里。
-          <strong>从一个神经元到大模型,你已经把这条路,亲眼、亲手走了一遍。</strong>
+          原始数据往往量纲乱七八糟(有的特征 0~1,有的 0~10000)。直接喂进去,大数值特征会主导梯度、训练很不稳。
+          <span class="term">归一化 / 标准化</span>就是把各特征缩放到<strong>差不多的尺度</strong>。最常见两种:
         </p>
+        <ul>
+          <li><strong>归一化到 [0,1]</strong>:减最小值、除以范围。MNIST 的像素(0~255)就是这么除以 255 变成 [0,1] 的。</li>
+          <li><strong>标准化(zero-mean)</strong>:减均值、除标准差,变成“均值 0、标准差 1”。(是不是很眼熟?LayerNorm 就是这套,第 17 章。)</li>
+        </ul>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/mnist/mnist_data.h(思路)</figcaption>
+          <pre class="code-walk__code"><code>// 像素 0~255 归一化到 [0,1] 再喂进网络
+pixel_value = raw_pixel / 255.0;                <b class="cw-tag">1</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>本仓库的 MNIST 就把像素除以 255,压到 <code>[0,1]</code>(不是二值化)。<code>optimizer_bench</code> 也共用这份预处理。归一化后各特征尺度一致,训练更稳、更快。</li>
+          </ol>
+        </figure>
+
+        <h2>6. 训练不动?一份排查清单</h2>
+        <p>真上手训练,十有八九会遇到“不对劲”。按这个顺序排查,能解决大部分问题:</p>
+        <ul>
+          <li><strong>损失是 NaN / 直接发散</strong> → 学习率太大,先调小 10 倍;检查有没有忘了归一化;考虑梯度裁剪(第 9 章)。</li>
+          <li><strong>损失几乎不降</strong> → 学习率太小,或模型太弱/激活选错(第 7 章);先确认能在<strong>一小撮数据上过拟合</strong>(连背都背不下来,说明代码有 bug)。</li>
+          <li><strong>训练降、验证不降甚至回升</strong> → 过拟合,上正则化(第 10 章):weight decay、Dropout、early stop、更多数据。</li>
+          <li><strong>训练/验证差距很大又都不好</strong> → 可能数据有问题(标签错、泄漏、分布不一致),回头查数据。</li>
+        </ul>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">黄金第一步:先过拟合一小撮</span>
+          <p>
+            拿 <strong>10 条样本</strong>让模型<strong>死记到损失≈0</strong>。如果连这都做不到,基本是代码/数据管道有 bug,
+            而不是“模型不够强”。这一招能帮你在浪费大量算力前,先揪出低级错误。
+          </p>
+        </div>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>大模型的内核 = 第 10 章的“预测下一个 token + 自回归”,只是规模大上亿倍。</li>
-            <li>Scaling Law:同时放大参数、数据、算力,性能可预测地提升。</li>
-            <li>三步炼成:预训练(自监督学语言)→ 指令微调(学听话)→ RLHF(按人类偏好对齐)。</li>
-            <li>涌现能力随规模出现;上下文窗口和 KV cache 都直接建立在注意力之上。</li>
-            <li>它强大但会幻觉、有偏见、有知识截止——当作“强大但会错的工具”理性使用。</li>
+            <li><strong>train/val/test</strong>:学 / 调 / 考,三份互不重叠;测试集全程不能碰,当心数据泄漏。</li>
+            <li>数据少用 <strong>K 折交叉验证</strong>,每条数据都当一次考题。</li>
+            <li><strong>准确率在不平衡时会骗人</strong>;用<strong>混淆矩阵</strong>推出精确率(查准)、召回(查全)、F1。</li>
+            <li>指标要配任务:分类看 P/R/F1,回归看 MSE,语言模型看困惑度。</li>
+            <li>喂数据前先<strong>归一化</strong>(MNIST 除以 255);训练不动就按清单排查,先“过拟合一小撮”验证管道。</li>
           </ul>
         </section>
 
-        <h2>动手与思考</h2>
-        <div class="quiz reveal">
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 1:GPT 的预训练目标,和本书第 10 章的 mini LM 有什么关系?</summary>
-            <div class="quiz__a">
-              <p>本质完全相同:都是“看前文、预测下一个 token”的自监督任务。区别只在数据规模、参数规模和算力——原理你已经在第 10 章亲手实现过了。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 2:为什么大模型会“一本正经地胡说八道(幻觉)”?</summary>
-            <div class="quiz__a">
-              <p>因为它的训练目标是“预测最像样、最连贯的下一个词”,而不是“说真话”。当它对某事实没有可靠依据时,仍会生成看起来通顺合理、实则错误的内容。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 3:KV cache 为什么能加速生成?它和哪一章的知识相关?</summary>
-            <div class="quiz__a">
-              <p>自回归生成时,已经出现的词的 Key/Value 不会改变,缓存起来就不必每步重算,新词只算自己的部分。它直接建立在第 8 章注意力的 Q/K/V 机制之上。</p>
-            </div>
-          </details>
-        </div>
-
-        <div class="summary reveal" style="text-align:center">
-          <h2>全书完 · 谢谢你读到这里</h2>
-          <p>
-            你从一个最朴素的神经元出发,一步步理解了今天最前沿模型的核心原理。
-            接下来最好的学习方式,是去<strong>把配套的 C++ 代码跑起来、改一改</strong>:
-            调调激活函数、换换优化器、训训那个字符级语言模型,看看数字怎么变化。
-          </p>
-          <p class="muted">原理已经在你心里了,剩下的,交给好奇心和动手。</p>
-          <p style="margin-top:1.4rem"><a class="button button--primary" href="index.html">返回目录 / 重读某章</a></p>
-        </div>
+        <p class="muted">
+          到这里,“如何训练好一个网络”的完整功夫就齐了。接下来换个视角:
+          <strong>不同的数据,适合不同结构的网络</strong>。下一部分我们认识两位“专才”——
+          处理图像的 <strong>CNN</strong> 和处理序列的 <strong>RNN</strong>,先从卷积开始。
+        </p>
       </div>
     </main>
 

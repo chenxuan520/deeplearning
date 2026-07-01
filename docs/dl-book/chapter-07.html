@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 7 章 · 为什么需要注意力 | 深度学习入门</title>
+    <title>第 7 章 · 激活函数全家福 | 深度学习入门</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -11,139 +11,187 @@
   <body data-chapter="7">
     <main class="chapter">
       <div class="chapter__inner">
-        <p class="chapter__eyebrow">第 7 章 · 序列与 Transformer</p>
-        <h1>为什么需要注意力</h1>
+        <p class="chapter__eyebrow">第 7 章 · 学习是怎么发生的</p>
+        <h1>激活函数全家福</h1>
 
         <p class="lead">
-          到目前为止,我们的网络处理的都是“一个固定长度的特征向量”。
-          可现实里最重要的一类数据——<strong>语言</strong>——长得不一样:它是一串
-          <strong>有先后、有长短、词与词还互相关联</strong>的<span class="term">序列</span>。
-          这一章我们先想清楚:处理序列,旧网络到底卡在哪?注意力又是来救什么场的?
+          第 2 章我们说过,一个神经元 = <strong>加权求和 + 一个激活函数</strong>。那个不起眼的激活函数,
+          其实是让神经网络<strong>拥有“威力”的关键开关</strong>——没有它,再深的网络也退化成一条直线。
+          这一章把常见的几个激活函数摆到一起:看它们的<strong>曲线、导数、脾气</strong>,以及到底该用哪个。
         </p>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>“序列”这种数据为什么对前面的网络是个难题;</li>
-            <li>两种朴素做法各自的硬伤(信息瓶颈 / 传话衰减);</li>
-            <li>真正难的不是“词多”,而是“相关的词可能离得很远”;</li>
-            <li>注意力的一句话核心:让每个词<strong>直接看全局,自己决定关注谁</strong>。</li>
+            <li>为什么<strong>必须有非线性</strong>——没有激活函数,堆一百层也等于一层;</li>
+            <li>怎么“读”一张激活函数图,以及为什么<strong>导数(斜率)</strong>决定梯度好不好传;</li>
+            <li>Sigmoid / Tanh / ReLU / LeakyReLU / GELU 各自的样子和优缺点;</li>
+            <li>两个经典毛病:<strong>梯度消失</strong> 与 <strong>死亡 ReLU</strong>;</li>
+            <li>实战里<strong>到底该选哪个</strong>,以及它们在本仓库代码里长什么样。</li>
           </ul>
         </section>
 
-        <h2>1. 新挑战:句子是一串会互相影响的词</h2>
+        <h2>1. 为什么非要有“非线性”?</h2>
         <p>
-          一句话由许多 <span class="term">token</span>(可以先理解成“词”或“字”)按顺序组成。
-          它有两个让旧网络头疼的特点:<strong>长度不固定</strong>(有的句子三个词,有的三十个),
-          以及<strong>词之间有关系</strong>(谁修饰谁、谁指代谁)。固定大小的 MLP 一次只吃固定长度的向量,
-          天然不适合这种“弹性又互相纠缠”的输入。
+          假设我们把激活函数去掉,每层只做“加权求和”(线性变换)。那么两层叠起来是什么?
+          <strong>线性套线性,还是线性</strong>——相当于一个更大的矩阵乘法。换句话说:
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">没有激活函数,深度就白搭了</span>
+          <p>
+            若每层都只是线性变换,那么无论你堆 <strong>2 层还是 100 层</strong>,整个网络能表达的都只是
+            <strong>一条直线(超平面)</strong>——画不出曲线、分不开复杂的边界。激活函数往中间塞进一点“<strong>拐弯</strong>”,
+            层层叠加后,网络才能拟合任意复杂的函数。这就是“非线性”三个字的全部意义。
+          </p>
+        </div>
+        <p>
+          所以激活函数的职责就一句话:<strong>给每个神经元的输出加一道“非线性的弯”</strong>,让网络有能力表达复杂关系。
         </p>
 
-        <h2>2. 两种笨办法,各有硬伤</h2>
-        <p><strong>笨办法一:把整句话压成一个向量。</strong> 先把所有词的信息硬塞进一个固定大小的向量,再交给 MLP。问题是:句子越长,这个向量就越“挤”,细节被严重压缩——这叫<span class="term">信息瓶颈</span>。</p>
-        <p><strong>笨办法二:按顺序一个一个传。</strong> 像接力一样,把前面读到的信息一路往后递(这正是 RNN 的思路)。问题是:它像一场<strong>传话游戏</strong>,信息每经过一个词就被改写一点,等传到很远的地方,最初的内容早就模糊甚至丢失了。</p>
-
-        <h2>3. 真正的难点:相关的词,可能离得很远</h2>
-        <p>看这句话:</p>
-        <blockquote>小明把<strong>书</strong>放在桌子上,因为<strong>它</strong>太重了。</blockquote>
+        <h2>2. 怎么读一张激活函数图</h2>
         <p>
-          “它”指的是“书”还是“桌子”?要判断,模型必须把“它”和前面的“书”联系起来——
-          可它们之间隔了好几个词。<strong>难点不在于词多,而在于“该关联的词常常离得很远”。</strong>
-          按顺序传递的办法,在这种长距离依赖上特别吃力。
+          激活函数是“一个数进、一个数出”的函数,所以能画成一条曲线:<strong>横轴是输入</strong> <var>z</var>(加权求和的结果),
+          <strong>纵轴是输出</strong>。两件事最值得看:
         </p>
-
-        <h2>4. 注意力的核心想法</h2>
-        <p>
-          注意力(attention)换了个思路,简单得近乎暴力:<strong>不要再一站站传话了,
-          让每个词直接去看序列里所有的词,然后自己决定该重点关注谁。</strong>
-          “它”可以一眼扫过全句,发现自己和“书”最相关,于是把注意力大部分放在“书”上。
-        </p>
-
+        <ul>
+          <li><strong>形状</strong>:它把输入“压”成什么样(压到 0~1?还是砍掉负数?);</li>
+          <li><strong>斜率(导数)</strong>:曲线在各处有多陡。<strong>斜率≈0 的地方,梯度会“断流”</strong>——因为反向传播要乘上这个导数(第 6 章的链式法则),导数接近 0,传回去的梯度就几乎消失了。</li>
+        </ul>
         <div class="figure reveal">
           <div class="diagram">
-            <svg viewBox="0 0 640 340" role="img" aria-label="传话式处理与注意力的对比">
-              <!-- 上: 传话链 -->
-              <text x="60" y="40" fill="#ffcf72" font-size="14">没有注意力:像传话游戏,远距离信息逐跳衰减</text>
-              <g>
-                <circle cx="90" cy="90" r="22" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" /><text x="90" y="95" text-anchor="middle" fill="#eef4ff" font-size="13">小明</text>
-                <circle cx="210" cy="90" r="22" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" /><text x="210" y="95" text-anchor="middle" fill="#eef4ff" font-size="13">书</text>
-                <circle cx="330" cy="90" r="22" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" /><text x="330" y="95" text-anchor="middle" fill="#eef4ff" font-size="13">桌子</text>
-                <circle cx="450" cy="90" r="22" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" /><text x="450" y="95" text-anchor="middle" fill="#eef4ff" font-size="13">因为</text>
-                <circle cx="570" cy="90" r="22" fill="rgba(255,143,163,0.18)" stroke="#ff8fa3" stroke-width="2" /><text x="570" y="95" text-anchor="middle" fill="#eef4ff" font-size="13">它</text>
-              </g>
-              <g stroke="#6f5a36" stroke-width="2" fill="none" marker-end="url(#a7)">
-                <line x1="112" y1="90" x2="188" y2="90" /><line x1="232" y1="90" x2="308" y2="90" />
-                <line x1="352" y1="90" x2="428" y2="90" /><line x1="472" y1="90" x2="548" y2="90" />
-              </g>
-              <!-- 下: 注意力 -->
-              <text x="60" y="200" fill="#8ef0d1" font-size="14">有注意力:“它”直接看全句,把注意力放在最相关的“书”上</text>
-              <g>
-                <circle cx="90" cy="260" r="22" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="2" /><text x="90" y="265" text-anchor="middle" fill="#eef4ff" font-size="13">小明</text>
-                <circle cx="210" cy="260" r="22" fill="rgba(142,240,209,0.22)" stroke="#8ef0d1" stroke-width="3" /><text x="210" y="265" text-anchor="middle" fill="#eef4ff" font-size="13">书</text>
-                <circle cx="330" cy="260" r="22" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="2" /><text x="330" y="265" text-anchor="middle" fill="#eef4ff" font-size="13">桌子</text>
-                <circle cx="450" cy="260" r="22" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="2" /><text x="450" y="265" text-anchor="middle" fill="#eef4ff" font-size="13">因为</text>
-                <circle cx="570" cy="260" r="22" fill="rgba(255,143,163,0.18)" stroke="#ff8fa3" stroke-width="2" /><text x="570" y="265" text-anchor="middle" fill="#eef4ff" font-size="13">它</text>
-              </g>
-              <g stroke="#8ef0d1" fill="none" stroke-linecap="round">
-                <line x1="551" y1="251" x2="229" y2="255" stroke-width="3.5" />
-                <line x1="552" y1="258" x2="108" y2="262" stroke-width="1.2" opacity="0.5" />
-                <line x1="551" y1="265" x2="349" y2="265" stroke-width="1.2" opacity="0.5" />
-                <line x1="552" y1="270" x2="469" y2="268" stroke-width="1.2" opacity="0.5" />
-              </g>
-              <defs>
-                <marker id="a7" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#6f5a36" /></marker>
-              </defs>
+            <svg viewBox="0 0 620 220" role="img" aria-label="常见激活函数曲线示意">
+              <text x="55" y="26" fill="#b6c5e1" font-size="12">S 型:Sigmoid / Tanh(两端会“压平”)</text>
+              <line x1="60" y1="115" x2="380" y2="115" stroke="#46587a" stroke-width="1.2" />
+              <line x1="220" y1="45" x2="220" y2="190" stroke="#46587a" stroke-width="1.2" />
+              <polyline points="60,114 140,107 180,97 220,81 260,65 300,55 380,48" fill="none" stroke="#6ac3ff" stroke-width="2.5" />
+              <polyline points="60,183 140,181 180,167 220,115 260,63 300,49 380,47" fill="none" stroke="#8ef0d1" stroke-width="2.5" />
+              <text x="330" y="44" fill="#6ac3ff" font-size="11">Sigmoid</text>
+              <text x="326" y="60" fill="#8ef0d1" font-size="11">Tanh</text>
+              <text x="150" y="205" fill="#8499bd" font-size="10">两端斜率≈0 → 梯度消失</text>
+              <text x="415" y="26" fill="#b6c5e1" font-size="12">折线型:ReLU / GELU(负区处理不同)</text>
+              <line x1="420" y1="170" x2="600" y2="170" stroke="#46587a" stroke-width="1.2" />
+              <line x1="510" y1="45" x2="510" y2="190" stroke="#46587a" stroke-width="1.2" />
+              <polyline points="420,170 510,170 600,50" fill="none" stroke="#ffcf72" stroke-width="2.5" />
+              <polyline points="420,170 480,176 495,176 510,170 525,156 540,136 570,92 600,50" fill="none" stroke="#8b7bff" stroke-width="2.5" />
+              <text x="565" y="66" fill="#ffcf72" font-size="11">ReLU</text>
+              <text x="524" y="150" fill="#8b7bff" font-size="11">GELU</text>
+              <text x="430" y="188" fill="#8499bd" font-size="10">负区被砍成 0(ReLU)</text>
             </svg>
           </div>
-          <p class="figure__cap">上:信息沿链条逐跳衰减。下:“它”一步直达全句,粗线表示它把更多注意力分给了“书”。</p>
+          <p class="figure__cap">示意图:左边 S 型两端“压平”(斜率趋 0),右边 ReLU 把负数砍成 0、GELU 是它的平滑版。</p>
+        </div>
+        <div class="figure reveal">
+          <div data-lab="activation-curve"></div>
+          <p class="figure__cap">动手玩:换激活函数、拖动取值点 x,看曲线形状、函数值和<strong>导数(切线斜率)</strong>怎么变。把 Sigmoid 拖到两端,亲眼看它“变平、导数≈0”——梯度就是在这里消失的。</p>
         </div>
 
-        <div class="callout callout--analogy reveal">
-          <span class="callout__title">两个生活类比</span>
+        <h2>3. 全家福:逐个认识</h2>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>激活</th><th>公式</th><th>输出范围</th><th>脾气(优/缺)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Step 阶跃</td><td>x≥0 ? 1 : 0</td><td>{0, 1}</td><td>最早的“开关”;导数几乎处处为 0,<strong>没法训练</strong>,只剩历史意义</td></tr>
+              <tr><td>Sigmoid</td><td>1 / (1 + e<sup>−x</sup>)</td><td>(0, 1)</td><td>平滑、像概率;但<strong>两端饱和 → 梯度消失</strong>,且非零中心</td></tr>
+              <tr><td>Tanh</td><td>(e<sup>x</sup>−e<sup>−x</sup>)/(e<sup>x</sup>+e<sup>−x</sup>)</td><td>(−1, 1)</td><td>零中心,通常比 Sigmoid 好;<strong>仍会饱和</strong></td></tr>
+              <tr><td>ReLU</td><td>max(0, x)</td><td>[0, ∞)</td><td>又快又好,正区不饱和;但负区恒 0 → <strong>死亡 ReLU</strong></td></tr>
+              <tr><td>LeakyReLU</td><td>x&gt;0 ? x : 0.01x</td><td>(−∞, ∞)</td><td>负区留一条<strong>小斜率</strong>(默认 0.01),缓解死亡 ReLU</td></tr>
+              <tr><td>GELU</td><td>x · Φ(x)</td><td>≈[−0.17, ∞)</td><td>ReLU 的<strong>平滑版</strong>,Transformer / GPT 类模型的常客</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">Φ(x) 是标准正态分布的累积函数。本仓库的 GELU 用 <code>std::erf</code> 精确实现。</p>
+        </div>
+
+        <h3>Sigmoid / Tanh:平滑,但会“饱和”</h3>
+        <p>
+          Sigmoid 把任何输入压进 (0, 1),很像“概率”,历史上最流行。但它有个致命伤:当输入很大或很小时,
+          曲线<strong>几乎变平</strong>(饱和),此处导数趋近 0。Sigmoid 的导数最大也只有 <strong>0.25</strong>,
+          反向传播一层层乘下去,梯度会越乘越小——这就是<strong>梯度消失</strong>,深网络的前几层因此几乎学不动。
+          Tanh 把输出压到 (−1, 1),是<strong>零中心</strong>的,通常比 Sigmoid 收敛更好,但饱和问题依旧。
+        </p>
+
+        <h3>ReLU:简单粗暴,却成了默认选择</h3>
+        <p>
+          <span class="term">ReLU(修正线性单元)</span>只做一件事:<strong>负数砍成 0,正数原样放行</strong>。
+          它便宜(一个比较就完事)、在正区导数恒为 1(<strong>不饱和</strong>,梯度传得动),
+          让深网络训练一下子顺畅了很多,至今仍是最常用的默认激活。
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">死亡 ReLU(dying ReLU)</span>
           <p>
-            <strong>开会</strong>:一个人发言前,先扫一眼全场,决定主要听谁的、参考谁的,而不是只听旁边一个人耳语转述。<br />
-            <strong>查资料</strong>:你带着一个问题(query),扫过所有资料的标题(key),挑出最相关的几份,重点读它们的内容(value)。
+            ReLU 的负区输出恒为 0,导数也为 0。如果某个神经元的输入长期落在负区,它就<strong>永远输出 0、永远没有梯度</strong>,
+            相当于“<strong>死掉</strong>”了,再也学不动。这在学习率过大时尤其容易发生。
+            <strong>LeakyReLU</strong> 的解法很直接:负区不砍成 0,而是给一条很小的斜率(如 0.01x),让它<strong>还留着一口气</strong>。
           </p>
         </div>
 
+        <h3>GELU:ReLU 的“平滑升级版”</h3>
+        <p>
+          <span class="term">GELU(高斯误差线性单元)</span>可以理解成<strong>“软化了拐角”的 ReLU</strong>:它不像 ReLU 在 0 处
+          硬生生一个折角,而是平滑过渡,负区还允许一点点小小的负输出。它在 <strong>Transformer、BERT、GPT</strong>
+          这类模型里几乎是标配,实践中往往比 ReLU 略好。代价是计算稍贵(要算正态分布的积分)。
+        </p>
+
+        <h2>4. 到底用哪个?一张速查</h2>
+        <ul>
+          <li><strong>默认从 ReLU 开始</strong>:简单、快、够用,大多数情况先上它。</li>
+          <li>担心<strong>死亡 ReLU</strong>(比如很深、或调大了学习率)→ 换 <strong>LeakyReLU</strong>。</li>
+          <li>做 <strong>Transformer / 语言模型</strong> → 用 <strong>GELU</strong>(和主流保持一致)。</li>
+          <li><strong>输出层</strong>要“概率”→ 用 Sigmoid(二分类)或 Softmax(多分类,第 4 章);<strong>隐藏层一般不用</strong> Sigmoid/Tanh(容易梯度消失)。</li>
+        </ul>
+
+        <h2>5. 在代码里长什么样</h2>
+        <p>
+          本仓库把激活函数抽象成一个统一接口:每个激活至少实现“<strong>正向 <code>Activate</code></strong>”和
+          “<strong>求导 <code>DerivActivate</code></strong>”两件事。反向传播时(第 6 章),就是要乘上这个导数。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/activate/activate_base.h(精简)</figcaption>
+          <pre class="code-walk__code"><code>enum ActivateType {
+  ACTIVATE_SIGMOID, ACTIVATE_RELU, ACTIVATE_TANH,
+  ACTIVATE_LEAKY_RELU, ACTIVATE_GELU,               <b class="cw-tag">1</b>
+};
+
+class ActivateFunction {
+  virtual double Activate(const double &amp;input) = 0;         // 正向  <b class="cw-tag">2</b>
+  virtual double DerivActivate(const double &amp;output) = 0;    // 求导  <b class="cw-tag">3</b>
+  // GELU 等需要 pre-activation 的, 再重载一个 2 参版本
+  virtual double DerivActivate(const double &amp;input, const double &amp;output);
+};</code></pre>
+          <ol class="code-walk__notes">
+            <li>五种激活各是一个子类,用一个枚举 + 工厂(<code>ActivateFactory</code>)来选,想加新激活只要照抄这套模式。</li>
+            <li><code>Activate</code> 是正向:输入 <var>z</var>,输出激活后的值。ReLU 就是一句 <code>max(0, x)</code>。</li>
+            <li><code>DerivActivate</code> 是求导,反向传播要用它。Sigmoid/ReLU 用输出就能算导数;<strong>GELU 需要额外知道输入 <var>z</var></strong>,所以多了一个 2 参版本(第 6 章埋过这个伏笔)。</li>
+          </ol>
+        </figure>
         <div class="callout callout--note reveal">
-          <span class="callout__title">一句话记住</span>
-          <p>注意力的本质,不是“更复杂的矩阵运算”,而是赋予每个词一种能力:<strong>主动地、按相关性,把注意力分配到序列里所有其他词上。</strong></p>
+          <span class="callout__title">和梯度的关系,一句话串起来</span>
+          <p>
+            反向传播时(第 6 章),每经过一个激活函数,就要<strong>乘一次它的导数</strong>。所以“导数会不会变成 0”
+            直接决定“梯度能不能传回去”——这正是我们挑激活函数时最在意的事,也是 ReLU 打败 Sigmoid 的根本原因。
+          </p>
         </div>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>语言是序列:长度可变、词与词互相关联,固定大小的 MLP 天然不适合。</li>
-            <li>把整句压成一个向量 → 信息瓶颈;按顺序逐个传递 → 传话式的远距离衰减。</li>
-            <li>真正的难点是“相关的词可能离得很远”(如代词指代)。</li>
-            <li>注意力让每个词直接看全局、按相关性自己分配关注,从根上解决了长距离依赖。</li>
+            <li>没有激活函数,再深的网络也只是一条直线;激活给网络加“非线性的弯”。</li>
+            <li>看激活函数,重点看两件事:<strong>形状</strong>和<strong>斜率(导数)</strong>;斜率≈0 的地方梯度会断流。</li>
+            <li>Sigmoid/Tanh 平滑但会<strong>饱和 → 梯度消失</strong>;ReLU 又快又不饱和,但有<strong>死亡 ReLU</strong>。</li>
+            <li>LeakyReLU 给负区留小斜率救活;GELU 是平滑版 ReLU,Transformer 常用。</li>
+            <li>实战默认 ReLU;深网络/大学习率考虑 LeakyReLU;Transformer 用 GELU;输出层才用 Sigmoid/Softmax。</li>
           </ul>
         </section>
 
-        <h2>动手与思考</h2>
-        <div class="quiz reveal">
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 1:为什么说“按顺序逐个传递”处理长句子有先天劣势?</summary>
-            <div class="quiz__a">
-              <p>因为信息像传话游戏一样要经过很多中间步骤,每一步都可能被改写或稀释,等传到很远的位置,最初的信息早已模糊。长距离依赖最容易在这种方式里丢失。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 2:用一句话概括注意力解决了什么核心问题?</summary>
-            <div class="quiz__a">
-              <p>让每个词都能直接“看到”序列里所有其他词,并按相关性自主决定关注谁,从而绕开了长距离信息传递的衰减问题。</p>
-            </div>
-          </details>
-        </div>
-
         <p class="muted">
-          想法很美,但“直接看全局、决定关注谁”到底怎么用数字算出来?
-          下一章就把这台机器拆开:<strong>Q、K、V、打分、softmax、加权求和</strong>,一个都不少。
+          有了激活函数,前向和反向都能顺畅跑了。可参数到底该<strong>怎么更新</strong>才又快又稳?
+          下一章我们把优化器家族——从最朴素的 <strong>SGD</strong> 一路讲到 <strong>Adam</strong>——排成一条进化线。
         </p>
       </div>
     </main>
 
     <script src="assets/book.js"></script>
+    <script src="assets/labs.js"></script>
   </body>
 </html>

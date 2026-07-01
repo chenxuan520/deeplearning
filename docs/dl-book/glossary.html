@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>术语表 | 深度学习入门</title>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body>
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">附录</p>
+        <h1>术语表:名词速查</h1>
+
+        <p class="lead">
+          全书出现过的“黑话”集中在这里,每个<strong>一句话</strong>讲清,并给出<strong>详解章节</strong>。
+          读到不认识的词,回来扫一眼即可。术语大致按出场顺序分组。
+        </p>
+
+        <h2>基础概念</h2>
+        <ul class="glossary">
+          <li id="g-model"><strong>模型 model</strong> — 一个带很多“旋钮”(参数)的函数,靠调旋钮去拟合数据。<a href="chapter-00.html">→ 第 0 章</a></li>
+          <li id="g-param"><strong>参数 parameter</strong> — 模型里可训练的数值,主要是权重和偏置;训练就是在调它们。<a href="chapter-00.html">→ 第 0 章</a></li>
+          <li id="g-train"><strong>训练 training</strong> — “预测 → 对答案 → 算损失 → 微调参数”的循环。<a href="chapter-00.html">→ 第 0 章</a></li>
+          <li id="g-vector"><strong>向量 vector</strong> — 一串有序的数,也是一个有方向、有长度的箭头。<a href="chapter-01.html">→ 第 1 章</a></li>
+          <li id="g-dot"><strong>点积 dot product</strong> — 对应相乘再加总,衡量两个向量“合不合拍”(相关性)。<a href="chapter-01.html">→ 第 1 章</a></li>
+          <li id="g-matrix"><strong>矩阵 matrix</strong> — 数字方阵;矩阵乘向量 = 一堆点积 = 一层网络的计算。<a href="chapter-01.html">→ 第 1 章</a></li>
+          <li id="g-gradient"><strong>梯度 gradient</strong> — 每个参数导数打包成的向量,指向“损失上升最快”的方向。<a href="chapter-01.html">→ 第 1 章</a></li>
+          <li id="g-chain"><strong>链式法则 chain rule</strong> — 复合函数求导 = 各层变化率相乘;反向传播的全部数学。<a href="chapter-01.html">→ 第 1 章</a></li>
+          <li id="g-neuron"><strong>神经元 neuron</strong> — 最小积木:加权求和 + 偏置 + 激活函数。<a href="chapter-02.html">→ 第 2 章</a></li>
+          <li id="g-mlp"><strong>MLP 多层感知机</strong> — 层层全连接的最朴素网络,适合固定长度输入。<a href="chapter-03.html">→ 第 3 章</a></li>
+          <li id="g-forward"><strong>前向传播 forward propagation</strong> — 数据从输入一层层向前流动,算出预测。<a href="chapter-03.html">→ 第 3 章</a></li>
+        </ul>
+
+        <h2>训练三件套</h2>
+        <ul class="glossary">
+          <li id="g-loss"><strong>损失函数 loss</strong> — 把“错得多离谱”量化成一个数;越小越好。<a href="chapter-04.html">→ 第 4 章</a></li>
+          <li id="g-crossentropy"><strong>交叉熵 cross-entropy</strong> — 分类常用损失,−log(正确类的预测概率)。<a href="chapter-04.html">→ 第 4 章</a></li>
+          <li id="g-softmax"><strong>softmax</strong> — 把一排分数变成一排加起来为 1 的概率。<a href="chapter-04.html">→ 第 4 章</a></li>
+          <li id="g-gd"><strong>梯度下降 gradient descent</strong> — 沿梯度反方向一小步步降低损失。<a href="chapter-05.html">→ 第 5 章</a></li>
+          <li id="g-lr"><strong>学习率 learning rate</strong> — 每步挪多大;太大发散、太小太慢。<a href="chapter-05.html">→ 第 5 章</a></li>
+          <li id="g-batch"><strong>batch / epoch / step</strong> — 一小撮样本 / 全数据过一遍 / 一次参数更新。<a href="chapter-05.html">→ 第 5 章</a></li>
+          <li id="g-backprop"><strong>反向传播 backpropagation</strong> — 用链式法则把误差从输出反传回每个参数。<a href="chapter-06.html">→ 第 6 章</a></li>
+          <li id="g-activation"><strong>激活函数 activation</strong> — 给神经元加“非线性的弯”,没它深度就白搭。<a href="chapter-07.html">→ 第 7 章</a></li>
+          <li id="g-relu"><strong>ReLU</strong> — 负数砍成 0、正数放行;最常用的默认激活。<a href="chapter-07.html">→ 第 7 章</a></li>
+          <li id="g-gelu"><strong>GELU</strong> — 平滑版 ReLU,Transformer / GPT 常用。<a href="chapter-07.html">→ 第 7 章</a></li>
+          <li id="g-vanish"><strong>梯度消失</strong> — 梯度反传时越乘越小、趋近 0,深层学不动(Sigmoid 易犯)。<a href="chapter-07.html">→ 第 7 章</a></li>
+          <li id="g-optimizer"><strong>优化器 optimizer</strong> — 决定“拿到梯度后参数怎么挪”的策略。<a href="chapter-08.html">→ 第 8 章</a></li>
+          <li id="g-adam"><strong>Adam / AdamW</strong> — Momentum + 自适应步长 + 偏差校正;训大模型的默认选择。<a href="chapter-08.html">→ 第 8 章</a></li>
+        </ul>
+
+        <h2>训练技巧与评估</h2>
+        <ul class="glossary">
+          <li id="g-init"><strong>参数初始化</strong> — 训练开始前给权重设一个合适的随机起点(如 He / Xavier)。<a href="chapter-09.html">→ 第 9 章</a></li>
+          <li id="g-lrsched"><strong>学习率调度</strong> — 训练过程中动态调学习率(如 warmup + 余弦退火)。<a href="chapter-09.html">→ 第 9 章</a></li>
+          <li id="g-clip"><strong>梯度裁剪</strong> — 给梯度设上限,防止爆炸导致训练崩。<a href="chapter-09.html">→ 第 9 章</a></li>
+          <li id="g-overfit"><strong>过拟合 / 欠拟合</strong> — 训练好测试差(背题) / 都差(没学会)。<a href="chapter-10.html">→ 第 10 章</a></li>
+          <li id="g-reg"><strong>正则化 regularization</strong> — 给学习加约束/干扰,逼模型别背训练集。<a href="chapter-10.html">→ 第 10 章</a></li>
+          <li id="g-wd"><strong>weight decay(L2)</strong> — 惩罚过大权重,让模型更平滑克制。<a href="chapter-10.html">→ 第 10 章</a></li>
+          <li id="g-dropout"><strong>Dropout</strong> — 训练时随机关掉部分神经元,逼网络别依赖个别单元。<a href="chapter-10.html">→ 第 10 章</a></li>
+          <li id="g-generalize"><strong>泛化 generalization</strong> — 在没见过的数据上也表现好,这才是真本事。<a href="chapter-10.html">→ 第 10 章</a></li>
+          <li id="g-split"><strong>训练/验证/测试集</strong> — 学 / 调 / 考三份互不重叠的数据。<a href="chapter-11.html">→ 第 11 章</a></li>
+          <li id="g-prf"><strong>精确率 / 召回 / F1</strong> — 查得准 / 查得全 / 两者的调和平均。<a href="chapter-11.html">→ 第 11 章</a></li>
+          <li id="g-norm"><strong>归一化 normalization</strong> — 把特征缩放到相近尺度(如像素除以 255),训练更稳。<a href="chapter-11.html">→ 第 11 章</a></li>
+        </ul>
+
+        <h2>网络结构</h2>
+        <ul class="glossary">
+          <li id="g-cnn"><strong>CNN 卷积神经网络</strong> — 用小卷积核在图上滑动,专治图像。<a href="chapter-12.html">→ 第 12 章</a></li>
+          <li id="g-conv"><strong>卷积核 / 感受野 / 权重共享</strong> — 小滤波器只看局部、全图通用,省参数又平移不变。<a href="chapter-12.html">→ 第 12 章</a></li>
+          <li id="g-pool"><strong>池化 pooling</strong> — 把特征图缩小、增强鲁棒(最大/平均)。<a href="chapter-12.html">→ 第 12 章</a></li>
+          <li id="g-rnn"><strong>RNN 循环神经网络</strong> — 用隐藏状态边读边记,处理序列;但串行、易失忆。<a href="chapter-13.html">→ 第 13 章</a></li>
+          <li id="g-lstm"><strong>LSTM</strong> — 给 RNN 加“门”和记忆传送带,缓解长依赖失忆。<a href="chapter-13.html">→ 第 13 章</a></li>
+          <li id="g-embedding"><strong>词嵌入 embedding</strong> — 把词表示成稠密向量(语义坐标),意思近则向量近。<a href="chapter-14.html">→ 第 14 章</a></li>
+          <li id="g-word2vec"><strong>word2vec</strong> — 靠“看上下文”自监督学词向量(CBOW / skip-gram)。<a href="chapter-14.html">→ 第 14 章</a></li>
+        </ul>
+
+        <h2>注意力与 Transformer</h2>
+        <ul class="glossary">
+          <li id="g-attention"><strong>注意力 attention</strong> — 让每个词直接看全序列,按相关性做加权平均。<a href="chapter-16.html">→ 第 16 章</a></li>
+          <li id="g-qkv"><strong>Q / K / V(查询/键/值)</strong> — 同一个词的三副面孔,来自三个可训练矩阵。<a href="chapter-16.html">→ 第 16 章</a></li>
+          <li id="g-causal"><strong>causal mask 因果掩码</strong> — 屏蔽未来位置,保证生成时只看前文。<a href="chapter-16.html">→ 第 16 章</a></li>
+          <li id="g-multihead"><strong>多头注意力</strong> — 请几位“专家”各看一遍再拼接,一次看清多种关系。<a href="chapter-16.html">→ 第 16 章</a></li>
+          <li id="g-residual"><strong>残差连接 residual</strong> — 输出 = x + 子层(x),给梯度修高速公路。<a href="chapter-17.html">→ 第 17 章</a></li>
+          <li id="g-layernorm"><strong>LayerNorm</strong> — 对每个词向量减均值除标准差,稳住训练。<a href="chapter-17.html">→ 第 17 章</a></li>
+          <li id="g-posenc"><strong>位置编码</strong> — 给每个位置一个独特指纹,让模型知道词序。<a href="chapter-17.html">→ 第 17 章</a></li>
+          <li id="g-transformer"><strong>Transformer</strong> — 注意力+残差+LayerNorm+FFN 拼成的可堆叠积木,大模型的地基。<a href="chapter-17.html">→ 第 17 章</a></li>
+          <li id="g-cross"><strong>cross-attention 交叉注意力</strong> — Q 来自解码器、K/V 来自编码器,解码时“查阅原文”。<a href="chapter-17.html">→ 第 17 章</a></li>
+        </ul>
+
+        <h2>大模型</h2>
+        <ul class="glossary">
+          <li id="g-token"><strong>token / tokenizer</strong> — 文本被切成的最小单位 / 负责切分与编号的分词器。<a href="chapter-18.html">→ 第 18 章</a></li>
+          <li id="g-autoregressive"><strong>自回归 autoregressive</strong> — 把刚生成的词接回输入,循环往下写。<a href="chapter-18.html">→ 第 18 章</a></li>
+          <li id="g-sampling"><strong>temperature / top-k / top-p</strong> — 控制生成随机性的三个采样旋钮。<a href="chapter-18.html">→ 第 18 章</a></li>
+          <li id="g-perplexity"><strong>困惑度 perplexity</strong> — 平均交叉熵取指数,衡量“平均在几个选项里纠结”。<a href="chapter-18.html">→ 第 18 章</a></li>
+          <li id="g-bpe"><strong>BPE 子词分词</strong> — 把高频组合合并成一个 token,序列更短更高效。<a href="chapter-19.html">→ 第 19 章</a></li>
+          <li id="g-scaling"><strong>Scaling Law 规模定律</strong> — 参数/数据/算力一起放大,性能可预测提升。<a href="chapter-19.html">→ 第 19 章</a></li>
+          <li id="g-emergent"><strong>涌现能力 emergent abilities</strong> — 规模越过门槛后突然出现的新能力。<a href="chapter-19.html">→ 第 19 章</a></li>
+          <li id="g-selfsup"><strong>自监督 self-supervised</strong> — 答案从数据本身自动抠出(如遮词预测),不用人工标注。<a href="chapter-19.html">→ 第 19 章</a></li>
+          <li id="g-pretrain"><strong>预训练 / 后训练</strong> — 海量文本上练底座 / SFT+RLHF+蒸馏调成好用的助手。<a href="chapter-19.html">→ 第 19 章</a></li>
+          <li id="g-rlhf"><strong>RLHF / SFT</strong> — 按人类偏好对齐 / 用指令范文微调。<a href="chapter-19.html">→ 第 19 章</a></li>
+          <li id="g-distill"><strong>知识蒸馏 distillation</strong> — 让小学生模型模仿大教师模型的输出分布。<a href="chapter-19.html">→ 第 19 章</a></li>
+          <li id="g-hallucination"><strong>幻觉 hallucination</strong> — 一本正经地生成通顺却编造的内容。<a href="chapter-19.html">→ 第 19 章</a></li>
+          <li id="g-kvcache"><strong>KV cache</strong> — 缓存已生成词的 Key/Value,避免重复计算,加速生成。<a href="chapter-20.html">→ 第 20 章</a></li>
+          <li id="g-parallel"><strong>数据/张量/流水线并行</strong> — 把训练切到多卡的三种拆法。<a href="chapter-20.html">→ 第 20 章</a></li>
+          <li id="g-moe"><strong>MoE 混合专家</strong> — 每个 token 只激活少数专家,参数多但算得少。<a href="chapter-20.html">→ 第 20 章</a></li>
+          <li id="g-sparseattn"><strong>稀疏注意力</strong> — 只算部分 token 对,把 O(n²) 降下来。<a href="chapter-20.html">→ 第 20 章</a></li>
+          <li id="g-prompt"><strong>提示工程 / 思维链</strong> — 把话说清楚 / 让它“一步步想”提升推理。<a href="chapter-21.html">→ 第 21 章</a></li>
+          <li id="g-rag"><strong>RAG 检索增强</strong> — 先检索资料再让模型基于资料回答,治幻觉、补新知。<a href="chapter-21.html">→ 第 21 章</a></li>
+          <li id="g-agent"><strong>function calling / Agent</strong> — 让模型调用工具、多步做事,从“会聊”变“能办”。<a href="chapter-21.html">→ 第 21 章</a></li>
+        </ul>
+
+        <p class="muted">
+          回到 <a href="index.html">全书目录</a>,或从任意章节的左侧栏继续阅读。
+        </p>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>

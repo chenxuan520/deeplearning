@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 4 章 · 怎么变“好”:梯度下降 | 深度学习入门</title>
+    <title>第 4 章 · 怎么衡量“错”:损失函数 | 深度学习入门</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -12,203 +12,199 @@
     <main class="chapter">
       <div class="chapter__inner">
         <p class="chapter__eyebrow">第 4 章 · 学习是怎么发生的</p>
-        <h1>怎么变“好”:梯度下降</h1>
+        <h1>怎么衡量“错”:损失函数</h1>
 
         <p class="lead">
-          上一章我们把“错”变成了一个数字——损失。现在的问题非常具体:
-          <strong>该把每个参数往哪个方向、调多大,才能让这个数字变小?</strong>
-          答案是深度学习的发动机:<span class="term">梯度下降(gradient descent)</span>。
+          网络现在能向前算出一个预测了,但它八成是错的。要让它“学”,第一步是给“错”
+          一个<strong>精确、可计算</strong>的定义——这就是<span class="term">损失函数(loss function)</span>。
+          它把“模型这次错得多离谱”压缩成<strong>一个数字</strong>。这个数字,就是后面所有优化的指南针。
         </p>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>“梯度”到底是什么,为什么它指向“下降最快的方向”;</li>
-            <li>参数更新那条核心公式 <var>w</var> ← <var>w</var> − <var>η</var>·梯度;</li>
-            <li>学习率 <var>η</var> 是什么、太大太小分别会怎样;</li>
-            <li>什么是 mini-batch SGD,并逐行读懂参数更新的真实代码。</li>
+            <li>为什么需要把“错误”变成一个数字,以及它怎么指导训练;</li>
+            <li>回归任务用的<strong>均方误差(MSE)</strong>是怎么回事;</li>
+            <li>分类任务里,<strong>softmax</strong> 怎么把分数变成概率,<strong>交叉熵</strong>怎么衡量概率的差距;</li>
+            <li>“softmax + 交叉熵”为什么会得到一个特别漂亮的结果 <var>δ</var> = 预测 − 答案。</li>
           </ul>
         </section>
 
-        <h2>1. 把训练想成“蒙着眼下山”</h2>
+        <h2>1. 为什么要把“错”变成一个数字</h2>
         <p>
-          想象损失是一片山地的<strong>海拔</strong>:你站的位置由所有参数决定,海拔就是当前的损失。
-          我们想走到<strong>谷底</strong>(损失最小)。但你蒙着眼,看不到全局地形,只能感受
-          <strong>脚下哪个方向最陡</strong>,然后朝下坡迈一步;到了新位置再感受、再迈一步……
-          反复下去,通常就能走到一个谷底。
+          回忆第 0 章的训练循环:预测 → 对答案 → <strong>算差距</strong> → 微调。
+          这里的“算差距”,必须输出一个<strong>具体的数</strong>,程序才能比较“调整之前和之后,到底哪个更好”。
+        </p>
+        <p>
+          这个数,我们希望它满足两个朴素的要求:<strong>预测越接近答案,它越小</strong>;
+          <strong>完全正确时,它应该是 0(或最小)</strong>。剩下的,只是“用什么公式来算这个差距”而已。
+          不同任务,用不同的公式。
         </p>
 
-        <div class="figure reveal">
-          <div class="diagram">
-            <svg viewBox="0 0 640 320" role="img" aria-label="损失曲线上的梯度下降示意">
-              <!-- 坐标轴 -->
-              <line x1="60" y1="280" x2="600" y2="280" stroke="#46587a" stroke-width="1.5" />
-              <line x1="60" y1="40" x2="60" y2="280" stroke="#46587a" stroke-width="1.5" />
-              <text x="600" y="300" text-anchor="end" fill="#8499bd" font-size="13">参数 w</text>
-              <text x="36" y="52" fill="#8499bd" font-size="13">损失 L</text>
-              <!-- 损失曲线 (U形) -->
-              <path d="M 90 70 Q 330 430 560 70" fill="none" stroke="#6ac3ff" stroke-width="2.5" />
-              <!-- 下降的点 -->
-              <circle cx="505" cy="120" r="8" fill="#ffcf72" />
-              <text x="525" y="118" fill="#ffcf72" font-size="13">当前参数(损失高)</text>
-              <circle cx="446" cy="180" r="7" fill="#ffcf72" opacity="0.8" />
-              <circle cx="392" cy="220" r="7" fill="#ffcf72" opacity="0.65" />
-              <circle cx="352" cy="240" r="7" fill="#ffcf72" opacity="0.5" />
-              <!-- 下降箭头 -->
-              <g stroke="#8ef0d1" stroke-width="2" fill="none">
-                <path d="M 497 128 L 454 172" marker-end="url(#a)" />
-                <path d="M 438 188 L 400 212" marker-end="url(#a)" />
-              </g>
-              <defs>
-                <marker id="a" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
-                  <path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" />
-                </marker>
-              </defs>
-              <!-- 谷底 -->
-              <circle cx="325" cy="248" r="9" fill="#8ef0d1" />
-              <text x="325" y="275" text-anchor="middle" fill="#8ef0d1" font-size="13">谷底 = 损失最小</text>
-            </svg>
-          </div>
-          <p class="figure__cap">每一步都朝“最陡下坡”方向走一小步,一步步逼近损失的谷底。</p>
-        </div>
-
-        <h2>2. “梯度”就是最陡的方向</h2>
+        <h2>2. 回归任务:均方误差 MSE</h2>
         <p>
-          “脚下最陡的方向”,在数学里有个名字叫<span class="term">梯度(gradient)</span>。
-          它其实就是损失对每个参数的<strong>导数</strong>:导数告诉你“这个参数动一点点,损失会朝哪边变、变多快”。
-        </p>
-        <ul>
-          <li>导数为<strong>正</strong>:增大这个参数,损失会上升 → 所以我们要<strong>减小</strong>它;</li>
-          <li>导数为<strong>负</strong>:增大这个参数,损失会下降 → 所以我们要<strong>增大</strong>它。</li>
-        </ul>
-        <p>
-          两种情况合起来,规律惊人地一致:<strong>朝“梯度的反方向”走,损失就会下降。</strong>
-          这就是“梯度下降”名字的由来。写成公式就是那条你以后会见无数次的更新规则:
+          如果模型要预测一个<strong>连续的数值</strong>(比如房价、温度),这叫<span class="term">回归</span>。
+          最自然的“差距”就是:预测值和真实值<strong>差多少,然后平方</strong>(平方是为了让正负差距都变成正贡献,并且惩罚大错):
         </p>
         <div class="mathblock reveal">
-          <var>w</var> ← <var>w</var> − <var>η</var> · <span class="frac"><span>∂<var>L</var></span><span>∂<var>w</var></span></span>
-          <span class="label">新参数 = 旧参数 − 学习率 × 梯度。对每一个参数都这么做一遍</span>
+          <var>L</var> = <span class="frac"><span>1</span><span>2</span></span> (<var>t</var> − <var>o</var>)<sup>2</sup>
+          <span class="label">t = 真实值(target),o = 模型输出(output)。差得越多,平方后涨得越快</span>
         </div>
+        <p>看看它在代码里有多直白:</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/loss/mse_loss.cpp</figcaption>
+          <pre class="code-walk__code"><code>double MSELoss::Loss(double target, double output) {
+  return 0.5 * (target - output) * (target - output);   <b class="cw-tag">1</b>
+}
 
-        <h2>3. 学习率 η:每一步迈多大</h2>
+double MSELoss::DerivLoss(double target, double output) {
+  return -2.0 * (target - output);                      <b class="cw-tag">2</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li><strong>Loss</strong>:就是上面的公式,算出“这一个输出错了多少”。</li>
+            <li><strong>DerivLoss</strong>:损失对输出的<em>导数</em>,反向传播要用它(第 6 章)。这里你只要先看懂它的<strong>符号</strong>:当 <var>o</var> 比 <var>t</var> 小,(t − o) 为正,导数为负——它在告诉网络“你预测得太低了,把输出往大调”。导数前面的常数(这里是 2)不影响方向,只是缩放,会被学习率吸收。</li>
+          </ol>
+        </figure>
+
+        <h2>3. 分类任务:先把分数变成“概率”</h2>
         <p>
-          公式里的 <var>η</var>(读作 eta)就是<span class="term">学习率(learning rate)</span>,
-          它控制每一步的<strong>步子大小</strong>。这是整个训练里最关键、也最需要调的一个旋钮:
+          如果模型要从几个选项里<strong>选一个类别</strong>(比如这张图是 0–9 里的哪个数字),这叫<span class="term">分类</span>。
+          网络最后一层会对每个类别输出一个分数(叫 <span class="term">logits</span>),但这些分数可能是任意实数,
+          不能直接当“概率”。我们需要一个函数,把一组分数变成一组<strong>非负、且加起来等于 1</strong> 的概率——
+          这就是 <span class="term">softmax</span>:
         </p>
-        <ul>
-          <li><strong>太小</strong>:每步挪一点点,要走非常久才到谷底,训练慢得让人崩溃;</li>
-          <li><strong>太大</strong>:一步迈过头,直接越过谷底冲到对面更高的地方,损失反而<strong>来回震荡甚至发散</strong>;</li>
-          <li><strong>刚好</strong>:稳步下降,又快又稳。</li>
-        </ul>
-        <div class="callout callout--tip reveal">
-          <span class="callout__title">想亲眼看看?</span>
-          <p>
-            下一章的“前向 / 反向传播动画”里有一个 <strong>Learning Rate 滑块</strong>,
-            你可以拖动它,观察同样的梯度下,参数每一步被改动的幅度如何随学习率变化。
-            到第 6 章我们还会让学习率在训练过程中<strong>动态变化</strong>(学习率调度)。
-          </p>
+        <div class="mathblock reveal">
+          <var>p</var><sub>i</sub> = <span class="frac"><span>e<sup>z<sub>i</sub></sup></span><span>Σ<sub>j</sub> e<sup>z<sub>j</sub></sup></span></span>
+          <span class="label">先把每个分数取指数(保证为正),再除以所有指数之和(保证加起来为 1)</span>
         </div>
+        <p>直觉:取指数会<strong>放大差距</strong>(分数高的更突出),除以总和则把它们归一化成概率。代码:</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/softmax/std_softmax.cpp · Normalize</figcaption>
+          <pre class="code-walk__code"><code>long double sum = 0;
+for (int i = 0; i &lt; input.size(); i++)
+  sum += std::exp(input[i]);                 <b class="cw-tag">1</b>
 
-        <h2>4. 不必每次都看完所有数据:mini-batch SGD</h2>
+for (int i = 0; i &lt; input.size(); i++)
+  output[i] = std::exp(input[i]) / sum;      <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>第一遍循环:把每个 logit 取指数 <code>exp</code>,全部加起来得到分母 <code>sum</code>。</li>
+            <li>第二遍循环:每个类别的概率 = 自己的指数 ÷ 总和。这样所有 <code>output[i]</code> 都在 (0, 1) 之间,且加起来正好是 1——一组合法的概率。</li>
+          </ol>
+        </figure>
+
+        <h2>4. 用交叉熵衡量两个概率的差距</h2>
         <p>
-          严格说,要算“真正的梯度”,得把<strong>所有</strong>训练样本都过一遍。但数据量动辄百万,
-          每走一步都全看一遍太慢了。实践中我们用一个聪明的折中:每次只<strong>随机抓一小批(mini-batch)</strong>
-          样本,用这一小批估算梯度,就更新一次。这叫<span class="term">小批量随机梯度下降(mini-batch SGD)</span>。
+          现在模型给出了一组预测概率 <var>p</var>,而正确答案是一个“只有正确类是 1、其余是 0”的分布
+          <var>t</var>(叫 <span class="term">one-hot</span>)。怎么衡量这两组概率差多少?用
+          <span class="term">交叉熵(cross-entropy)</span>:
         </p>
-        <p>看看训练主循环是怎么做的(精简自 <code>Train</code>):</p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/neural_network.cpp · Train(精简)</figcaption>
-          <pre class="code-walk__code"><code>// 每轮开始前打乱样本顺序
-std::shuffle(index_pos.begin(), index_pos.end(), shuffle_gen);  <b class="cw-tag">1</b>
-
-// 取出一小批样本, 走一遍 "前向 → 反向 → 更新"
-ForwardPropagationBatch(batch_data);   <b class="cw-tag">2</b>
-ResetGradients();
-BackPropagationBatch(batch_target);    <b class="cw-tag">3</b>
-ApplyGradient(B);                      <b class="cw-tag">4</b></code></pre>
-          <ol class="code-walk__notes">
-            <li>打乱顺序,避免模型“记住样本的排列”,让每一批都更有代表性。</li>
-            <li>对这一小批做前向传播,得到预测(第 2 章)。</li>
-            <li>反向传播,算出这一批里每个参数的梯度(第 5 章马上讲)。</li>
-            <li>用算好的梯度更新一次参数。<code>B</code> 是这批的样本数,用来把梯度取平均。</li>
-          </ol>
-        </figure>
-
-        <h2>5. 逐行读懂“参数更新”</h2>
-        <p>真正执行 <var>w</var> ← <var>w</var> − <var>η</var>·梯度 的,是优化器。最朴素的 SGD 优化器只有几行:</p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/optimizer/sgd_optimizer.cpp · CalcChangeValue</figcaption>
-          <pre class="code-walk__code"><code>double g = delta;                                  <b class="cw-tag">1</b>
-if (weight_pos != -1 &amp;&amp; weight_decay_ != 0.0)
-  g += weight_decay_ * param_value;                <b class="cw-tag">2</b>
-return learning_rate * g;                          <b class="cw-tag">3</b></code></pre>
-          <ol class="code-walk__notes">
-            <li><code>delta</code> 就是这个参数的梯度(由反向传播算出)。</li>
-            <li>(可选)weight decay / L2 正则:把权重稍微往 0 拉一点,抑制过拟合;注意只对权重做,偏置不动(<code>weight_pos != -1</code> 才进来)。第 6 章细讲。</li>
-            <li>返回“这一步要改变的量” = 学习率 × 梯度。这正是更新公式里的 <var>η</var>·梯度。</li>
-          </ol>
-        </figure>
-        <p>而把这个改变量真正从参数里减掉的,是 <code>ApplyGradient</code>:</p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/neural_network.cpp · ApplyGradient(精简)</figcaption>
-          <pre class="code-walk__code"><code>optimizer_function_-&gt;BeforeStep();                  <b class="cw-tag">1</b>
-
-double avg_dw = g_row[i] * inv_bs;                  <b class="cw-tag">2</b>
-double w_change = optimizer_function_-&gt;CalcChangeValue(
-    avg_dw, learning_rate_, {l, o}, i, w_row[i]);
-w_row[i] -= w_change;                               <b class="cw-tag">3</b></code></pre>
-          <ol class="code-walk__notes">
-            <li>先通知优化器“新的一步开始了”。对 SGD 这是空操作;但对 Adam 这类优化器,它会在这里推进内部的计步器(第 6 章)。</li>
-            <li>把累加的梯度乘以 <code>1/B</code>,得到这一批的<strong>平均梯度</strong>。</li>
-            <li>算出改变量,再从参数里<strong>减掉</strong>它——这一行,就是 <var>w</var> ← <var>w</var> − <var>η</var>·梯度 的代码版本。</li>
-          </ol>
-        </figure>
-
-        <div class="callout callout--warn reveal">
-          <span class="callout__title">梯度下降不保证找到“全局最优”</span>
-          <p>
-            真实的损失地形坑坑洼洼,梯度下降可能停在某个“局部谷底”而不是最深的那个。
-            但好消息是:在深度学习里,绝大多数局部谷底的效果都已经足够好,
-            而且后面第 6 章的动量、Adam 等技巧,能帮我们更稳地走下去。
-          </p>
+        <div class="mathblock reveal">
+          <var>L</var> = − Σ<sub>i</sub> <var>t</var><sub>i</sub> log(<var>p</var><sub>i</sub>) = − log(<var>p</var><sub>正确类</sub>)
+          <span class="label">因为 t 只有正确类是 1,求和最后只剩“正确类的预测概率”那一项</span>
         </div>
+        <p>
+          直觉非常顺:如果模型给<strong>正确类</strong>的概率很高(接近 1),log 接近 0,损失很小;
+          如果它给正确类的概率很低(接近 0),−log 会冲向<strong>很大</strong>——狠狠惩罚“自信地答错”。
+        </p>
+        <p>项目里实现的是<strong>二元</strong>交叉熵(配合 Sigmoid 输出,判断“是/不是”):</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/loss/cross_entropy_loss.cpp</figcaption>
+          <pre class="code-walk__code"><code>double CrossEntropyLoss::Loss(double target, double output) {
+  return -target * log(output)
+         - (1.0 - target) * log(1.0 - output);     <b class="cw-tag">1</b>
+}
+
+double CrossEntropyLoss::DerivLoss(double target, double output) {
+  return (output - target) / (output * (1.0 - output));  <b class="cw-tag">2</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>当真实标签 <code>target</code> = 1,只剩前半项 <code>-log(output)</code>:输出越接近 1 损失越小;当 <code>target</code> = 0,只剩后半项 <code>-log(1-output)</code>:输出越接近 0 损失越小。</li>
+            <li>导数看起来有点吓人(分母里有 <code>output(1-output)</code>),但下一节你会看到,它和 Sigmoid/softmax 的导数<strong>正好抵消</strong>,变得无比清爽。</li>
+          </ol>
+        </figure>
+
+        <h2>5. 一个美妙的巧合:δ = 预测 − 答案</h2>
+        <p>
+          单独看,交叉熵的导数和 softmax 的导数都挺丑。但当你把它们<strong>合在一起</strong>
+          (softmax 算概率 + 交叉熵算损失),中间那些复杂的项会奇迹般地约掉,
+          最后末层要往回传的“误差信号” <var>δ</var> 简洁到不可思议:
+        </p>
+        <div class="mathblock reveal">
+          <var>δ</var> = <var>p</var> − <var>t</var>
+          <span class="label">预测概率 减去 真实答案。就这么简单</span>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/softmax/std_softmax.cpp · CalcDelta</figcaption>
+          <pre class="code-walk__code"><code>double StdSoftmax::CalcDelta(double output, double target,
+                            std::shared_ptr&lt;LossFunction&gt; loss_function) {
+  switch (loss_function-&gt;GetLossType()) {
+  case LOSS_MSE:           return output - target;   <b class="cw-tag">1</b>
+  case LOSS_CROSS_ENTROPY: return output - target;   <b class="cw-tag">2</b>
+  }
+  return 0;
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>这就是上面说的 <var>δ</var> = <var>p</var> − <var>t</var>。它会作为反向传播的“起点”(第 6 章)。</li>
+            <li>直觉太顺了:预测概率比答案高多少,就往回传多少“正向误差”;低多少,就传多少“负向误差”。这也是为什么分类任务几乎总是用“softmax + 交叉熵”这对黄金搭档。</li>
+          </ol>
+        </figure>
+
+        <h2>6. 一批样本的损失,取个平均</h2>
+        <p>
+          训练时我们一次看很多样本,把每个样本、每个输出的损失加起来再求平均,得到这一批的整体损失:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/loss/loss_base.cpp · AverageLoss</figcaption>
+          <pre class="code-walk__code"><code>double LossFunction::AverageLoss(const std::vector&lt;double&gt; &amp;target,
+                                const std::vector&lt;double&gt; &amp;output) {
+  double result = 0;
+  for (int i = 0; i &lt; target.size(); i++)
+    result += Loss(target[i], output[i]);   <b class="cw-tag">1</b>
+  result /= target.size();                  <b class="cw-tag">2</b>
+  return result;
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>把每个输出维度的损失累加起来。</li>
+            <li>除以个数得到平均损失。整个训练的目标,就是让这个平均损失尽可能小。</li>
+          </ol>
+        </figure>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>训练就像蒙眼下山:每步朝“最陡下坡”走一小步,逼近损失谷底。</li>
-            <li>梯度 = 损失对参数的导数,指向“上升最快”的方向;朝它的<strong>反方向</strong>走,损失下降。</li>
-            <li>核心更新规则:<var>w</var> ← <var>w</var> − <var>η</var>·梯度,对每个参数都做一遍。</li>
-            <li>学习率 <var>η</var> 是步长:太小慢、太大震荡发散、刚好又快又稳。</li>
-            <li>实践用 mini-batch SGD:每次随机抓一小批样本估算梯度并更新一次。</li>
+            <li>损失函数把“模型错得多离谱”变成一个数字:越准越小,完全正确时最小。</li>
+            <li>回归用<strong>均方误差 MSE</strong>:差值的平方。</li>
+            <li>分类先用 <strong>softmax</strong> 把分数变概率(非负、和为 1),再用<strong>交叉熵</strong>衡量与正确答案的差距,狠罚“自信地答错”。</li>
+            <li>“softmax + 交叉熵”的末层误差 <var>δ</var> = <var>p</var> − <var>t</var>,异常简洁,是分类的黄金搭档。</li>
+            <li><code>DerivLoss</code> 是损失对输出的导数,它是下一步“反向传播”的起点。</li>
           </ul>
         </section>
 
         <h2>动手与思考</h2>
         <div class="quiz reveal">
           <details class="quiz__item">
-            <summary class="quiz__q">问题 1:某个参数的梯度是 +3,学习率 0.1,这个参数应该怎么变?</summary>
+            <summary class="quiz__q">问题 1:模型对正确类给出 0.99 的概率,和给出 0.01 的概率,交叉熵损失差别大吗?</summary>
             <div class="quiz__a">
-              <p>按 <var>w</var> ← <var>w</var> − <var>η</var>·梯度 = <var>w</var> − 0.1×3 = <var>w</var> − 0.3,也就是<strong>减小</strong> 0.3。因为梯度为正说明增大它会让损失上升,所以要往反方向减。</p>
+              <p>差别巨大。−log(0.99) ≈ 0.01(几乎没损失);−log(0.01) ≈ 4.6(损失很大)。交叉熵会狠狠惩罚“自信地答错”,这正是我们想要的。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 2:训练时损失剧烈上下震荡、甚至变成 NaN,最可能是哪个旋钮出了问题?</summary>
+            <summary class="quiz__q">问题 2:softmax 为什么要先取指数,而不是直接把分数除以总和?</summary>
             <div class="quiz__a">
-              <p>学习率太大。步子迈得太猛,一次次越过谷底冲到更高处,导致损失不降反增甚至发散。先把学习率调小试试。</p>
+              <p>直接除以总和无法处理负分数(可能出现负概率),也无法保证“分数越高越突出”。取指数能把任意实数变成正数,并放大高分与低分的差距,再归一化就得到一组合理的概率。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 3:为什么用“一小批”样本而不是每次都用全部数据?</summary>
+            <summary class="quiz__q">问题 3:为什么分类几乎总是“softmax + 交叉熵”一起用?</summary>
             <div class="quiz__a">
-              <p>全量数据每走一步都要算很久,太慢。小批量用少量样本就能得到对梯度的合理估计,更新更频繁、训练更快,还能借助随机性帮助跳出一些差的局部谷底。</p>
+              <p>除了它们各自合理,组合起来梯度还特别干净:末层误差 <var>δ</var> = <var>p</var> − <var>t</var>。计算简单、数值稳定,反向传播也更不容易出问题。</p>
             </div>
           </details>
         </div>
 
         <p class="muted">
-          我们一直说“反向传播会算出梯度”,但它到底怎么算?下一章就来揭开这个让无数初学者头疼、
-          其实只是“链式法则 + 一点耐心”的过程。
+          有了“错得多少”这个数字,下一章我们就要回答那个核心问题:
+          <strong>该往哪个方向、走多大一步,才能让这个数字变小?</strong>——梯度下降登场。
         </p>
       </div>
     </main>

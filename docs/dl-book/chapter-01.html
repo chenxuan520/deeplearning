@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 1 章 · 一个神经元 | 深度学习入门</title>
+    <title>第 1 章 · 数学预备 | 深度学习入门</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -12,254 +12,224 @@
     <main class="chapter">
       <div class="chapter__inner">
         <p class="chapter__eyebrow">第 1 章 · 打地基</p>
-        <h1>一个神经元</h1>
+        <h1>数学预备:看懂公式的一点点数学</h1>
 
         <p class="lead">
-          深度学习这台庞大的机器,是由一种极其简单的小零件重复堆叠出来的,这个零件就是
-          <strong>神经元(neuron)</strong>。把这一个零件看透,你就拿到了理解后面一切的钥匙——
-          因为哪怕是上万亿参数的大模型,它最小的计算单元,和我们这一章拆开的这个,几乎没有区别。
+          这本书尽量不堆数学,但有<strong>六样小工具</strong>后面会反复用到:向量、点积、矩阵、导数、链式法则,
+          还有一点点概率。这一章用大白话加图把它们过一遍——<strong>都是初中/高一水平,不难</strong>。
+          已经熟的同学可以直接跳到<a href="chapter-02.html">第 2 章</a>;后面卡在某个公式时,随时翻回来查。
         </p>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>一个神经元内部到底在算什么(其实就两步:加权求和、过激活函数);</li>
-            <li>“权重”和“偏置”这两个旋钮分别在调什么;</li>
-            <li>为什么<strong>非要有激活函数不可</strong>,没有它会发生什么;</li>
-            <li>Sigmoid / ReLU / GELU 这些激活函数长什么样、各有什么脾气,并对照真实 C++ 实现。</li>
+            <li>向量为什么<strong>既是“一串数”又是“一个方向”</strong>;</li>
+            <li><strong>点积</strong>怎么衡量两个向量“合不合拍”(注意力、相似度全靠它);</li>
+            <li>矩阵 = 一次<strong>批量线性变换</strong>,矩阵乘向量其实就是<strong>一堆加权求和</strong>;</li>
+            <li><strong>导数</strong> = 斜率 = “往哪走会变大”,这是梯度下降的根;</li>
+            <li><strong>链式法则</strong>:复合函数怎么一层层求导——反向传播的唯一秘密;</li>
+            <li>softmax / 交叉熵会用到的一点点<strong>概率与对数</strong>。</li>
           </ul>
         </section>
 
-        <h2>1. 一个神经元,就是一个“打分员”</h2>
+        <h2>1. 别怕:你需要的数学比想象少</h2>
         <p>
-          想象你是面试官,要给一个候选人打分。你手上有几条线索:
-          <em>工作年限</em>、<em>项目经验</em>。这两条线索对你来说<strong>重要程度不一样</strong>:
-          也许你觉得项目经验更关键。于是你心里其实在做这样一件事:
+          很多人一看到 <var>Σ</var>、<var>∂</var> 就头皮发麻。但深度学习里 99% 的场景,反复出现的其实只有<strong>两个动作</strong>:
+          <strong>“一堆数乘起来再加总”</strong>(点积 / 矩阵乘法)和<strong>“顺着斜率往下滑”</strong>(求导 / 梯度下降)。
+          把这两件事想通,后面的公式基本都是它们的换装。这一章就带你把这几样小工具认全。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">怎么用这一章</span>
+          <p>
+            不用背。先读个眼熟,知道“有这么个东西、大概在干嘛”即可。等后面章节真用到时,你会“哦原来是它”,
+            那时再回来精读对应一节,效率最高。
+          </p>
+        </div>
+
+        <h2>2. 向量:一串数字,也是一个箭头</h2>
+        <p>
+          <span class="term">向量(vector)</span>就是<strong>有序的一串数</strong>,比如 <var>a</var> = [3, 1]。它有两副面孔:
         </p>
         <ul>
-          <li>给“工作年限”一个重要程度,比如 ×1.2;</li>
-          <li>给“项目经验”一个重要程度,比如 ×2.0;</li>
-          <li>再加上一个“底分 / 心情分”,比如今天面试官心情好,所有人 +0.5;</li>
-          <li>把它们加起来,得到一个总分,再根据总分决定“要不要”。</li>
+          <li><strong>一串数</strong>:比如“身高 175、体重 68”就是一个二维向量 [175, 68];一张 28×28 的图片摊平就是 784 维向量。</li>
+          <li><strong>一个箭头 / 一个点</strong>:[3, 1] 可以画成从原点指向 (3, 1) 的箭头。这让我们能谈“方向”和“长度”。</li>
         </ul>
-        <p>
-          恭喜,你刚刚已经在脑子里跑了一遍神经元。那几个“重要程度”就是
-          <span class="term">权重(weight)</span>,那个“底分”就是
-          <span class="term">偏置(bias)</span>,“加起来”就是
-          <span class="term">加权求和</span>,“根据总分做决定”就是
-          <span class="term">激活函数(activation)</span>。
-        </p>
-
-        <h2>2. 神经元内部的两步运算</h2>
-        <p>把上面的故事写成式子。设输入是 <var>x</var><sub>1</sub>、<var>x</var><sub>2</sub>,神经元先做<strong>第一步:加权求和 + 偏置</strong>,得到一个中间值 <var>z</var>:</p>
-
-        <div class="mathblock reveal">
-          <var>z</var> = <var>w</var><sub>1</sub><var>x</var><sub>1</sub> + <var>w</var><sub>2</sub><var>x</var><sub>2</sub> + <var>b</var>
-          <span class="label">w 是权重(每条线索的重要程度),b 是偏置(底分),z 叫“净输入 / 净激活值”</span>
-        </div>
-
-        <p>然后做<strong>第二步:把 <var>z</var> 丢进一个激活函数 <var>f</var></strong>,得到神经元的最终输出 <var>a</var>:</p>
-
-        <div class="mathblock reveal">
-          <var>a</var> = <var>f</var>(<var>z</var>)
-          <span class="label">a 是这个神经元的输出,也就是它对当前输入给出的“判断结果”</span>
-        </div>
-
         <div class="figure reveal">
           <div class="diagram">
-            <svg viewBox="0 0 660 240" role="img" aria-label="单个神经元的结构图">
-              <!-- 连线 -->
-              <line x1="86" y1="72" x2="262" y2="112" stroke="#5b6f93" stroke-width="2" />
-              <line x1="86" y1="168" x2="262" y2="128" stroke="#5b6f93" stroke-width="2" />
-              <line x1="338" y1="120" x2="428" y2="120" stroke="#5b6f93" stroke-width="2" />
-              <line x1="492" y1="120" x2="568" y2="120" stroke="#5b6f93" stroke-width="2" />
-              <!-- 输入节点 -->
-              <circle cx="60" cy="72" r="26" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="2" />
-              <text x="60" y="78" text-anchor="middle" fill="#eef4ff" font-size="18" font-style="italic">x₁</text>
-              <circle cx="60" cy="168" r="26" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="2" />
-              <text x="60" y="174" text-anchor="middle" fill="#eef4ff" font-size="18" font-style="italic">x₂</text>
-              <!-- 权重标注 -->
-              <text x="165" y="78" text-anchor="middle" fill="#8ef0d1" font-size="14">× w₁</text>
-              <text x="165" y="165" text-anchor="middle" fill="#8ef0d1" font-size="14">× w₂</text>
-              <!-- 求和节点 -->
-              <circle cx="300" cy="120" r="38" fill="rgba(139,123,255,0.16)" stroke="#8b7bff" stroke-width="2" />
-              <text x="300" y="116" text-anchor="middle" fill="#eef4ff" font-size="22">Σ</text>
-              <text x="300" y="136" text-anchor="middle" fill="#b6c5e1" font-size="12">+ b</text>
-              <text x="300" y="184" text-anchor="middle" fill="#8499bd" font-size="12">加权求和</text>
-              <!-- 激活节点 -->
-              <rect x="430" y="92" width="62" height="56" rx="14" fill="rgba(142,240,209,0.12)" stroke="#8ef0d1" stroke-width="2" />
-              <text x="461" y="126" text-anchor="middle" fill="#eef4ff" font-size="20" font-style="italic">f</text>
-              <text x="461" y="170" text-anchor="middle" fill="#8499bd" font-size="12">激活函数</text>
-              <!-- 输出节点 -->
-              <circle cx="596" cy="120" r="28" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" />
-              <text x="596" y="126" text-anchor="middle" fill="#eef4ff" font-size="18" font-style="italic">a</text>
+            <svg viewBox="0 0 420 240" role="img" aria-label="二维向量示意">
+              <defs>
+                <marker id="mv" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#6ac3ff" /></marker>
+                <marker id="mv2" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8ef0d1" /></marker>
+              </defs>
+              <!-- axes -->
+              <line x1="40" y1="200" x2="400" y2="200" stroke="#46587a" stroke-width="1.5" />
+              <line x1="40" y1="200" x2="40" y2="20" stroke="#46587a" stroke-width="1.5" />
+              <text x="392" y="218" fill="#8499bd" font-size="11">x</text>
+              <text x="20" y="28" fill="#8499bd" font-size="11">y</text>
+              <!-- grid ticks -->
+              <g stroke="#2b3a58" stroke-width="1">
+                <line x1="130" y1="200" x2="130" y2="196" /><line x1="220" y1="200" x2="220" y2="196" /><line x1="310" y1="200" x2="310" y2="196" />
+                <line x1="40" y1="140" x2="44" y2="140" /><line x1="40" y1="80" x2="44" y2="80" />
+              </g>
+              <!-- vector a = [3,1] -> scaled: x 40+3*90=310, y 200-1*60=140 -->
+              <line x1="40" y1="200" x2="310" y2="140" stroke="#6ac3ff" stroke-width="2.5" marker-end="url(#mv)" />
+              <text x="316" y="136" fill="#6ac3ff" font-size="13">a = [3, 1]</text>
+              <!-- vector b = [1,2] -> x 40+90=130, y 200-120=80 -->
+              <line x1="40" y1="200" x2="130" y2="80" stroke="#8ef0d1" stroke-width="2.5" marker-end="url(#mv2)" />
+              <text x="120" y="70" fill="#8ef0d1" font-size="13">b = [1, 2]</text>
             </svg>
           </div>
-          <p class="figure__cap">一个神经元:输入各自乘上权重 → 求和再加偏置得到 z → 过激活函数 f → 输出 a。</p>
+          <p class="figure__cap">向量 [3, 1] 就是从原点指向 (3, 1) 的箭头。方向和长度,后面点积会用到。</p>
         </div>
-
-        <h2>3. 别光看,动手拧一拧</h2>
-        <p>
-          下面是一个真正能玩的神经元。拖动滑块改变输入 <var>x</var>、权重 <var>w</var>、偏置 <var>b</var>,
-          再切换不同的激活函数,观察输出怎么变。建议你试试这几件事:
-        </p>
+        <p>两个基本操作:</p>
         <ul>
-          <li>把某个权重拖成<strong>负数</strong>,看看那条输入是怎么“反着起作用”的;</li>
-          <li>只调<strong>偏置 b</strong>,感受它整体抬高 / 压低输出的效果(它就是个“底分”);</li>
-          <li>切到 <strong>ReLU</strong>,把 z 调到负数,看输出怎么被“一刀切”成 0。</li>
+          <li><strong>加法</strong>:对应位置相加,[3, 1] + [1, 2] = [4, 3](几何上是“首尾相接”)。</li>
+          <li><strong>数乘</strong>:每个数乘同一个倍数,2 × [3, 1] = [6, 2](几何上是把箭头拉长/缩短)。</li>
         </ul>
-
-        <div class="figure reveal">
-          <div data-lab="neuron"></div>
-          <p class="figure__cap">神经元实验台:中间那行式子,就是上面 z = wx + b 再过激活函数的实时计算。</p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">深度学习里到处是向量</span>
+          <p>
+            一个样本(一张图、一行特征)是向量;一个词的<strong>词嵌入</strong>是向量(第 14 章);
+            一个神经元的<strong>权重</strong>也是向量(第 2 章)。学会向量,等于拿到了后面所有内容的“通用容器”。
+          </p>
         </div>
 
-        <h2>4. 为什么<strong>非得</strong>有激活函数?</h2>
+        <h2>3. 点积:两个向量有多“合拍”</h2>
         <p>
-          这是初学者最容易忽略、但极其关键的一点。假如<strong>去掉</strong>激活函数,
-          神经元就只剩“加权求和”这一步,也就是一个<strong>线性变换</strong>。
-          这时候,你把很多层这样的神经元叠起来,会发生一件令人沮丧的事:
+          <span class="term">点积(dot product)</span>是本书<strong>出镜率最高</strong>的运算。做法极简单——
+          <strong>对应位置相乘,再全部加起来</strong>,得到<strong>一个数</strong>:
         </p>
         <div class="mathblock reveal">
-          第二层(第一层) = <var>W</var><sub>2</sub>(<var>W</var><sub>1</sub><var>x</var>) = (<var>W</var><sub>2</sub><var>W</var><sub>1</sub>)<var>x</var> = <var>W</var>′<var>x</var>
-          <span class="label">两层线性叠加,等价于一层线性。叠 100 层也一样,还是一条“直线”</span>
+          <var>a</var> · <var>b</var> = <var>a</var><sub>1</sub><var>b</var><sub>1</sub> + <var>a</var><sub>2</sub><var>b</var><sub>2</sub> + … + <var>a</var><sub>n</sub><var>b</var><sub>n</sub>
+          <span class="label">例:[3, 1] · [1, 2] = 3×1 + 1×2 = 5</span>
+        </div>
+        <p>它最有用的性质是几何意义:<strong>点积衡量两个向量“方向合不合拍”</strong>。</p>
+        <div class="mathblock reveal">
+          <var>a</var> · <var>b</var> = |<var>a</var>| |<var>b</var>| cos<var>θ</var>
+          <span class="label">θ 是两向量夹角:方向越接近,cosθ 越大,点积越大</span>
+        </div>
+        <ul>
+          <li>方向<strong>基本一致</strong>(夹角小)→ 点积<strong>大而正</strong> → “很合拍 / 很相关”;</li>
+          <li>方向<strong>垂直</strong>(夹角 90°,cos=0)→ 点积<strong>为 0</strong> → “毫不相关”;</li>
+          <li>方向<strong>相反</strong>(夹角大)→ 点积<strong>为负</strong> → “负相关”。</li>
+        </ul>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">记住这一条,后面省一半力气</span>
+          <p>
+            <strong>一个神经元</strong>算的就是“输入向量 · 权重向量 + 偏置”(第 2 章);
+            <strong>注意力</strong>用 Query 和 Key 的点积当“相关性打分”(第 16 章);
+            <strong>词向量相似度</strong>也是点积(第 14、19 章)。点积 = “合拍程度”,这个直觉会一路带你到大模型。
+          </p>
+        </div>
+
+        <h2>4. 矩阵:一次“批量线性变换”</h2>
+        <p>
+          <span class="term">矩阵(matrix)</span>就是把数字排成的<strong>方阵</strong>(几行几列)。你可以把它理解成一台
+          “<strong>把向量变成另一个向量</strong>”的机器。核心操作是<strong>矩阵 × 向量</strong>:
+        </p>
+        <div class="mathblock reveal">
+          <span class="frac"><span>[ 2&nbsp;&nbsp;1 ]</span><span>[ 0&nbsp;&nbsp;3 ]</span></span>
+          × [1, 2] = [ 2×1 + 1×2 , 0×1 + 3×2 ] = [4, 6]
+          <span class="label">输出的每个数 = 矩阵“对应那一行”和输入向量做一次点积</span>
         </div>
         <p>
-          换句话说,<strong>没有激活函数,叠再多层都白搭</strong>,整个网络的表达能力和单层一模一样,
-          只能学“按比例缩放”这种最简单的关系,学不会任何“拐弯”的、复杂的模式。
+          看出来了吗?<strong>矩阵乘向量 = 一堆点积 = 一堆加权求和</strong>。矩阵有几行,输出就有几个数,
+          每个数都是“那一行的权重”和输入的点积。这正是神经网络<strong>一整层</strong>在做的事:
+          一层有很多神经元,每个神经元用自己那行权重和输入做点积——用一个矩阵就一次算完(第 3 章)。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">形状很重要</span>
+          <p>
+            一个 <var>m</var>×<var>n</var> 的矩阵(<var>m</var> 行 <var>n</var> 列)把一个 <var>n</var> 维向量变成 <var>m</var> 维向量。
+            后面看到“<code>784→128</code>”这种写法,意思就是有个 128×784 的权重矩阵,把 784 维输入压成 128 维(第 3 章)。
+          </p>
+        </div>
+
+        <h2>5. 导数:斜率,告诉你“往哪走会变大”</h2>
+        <p>
+          <span class="term">导数(derivative)</span>说的是:一个函数在某一点<strong>变化有多快、朝哪个方向变</strong>,
+          也就是那一点的<strong>斜率</strong>。
+        </p>
+        <ul>
+          <li>导数<strong>为正</strong>:此处 <var>x</var> 增大,函数值<strong>上升</strong>(上坡);</li>
+          <li>导数<strong>为负</strong>:此处 <var>x</var> 增大,函数值<strong>下降</strong>(下坡);</li>
+          <li>导数<strong>为 0</strong>:此处是<strong>平的</strong>(可能是山顶或谷底)。</li>
+        </ul>
+        <div class="mathblock reveal">
+          <var>f</var>(<var>x</var>) = <var>x</var><sup>2</sup> 的导数是 <var>f</var>′(<var>x</var>) = 2<var>x</var>
+          <span class="label">在 x=3 处斜率是 6(陡上坡);在 x=0 处斜率是 0(谷底最平)</span>
+        </div>
+        <p>
+          当函数有很多个输入(比如模型有几百万个参数),对<strong>每个</strong>参数分别求导,把这些导数打包成一个向量,
+          就叫<span class="term">梯度(gradient)</span>。梯度指向“<strong>函数上升最快</strong>”的方向;
+          所以想让损失<strong>下降</strong>,就往梯度的<strong>反方向</strong>挪一小步——这就是第 5 章的<strong>梯度下降</strong>。
         </p>
         <div class="callout callout--analogy reveal">
-          <span class="callout__title">打个比方</span>
+          <span class="callout__title">下山的比喻(会贯穿全书)</span>
           <p>
-            线性变换就像“只会把图片整体放大缩小、平移”的工具;
-            激活函数则给了网络“折叠、弯曲”的能力。
-            正是这点<strong>非线性</strong>,让深层网络能拟合出任意复杂的形状。
+            把损失函数想成一片<strong>山地</strong>,你要走到最低的谷底。梯度就是脚下“最陡上坡”的方向,
+            你每次都朝<strong>反方向</strong>(最陡下坡)迈一小步,慢慢就滑到谷底了。步子多大,由<strong>学习率</strong>决定(第 5 章)。
           </p>
         </div>
 
-        <h2>5. 几种常见的激活函数</h2>
-        <p>它们的差别,就在于“怎么根据总分 z 做决定”这条曲线长什么样:</p>
+        <h2>6. 链式法则:复合函数怎么求导</h2>
+        <p>
+          神经网络是很多层<strong>套在一起</strong>的复合函数:<var>f</var>(<var>g</var>(<var>h</var>(<var>x</var>)))。要知道“最里层的参数
+          怎么影响最终损失”,就得会<strong>给复合函数求导</strong>。工具只有一条——<span class="term">链式法则</span>:
+        </p>
+        <div class="mathblock reveal">
+          [ <var>f</var>(<var>g</var>(<var>x</var>)) ]′ = <var>f</var>′(<var>g</var>(<var>x</var>)) · <var>g</var>′(<var>x</var>)
+          <span class="label">外层的导数 × 内层的导数——“一层一层的变化率乘起来”</span>
+        </div>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">齿轮传动</span>
+          <p>
+            想象一串咬合的齿轮:第一个转 1 圈带动第二个转 2 圈,第二个转 1 圈带动第三个转 3 圈。
+            那第一个转 1 圈,最后一个转几圈?<strong>2 × 3 = 6 圈</strong>。链式法则就是这个理:
+            总的“变化率”等于<strong>沿途每一环变化率的乘积</strong>。
+          </p>
+        </div>
+        <p>
+          <strong>反向传播(第 6 章)的全部数学,就是这一条链式法则</strong>——从损失出发,一层层把导数乘回去,
+          就能算出每个参数“该往哪调”。现在记不住细节没关系,知道“反传 = 链式法则”这个等式就够了。
+        </p>
+
+        <h2>7. 概率、softmax 与对数</h2>
+        <p>做分类时,我们希望模型输出“<strong>每个类别的概率</strong>”。这里只需三个小概念:</p>
         <ul>
-          <li><span class="pill">Sigmoid</span> 把任何数压到 0 和 1 之间,像一个平滑的开关。早期很常用,但两端容易“饱和”(梯度趋近 0,学不动)。</li>
-          <li><span class="pill">Tanh</span> 和 Sigmoid 形状像,但压到 −1 到 1 之间,以 0 为中心。</li>
-          <li><span class="pill">ReLU</span> 大于 0 原样输出,小于 0 直接归零。又快又好用,是现代网络的默认选择。</li>
-          <li><span class="pill">LeakyReLU</span> 给负半轴留一条很小的斜坡(比如 0.01),缓解 ReLU 把神经元“彻底关死”的问题。</li>
-          <li><span class="pill">GELU</span> 比 ReLU 更平滑的“软开关”,是 BERT / GPT 这类 Transformer 的常客。</li>
+          <li><strong>概率</strong>:0 到 1 之间的数,所有类别的概率<strong>加起来等于 1</strong>。</li>
+          <li><span class="term">softmax</span>:一台“<strong>归一化机器</strong>”,把模型吐出的一排任意分数,压成一排<strong>正的、加起来为 1</strong> 的概率(第 4 章细讲)。分数越高,分到的概率越大。</li>
+          <li><strong>对数 log</strong>:一个“压缩尺子”。它把很小的概率变成<strong>好处理的负数</strong>,还能把乘法变加法。</li>
         </ul>
-        <p>(上面的实验台里这些都能直接切换,建议挨个切一遍看曲线手感。)</p>
-
-        <h2>6. 对照真实代码:激活函数是怎么实现的</h2>
-        <p>
-          在本书配套的 C++ 项目里,每个激活函数都实现两个方法:<code>Activate</code>(前向,把 z 变成输出)
-          和 <code>DerivActivate</code>(它的导数,留着第 5 章反向传播时用)。先看最经典的 Sigmoid:
-        </p>
-
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/activate/sigmoid_activate.cpp</figcaption>
-          <pre class="code-walk__code"><code>double SigmoidActivate::Activate(const double &amp;input) {
-  return 1 / (1 + exp(-input));            <b class="cw-tag">1</b>
-}
-
-double SigmoidActivate::DerivActivate(const double &amp;output) {
-  return output * (1 - output);            <b class="cw-tag">2</b>
-}</code></pre>
-          <ol class="code-walk__notes">
-            <li><strong>前向</strong>:这一行就是 Sigmoid 的全部。输入 <var>z</var> 很大时 <code>exp(-z)</code> 趋近 0,输出趋近 1;<var>z</var> 很小(很负)时输出趋近 0;<var>z</var> = 0 时正好是 0.5。所以它把任意实数“压”进了 (0, 1)。</li>
-            <li><strong>导数</strong>:Sigmoid 有个非常漂亮的性质——它的导数可以直接用<em>输出</em> <var>a</var> 表示,即 <var>a</var>(1 − <var>a</var>),完全不用再碰输入。这让反向传播算起来特别省事(细节见第 5 章)。</li>
-          </ol>
-        </figure>
-
-        <p>再看现在最流行的 ReLU,简单到几乎像在开玩笑:</p>
-
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/activate/relu_activate.cpp</figcaption>
-          <pre class="code-walk__code"><code>double ReluActivate::Activate(const double &amp;x) {
-  return x > 0 ? x : 0;                     <b class="cw-tag">1</b>
-}
-
-double ReluActivate::DerivActivate(const double &amp;output) {
-  return output > 0 ? 1 : 0;               <b class="cw-tag">2</b>
-}</code></pre>
-          <ol class="code-walk__notes">
-            <li><strong>前向</strong>:正数原样放过,负数一律压成 0。就这么简单。它的好处是计算极快,而且在正区间梯度恒为 1,不会像 Sigmoid 那样“饱和”到学不动。</li>
-            <li><strong>导数</strong>:像一个开关——输出为正时斜率是 1,否则是 0。负区间梯度为 0,正是它偶尔会把神经元“关死”的原因(于是有了 LeakyReLU 这种改良版)。</li>
-          </ol>
-        </figure>
-
-        <p>
-          最后看 Transformer 时代的宠儿 GELU。它不像 ReLU 那样“一刀切”,而是按“<var>x</var> 有多大概率为正”来平滑地决定保留多少,所以训练更稳:
-        </p>
-
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/activate/gelu_activate.cpp</figcaption>
-          <pre class="code-walk__code"><code>// 精确 GELU = x * 0.5 * (1 + erf(x / sqrt(2)))
-double GeluActivate::Activate(const double &amp;input) {
-  return 0.5 * input * (1.0 + std::erf(input * kInvSqrt2));   <b class="cw-tag">1</b>
-}
-
-double GeluActivate::DerivActivate(const double &amp;input,
-                                   const double &amp;output) {
-  double cdf = 0.5 * (1.0 + std::erf(input * kInvSqrt2));     <b class="cw-tag">2</b>
-  double pdf = std::exp(-0.5 * input * input) * kInvSqrt2Pi;
-  return cdf + input * pdf;                                   <b class="cw-tag">3</b>
-}</code></pre>
-          <ol class="code-walk__notes">
-            <li><strong>前向</strong>:<code>std::erf</code> 是“误差函数”,这里用它算出 Φ(<var>x</var>)——也就是“标准正态分布里,取值小于 <var>x</var> 的概率”。直觉上,<var>x</var> 越大越该保留,GELU 就用这个概率去平滑地缩放 <var>x</var>。</li>
-            <li><code>cdf</code> 就是上面说的 Φ(<var>x</var>)。</li>
-            <li><strong>导数</strong>:GELU 的导数是 Φ(<var>x</var>) + <var>x</var>·φ(<var>x</var>)(φ 是正态分布的“钟形曲线”)。它处处平滑,没有 ReLU 在 0 处的那个硬拐角,这也是它训练大模型时表现更稳的原因之一。</li>
-          </ol>
-        </figure>
-
-        <div class="callout callout--note reveal">
-          <span class="callout__title">注意一个工程细节</span>
-          <p>
-            你可能发现 GELU 有<strong>两个</strong> <code>DerivActivate</code>:一个只接收 <code>output</code>,一个同时接收 <code>input</code> 和 <code>output</code>。
-            原因是:像 Sigmoid 那样能“只用输出就算出导数”的激活很省事,但 GELU 做不到,它必须知道原始的 <var>z</var>(也就是 <code>input</code>)才能算准导数。
-            所以项目里前向时顺手把每一层的 <var>z</var> 都存了下来——这个伏笔到第 5 章会用上。
-          </p>
+        <div class="mathblock reveal">
+          交叉熵损失 = −log(模型给“正确答案”的概率)
+          <span class="label">概率≈1 → −log≈0(几乎没损失);概率≈0 → −log 很大(狠狠惩罚)</span>
         </div>
+        <p>
+          直觉:模型对正确答案<strong>越有把握</strong>(概率越接近 1),损失越接近 0;越是把正确答案判得<strong>没可能</strong>
+          (概率接近 0),损失就飙得越大。这个 <code>−log(正确概率)</code> 就是第 4 章的<strong>交叉熵</strong>,
+          也是分类任务里最常用的损失。
+        </p>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>一个神经元只做两步:① 加权求和加偏置得到 <var>z</var> = <var>Σ w·x</var> + <var>b</var>;② 过激活函数 <var>a</var> = <var>f</var>(<var>z</var>)。</li>
-            <li>权重决定每条输入“有多重要”(可正可负),偏置是一个可调的“底分 / 门槛”。</li>
-            <li>没有激活函数,叠多少层都等价于一层线性变换——非线性是深度网络的命根子。</li>
-            <li>不同激活函数差别只在那条曲线的形状:Sigmoid 平滑开关、ReLU 一刀切、GELU 软开关。</li>
-            <li>代码里每个激活都配一个前向 <code>Activate</code> 和一个导数 <code>DerivActivate</code>,后者留给反向传播。</li>
+            <li><strong>向量</strong> = 一串数,也是一个有方向、有长度的箭头;深度学习里的样本、词、权重都是向量。</li>
+            <li><strong>点积</strong> = 对应相乘再加总,衡量两个向量“合不合拍”:同向大、垂直为 0、反向为负。</li>
+            <li><strong>矩阵 × 向量</strong> = 一堆点积 = 一堆加权求和,正是神经网络“一层”的计算。</li>
+            <li><strong>导数</strong> = 斜率 = “往哪走会变大”;把每个参数的导数打包成<strong>梯度</strong>,反方向走就能降损失。</li>
+            <li><strong>链式法则</strong>:复合函数求导 = 各层变化率相乘——这就是反向传播的全部数学。</li>
+            <li><strong>softmax</strong> 把分数变概率,<strong>−log(正确概率)</strong> 就是交叉熵损失。</li>
           </ul>
         </section>
 
-        <h2>动手与思考</h2>
-        <div class="quiz reveal">
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 1:在实验台里把 w1 调成负数,输出发生了什么?为什么?</summary>
-            <div class="quiz__a">
-              <p>对应输入越大,反而把总分 <var>z</var> 拉得越低。因为负权重表示“这条线索是反向证据”——它出现得越多,神经元越倾向于给出更低的激活值。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 2:如果把所有神经元的激活函数都拿掉,一个 100 层的网络还能学复杂模式吗?</summary>
-            <div class="quiz__a">
-              <p>不能。100 层线性变换叠加仍然等价于一层线性变换(<var>W</var>′<var>x</var> + <var>b</var>′),表达能力和单层一样,学不会任何非线性的、需要“拐弯”的关系。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 3:为什么 Sigmoid 的导数写成 <code>output * (1 - output)</code> 这么简洁,而 GELU 却需要 input?</summary>
-            <div class="quiz__a">
-              <p>因为 Sigmoid 的导数恰好能用它自己的输出 <var>a</var> 表示为 <var>a</var>(1−<var>a</var>);而 GELU 的导数公式 Φ(<var>x</var>)+<var>x</var>·φ(<var>x</var>) 里离不开原始的 <var>x</var>(input),光有输出反推不出来,所以必须把 <var>z</var> 存下来。</p>
-            </div>
-          </details>
-        </div>
-
         <p class="muted">
-          一个神经元只能做很有限的判断。下一章,我们把成百上千个神经元堆成“层”、再叠成“网络”,
-          看数据怎么<strong>一层层向前流动</strong>,最终算出预测。
+          工具备齐了。下一章我们就用上它们,把那台“带旋钮的机器”拆到最小的一个零件——
+          <strong>一个神经元</strong>,看看它内部无非就是一次<em>点积 + 一个激活</em>。
         </p>
       </div>
     </main>
 
     <script src="assets/book.js"></script>
-    <script src="assets/labs.js"></script>
   </body>
 </html>

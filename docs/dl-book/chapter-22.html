@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 22 章 · MNIST 实战:把第一、二部分跑起来 | 深度学习入门</title>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body data-chapter="22">
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">第 22 章 · 代码实战</p>
+        <h1>MNIST 实战:把第一、二部分跑起来</h1>
+
+        <p class="lead">
+          第一、二部分你已经把<strong>神经元 → 网络 → 损失 → 梯度下降 → 反向传播 → 优化器 → 训练技巧</strong>拆了个遍。
+          这一章不引入任何新概念,而是带你逐段读一个<strong>真能跑、还真能到 ~98% 准确率</strong>的完整程序:
+          让网络学会认<strong>手写数字 0–9</strong>。整个程序就是仓库里的
+          <code>src/demo/mnist/main.cpp</code>,不到 200 行、不依赖任何大框架。读完你会发现:
+          前面那些概念,在这里都对应着实实在在的几行代码。
+        </p>
+
+        <section class="objectives reveal">
+          <h2>读完这一章,你会明白</h2>
+          <ul>
+            <li>一个真实训练程序从头到尾有哪五步:<strong>数据 → 建网 → 训练 → 评估 → 保存</strong>;</li>
+            <li>每一步分别在“兑现”前面哪一章的哪个概念;</li>
+            <li>那一行不起眼的 <code>Train(...)</code> 背后,到底在循环做什么;</li>
+            <li>怎么亲手把它编译、跑起来,亲眼看到准确率一轮轮往上爬。</li>
+          </ul>
+        </section>
+
+        <h2>1. 任务与全景:一张图片,一个数字</h2>
+        <p>
+          <span class="term">MNIST</span> 是深度学习界的“Hello World”:7 万张 <strong>28×28</strong> 的手写数字灰度图
+          (6 万张训练、1 万张测试),每张图是 0–9 中的一个数字。我们的任务就是:<strong>看一张图,说出它是几</strong>。
+          这是个标准的<strong>十分类</strong>问题,正好把第一、二部分全用上。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">一张图片<small>28×28 = 784 个像素</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">网络<small>784 → 128 → 64 → 10</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">10 个分数<small>对每个数字打分</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">softmax<small>变成概率</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">预测<small>概率最高的那个数字</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">整条流水线,就是第 3 章“前向传播”加第 4 章“softmax”。训练好后,测试准确率约 97.8%。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">这一章就是一次“对答案”</span>
+          <p>
+            左边是本书讲过的道理,右边是它在 <code>main.cpp</code> 里对应的真身。你不需要背代码,
+            只要能把“<strong>这几行在干第几章那件事</strong>”对上号,就说明前面真的懂了。
+          </p>
+        </div>
+
+        <h2>2. 第一步 · 数据:把图片变成网络能吃的数字</h2>
+        <p>
+          回忆第 0 章的词:一张图片是一个<span class="term">样本</span>,描述它的数字是<span class="term">特征</span>,
+          正确数字是<span class="term">标签</span>。网络只认数字,所以要先把图片摊平:
+          28×28 的像素拉成一条 <strong>784 维</strong>的向量,每个像素的灰度<strong>归一化到 [0,1]</strong>
+          (0=纯黑,1=纯白)。这 784 个数,就是喂给第 3 章那个输入层的特征。
+        </p>
+        <p>
+          标签也要变形。数字 <code>3</code> 不能直接当目标(否则模型会以为 3 比 1 “大三倍”),
+          而是写成<strong>独热(one-hot)</strong>向量——只有第 3 个位置是 1,其余是 0。这正好对上第 4 章 softmax + 交叉熵想要的目标形状。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/mnist/main.cpp · 加载数据与构造 one-hot(精简)</figcaption>
+          <pre class="code-walk__code"><code>MnistData mnist_data;
+mnist_data.LoadMnistData(train_image, train_label,
+                         test_image,  test_label);   <b class="cw-tag">1</b>
+
+// 每张图 = 784 个已归一化到 [0,1] 的像素
+int N_train = mnist_data.train_data().size();
+
+// 把标签数字变成 one-hot: 数字 d -> 第 d 位为 1
+vector&lt;vector&lt;double&gt;&gt; train_target(N_train, vector&lt;double&gt;(10, 0.0));
+for (int i = 0; i &lt; N_train; i++)
+  train_target[i][ mnist_data.train_labels()[i] ] = 1.0;   <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>一次性把 6 万张训练图 + 1 万张测试图读进来。像素在 <code>mnist_data.h</code> 里就已经除以 255 归一化好了——这一步很重要,不然大数值会让训练很难收敛(第 9 章)。</li>
+            <li>把每个标签数字翻译成 10 维 one-hot。<code>train_target[i]</code> 就是第 <code>i</code> 张图的“正确答案分布”,交给第 4 章的交叉熵去比对。</li>
+          </ol>
+        </figure>
+
+        <h2>3. 第二步 · 建网:把积木一块块拼起来</h2>
+        <p>
+          这是最能体现“前面白学没白学”的一段。<strong>一行 <code>Init</code> 定层数,五行 <code>set_*</code> 选积木</strong>,
+          每一行都是前面某一章的主角:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/mnist/main.cpp · 构造网络(冷启动分支)</figcaption>
+          <pre class="code-walk__code"><code>NeuralNetwork demo_network;
+demo_network.Init(vector&lt;int&gt;{784, 128, 64, 10});          <b class="cw-tag">1</b>
+
+demo_network.set_random_seed(42);                          <b class="cw-tag">2</b>
+demo_network.set_param_init_function(PARAM_INIT_HE);       <b class="cw-tag">3</b>
+demo_network.set_activate_function(ACTIVATE_RELU);         <b class="cw-tag">4</b>
+demo_network.set_softmax_function(SOFTMAX_STD);            <b class="cw-tag">5</b>
+demo_network.set_loss_function(LOSS_CROSS_ENTROPY);        <b class="cw-tag">6</b>
+demo_network.set_optimizer_function(OPTIMIZER_ADAM);       <b class="cw-tag">7</b></code></pre>
+          <ol class="code-walk__notes">
+            <li><strong>网络结构(第 3 章)</strong>:输入 784,两个隐藏层 128、64,输出 10。数据会一层层向前流动。</li>
+            <li><strong>固定随机种子</strong>:让每次运行的初始旋钮一样,结果可复现(方便调试)。</li>
+            <li><strong>He 初始化(第 9 章)</strong>:给旋钮一个合适的随机起点。搭配 ReLU 的标配,避免一开始就“信号消失”。</li>
+            <li><strong>激活函数 ReLU(第 2 章)</strong>:每个神经元加权求和之后过一道 ReLU,给网络“掰弯”的非线性能力。</li>
+            <li><strong>softmax(第 4 章)</strong>:把输出层的 10 个分数变成加起来为 1 的概率。</li>
+            <li><strong>交叉熵损失(第 4 章)</strong>:衡量“预测的概率分布”和 one-hot 答案差多少——分类任务的黄金搭档。</li>
+            <li><strong>优化器 Adam(第 9 章)</strong>:决定拿到梯度后“怎么拧旋钮”,比朴素 SGD 收敛更快更稳。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">看,整本书前半部分都在这七行里</span>
+          <p>
+            层(第 3 章)+ 激活(第 2 章)+ softmax/损失(第 4 章)+ 初始化/优化器(第 9 章)。
+            这就是<strong>“可插拔策略”</strong>的好处:换个激活、换个优化器,只需改一行。第 9 章的 <code>optimizer_bench</code>
+            demo 就是靠这种一行切换,把 SGD / Momentum / Adam 拉出来赛跑的。
+          </p>
+        </div>
+
+        <h2>4. 第三步 · 学习率调度:先热身,再缓降</h2>
+        <p>
+          第 9 章说过,学习率(每次拧旋钮的步子)不该一成不变。这里用 <span class="term">WarmupCosineLR</span>:
+          开头一个 epoch <strong>从很小慢慢升到设定值</strong>(热身,防止一上来步子太大把网络“踹飞”),
+          之后沿<strong>余弦曲线平滑下降</strong>(后期小步微调,稳稳落地)。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/mnist/main.cpp · 挂上学习率调度器</figcaption>
+          <pre class="code-walk__code"><code>int batch_size = 64, epochs = 5;
+int steps_per_epoch = (N_train + batch_size - 1) / batch_size;
+int total_steps = epochs * steps_per_epoch;
+int warmup_steps = steps_per_epoch;      // 用 1 个 epoch 热身   <b class="cw-tag">1</b>
+
+demo_network.set_lr_scheduler(std::make_shared&lt;WarmupCosineLR&gt;(
+    base_lr, warmup_steps, total_steps, min_lr));                <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li><strong>step 的定义(第 5、9 章)</strong>:一个 batch 更新一次参数叫一 step;跑完一遍全部数据(<code>steps_per_epoch</code> 步)叫一个 epoch。这里 batch=64、训练 5 个 epoch。</li>
+            <li>把调度器挂到网络上,训练时每一步都会先问它“<strong>这一步该用多大的学习率</strong>”,再更新参数。</li>
+          </ol>
+        </figure>
+
+        <h2>5. 第四步 · 训练:这一行 <code>Train</code> 背后的循环</h2>
+        <p>
+          真正的训练只有一句话:<code>Train(...)</code>。但它内部,正是第 0 章那个“预测 → 对答案 → 算损失 → 微调”的循环,
+          把 6 万张图反复过 5 遍。传进去的那个 <code>each_step</code> 回调,只是让我们<strong>每个 epoch 末偷看一眼成绩</strong>。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/mnist/main.cpp · 训练主调用与回调(精简)</figcaption>
+          <pre class="code-walk__code"><code>auto each_step = [&amp;](NeuralNetwork &amp;net, int step, bool &amp;) {
+  // 只在每个 epoch 末算一次 loss / 准确率, 打印出来
+  double test_loss = 0;
+  net.CalcLoss(test_data, test_target, test_loss);
+  double acc = Accuracy(net, test_data, test_labels);       <b class="cw-tag">1</b>
+  cout &lt;&lt; "epoch ... test_acc=" &lt;&lt; acc &lt;&lt; endl;
+};
+
+demo_network.Train(train_data, train_target,
+                   each_step, total_steps, batch_size, base_lr);  <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>回调里顺便调 <code>CalcLoss</code> 看损失、调下面的 <code>Accuracy</code> 看准确率,让你亲眼看到它俩一个降、一个升。</li>
+            <li>核心就这一句。下面这张图拆开它每一步在做什么。</li>
+          </ol>
+        </figure>
+        <div class="figure figure--reading reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">打乱 + 切 batch<small>每步取 64 张</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">前向<small>第 3 章:算出预测</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">反向<small>第 6 章:算每个旋钮的梯度</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">更新<small>第 4/6 章:Adam 按学习率拧旋钮</small></div>
+            </div>
+          </div>
+          <p class="figure__cap"><code>Train</code> 内部每一 step 都跑这一圈(可选还有第 9 章的梯度裁剪),循环几千步,损失就降下来了。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">一 step = 第 0 章那张“训练循环”图转一圈</span>
+          <p>
+            前向对应“①预测”,交叉熵对应“②对答案 / ③算差距”,反向 + Adam 对应“④微调旋钮”。
+            你在第 0 章看到的那个抽象循环,到这里终于变成了会真的把准确率从 ~10%(瞎猜)拉到 ~98% 的具体代码。
+          </p>
+        </div>
+
+        <h2>6. 第五步 · 评估:准确率到底怎么算</h2>
+        <p>
+          损失小不等于“认得准”,我们更关心<strong>准确率</strong>。做法很直接:让网络对一批图前向一遍,
+          每张图得到 10 个概率,取<strong>概率最高</strong>的那个下标(<code>argmax</code>)当预测,再和真标签比,数数对了几张。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/mnist/main.cpp · Accuracy(精简)</figcaption>
+          <pre class="code-walk__code"><code>net.PredictBatch(x, pred);          // 一次前向一大批, 比逐张快   <b class="cw-tag">1</b>
+int correct = 0;
+for (int i = 0; i &lt; pred.size(); i++) {
+  int pi = argmax(pred[i]);         // 概率最高的那个数字         <b class="cw-tag">2</b>
+  if (pi == labels[i]) correct++;
+}
+return correct * 1.0 / pred.size();                              <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li><code>PredictBatch</code> 就是第 3 章的前向传播,只是一次算一整批(一个大矩阵乘法),比循环逐张调 <code>Predict</code> 快得多。</li>
+            <li><code>argmax</code>:10 个概率里选最大的下标。这个下标就是模型“猜的数字”。</li>
+            <li>对的张数 / 总张数 = 准确率。跑完 5 个 epoch,你会看到测试准确率稳定在 <strong>97%~98%</strong>。</li>
+          </ol>
+        </figure>
+
+        <h2>7. 收尾 · 保存与续训</h2>
+        <p>
+          训练很贵,当然要把学好的旋钮存下来。程序最后把所有参数导出到 <code>demo.v2.param</code>;
+          <strong>下次再运行会自动检测到它、加载续训</strong>(并把学习率自动降到很小做微调)。想从零重来,删掉这个文件即可。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/mnist/main.cpp · 保存参数(精简)</figcaption>
+          <pre class="code-walk__code"><code>NeuralNetwork::NetworkParam param;
+NeuralNetwork::NetworkOption option;
+demo_network.ExportNetworkParam(param, option);                 <b class="cw-tag">1</b>
+NeuralNetworkLoader::ExportParamToFile(param, option, "demo.v2.param");</code></pre>
+          <ol class="code-walk__notes">
+            <li>把网络里的层大小、权重、偏置全部序列化成一个二进制文件。第 18 章那个语言模型也是同样的套路存模型。</li>
+          </ol>
+        </figure>
+
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">自己跑一遍(强烈建议)</span>
+          <p>
+            在仓库的 <code>src/</code> 目录下:<br />
+            <code>./build.sh</code> &nbsp;→&nbsp; 编译<br />
+            <code>./bin/mnist</code> &nbsp;→&nbsp; 训练 + 评估<br />
+            你会看到每个 epoch 打印 <code>train_loss / test_loss / test_acc / lr</code>——
+            <strong>损失一路下降、准确率一路上升</strong>。试着改改 <code>epochs</code>、把 <code>ACTIVATE_RELU</code> 换成
+            <code>ACTIVATE_SIGMOID</code>、或把 <code>OPTIMIZER_ADAM</code> 换成 <code>OPTIMIZER_SGD</code>,亲眼感受前几章讲的差别。
+          </p>
+        </div>
+
+        <section class="summary reveal">
+          <h2>小结</h2>
+          <ul>
+            <li>一个完整训练程序 = <strong>数据 → 建网 → 训练 → 评估 → 保存</strong>五步,每步都对应前面某一章。</li>
+            <li>数据:图片摊平成 784 维并归一化(特征),标签变 one-hot(第 0、4 章)。</li>
+            <li>建网:<code>Init</code> 定层(第 3 章)+ 激活(第 2 章)+ softmax/交叉熵(第 4 章)+ 初始化/Adam(第 9 章),一行一个概念。</li>
+            <li>训练:一句 <code>Train</code> 背后是“前向(2)→反向(5)→Adam 更新(4/6)”的循环,配学习率热身+余弦衰减(6)。</li>
+            <li>评估:<code>PredictBatch</code> 前向 + <code>argmax</code> 比对,得到 ~98% 准确率;最后把参数存盘可续训。</li>
+          </ul>
+        </section>
+
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:为什么标签数字要变成 one-hot,而不是直接把数字当目标?</summary>
+            <div class="quiz__a">
+              <p>因为类别之间没有“大小/远近”关系(数字 8 不比 1 “大八倍”)。直接用数字会给模型错误的顺序假设。one-hot 把它变成 10 个类的概率目标,正好和 softmax + 交叉熵(第 4 章)配套。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:那一行 <code>Train(...)</code> 内部,每一步(step)依次做了哪几件事?</summary>
+            <div class="quiz__a">
+              <p>打乱数据并取一个 batch → 前向算出预测(第 3 章)→ 用交叉熵算损失 → 反向传播算出每个参数的梯度(第 6 章)→(可选梯度裁剪)→ 用 Adam 按当前学习率更新参数(第 5、9 章)。循环成千上万步。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:准确率是怎么从网络的 10 个输出算出来的?</summary>
+            <div class="quiz__a">
+              <p>网络对每张图输出 10 个概率,取概率最高的下标(argmax)作为预测数字,与真实标签比较,统计预测对的比例。这一步只用前向传播(<code>PredictBatch</code>),不需要反向。</p>
+            </div>
+          </details>
+        </div>
+
+        <p class="muted">
+          你已经把第一、二部分的所有概念,在一份真实代码里对上了号。下一章我们如法炮制,
+          去读那个<strong>字符级语言模型</strong>的完整程序——把第四、五部分(注意力、Transformer、生成、采样)也一并落到代码上。
+        </p>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>

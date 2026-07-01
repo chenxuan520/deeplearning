@@ -11,17 +11,29 @@
   // 全书章节清单 (顺序即阅读顺序, 索引 == data-chapter 的值)
   var CHAPTERS = [
     { num: "0", title: "导论:这本书到底在讲什么", file: "chapter-00.html", part: "第一部分 · 打地基" },
-    { num: "1", title: "一个神经元", file: "chapter-01.html", part: "第一部分 · 打地基" },
-    { num: "2", title: "搭成网络:前向传播", file: "chapter-02.html", part: "第一部分 · 打地基" },
-    { num: "3", title: "怎么衡量“错”:损失函数", file: "chapter-03.html", part: "第二部分 · 学习是怎么发生的" },
-    { num: "4", title: "怎么变“好”:梯度下降", file: "chapter-04.html", part: "第二部分 · 学习是怎么发生的" },
-    { num: "5", title: "反向传播", file: "chapter-05.html", part: "第二部分 · 学习是怎么发生的" },
-    { num: "6", title: "让它真的训得动", file: "chapter-06.html", part: "第二部分 · 学习是怎么发生的" },
-    { num: "7", title: "为什么需要注意力", file: "chapter-07.html", part: "第三部分 · 序列与 Transformer" },
-    { num: "8", title: "注意力机制", file: "chapter-08.html", part: "第三部分 · 序列与 Transformer" },
-    { num: "9", title: "Transformer 的完整结构", file: "chapter-09.html", part: "第三部分 · 序列与 Transformer" },
-    { num: "10", title: "字符级语言模型", file: "chapter-10.html", part: "第四部分 · 通往大模型" },
-    { num: "11", title: "通往大模型", file: "chapter-11.html", part: "第四部分 · 通往大模型" }
+    { num: "1", title: "数学预备:看懂公式的一点点数学", file: "chapter-01.html", part: "第一部分 · 打地基" },
+    { num: "2", title: "一个神经元", file: "chapter-02.html", part: "第一部分 · 打地基" },
+    { num: "3", title: "搭成网络:前向传播", file: "chapter-03.html", part: "第一部分 · 打地基" },
+    { num: "4", title: "怎么衡量“错”:损失函数", file: "chapter-04.html", part: "第二部分 · 学习是怎么发生的" },
+    { num: "5", title: "怎么变“好”:梯度下降", file: "chapter-05.html", part: "第二部分 · 学习是怎么发生的" },
+    { num: "6", title: "反向传播", file: "chapter-06.html", part: "第二部分 · 学习是怎么发生的" },
+    { num: "7", title: "激活函数全家福", file: "chapter-07.html", part: "第二部分 · 学习是怎么发生的" },
+    { num: "8", title: "优化器:从 SGD 到 Adam", file: "chapter-08.html", part: "第二部分 · 学习是怎么发生的" },
+    { num: "9", title: "让它真的训得动", file: "chapter-09.html", part: "第二部分 · 学习是怎么发生的" },
+    { num: "10", title: "正则化与泛化", file: "chapter-10.html", part: "第二部分 · 学习是怎么发生的" },
+    { num: "11", title: "评估与数据", file: "chapter-11.html", part: "第二部分 · 学习是怎么发生的" },
+    { num: "12", title: "CNN 卷积神经网络", file: "chapter-12.html", part: "第三部分 · 经典网络结构" },
+    { num: "13", title: "RNN 与 LSTM", file: "chapter-13.html", part: "第三部分 · 经典网络结构" },
+    { num: "14", title: "词嵌入与 word2vec", file: "chapter-14.html", part: "第三部分 · 经典网络结构" },
+    { num: "15", title: "为什么需要注意力", file: "chapter-15.html", part: "第四部分 · 序列与 Transformer" },
+    { num: "16", title: "注意力机制", file: "chapter-16.html", part: "第四部分 · 序列与 Transformer" },
+    { num: "17", title: "Transformer 的完整结构", file: "chapter-17.html", part: "第四部分 · 序列与 Transformer" },
+    { num: "18", title: "字符级语言模型", file: "chapter-18.html", part: "第五部分 · 通往大模型" },
+    { num: "19", title: "通往大模型:原理与训练", file: "chapter-19.html", part: "第五部分 · 通往大模型" },
+    { num: "20", title: "大模型的工程与基础设施", file: "chapter-20.html", part: "第五部分 · 通往大模型" },
+    { num: "21", title: "用好大模型:提示、RAG 与 Agent", file: "chapter-21.html", part: "第五部分 · 通往大模型" },
+    { num: "22", title: "MNIST 实战:第一、二部分", file: "chapter-22.html", part: "第六部分 · 代码实战" },
+    { num: "23", title: "mini-LM 实战:第四、五部分", file: "chapter-23.html", part: "第六部分 · 代码实战" }
   ];
 
   var STORAGE_LAST = "dlbook:last";
@@ -80,8 +92,36 @@
       li.appendChild(a);
       list.appendChild(li);
     });
+    var isGlossary = /glossary\.html$/.test(location.pathname);
+    list.appendChild(el("li", "book-rail__part", "附录"));
+    var gli = el("li");
+    var ga = el("a", "book-rail__link" + (isGlossary ? " is-current" : ""));
+    ga.href = "glossary.html";
+    ga.appendChild(el("span", "book-rail__num", "★"));
+    ga.appendChild(el("span", "book-rail__name", "术语表"));
+    gli.appendChild(ga);
+    list.appendChild(gli);
     aside.appendChild(list);
     return aside;
+  }
+
+  // 给 inner 里的 h2/h3 赋 id 并返回条目列表。
+  // 搜索索引与本章大纲都用它, 保证同一个标题算出的锚点 id 完全一致。
+  function assignHeadingIds(inner) {
+    var headings = [].slice.call(inner.querySelectorAll("h2, h3"));
+    var usedIds = {};
+    var entries = [];
+    headings.forEach(function (heading, index) {
+      if (heading.closest(".quiz")) return;
+      var text = heading.textContent.replace(/\s+/g, " ").trim();
+      if (!text) return;
+      var id = slugify(text, index);
+      while (usedIds[id]) id = id + "-" + index;
+      usedIds[id] = true;
+      heading.id = id;
+      entries.push({ heading: heading, id: id, text: text });
+    });
+    return entries;
   }
 
   function buildOutlineRail(inner) {
@@ -90,24 +130,14 @@
     aside.appendChild(el("div", "book-rail__title", "本章"));
 
     var list = el("ol", "book-rail__list book-rail__list--outline");
-    var headings = [].slice.call(inner.querySelectorAll("h2, h3"));
-    var usedIds = {};
     var links = [];
 
-    headings.forEach(function (heading, index) {
-      if (heading.closest(".quiz")) return;
-      var text = heading.textContent.replace(/\s+/g, " ").trim();
-      if (!text) return;
-
-      var id = slugify(text, index);
-      while (usedIds[id]) id = id + "-" + index;
-      usedIds[id] = true;
-      heading.id = id;
-
+    assignHeadingIds(inner).forEach(function (entry) {
+      var heading = entry.heading;
       var li = el("li", heading.tagName === "H3" ? "book-rail__outline-item book-rail__outline-item--sub" : "book-rail__outline-item");
       var a = el("a", "book-rail__outline-link");
-      a.href = "#" + id;
-      a.textContent = text;
+      a.href = "#" + entry.id;
+      a.textContent = entry.text;
       li.appendChild(a);
       list.appendChild(li);
       links.push({ link: a, heading: heading });
@@ -122,24 +152,51 @@
     return { aside: aside, links: links };
   }
 
+  // 把某个元素滚到视口垂直正中 (smooth 可选)
+  function scrollElementToCenter(target, smooth) {
+    var rect = target.getBoundingClientRect();
+    var y = rect.top + window.pageYOffset - (window.innerHeight / 2) + (rect.height / 2);
+    y = Math.max(0, y);
+    if (smooth) window.scrollTo({ top: y, behavior: "smooth" });
+    else window.scrollTo(0, y);
+  }
+
   function setupOutlineSpy(links) {
-    if (!links.length || !("IntersectionObserver" in window)) return;
+    if (!links.length) return;
     var current = null;
+    var lockUntil = 0;
     function setCurrent(link) {
       if (current === link) return;
       if (current) current.classList.remove("is-current");
       current = link;
       if (current) current.classList.add("is-current");
     }
-    var obs = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (!entry.isIntersecting) return;
-        links.forEach(function (item) {
-          if (item.heading === entry.target) setCurrent(item.link);
-        });
+    // 点击右侧目录: 把该小标题滚到视口正中, 并立即高亮它。
+    // 这样即使小节内容很少, 也不会误定位/误高亮到它下面的标题。
+    links.forEach(function (item) {
+      item.link.addEventListener("click", function (e) {
+        e.preventDefault();
+        lockUntil = Date.now() + 900; // 平滑滚动期间, 先别让 spy 抢高亮
+        setCurrent(item.link);
+        scrollElementToCenter(item.heading, true);
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, "", "#" + item.heading.id);
+        }
       });
-    }, { rootMargin: "-20% 0px -65% 0px", threshold: 0 });
-    links.forEach(function (item) { obs.observe(item.heading); });
+    });
+    if ("IntersectionObserver" in window) {
+      // 以"视口正中线"为判定线: 谁跨过中线就高亮谁, 与"点击居中"的行为对齐。
+      var obs = new IntersectionObserver(function (entries) {
+        if (Date.now() < lockUntil) return;
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          links.forEach(function (item) {
+            if (item.heading === entry.target) setCurrent(item.link);
+          });
+        });
+      }, { rootMargin: "-50% 0px -50% 0px", threshold: 0 });
+      links.forEach(function (item) { obs.observe(item.heading); });
+    }
     setCurrent(links[0].link);
   }
 
@@ -209,8 +266,11 @@
   }
 
   // ---------- 顶部 header + 进度条 ----------
-  function buildHeader(currentIdx, toc) {
+  function buildHeader(currentIdx, toc, search) {
     var ch = CHAPTERS[currentIdx];
+    var currentLabel = ch
+      ? "第 " + ch.num + " 章 · " + ch.title
+      : ((document.querySelector(".chapter__inner h1") || {}).textContent || "深度学习入门");
 
     var progress = el("div", "book-progress");
     progress.id = "bookProgress";
@@ -225,7 +285,7 @@
     var home = el("a", "book-header__home", "深度学习入门");
     home.href = "index.html";
 
-    var current = el("span", "book-header__current", "第 " + ch.num + " 章 · " + ch.title);
+    var current = el("span", "book-header__current", currentLabel);
     var pct = el("span", "book-header__pct");
     pct.id = "bookPct";
     pct.textContent = "0%";
@@ -233,6 +293,7 @@
     header.appendChild(menuBtn);
     header.appendChild(home);
     header.appendChild(current);
+    if (search) header.appendChild(makeSearchTrigger(search, "book-header__search", "搜索全书", SEARCH_ICON));
     header.appendChild(pct);
 
     document.body.appendChild(progress);
@@ -338,9 +399,234 @@
     nodes.forEach(function (n) { obs.observe(n); });
   }
 
+  // ---------- 全书搜索 ----------
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+  function escapeRegExp(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+  var SEARCH_ICON =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg>';
+
+  // 把一章的 .chapter__inner 拆成若干"以小标题分段"的可搜索片段
+  function extractSections(inner, ch, chIdx) {
+    assignHeadingIds(inner).forEach(function (entry) {
+      entry.heading.setAttribute("data-search-hid", entry.id);
+    });
+    var sections = [];
+    var current = { chIdx: chIdx, num: ch.num, chTitle: ch.title, file: ch.file, heading: ch.title, headingId: "", text: "" };
+    function pushCurrent() {
+      var t = current.text.replace(/\s+/g, " ").trim();
+      if (t) { current.text = t; sections.push(current); }
+    }
+    function walk(node) {
+      var kids = node.childNodes;
+      for (var i = 0; i < kids.length; i++) {
+        var c = kids[i];
+        if (c.nodeType === 1) {
+          var tag = (c.tagName || "").toUpperCase();
+          if (tag === "H2" || tag === "H3") {
+            pushCurrent();
+            var text = (c.textContent || "").replace(/\s+/g, " ").trim();
+            current = { chIdx: chIdx, num: ch.num, chTitle: ch.title, file: ch.file,
+              heading: text, headingId: c.getAttribute("data-search-hid") || "", text: text + " " };
+          } else if (tag === "SCRIPT" || tag === "STYLE" || tag === "SVG") {
+            /* 跳过脚本与 SVG 图内文字 */
+          } else {
+            walk(c);
+          }
+        } else if (c.nodeType === 3) {
+          current.text += c.nodeValue;
+        }
+      }
+    }
+    walk(inner);
+    pushCurrent();
+    return sections;
+  }
+
+  function createSearch() {
+    var overlay = el("div", "book-search");
+    overlay.innerHTML =
+      '<div class="book-search__backdrop" data-search-close></div>' +
+      '<div class="book-search__panel" role="dialog" aria-modal="true" aria-label="全书搜索">' +
+      '  <div class="book-search__bar">' +
+      '    <span class="book-search__icon">' + SEARCH_ICON + '</span>' +
+      '    <input type="search" name="book-search" class="book-search__input" placeholder="搜索全书:标题、正文、代码…" autocomplete="off" spellcheck="false" aria-label="搜索全书" />' +
+      '    <button type="button" class="book-search__close" data-search-close aria-label="关闭搜索">Esc</button>' +
+      '  </div>' +
+      '  <div class="book-search__status" data-search-status></div>' +
+      '  <div class="book-search__results" data-search-results></div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    var input = overlay.querySelector(".book-search__input");
+    var statusEl = overlay.querySelector("[data-search-status]");
+    var resultsEl = overlay.querySelector("[data-search-results]");
+    var INDEX = [];
+    var indexReady = false, indexLoading = false, pending = null, debounce = null, activeIndex = -1;
+    var READY_HINT = "已索引全书 · 输入关键词开始搜索(↑↓ 选择,Enter 打开,Esc 关闭)";
+
+    function setStatus(t) { statusEl.textContent = t; }
+
+    function ensureIndex() {
+      if (indexReady || indexLoading) return;
+      indexLoading = true;
+      setStatus("正在准备全书索引…");
+      Promise.all(CHAPTERS.map(function (ch, i) {
+        return fetch(ch.file)
+          .then(function (r) { return r.text(); })
+          .then(function (html) {
+            var doc = new DOMParser().parseFromString(html, "text/html");
+            var inner = doc.querySelector(".chapter__inner");
+            return inner ? extractSections(inner, ch, i) : [];
+          })
+          .catch(function () { return []; });
+      })).then(function (all) {
+        INDEX = [];
+        all.forEach(function (list) { INDEX = INDEX.concat(list); });
+        indexReady = true; indexLoading = false;
+        if (!INDEX.length) setStatus("无法建立索引(可能是以 file:// 方式打开)。请改用本地静态服务器访问。");
+        else setStatus(READY_HINT);
+        if (pending != null) { var q = pending; pending = null; runSearch(q); }
+      });
+    }
+
+    function makeSnippet(text, terms) {
+      var lower = text.toLowerCase();
+      var pos = -1;
+      terms.forEach(function (t) { var p = lower.indexOf(t); if (p !== -1 && (pos === -1 || p < pos)) pos = p; });
+      if (pos < 0) pos = 0;
+      var start = Math.max(0, pos - 32);
+      var end = Math.min(text.length, pos + 100);
+      var raw = (start > 0 ? "…" : "") + text.slice(start, end) + (end < text.length ? "…" : "");
+      var html = escapeHtml(raw);
+      terms.forEach(function (t) {
+        if (!t) return;
+        html = html.replace(new RegExp("(" + escapeRegExp(escapeHtml(t)) + ")", "ig"), "<mark>$1</mark>");
+      });
+      return html;
+    }
+
+    function runSearch(query) {
+      var q = (query || "").trim().toLowerCase();
+      activeIndex = -1;
+      if (!q) { resultsEl.innerHTML = ""; if (indexReady) setStatus(READY_HINT); return; }
+      if (!indexReady) { pending = query; return; }
+      var terms = q.split(/\s+/).filter(Boolean);
+      var results = [];
+      INDEX.forEach(function (sec) {
+        var headLower = sec.heading.toLowerCase();
+        var hay = (sec.heading + " " + sec.text).toLowerCase();
+        if (!terms.every(function (t) { return hay.indexOf(t) !== -1; })) return;
+        var score = 0;
+        terms.forEach(function (t) {
+          if (headLower.indexOf(t) !== -1) score += 6;
+          var idx = 0, count = 0;
+          while ((idx = hay.indexOf(t, idx)) !== -1) { count++; idx += t.length; }
+          score += count;
+        });
+        results.push({ sec: sec, score: score });
+      });
+      results.sort(function (a, b) { return b.score - a.score || a.sec.chIdx - b.sec.chIdx; });
+      results = results.slice(0, 40);
+      if (!results.length) {
+        resultsEl.innerHTML = '<div class="book-search__empty">没有找到 “' + escapeHtml(query) + '” 相关内容</div>';
+        setStatus("无匹配结果"); return;
+      }
+      setStatus("找到 " + results.length + " 条结果" + (results.length === 40 ? "(仅显示前 40 条)" : ""));
+      resultsEl.innerHTML = results.map(function (r, i) {
+        var sec = r.sec;
+        var href = sec.file + (sec.headingId ? "#" + sec.headingId : "");
+        return '<a class="book-search__result" href="' + href + '" data-ri="' + i + '">' +
+          '<span class="book-search__result-chapter">第 ' + sec.num + ' 章 · ' + escapeHtml(sec.chTitle) + '</span>' +
+          '<span class="book-search__result-heading">' + escapeHtml(sec.heading) + '</span>' +
+          '<span class="book-search__result-snippet">' + makeSnippet(sec.text, terms) + '</span>' +
+          '</a>';
+      }).join("");
+    }
+
+    function setActive(i) {
+      var items = resultsEl.querySelectorAll(".book-search__result");
+      if (!items.length) return;
+      if (i < 0) i = items.length - 1;
+      if (i >= items.length) i = 0;
+      activeIndex = i;
+      items.forEach(function (n, idx) { n.classList.toggle("is-active", idx === i); });
+      items[i].scrollIntoView({ block: "nearest" });
+    }
+
+    function open() {
+      if (overlay.classList.contains("is-open")) return;
+      overlay.classList.add("is-open");
+      document.body.style.overflow = "hidden";
+      ensureIndex();
+      setTimeout(function () { input.focus(); input.select(); }, 30);
+    }
+    function close() {
+      overlay.classList.remove("is-open");
+      document.body.style.overflow = "";
+    }
+
+    overlay.querySelectorAll("[data-search-close]").forEach(function (n) { n.addEventListener("click", close); });
+    input.addEventListener("input", function () {
+      if (debounce) clearTimeout(debounce);
+      var v = input.value;
+      debounce = setTimeout(function () { runSearch(v); }, 140);
+    });
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowDown") { e.preventDefault(); setActive(activeIndex + 1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); setActive(activeIndex - 1); }
+      else if (e.key === "Enter") {
+        var items = resultsEl.querySelectorAll(".book-search__result");
+        var target = items[activeIndex >= 0 ? activeIndex : 0];
+        if (target) { e.preventDefault(); window.location.href = target.getAttribute("href"); }
+      }
+    });
+    overlay.addEventListener("keydown", function (e) { if (e.key === "Escape") { e.preventDefault(); close(); } });
+
+    return { open: open, close: close };
+  }
+
+  function makeSearchTrigger(search, cls, label, html) {
+    var btn = el("button", cls, html);
+    btn.type = "button";
+    btn.setAttribute("aria-label", label);
+    btn.addEventListener("click", search.open);
+    return btn;
+  }
+
+  function setupSearchShortcut(search) {
+    document.addEventListener("keydown", function (e) {
+      var t = e.target;
+      var typing = t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName);
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); search.open(); return; }
+      if (e.key === "/" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); search.open(); }
+    });
+  }
+
+  // 跨页跳转到 #锚点: id 是 JS 运行期才赋的, 浏览器原生跳转会失败, 这里补一次带偏移的滚动
+  function handleInitialHash() {
+    if (!window.location.hash) return;
+    var id;
+    try { id = decodeURIComponent(window.location.hash.slice(1)); } catch (e) { id = window.location.hash.slice(1); }
+    if (!id) return;
+    var target = document.getElementById(id);
+    if (!target) return;
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { scrollElementToCenter(target, false); });
+    });
+  }
+
   // ---------- 封面: 继续阅读 ----------
-  function setupCover() {
+  function setupCover(search) {
     setupReveal();
+    var actions = document.querySelector(".cover__actions");
+    if (actions && search) {
+      actions.appendChild(makeSearchTrigger(search, "button button--ghost", "搜索全书", "搜索全书"));
+    }
     var last = store.get(STORAGE_LAST);
     var btn = document.querySelector("[data-continue]");
     if (!btn) return;
@@ -360,23 +646,30 @@
   }
 
   function init() {
+    var search = createSearch();
+    setupSearchShortcut(search);
     if (document.body.hasAttribute("data-cover")) {
-      setupCover();
+      setupCover(search);
       return;
     }
     var idx = chapterIndex();
-    if (idx < 0 || idx >= CHAPTERS.length) {
+    var hasChapterBody = !!document.querySelector(".chapter .chapter__inner");
+    if ((idx < 0 || idx >= CHAPTERS.length) && !hasChapterBody) {
       setupReveal();
       return;
     }
+    var isChapter = idx >= 0 && idx < CHAPTERS.length;
     var toc = buildToc(idx);
-    var refs = buildHeader(idx, toc);
+    var refs = buildHeader(idx, toc, search);
     buildDesktopLayout(idx);
-    buildPrevNext(idx);
+    if (isChapter) {
+      buildPrevNext(idx);
+      setupKeyboard(idx);
+    }
     setupProgress(refs);
-    setupKeyboard(idx);
     setupReveal();
-    store.set(STORAGE_LAST, CHAPTERS[idx].file);
+    handleInitialHash();
+    if (isChapter) store.set(STORAGE_LAST, CHAPTERS[idx].file);
   }
 
   if (document.readyState === "loading") {

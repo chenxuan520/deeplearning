@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 9 章 · Transformer 的完整结构 | 深度学习入门</title>
+    <title>第 9 章 · 让它真的训得动 | 深度学习入门</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -11,226 +11,247 @@
   <body data-chapter="9">
     <main class="chapter">
       <div class="chapter__inner">
-        <p class="chapter__eyebrow">第 9 章 · 序列与 Transformer</p>
-        <h1>Transformer 的完整结构</h1>
+        <p class="chapter__eyebrow">第 9 章 · 学习是怎么发生的</p>
+        <h1>让它真的训得动</h1>
 
         <p class="lead">
-          注意力是发动机,但光有发动机还开不了车。要把注意力堆成又深又能训的网络,
-          还需要几个关键配件:<strong>残差连接、LayerNorm、前馈网络</strong>,
-          再加上让模型知道词序的<strong>位置编码</strong>。把它们组装起来,就是一块完整的
-          <span class="term">Transformer Block</span>——今天所有大模型的基本积木。
+          前向、损失、反向、梯度下降——“学习”的原理已经讲完了。但把原理变成
+          <strong>真能训练成功</strong>的模型,中间还隔着一整套工程技巧。
+          这一章我们把四样最重要的配齐:<strong>好的初始化、聪明的优化器、会变化的学习率、防爆炸的梯度裁剪</strong>。
+          它们就是现代深度学习的“标准启动套件”。
         </p>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>残差连接为什么能让“很深的网络”也训得动;</li>
-            <li>LayerNorm 在归一化什么,为什么能稳住训练;</li>
-            <li>前馈网络(FFN)在 attention 之后又补了什么;</li>
-            <li>位置编码怎么把“词的顺序”告诉模型,以及 encoder 和 decoder 的区别。</li>
+            <li>为什么参数不能初始化成全 0,He/Xavier 初始化在解决什么;</li>
+            <li>优化器从 SGD → Momentum → Adam → AdamW 一路在补什么短板;</li>
+            <li>学习率为什么要“先热身、再退火”,以及 warmup + cosine 长什么样;</li>
+            <li>梯度裁剪和 weight decay 分别防的是什么问题。</li>
           </ul>
         </section>
 
-        <h2>1. 残差连接:给信息和梯度修一条高速公路</h2>
+        <h2>1. 起点很重要:参数初始化</h2>
         <p>
-          网络一深,就容易“训不动”:梯度反传到前面几层时已经衰减得几乎为 0(梯度消失)。
-          <span class="term">残差连接(residual connection)</span>的解法简单得惊人——
-          让每个子层的输出<strong>加上它自己的输入</strong>:
+          训练前,所有权重得有个初始值。你可能想:全设成 0 不是最干净吗?
+          <strong>恰恰是最糟的</strong>。如果一层里每个神经元的权重都一样,它们收到的输入一样、
+          算出的输出一样、反传回来的梯度也一样,于是<strong>永远保持相同</strong>——
+          这一层等于只有一个神经元在工作。这叫<span class="term">对称性问题</span>,必须用<strong>随机</strong>初始化打破。
+        </p>
+        <p>
+          但随机也有讲究:初始值<strong>太大</strong>,信号逐层放大直到“爆炸”;<strong>太小</strong>,信号逐层衰减直到“消失”。
+          诀窍是让每层输出的“波动幅度”大致稳定。<span class="term">He 初始化</span>(配 ReLU 类激活)和
+          <span class="term">Xavier 初始化</span>(配 Sigmoid/Tanh)就是按这一层的<strong>输入个数(fan-in)</strong>来定随机范围:
         </p>
         <div class="mathblock reveal">
-          输出 = <var>x</var> + Sublayer(<var>x</var>)
-          <span class="label">不是用子层的输出替换 x,而是在 x 的基础上“加一个增量”</span>
+          limit = √( 6 / fan_in ),&nbsp;&nbsp; <var>w</var> ~ Uniform(−limit, +limit)
+          <span class="label">输入越多,初始权重就调得越小,避免求和后数值过大</span>
         </div>
-        <p>
-          这条“<var>x</var> +”的捷径有两个好处:① 梯度可以<strong>原路直通</strong>回前面的层(高速公路),
-          深网络也不怕梯度消失;② 每个子层只需要学“在原有基础上改进多少”,比从零学一个新表示容易得多。
-        </p>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/transformer_block.cpp · 残差(精简)</figcaption>
-          <pre class="code-walk__code"><code>last_residual_1_ = input;                          <b class="cw-tag">1</b>
-for (int i ...) for (int j ...)
-  last_residual_1_[i][j] += last_attention_output_[i][j];   <b class="cw-tag">2</b>
-attention_norm_.Forward(last_residual_1_, last_norm_1_);    <b class="cw-tag">3</b></code></pre>
+          <figcaption class="code-walk__file">src/deeplearning/param_init/he_param_init.cpp(精简)</figcaption>
+          <pre class="code-walk__code"><code>double limit = std::sqrt(6.0 / (double)fan_in);                 <b class="cw-tag">1</b>
+std::uniform_real_distribution&lt;double&gt; dis(-limit, limit);      <b class="cw-tag">2</b>
+
+for (auto &amp;w : weight[i])
+  for (auto &amp;w_ : w)
+    w_ = dis(gen);                                              <b class="cw-tag">3</b></code></pre>
           <ol class="code-walk__notes">
-            <li>先把原始输入 <code>input</code> 留一份。</li>
-            <li>把注意力的输出<strong>加回</strong>到输入上——这就是 <var>x</var> + Attention(<var>x</var>)。</li>
-            <li>再交给 LayerNorm(下一节)。这种“子层 → 加残差 → 归一化”的三连,在 block 里会出现两次。</li>
+            <li><code>fan_in</code> 是这一层每个神经元接收的输入个数。输入越多,<code>limit</code> 越小。</li>
+            <li>在 [−limit, +limit] 上均匀随机——每个权重都不一样,打破了对称性。</li>
+            <li>逐个权重赋随机值。配套项目里这一切由 <code>set_param_init_function(PARAM_INIT_HE)</code> 一键启用,还支持设种子复现。</li>
           </ol>
         </figure>
 
-        <h2>2. LayerNorm:把每个词的特征“拉回正常范围”</h2>
+        <h2>2. 优化器进化史:从 SGD 到 AdamW</h2>
+        <p>第 5 章的朴素 SGD(<var>w</var> ← <var>w</var> − <var>η</var>·梯度)能用,但有两个毛病:在“狭长峡谷”地形里来回横跳,在“平坦”地段又走得太慢。后面几代优化器,就是在逐个修补它。</p>
+
+        <h3>第一步加“惯性”:Momentum</h3>
         <p>
-          训练中,各层数值的大小、波动会乱飘,拖慢甚至搞崩训练。<span class="term">LayerNorm(层归一化)</span>
-          对<strong>每一个词向量</strong>单独做标准化:减去均值、除以标准差,把它拉成“均值 0、波动 1”的分布,
-          再用两个可学习参数 <var>γ</var>(scale)和 <var>β</var>(bias)做微调:
+          Momentum(动量)给参数更新加上<strong>惯性</strong>:像一个滚下山的球,会累积“速度”。
+          这样同方向的梯度会越滚越快(冲过平地),来回抖动的方向则相互抵消(峡谷里更稳)。
         </p>
-        <div class="mathblock reveal">
-          LN(<var>x</var>) = <span class="frac"><span><var>x</var> − μ</span><span>√(σ<sup>2</sup> + ε)</span></span> · <var>γ</var> + <var>β</var>
-          <span class="label">μ、σ² 是这个词向量自己的均值和方差;ε 防止除以 0;γ、β 可学习</span>
-        </div>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/layer_norm.cpp · Forward(精简)</figcaption>
-          <pre class="code-walk__code"><code>double mean = 0;
-for (double v : token) mean += v;
-mean /= feature_dim_;                                  <b class="cw-tag">1</b>
-
-double variance = 0;
-for (double v : token) variance += (v - mean) * (v - mean);
-variance /= feature_dim_;                              <b class="cw-tag">2</b>
-
-double denom = std::sqrt(variance + epsilon_);
-for (int i = 0; i &lt; feature_dim_; i++)
-  token[i] = ((token[i] - mean) / denom) * scale_[i] + bias_[i];  <b class="cw-tag">3</b></code></pre>
+          <figcaption class="code-walk__file">src/deeplearning/optimizer/momentum_optimizer.cpp(精简,v = 该参数的速度)</figcaption>
+          <pre class="code-walk__code"><code>v = momentum_ * v - learning_rate * g;   <b class="cw-tag">1</b>
+return -v;                               <b class="cw-tag">2</b></code></pre>
           <ol class="code-walk__notes">
-            <li>算这个词向量所有维度的<strong>均值</strong> μ。</li>
-            <li>算<strong>方差</strong> σ²(各维度偏离均值的平方的平均)。</li>
-            <li>标准化(减均值、除标准差),再乘 <code>scale</code>(γ)、加 <code>bias</code>(β)。注意:它是对<em>每个词自己</em>归一化,和样本数无关,这正是它适合序列的原因。</li>
+            <li>新速度 = 旧速度 × 惯性系数(如 0.9)− 学习率 × 当前梯度。它把过去的更新方向“记”了下来。</li>
+            <li>用这个累积速度去更新参数,而不是只看当下这一步的梯度。</li>
           </ol>
         </figure>
 
-        <h2>3. 前馈网络 FFN:逐个词再加工一次</h2>
+        <h3>第二步给每个参数“私人步长”:Adam</h3>
         <p>
-          注意力让每个词“看了全局”,但融合方式基本是线性加权。<span class="term">前馈网络(FFN)</span>
-          紧随其后,对<strong>每个词</strong>独立地做一次“放大 → 非线性 → 压缩”:先用一个矩阵升到更高维度(比如 4 倍),
-          过 ReLU,再压回原维度。这给了模型额外的非线性加工能力。
+          不同参数的梯度大小可能天差地别,用同一个学习率不公平。Adam 同时维护两样东西:
+          一阶矩 <var>m</var>(梯度的滑动平均,代表“惯性/方向”)和二阶矩 <var>v</var>(梯度平方的滑动平均,代表“最近这个参数有多活跃”),
+          再用 <var>v</var> 给每个参数<strong>自适应地缩放步长</strong>:
         </p>
         <div class="mathblock reveal">
-          FFN(<var>x</var>) = ReLU(<var>x</var> <var>W</var><sub>1</sub> + <var>b</var><sub>1</sub>) <var>W</var><sub>2</sub> + <var>b</var><sub>2</sub>
-          <span class="label">W₁ 把维度升上去,ReLU 加非线性,W₂ 再压回来</span>
+          <var>m</var> ← β<sub>1</sub><var>m</var> + (1−β<sub>1</sub>)<var>g</var> &nbsp;&nbsp;&nbsp; <var>v</var> ← β<sub>2</sub><var>v</var> + (1−β<sub>2</sub>)<var>g</var><sup>2</sup><br />
+          <var>m̂</var> = <var>m</var> / (1−β<sub>1</sub><sup>t</sup>) &nbsp;&nbsp;&nbsp; <var>v̂</var> = <var>v</var> / (1−β<sub>2</sub><sup>t</sup>)<br />
+          Δ<var>w</var> = <var>η</var> · <var>m̂</var> / ( √<var>v̂</var> + ε )
+          <span class="label">方向用 m,步长被 √v 自动缩放;m̂ / v̂ 是“偏差修正”,弥补训练初期 m、v 从 0 起步的冷启动</span>
         </div>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/transformer_block.cpp · FFN(精简)</figcaption>
-          <pre class="code-walk__code"><code>hidden = ApplyLinear(norm_1, W1, b1);   // model_dim → ff_dim   <b class="cw-tag">1</b>
-for (double &amp;v : hidden) v = Relu(v);                          <b class="cw-tag">2</b>
-ff_output = ApplyLinear(hidden, W2, b2);  // ff_dim → model_dim <b class="cw-tag">3</b></code></pre>
+          <figcaption class="code-walk__file">src/deeplearning/optimizer/adam_optimizer.cpp(精简)</figcaption>
+          <pre class="code-walk__code"><code>void AdamOptimizer::BeforeStep() {
+  step_ += 1;                                    <b class="cw-tag">1</b>
+  bias_correction1_ = 1.0 - std::pow(beta1_, step_);
+  bias_correction2_ = 1.0 - std::pow(beta2_, step_);
+}
+
+// CalcChangeValue 里(m、v 是该参数存下来的两个状态):
+m = beta1_ * m + (1.0 - beta1_) * g;             <b class="cw-tag">2</b>
+v = beta2_ * v + (1.0 - beta2_) * g * g;         <b class="cw-tag">3</b>
+double m_hat = m / bias_correction1_;            <b class="cw-tag">4</b>
+double v_hat = v / bias_correction2_;
+return learning_rate * m_hat / (std::sqrt(v_hat) + epsilon_);  <b class="cw-tag">5</b></code></pre>
           <ol class="code-walk__notes">
-            <li>第一层线性:把每个词向量从 <code>model_dim</code> 升到更大的 <code>ff_dim</code>。</li>
-            <li>过 ReLU 加入非线性(第 1 章的老朋友)。</li>
-            <li>第二层线性:再压回 <code>model_dim</code>,方便接下来继续残差相加。每个词都独立走这一遍。</li>
+            <li>每步开始,计步器 <code>step_</code> 加 1,并算好这一步的偏差修正系数(这就是第 5 章 <code>BeforeStep</code> 对 SGD 是空操作、对 Adam 却有事做的原因)。</li>
+            <li>更新一阶矩 <var>m</var>:梯度的滑动平均,提供“方向/惯性”。</li>
+            <li>更新二阶矩 <var>v</var>:梯度<strong>平方</strong>的滑动平均,衡量这个参数最近的活跃程度。</li>
+            <li>偏差修正:训练初期 <var>m</var>、<var>v</var> 还很小,除以 (1−βᵗ) 把它们放大到合理水平。</li>
+            <li>最终更新量 = 学习率 × 方向 ÷ √活跃度。活跃(梯度大)的参数自动用更小的步长,稳。</li>
           </ol>
         </figure>
 
-        <h2>4. 把它们拼成一块 Block</h2>
-        <p>一块标准 Transformer Block,就是“注意力 + 残差 + 归一化”和“FFN + 残差 + 归一化”这两段串起来:</p>
+        <h3>第三步把正则“解耦”:AdamW</h3>
+        <p>
+          weight decay(权重衰减)是把权重轻轻往 0 拉,抑制过拟合。经典 Adam 把它<strong>混进梯度</strong>里
+          (<code>g += wd·w</code>),但这样会被自适应步长削弱,效果打折。AdamW 的改良是:
+          自适应那部分照算,weight decay <strong>单独、直接</strong>地作用在权重上(解耦),所以训 Transformer 时是标配。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/optimizer/adamw_optimizer.cpp(关键差异)</figcaption>
+          <pre class="code-walk__code"><code>double adaptive = learning_rate * m_hat / (std::sqrt(v_hat) + epsilon_);
+
+// 解耦的 weight decay: 单独加在权重上, 不混进梯度, bias 不衰减
+if (weight_pos != -1 &amp;&amp; weight_decay_ != 0.0)
+  adaptive += learning_rate * weight_decay_ * param_value;   <b class="cw-tag">1</b>
+return adaptive;</code></pre>
+          <ol class="code-walk__notes">
+            <li>对比 Adam(把 <code>wd·w</code> 加进 <code>g</code> 再参与自适应),AdamW 把这一项<strong>独立</strong>加在更新量末尾——这就是“解耦 weight decay”。注意 <code>weight_pos != -1</code>:只衰减权重,不动偏置。</li>
+          </ol>
+        </figure>
+
+        <h2>3. 学习率不必一成不变:调度器</h2>
+        <p>
+          第 5 章我们用固定学习率,但更聪明的做法是让它<strong>随训练进程变化</strong>:
+        </p>
+        <ul>
+          <li><strong>Warmup(热身)</strong>:开头几步用很小的学习率慢慢升上来,避免刚开始参数还很乱时一脚踩空、直接训崩;</li>
+          <li><strong>Cosine 退火</strong>:热身之后,让学习率沿着余弦曲线平滑地降到一个很小的值,后期小步精修,稳稳落进谷底。</li>
+        </ul>
+
         <div class="figure reveal">
           <div class="diagram">
-            <svg viewBox="0 0 460 470" role="img" aria-label="Transformer Block 结构图">
-              <!-- 残差跳线 -->
-              <path d="M 95 70 L 60 70 L 60 150 L 196 150" fill="none" stroke="#8ef0d1" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#b9)" />
-              <path d="M 95 250 L 400 250 L 400 330 L 264 330" fill="none" stroke="#8ef0d1" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#b9)" />
-              <!-- 主干箭头 -->
-              <g stroke="#46587a" stroke-width="2" fill="none" marker-end="url(#m9)">
-                <line x1="230" y1="44" x2="230" y2="62" />
-                <line x1="230" y1="98" x2="230" y2="138" />
-                <line x1="230" y1="166" x2="230" y2="196" />
-                <line x1="230" y1="224" x2="230" y2="242" />
-                <line x1="230" y1="278" x2="230" y2="318" />
-                <line x1="230" y1="346" x2="230" y2="376" />
-                <line x1="230" y1="404" x2="230" y2="424" />
-              </g>
-              <text x="230" y="30" text-anchor="middle" fill="#8499bd" font-size="13">输入序列(每个词一个向量)</text>
-              <!-- Self-Attention -->
-              <rect x="130" y="64" width="200" height="36" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" />
-              <text x="230" y="87" text-anchor="middle" fill="#eef4ff" font-size="14">Self-Attention</text>
-              <!-- Add 1 -->
-              <circle cx="230" cy="152" r="15" fill="rgba(142,240,209,0.18)" stroke="#8ef0d1" stroke-width="2" /><text x="230" y="157" text-anchor="middle" fill="#eef4ff" font-size="15">＋</text>
-              <!-- Norm 1 -->
-              <rect x="130" y="198" width="200" height="30" rx="9" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="2" />
-              <text x="230" y="218" text-anchor="middle" fill="#eef4ff" font-size="13">LayerNorm</text>
-              <!-- FFN -->
-              <rect x="130" y="244" width="200" height="36" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" />
-              <text x="230" y="267" text-anchor="middle" fill="#eef4ff" font-size="14">Feed-Forward (FFN)</text>
-              <!-- Add 2 -->
-              <circle cx="230" cy="332" r="15" fill="rgba(142,240,209,0.18)" stroke="#8ef0d1" stroke-width="2" /><text x="230" y="337" text-anchor="middle" fill="#eef4ff" font-size="15">＋</text>
-              <!-- Norm 2 -->
-              <rect x="130" y="378" width="200" height="30" rx="9" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="2" />
-              <text x="230" y="398" text-anchor="middle" fill="#eef4ff" font-size="13">LayerNorm</text>
-              <text x="230" y="446" text-anchor="middle" fill="#8499bd" font-size="13">输出序列(可送入下一块 Block)</text>
-              <text x="46" y="120" fill="#8ef0d1" font-size="11">残差</text>
-              <text x="406" y="300" fill="#8ef0d1" font-size="11" text-anchor="end">残差</text>
-              <defs>
-                <marker id="m9" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#46587a" /></marker>
-                <marker id="b9" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" /></marker>
-              </defs>
+            <svg viewBox="0 0 640 280" role="img" aria-label="warmup 加 cosine 学习率曲线">
+              <line x1="60" y1="230" x2="600" y2="230" stroke="#46587a" stroke-width="1.5" />
+              <line x1="60" y1="40" x2="60" y2="230" stroke="#46587a" stroke-width="1.5" />
+              <text x="600" y="252" text-anchor="end" fill="#8499bd" font-size="13">训练步数 step</text>
+              <text x="36" y="52" fill="#8499bd" font-size="13">学习率</text>
+              <!-- warmup 段: 线性上升 -->
+              <line x1="60" y1="225" x2="170" y2="60" stroke="#ffcf72" stroke-width="3" />
+              <!-- cosine 段 -->
+              <path d="M 170 60 C 320 70, 470 200, 580 210" fill="none" stroke="#6ac3ff" stroke-width="3" />
+              <!-- 标注 -->
+              <line x1="170" y1="40" x2="170" y2="230" stroke="#46587a" stroke-width="1" stroke-dasharray="4 4" />
+              <text x="112" y="252" text-anchor="middle" fill="#ffcf72" font-size="12">warmup</text>
+              <text x="380" y="120" text-anchor="middle" fill="#6ac3ff" font-size="12">cosine 退火</text>
+              <text x="178" y="54" fill="#8ef0d1" font-size="12">峰值 = base_lr</text>
+              <text x="585" y="205" text-anchor="end" fill="#8499bd" font-size="12">min_lr</text>
             </svg>
           </div>
-          <p class="figure__cap">一块 Transformer Block:Self-Attention → 加残差 → LayerNorm → FFN → 加残差 → LayerNorm。</p>
+          <p class="figure__cap">先线性热身到峰值(黄),再沿余弦曲线平滑退火到最小值(蓝)。</p>
         </div>
-        <p>
-          关键在于:这块 Block 的<strong>输入和输出形状完全一样</strong>(都是“一串词向量”)。
-          所以它能像乐高一样<strong>一块叠一块</strong>:堆 6 块、12 块、96 块……越深,模型能力越强。
-          这正是“GPT-3 有 96 层”这类说法的含义。
-        </p>
 
-        <h2>5. 位置编码:告诉模型“谁在前谁在后”</h2>
-        <p>
-          注意力有个“缺陷”:它对所有位置一视同仁,<strong>本身并不知道词的先后顺序</strong>
-          ——把“狗咬人”和“人咬狗”打乱了它也分不清。解决办法是给每个位置造一个独特的“位置指纹”,
-          加到词向量上。经典做法用不同频率的<strong>正弦和余弦</strong>:
-        </p>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/positional_encoding.cpp(精简)</figcaption>
-          <pre class="code-walk__code"><code>double angle = pos / std::pow(10000.0, (double)i / model_dim);  <b class="cw-tag">1</b>
-encoding[pos][i]     = std::sin(angle);                         <b class="cw-tag">2</b>
-encoding[pos][i + 1] = std::cos(angle);
-// 之后: sequence[i][j] += encoding[i][j];                      <b class="cw-tag">3</b></code></pre>
+          <figcaption class="code-walk__file">src/deeplearning/lr_scheduler/warmup_cosine_lr.cpp · GetLR(精简)</figcaption>
+          <pre class="code-walk__code"><code>if (step &lt; warmup_steps_)
+  return base_lr_ * (step + 1) / warmup_steps_;          <b class="cw-tag">1</b>
+
+double progress = (double)(step - warmup_steps_) / rest; <b class="cw-tag">2</b>
+double cos_val = std::cos(kPi * progress);
+return min_lr_ + 0.5 * (base_lr_ - min_lr_) * (1.0 + cos_val);  <b class="cw-tag">3</b></code></pre>
           <ol class="code-walk__notes">
-            <li>每个位置 <code>pos</code>、每个维度 <code>i</code> 对应一个角度;不同维度用不同频率(<code>10000</code> 的幂)。</li>
-            <li>偶数维用 sin,奇数维用 cos——这样每个位置都得到一串独一无二、且“相邻位置相近”的编码。</li>
-            <li>把位置编码<strong>加</strong>到词向量上,词向量从此既带“是什么词”也带“在第几位”的信息。</li>
+            <li><strong>热身段</strong>:前 <code>warmup_steps_</code> 步,学习率从接近 0 线性升到 <code>base_lr_</code>。</li>
+            <li><strong>进度</strong>:热身结束后,算出“退火走了百分之多少”。</li>
+            <li><strong>退火段</strong>:用余弦把学习率从 <code>base_lr_</code> 平滑降到 <code>min_lr_</code>(<code>cos</code> 从 1 平滑变到 −1,整体就从峰值滑到谷值)。训练时每一步由 <code>Train</code> 自动调用它来更新当前学习率。</li>
           </ol>
         </figure>
 
-        <h2>6. Encoder 与 Decoder</h2>
-        <p>同样的 Block,按“能看到哪些词”分成两种用法:</p>
-        <ul>
-          <li><span class="pill">Encoder 编码器</span>不加 causal mask,每个词能看到<strong>整句</strong>(双向)。适合“理解”类任务(如 BERT)。</li>
-          <li><span class="pill">Decoder 解码器</span>加上 causal mask(第 8 章),每个词只能看到<strong>它之前</strong>的词。适合“生成”类任务——因为生成时本来就还没有后文。GPT 系列就是纯 decoder。</li>
-        </ul>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">本项目两种都支持</span>
-          <p>
-            配套的 <code>MiniTransformerLM</code> 用一个 <code>backbone</code> 配置在 encoder / decoder 之间切换。
-            下一章我们要做“预测下一个字”,用的就是带 causal mask 的 decoder 思路。
-          </p>
-        </div>
+        <h2>4. 防止训练“踩空”:梯度裁剪</h2>
+        <p>
+          有时某一步会冒出一个<strong>异常巨大</strong>的梯度(尤其在很深的网络或序列模型里),
+          一下子把参数推飞,损失瞬间变成 NaN——这叫<span class="term">梯度爆炸</span>。
+          对策是<span class="term">梯度裁剪</span>:给梯度的大小设一个上限。最常用的是“按全局范数裁剪”:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/neural_network.cpp · ClipGradients(by-norm,精简)</figcaption>
+          <pre class="code-walk__code"><code>double norm = std::sqrt(sq_sum);                 <b class="cw-tag">1</b>
+if (norm &gt; grad_clip_norm_ &amp;&amp; norm &gt; 0.0) {
+  double scale = grad_clip_norm_ / norm;        <b class="cw-tag">2</b>
+  // 把所有梯度统一乘以 scale, 整体缩回阈值以内
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>先把所有参数的梯度看成一个大向量,算它的总长度(L2 范数)。</li>
+            <li>如果总长度超过阈值,就整体按比例缩小(方向不变,只是变短),把这“一脚”收回到安全范围。项目里 <code>set_gradient_clip_norm(1.0)</code> 即可开启;还有一个“逐分量裁剪”的 by-value 版本。</li>
+          </ol>
+        </figure>
+
+        <h2>5. 把它们拼成一个“现代训练循环”</h2>
+        <p>把这一章的零件全装上,配置一个网络大概长这样(概念上和你在 PyTorch 里写的那套完全对得上):</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">现代训练栈的典型配置(C++ 接口)</figcaption>
+          <pre class="code-walk__code"><code>net.set_random_seed(42);                  <span class="cw-cmt">// 可复现</span>
+net.set_param_init_function(PARAM_INIT_HE);     <span class="cw-cmt">// 好的初始化</span>
+net.set_activate_function(ACTIVATE_GELU);       <span class="cw-cmt">// 平滑激活</span>
+net.set_optimizer_function(OPTIMIZER_ADAMW);    <span class="cw-cmt">// 自适应 + 解耦正则</span>
+net.optimizer_function()-&gt;set_weight_decay(1e-4);
+net.set_gradient_clip_norm(1.0);                <span class="cw-cmt">// 防爆炸</span>
+net.set_lr_scheduler(
+    std::make_shared&lt;WarmupCosineLR&gt;(1e-3, 500, 10000));  <span class="cw-cmt">// 热身+退火</span>
+net.Train(data, target, callback, 10000, 64);</code></pre>
+          <ol class="code-walk__notes">
+            <li>真正理解了这几个组件,你以后读任何框架(PyTorch / JAX)的训练脚本,都不再需要死记参数名——名字不同,背后的原理就是这一章这几样。</li>
+          </ol>
+        </figure>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li><strong>残差连接</strong>(<var>x</var> + Sublayer(<var>x</var>)):给梯度修高速公路,让深网络训得动,每层只学“增量”。</li>
-            <li><strong>LayerNorm</strong>:对每个词向量减均值除标准差再缩放,稳住数值、加速收敛。</li>
-            <li><strong>FFN</strong>:对每个词独立做“升维 → ReLU → 降维”,补充非线性加工。</li>
-            <li>一块 Block = 注意力+残差+Norm,再 FFN+残差+Norm;输入输出同形,可无限堆叠。</li>
-            <li><strong>位置编码</strong>用 sin/cos 把词序加进向量;encoder 双向看全句,decoder 带 causal mask 只看前文。</li>
+            <li><strong>初始化</strong>:不能全 0(对称性);随机且按 fan-in 缩放(He/Xavier),避免信号爆炸或消失。</li>
+            <li><strong>优化器</strong>:SGD → 加惯性的 Momentum → 自适应步长的 Adam → 解耦正则的 AdamW。</li>
+            <li><strong>学习率调度</strong>:warmup 热身防早期训崩,cosine 退火让后期稳稳收敛。</li>
+            <li><strong>梯度裁剪</strong>:给梯度大小设上限,防止某一步爆炸把训练带飞;weight decay 抑制过拟合。</li>
           </ul>
         </section>
 
         <h2>动手与思考</h2>
         <div class="quiz reveal">
           <details class="quiz__item">
-            <summary class="quiz__q">问题 1:残差连接 <var>x</var> + Sublayer(<var>x</var>) 为什么有助于训练很深的网络?</summary>
+            <summary class="quiz__q">问题 1:为什么把所有权重初始化为 0 是个坏主意?</summary>
             <div class="quiz__a">
-              <p>那条“+ x”的捷径让梯度在反向传播时能几乎无损地直通回前面的层,缓解梯度消失;同时每个子层只需学习“在输入基础上的增量”,优化更容易。</p>
+              <p>会导致同一层所有神经元完全对称:输入、输出、梯度都一样,更新后仍然一样,等于整层只有一个神经元在学。必须用随机初始化打破这种对称性。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 2:为什么注意力机制需要额外的“位置编码”?</summary>
+            <summary class="quiz__q">问题 2:Adam 里的二阶矩 <var>v</var> 起什么作用?</summary>
             <div class="quiz__a">
-              <p>因为注意力对所有位置对称,本身分不清词的先后顺序。位置编码给每个位置一个独特指纹并加到词向量上,模型才能区分“狗咬人”和“人咬狗”。</p>
+              <p><var>v</var> 是梯度平方的滑动平均,衡量某个参数“最近有多活跃”。更新时除以 √<var>v</var>,相当于给每个参数一个自适应步长:梯度一直很大的参数自动用更小的步长,更稳。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 3:做“预测下一个词”的语言模型,应该用 encoder 还是 decoder?为什么?</summary>
+            <summary class="quiz__q">问题 3:训练到一半损失突然变成 NaN,除了调小学习率,还能开什么开关?</summary>
             <div class="quiz__a">
-              <p>用 decoder。因为生成时只能依赖已经出现的前文,必须用 causal mask 屏蔽未来;encoder 能看全句,会“偷看答案”,不适合自回归生成。</p>
+              <p>开梯度裁剪(<code>set_gradient_clip_norm</code>)。它给梯度总长度设上限,防止某一步出现异常巨大的梯度把参数推飞。配合 warmup 也能缓解早期的不稳定。</p>
             </div>
           </details>
         </div>
 
         <p class="muted">
-          积木齐了!下一章我们把 embedding、Transformer、再加一个“输出层”接起来,
-          做成一个真正能<strong>一个字一个字写下去</strong>的字符级语言模型,并看看它怎么采样、怎么评估。
+          训练能跑稳了,但“训练集上表现很好、没见过的数据上却拉垮”怎么办?
+          下一章我们讲<strong>正则化与泛化</strong>:过拟合到底是什么,以及 weight decay、Dropout、early stopping 这些防过拟合的常用招。
         </p>
       </div>
     </main>

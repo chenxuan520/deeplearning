@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 13 章 · RNN 与 LSTM | 深度学习入门</title>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body data-chapter="13">
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">第 13 章 · 经典网络结构</p>
+        <h1>RNN 与 LSTM</h1>
+
+        <p class="lead">
+          CNN 专治图像。可另一类数据——<strong>一句话、一段语音、一串股价</strong>——是有<strong>先后顺序</strong>的
+          <span class="term">序列</span>,要处理它,得能“<strong>记住前面</strong>”。这一章认识第二位专才:
+          <span class="term">RNN(循环神经网络)</span>和它的升级版 <span class="term">LSTM</span>,并看清它们的先天短板——
+          这正是下一部分<strong>注意力</strong>要来救的场。
+        </p>
+
+        <section class="objectives reveal">
+          <h2>读完这一章,你会明白</h2>
+          <ul>
+            <li>序列数据为什么需要“<strong>记忆</strong>”,而 MLP 给不了;</li>
+            <li>RNN 怎么用一个<strong>隐藏状态</strong>把信息一路带下去(按时间展开);</li>
+            <li>RNN 的两个硬伤:<strong>梯度消失/爆炸</strong>(长依赖学不到)和<strong>没法并行</strong>(慢);</li>
+            <li>LSTM 怎么用<strong>“门”</strong>管理记忆,缓解长依赖;</li>
+            <li>为什么后来 <strong>Transformer</strong> 把它取代了(承接第四部分)。</li>
+          </ul>
+        </section>
+
+        <h2>1. 序列:顺序很重要,还得记住前文</h2>
+        <p>
+          “狗咬人”和“人咬狗”用的字一样,顺序不同意思就反了;要判断“它太重了”里的“它”指谁,得<strong>回看前文</strong>。
+          这类数据有两个特点:<strong>长度不固定</strong>、<strong>元素间有顺序和依赖</strong>。固定大小的 MLP(第 3 章)一次只吃固定长度、
+          还把顺序信息丢了,天然不适合。我们需要一种能“<strong>边读边记</strong>”的结构。
+        </p>
+
+        <h2>2. RNN:一个带“隐藏状态”的循环</h2>
+        <p>
+          RNN 的想法非常像<strong>人读句子</strong>:一个词一个词地读,每读一个,就把“<strong>到目前为止记住的东西</strong>”
+          打包成一个向量,叫<span class="term">隐藏状态(hidden state)</span>,带到下一步。读下一个词时,它同时看两样东西:
+          <strong>这个新词 + 上一步传来的隐藏状态</strong>,更新出新的隐藏状态。
+        </p>
+        <div class="mathblock reveal">
+          <var>h</var><sub>t</sub> = 激活( <var>W</var><sub>x</sub>·<var>x</var><sub>t</sub> + <var>W</var><sub>h</sub>·<var>h</var><sub>t−1</sub> + <var>b</var> )
+          <span class="label">新记忆 hₜ = 由“当前输入 xₜ”和“上一刻记忆 hₜ₋₁”共同决定</span>
+        </div>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 520 180" role="img" aria-label="RNN 按时间展开示意">
+              <defs><marker id="rm" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8499bd" /></marker></defs>
+              <text x="40" y="30" fill="#8ef0d1" font-size="12">隐藏状态(记忆)一路向右传</text>
+              <!-- hidden boxes -->
+              <g>
+                <rect x="46" y="56" width="72" height="40" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" /><text x="82" y="81" text-anchor="middle" fill="#eef4ff" font-size="13">h₁</text>
+                <rect x="166" y="56" width="72" height="40" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" /><text x="202" y="81" text-anchor="middle" fill="#eef4ff" font-size="13">h₂</text>
+                <rect x="286" y="56" width="72" height="40" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" /><text x="322" y="81" text-anchor="middle" fill="#eef4ff" font-size="13">h₃</text>
+                <rect x="406" y="56" width="72" height="40" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" /><text x="442" y="81" text-anchor="middle" fill="#eef4ff" font-size="13">h₄</text>
+              </g>
+              <!-- recurrent arrows -->
+              <g stroke="#8499bd" stroke-width="2" fill="none" marker-end="url(#rm)">
+                <line x1="118" y1="76" x2="166" y2="76" /><line x1="238" y1="76" x2="286" y2="76" /><line x1="358" y1="76" x2="406" y2="76" />
+              </g>
+              <!-- inputs -->
+              <g stroke="#6ac3ff" stroke-width="2" fill="none" marker-end="url(#rm)">
+                <line x1="82" y1="140" x2="82" y2="98" /><line x1="202" y1="140" x2="202" y2="98" /><line x1="322" y1="140" x2="322" y2="98" /><line x1="442" y1="140" x2="442" y2="98" />
+              </g>
+              <g fill="#8499bd" font-size="12" text-anchor="middle">
+                <text x="82" y="156">词₁</text><text x="202" y="156">词₂</text><text x="322" y="156">词₃</text><text x="442" y="156">词₄</text>
+              </g>
+            </svg>
+          </div>
+          <p class="figure__cap">同一个 RNN 单元被“按时间展开”:每步吃一个词 + 上一步的隐藏状态,更新记忆再传给下一步。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">“循环”和“展开”是一回事</span>
+          <p>
+            RNN 其实只有<strong>一个单元</strong>,靠“把输出接回输入”循环使用。为了看清和训练它,我们把这个循环
+            <strong>按时间摊平</strong>(unroll)成上图那样一长串——本质是<strong>同一套权重重复用了很多次</strong>。
+          </p>
+        </div>
+
+        <h2>3. 怎么训练:按时间反向传播(BPTT)</h2>
+        <p>
+          展开之后,RNN 就变成了一个<strong>很深的网络</strong>(有几个词就有几层)。训练它,依然是第 6 章的反向传播,
+          只不过要<strong>沿着时间一路传回去</strong>,所以叫 <span class="term">BPTT(Backpropagation Through Time,按时间反向传播)</span>。
+          道理没变,还是链式法则(第 1 章),只是链条特别长。
+        </p>
+
+        <h2>4. 两个硬伤</h2>
+        <p>正是“链条特别长 + 严格按顺序”,带来了 RNN 的两个致命短板:</p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">硬伤一:长依赖会“失忆”(梯度消失/爆炸)</span>
+          <p>
+            信息像一场<strong>传话游戏</strong>:每传一步,梯度都要乘一次权重和激活的导数(第 7 章)。乘的次数一多,
+            梯度要么<strong>越乘越小、趋近 0(消失)</strong>,要么<strong>越乘越大、炸掉(爆炸)</strong>。结果就是
+            <strong>隔得远的词之间,依赖关系几乎学不到</strong>——而“它 ↔ 前文某个名词”这种长距离关联恰恰最重要。
+          </p>
+        </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">硬伤二:没法并行,训练慢</span>
+          <p>
+            要算第 5 个词的隐藏状态,<strong>必须先等第 4 个算完</strong>——天生<strong>串行</strong>。这就没法把工作切开
+            丢给一堆 GPU 同时算(第 20 章),在超长序列、超大数据上慢得要命。这一点,后来<strong>直接决定了它的命运</strong>。
+          </p>
+        </div>
+
+        <h2>5. LSTM:给记忆装上“门”</h2>
+        <p>
+          为了缓解“失忆”,<span class="term">LSTM(长短期记忆网络)</span>给 RNN 加了一条<strong>专门的记忆传送带
+          (cell state)</strong>,并用三个<strong>“门”</strong>来精细地管理它。门就是一个输出 0~1 的小开关(用 Sigmoid,第 7 章),
+          0 = 关掉、1 = 放行:
+        </p>
+        <ul>
+          <li><span class="pill">遗忘门</span>决定<strong>旧记忆丢掉多少</strong>(读到新主语,可以忘掉旧主语)。</li>
+          <li><span class="pill">输入门</span>决定<strong>新信息写入多少</strong>到记忆里。</li>
+          <li><span class="pill">输出门</span>决定<strong>这一步向外吐出多少</strong>记忆。</li>
+        </ul>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">像一条能“选择性记忆”的传送带</span>
+          <p>
+            普通 RNN 每步都把记忆<strong>整个重写</strong>一遍,信息很容易在反复改写中丢失。LSTM 的记忆传送带则可以
+            <strong>大部分原样往前带</strong>,只在门允许时才增删——重要的信息因此能<strong>“搭直通车”</strong>走很远而不衰减,
+            长依赖就保住了。<strong>GRU</strong> 是它的简化版(两个门),更轻但思路一致。
+          </p>
+        </div>
+
+        <h2>6. 承上启下:为什么 Transformer 取代了它</h2>
+        <p>
+          LSTM 缓解了“失忆”,但<strong>串行、慢</strong>这条硬伤仍在:再怎么改门,它还是得一步一步顺着读。
+          当数据和模型都要爆炸式放大时,“<strong>不能并行</strong>”成了无法忍受的瓶颈。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">下一部分的主角就是来解决这两点的</span>
+          <p>
+            <strong>注意力 / Transformer</strong>(第四部分)换了个思路:不再一站站传话,而是让<strong>每个词直接看全序列</strong>——
+            长依赖一步直达(治“失忆”),而且所有位置<strong>可以同时算</strong>(治“串行”)。于是它几乎全面取代了 RNN/LSTM,
+            成了今天大模型的地基。带着 RNN 这两个短板去读第 15 章,你会立刻明白注意力“妙在哪”。
+          </p>
+        </div>
+
+        <section class="summary reveal">
+          <h2>小结</h2>
+          <ul>
+            <li>序列数据有顺序、需记忆,MLP 不合适;RNN 用<strong>隐藏状态</strong>边读边记,按时间展开成很深的网络。</li>
+            <li>训练用 <strong>BPTT</strong>(按时间反向传播),本质仍是链式法则,只是链条很长。</li>
+            <li>两大硬伤:长依赖<strong>梯度消失/爆炸</strong>(记不住远处)、严格<strong>串行不能并行</strong>(慢)。</li>
+            <li><strong>LSTM</strong> 用遗忘/输入/输出三个门 + 记忆传送带,让重要信息走直通车,缓解长依赖(GRU 是简化版)。</li>
+            <li>但“串行慢”没解决——这正是 Transformer 用注意力取而代之的原因(第四部分)。</li>
+          </ul>
+        </section>
+
+        <p class="muted">
+          RNN 也好、注意力也好,处理文字前都得先把<strong>词变成向量</strong>。可“词”本是离散符号,
+          怎么变成有含义的数字?下一章讲<strong>词嵌入与 word2vec</strong>——让词第一次拥有“语义坐标”。
+        </p>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>

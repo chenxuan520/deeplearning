@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 8 章 · 注意力机制 | 深度学习入门</title>
+    <title>第 8 章 · 优化器:从 SGD 到 Adam | 深度学习入门</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -11,222 +11,200 @@
   <body data-chapter="8">
     <main class="chapter">
       <div class="chapter__inner">
-        <p class="chapter__eyebrow">第 8 章 · 序列与 Transformer</p>
-        <h1>注意力机制</h1>
+        <p class="chapter__eyebrow">第 8 章 · 学习是怎么发生的</p>
+        <h1>优化器:从 SGD 到 Adam</h1>
 
         <p class="lead">
-          上一章我们想通了“为什么要让每个词直接看全局”。这一章把这台机器彻底拆开:
-          <strong>Q、K、V 三个角色,打分,softmax,加权求和</strong>。
-          这套机制是整个 Transformer、乃至今天所有大模型的发动机。别担心,它其实就是
-          “带权重的查字典”,你前面学的点积、softmax、加权和在这里全用得上。
+          第 5 章我们学了梯度下降:<strong>参数 −= 学习率 × 梯度</strong>。这就是最朴素的优化器。
+          但真拿它去训大网络,你会发现它<strong>又慢又爱震荡</strong>。这一章我们把优化器家族排成一条进化线——
+          SGD → Momentum → RMSProp → <strong>Adam</strong> → AdamW,看每一代到底改进了什么。
         </p>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>Q(查询)、K(键)、V(值)分别是什么,为什么要有这三样;</li>
-            <li>注意力的完整流程:打分 → 缩放 → softmax → 加权求和;</li>
-            <li>causal mask(因果掩码)是怎么让模型“不能偷看未来”的;</li>
-            <li>多头注意力为什么有用,并逐行读懂真实的 self-attention 实现。</li>
+            <li>纯 SGD 的两个痛点:<strong>只有一个统一步长</strong>、<strong>在峡谷里来回震荡</strong>;</li>
+            <li><strong>Momentum</strong> 怎么用“惯性”让下山更顺、冲过小坑;</li>
+            <li><strong>RMSProp</strong> 怎么给每个参数配一个<strong>自适应步长</strong>;</li>
+            <li><strong>Adam</strong> 怎么把两者合体(还加了偏差校正),成为如今的默认选择;</li>
+            <li><strong>AdamW</strong> 又修正了 Adam 的什么,以及这些在仓库代码里怎么统一实现。</li>
           </ul>
         </section>
 
-        <h2>1. 三个角色:Query、Key、Value</h2>
-        <p>注意力把“查资料”这件事拆成了三个角色。还是用查字典/搜索的类比:</p>
-        <ul>
-          <li><span class="pill">Query 查询</span>当前这个词“<strong>我想找什么</strong>”。比如“它”想找它指代的对象。</li>
-          <li><span class="pill">Key 键</span>每个词对外挂出的“<strong>标签 / 索引</strong>”,用来被匹配。像每本书的标题。</li>
-          <li><span class="pill">Value 值</span>每个词真正的“<strong>内容</strong>”,一旦被选中就把它取出来用。像书里的内容。</li>
-        </ul>
+        <h2>1. 先回顾:优化器在解决什么</h2>
         <p>
-          关键点:这三样都是从<strong>同一份输入词向量</strong>,分别乘上三个不同的权重矩阵
-          <var>W</var><sub>Q</sub>、<var>W</var><sub>K</sub>、<var>W</var><sub>V</sub> 得到的。
-          换句话说,每个词都同时准备好了自己的“问题、标签、内容”三副面孔。
+          训练的每一步,反向传播都会算出每个参数的<strong>梯度</strong>(第 6 章)。优化器的活儿,就是决定
+          “<strong>拿到梯度后,参数具体怎么挪</strong>”。最朴素的挪法就是第 5 章那条:
         </p>
-
-        <h2>2. 完整流程:打分 → 缩放 → softmax → 加权求和</h2>
-        <p>对某一个 query 词,注意力做四件事:</p>
-        <ol>
-          <li><strong>打分</strong>:拿它的 Query 和<em>每个</em>词的 Key 做<strong>点积</strong>。点积越大,说明越“匹配”、越相关。(点积就是第 8 章……其实你在第 1 章加权求和里就见过它了。)</li>
-          <li><strong>缩放</strong>:把分数除以 √<var>d</var>(<var>d</var> 是向量维度)。维度一大,点积容易变得很大,会把 softmax 推到极端,缩放能让它稳一点。</li>
-          <li><strong>softmax</strong>:把一排分数变成一排<strong>加起来等于 1 的权重</strong>(第 3 章学过)。这就是“注意力分配”。</li>
-          <li><strong>加权求和</strong>:用这排权重,对所有词的 Value 做加权求和,得到这个 query 的<strong>新表示</strong>——一个“看过全局、按相关性融合”的向量。</li>
-        </ol>
         <div class="mathblock reveal">
-          Attention(<var>Q</var>, <var>K</var>, <var>V</var>) = softmax( <span class="frac"><span><var>Q</var><var>K</var><sup>T</sup></span><span>√<var>d</var><sub>k</sub></span></span> ) <var>V</var>
-          <span class="label">这一行就是注意力的全部:打分(QKᵀ)→ 缩放(÷√d)→ softmax → 乘 V 加权求和</span>
+          参数 ← 参数 − 学习率 × 梯度
+          <span class="label">这就是 SGD(随机梯度下降)。简单,但不够聪明</span>
         </div>
-
+        <p>它有两个一眼可见的短板,后面每一代优化器都在补它们:</p>
+        <ul>
+          <li><strong>一个学习率走天下</strong>:所有参数用同一个步长。可有的方向该大步走、有的方向该小步挪,一刀切并不好。</li>
+          <li><strong>在“峡谷”里来回震荡</strong>:损失面常常一个方向很陡、另一个方向很平(像狭长山谷)。纯 SGD 会在陡壁间<strong>来回弹跳</strong>,朝谷底前进得很慢。</li>
+        </ul>
         <div class="figure reveal">
           <div class="diagram">
-            <div class="pipe">
-              <div class="pipe__box">输入词向量<small>一句话</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">Q / K / V<small>各乘一个矩阵</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">打分 QKᵀ/√d<small>谁和谁相关</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">softmax<small>注意力权重</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">×V 求和<small>新的表示</small></div>
-            </div>
+            <svg viewBox="0 0 480 220" role="img" aria-label="SGD 震荡与 Momentum 平滑对比">
+              <g fill="none" stroke="#2b3a58" stroke-width="1.2">
+                <ellipse cx="390" cy="110" rx="300" ry="72" />
+                <ellipse cx="390" cy="110" rx="220" ry="52" />
+                <ellipse cx="390" cy="110" rx="140" ry="34" />
+                <ellipse cx="390" cy="110" rx="66" ry="18" />
+              </g>
+              <circle cx="390" cy="110" r="4" fill="#8ef0d1" />
+              <text x="360" y="98" fill="#8ef0d1" font-size="11">谷底</text>
+              <polyline points="80,110 120,66 156,158 196,78 232,150 268,92 300,136 330,102 356,122 375,112 390,110" fill="none" stroke="#ffcf72" stroke-width="2" />
+              <polyline points="80,110 165,98 245,124 315,112 362,110 390,110" fill="none" stroke="#6ac3ff" stroke-width="2.5" />
+              <text x="70" y="200" fill="#ffcf72" font-size="11">SGD:在陡壁间来回震荡</text>
+              <text x="300" y="200" fill="#6ac3ff" font-size="11">Momentum:更顺地冲向谷底</text>
+            </svg>
           </div>
-          <p class="figure__cap">注意力的数据流。每个词都会走一遍,得到一个融合了上下文的新向量。</p>
+          <p class="figure__cap">狭长“峡谷”式损失面:SGD(黄)反复横跳,加了惯性的 Momentum(蓝)更直地滑向谷底。</p>
         </div>
 
-        <h2>3. 自己上手玩一玩</h2>
+        <h2>2. SGD 与 mini-batch:一次用多少数据?</h2>
         <p>
-          下面是一个可交互的注意力实验台。选一个 query 词,页面会实时算出它对每个词的
-          打分、softmax 权重和最终加权结果。你可以试试:
+          “随机”指的是:每一步不用全部数据算梯度,而是<strong>抽一小批(mini-batch)</strong>来估计。这是速度与稳定的折中:
         </p>
         <ul>
-          <li>切换不同的 query 词,看注意力分布怎么变;</li>
-          <li>拖动 <strong>Temperature</strong>:调高会让权重更“平均”,调低会更“尖锐”地集中在少数词;</li>
-          <li>勾上 <strong>causal mask</strong>,看它怎么把“后面的词”屏蔽掉(下一节细讲)。</li>
+          <li><strong>全量梯度</strong>:每步用所有样本,方向最准,但每步极慢、还吃不下大数据;</li>
+          <li><strong>单样本(纯 SGD)</strong>:每步只用 1 个样本,快但噪声大、方向乱抖;</li>
+          <li><span class="pill">mini-batch</span>每步用几十到几百个样本——<strong>又快又稳</strong>,是实际训练的标准做法(第 5 章讲过 batch)。</li>
         </ul>
-        <div class="figure reveal">
-          <div data-lab="attention"></div>
-          <p class="figure__cap">hover 公式里的彩色项,会高亮它对应的 token / 分数 / 权重区域。</p>
+
+        <h2>3. Momentum:给下山加“惯性”</h2>
+        <p>
+          <span class="term">Momentum(动量)</span>的想法特别形象:别让参数“<strong>每步只看当前坡度</strong>”,
+          而是像一个<strong>滚下山的球</strong>,带着<strong>惯性</strong>。它把历史的更新方向<strong>累积</strong>成一个“速度”:
+        </p>
+        <div class="mathblock reveal">
+          速度 <var>v</var> ← <var>β</var> · <var>v</var> + 梯度 &nbsp;&nbsp;&nbsp; 参数 ← 参数 − 学习率 × <var>v</var>
+          <span class="label">β(默认 0.9)是“保留多少惯性”;v 把连续同向的梯度越滚越大</span>
         </div>
+        <p>好处正好对上 SGD 的痛点:</p>
+        <ul>
+          <li>连续<strong>同方向</strong>的梯度会被累加,速度越来越大 → <strong>该冲的方向冲得更快</strong>,还能<strong>冲过小坑</strong>(局部小凹陷);</li>
+          <li>来回<strong>反向</strong>的震荡会相互抵消 → <strong>横跳被抚平</strong>,轨迹更直(上图的蓝线)。</li>
+        </ul>
 
-        <h2>4. 不能偷看未来:causal mask</h2>
+        <h2>4. RMSProp:每个参数配一个自适应步长</h2>
         <p>
-          语言模型要做的事是“根据前文预测下一个词”。训练和生成时,有一条铁律:
-          预测第 <var>t</var> 个词时,<strong>只能看第 1 到 <var>t</var> 个词,绝不能看到它后面的词</strong>
-          ——否则就是“偷看答案”,学不到真本事。
+          Momentum 解决了“方向”,但学习率仍是一个统一值。<span class="term">RMSProp</span>换个角度:
+          <strong>让每个参数自己有自己的步长</strong>。它记录每个参数<strong>梯度平方的滑动平均</strong>(衡量这个方向“一贯有多陡”),
+          再拿它去<strong>缩放</strong>步长:
         </p>
+        <div class="mathblock reveal">
+          <var>s</var> ← <var>β</var> · <var>s</var> + (1−<var>β</var>) · 梯度<sup>2</sup> &nbsp;&nbsp;&nbsp; 参数 ← 参数 − 学习率 × <span class="frac"><span>梯度</span><span>√<var>s</var> + ε</span></span>
+          <span class="label">一贯很陡的方向(s 大)→ 步子自动变小;一贯平缓的方向 → 步子放大</span>
+        </div>
         <p>
-          实现办法很巧妙:在打分之后,把所有“未来位置”的分数设成<strong>负无穷</strong>。
-          这样它们一过 softmax 就变成约等于 0 的权重,相当于被彻底屏蔽。这就是
-          <span class="term">causal mask(因果掩码)</span>。(在上面的实验台里勾选 causal,就能看到后面的词被标成 masked。)
+          直觉:陡的方向容易冲过头,就<strong>自动小步</strong>;平的方向进展慢,就<strong>自动大步</strong>。这样峡谷里也能走得又稳又快。
+          (ε 是个很小的数,防止除以 0。)
         </p>
 
-        <h2>5. 多头注意力:几个视角一起看</h2>
+        <h2>5. Adam:把两者合体(默认之选)</h2>
         <p>
-          单头注意力只有<strong>一种</strong>关注视角。但一句话里,词与词的关系是多维度的:
-          有的是“主语—谓语”,有的是“动词—宾语”,有的是“位置相邻”。
-          <span class="term">多头注意力(multi-head attention)</span>的想法是:
-          把向量切成几段,<strong>每一段(每个“头”)独立做一次注意力</strong>,各自学一种关系,最后再拼起来。
+          <span class="term">Adam</span> = <strong>Momentum(管方向) + RMSProp(管步长)</strong>,外加一个“<strong>偏差校正</strong>”。
+          它同时维护两个滑动平均:一阶矩 <var>m</var>(梯度的均值,即惯性)和二阶矩 <var>v</var>(梯度平方的均值,即陡峭度):
         </p>
+        <div class="mathblock reveal">
+          <var>m</var> ← <var>β</var><sub>1</sub><var>m</var> + (1−<var>β</var><sub>1</sub>)·g &nbsp;&nbsp; <var>v</var> ← <var>β</var><sub>2</sub><var>v</var> + (1−<var>β</var><sub>2</sub>)·g<sup>2</sup><br />
+          <var>m̂</var> = <var>m</var> / (1−<var>β</var><sub>1</sub><sup>t</sup>) &nbsp;&nbsp; <var>v̂</var> = <var>v</var> / (1−<var>β</var><sub>2</sub><sup>t</sup>) &nbsp;&nbsp; 参数 ← 参数 − 学习率 · <span class="frac"><span><var>m̂</var></span><span>√<var>v̂</var> + ε</span></span>
+          <span class="label">默认 β₁=0.9、β₂=0.999、ε=1e-8;t 是步数</span>
+        </div>
         <div class="callout callout--note reveal">
-          <span class="callout__title">维度怎么分</span>
+          <span class="callout__title">“偏差校正”是干嘛的?</span>
           <p>
-            如果模型维度是 <var>d</var>=64、头数是 8,那每个头分到 <var>d</var>/8 = 8 维。
-            代码里就是 <code>head_dim_ = model_dim_ / head_num_</code>,每个头在自己负责的那一段维度上独立运算,互不干扰。
+            <var>m</var> 和 <var>v</var> 都从 0 开始,训练<strong>刚起步的几步</strong>会被这个 0 拖得偏小(估计不准)。
+            除以 <strong>(1−β<sup>t</sup>)</strong> 就是把这个“起步偏差”补回来——<var>t</var> 越大,这个修正越接近 1、逐渐消失。
+            这一步就是仓库里 <code>BeforeStep()</code> 每步推进 <var>t</var> 计数要做的事。
           </p>
         </div>
-        <div class="figure reveal">
-          <div data-lab="multihead"></div>
-          <p class="figure__cap">切换不同的头,观察它们关注的模式截然不同——这正是多头的价值。</p>
+        <p>
+          正因为“方向 + 自适应步长 + 起步校正”都照顾到了,<strong>Adam 成了今天绝大多数模型的默认优化器</strong>,
+          省心、对学习率不那么敏感。
+        </p>
+
+        <h2>6. AdamW:把 weight decay 解耦</h2>
+        <p>
+          最后一小步升级。为了防过拟合,常给权重加 <strong>weight decay(权重衰减,一种 L2 正则,第 10 章)</strong>。
+          经典 Adam 的做法是把它<strong>塞进梯度里</strong>(<code>g += wd·w</code>),可这样一来它会被 Adam 那个自适应分母
+          <strong>√v̂ 给削弱</strong>,衰减力度变得不稳。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">AdamW 的修正:分开处理</span>
+          <p>
+            <span class="term">AdamW</span> 把权重衰减从梯度里<strong>拆出来、单独作用在参数上</strong>(decoupled weight decay):
+            自适应步长照常算,衰减单算一份直接减。效果更干净、更可控,已成为<strong>训练大模型的标配</strong>。
+            仓库里 Adam 与 AdamW 的差别,正是 weight decay 这一处的耦合方式不同。
+          </p>
         </div>
 
-        <h2>6. 逐行读懂 self-attention 的前向</h2>
-        <p>真实代码就是上面流程的逐字翻译。<strong>第一步:把输入投影成 Q、K、V。</strong></p>
+        <h2>7. 代码里怎么统一起来</h2>
+        <p>
+          本仓库把所有优化器抽象成一个接口:每步开始调一次 <code>BeforeStep()</code>(Adam 用它推进 <var>t</var>),
+          然后对每个参数调 <code>CalcChangeValue(...)</code> 算出“该减多少”。想换优化器,只需换一个子类。
+        </p>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/self_attention.cpp · Forward ①投影</figcaption>
-          <pre class="code-walk__code"><code>last_query_ = ProjectSequence(input, query_weight_);   <b class="cw-tag">1</b>
-last_key_   = ProjectSequence(input, key_weight_);
-last_value_ = ProjectSequence(input, value_weight_);   <b class="cw-tag">2</b></code></pre>
+          <figcaption class="code-walk__file">src/deeplearning/optimizer/optimizer_base.h(精简)</figcaption>
+          <pre class="code-walk__code"><code>enum OptimizerType {
+  OPTIMIZER_SGD, OPTIMIZER_MOMENTUM,
+  OPTIMIZER_ADAM, OPTIMIZER_RMSPROP, OPTIMIZER_ADAMW,   <b class="cw-tag">1</b>
+};
+
+class OptimizerFunction {
+  virtual void BeforeStep() {}                          // Adam 在此推进 t  <b class="cw-tag">2</b>
+  // 返回“该从参数里扣除多少”, 即 param -= 返回值
+  virtual double CalcChangeValue(double delta, double learning_rate,
+      const std::pair&lt;int,int&gt; &amp;pos, int weight_pos = -1,
+      double param_value = 0.0) = 0;                     <b class="cw-tag">3</b>
+  void set_weight_decay(double wd);                      // 只对 weight 生效  <b class="cw-tag">4</b>
+};</code></pre>
           <ol class="code-walk__notes">
-            <li><code>ProjectSequence</code> 就是把序列里每个词向量乘上一个权重矩阵。这里用 <code>input</code> 算出 Query。</li>
-            <li>K 和 V 也用<strong>同一个</strong> <code>input</code> 算出来——“自己的 Q 去看自己的 K/V”,这正是 “<strong>self</strong>-attention(自注意力)”名字的由来。</li>
+            <li>五种优化器各是一个子类,用枚举 + 工厂选择——和激活函数(第 7 章)是同一套“可插拔”模式。</li>
+            <li><code>BeforeStep()</code> 每个 minibatch 步开头调一次;SGD 是空的,Adam/AdamW 在这里把步数 <var>t</var> 加一、算好偏差校正。</li>
+            <li><code>CalcChangeValue</code> 拿到<strong>平均梯度</strong> <code>delta</code>、学习率和参数位置,算出该扣除的量。SGD 就返回 <code>lr·delta</code>;Adam 则套用上面那串 m/v 公式。</li>
+            <li><code>weight_pos == -1</code> 表示这是 bias(不做衰减);weight decay 只作用在真正的权重上,Adam 与 AdamW 在这里体现耦合方式的差异。</li>
           </ol>
         </figure>
 
-        <p><strong>第二步:打分并缩放。</strong>(下面是针对某个 query 行 <code>row</code>、某个头的内层循环)</p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/self_attention.cpp · Forward ②打分</figcaption>
-          <pre class="code-walk__code"><code>for (int col = 0; col &lt; n; col++) {
-  if (mask != nullptr &amp;&amp; mask[row][col] &lt;= 0) {
-    score[col] = lowest();   // 屏蔽未来位置(causal mask)  <b class="cw-tag">1</b>
-    continue;
-  }
-  double dot = 0;
-  for (int i = 0; i &lt; head_dim_; i++)
-    dot += last_query_[row][head_start + i]
-         * last_key_[col][head_start + i];                 <b class="cw-tag">2</b>
-  score[col] = dot / std::sqrt(head_dim_);                 <b class="cw-tag">3</b>
-}</code></pre>
-          <ol class="code-walk__notes">
-            <li>如果有掩码且这个位置被屏蔽,直接把分数设成最小值(相当于 −∞),softmax 后它会变成 ≈0。</li>
-            <li>Query(第 <code>row</code> 个词)和 Key(第 <code>col</code> 个词)在当前头的那段维度(<code>head_start</code> 起的 <code>head_dim_</code> 维)上做点积,衡量它俩有多相关。</li>
-            <li>除以 √<code>head_dim_</code> 做缩放,稳定数值。这就是公式里的 <var>QK</var><sup>T</sup> / √<var>d</var>。</li>
-          </ol>
-        </figure>
-
-        <p><strong>第三步:softmax,再用权重对 Value 加权求和。</strong></p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/self_attention.cpp · Forward ③加权求和</figcaption>
-          <pre class="code-walk__code"><code>auto weight = Softmax(score);                  <b class="cw-tag">1</b>
-for (int col = 0; col &lt; n; col++)
-  for (int i = 0; i &lt; head_dim_; i++)
-    merged_output[row][head_start + i]
-        += weight[col] * last_value_[col][head_start + i];   <b class="cw-tag">2</b></code></pre>
-          <ol class="code-walk__notes">
-            <li>把这一排分数过 softmax,变成加起来为 1 的注意力权重。</li>
-            <li>用权重对所有词的 Value 加权求和,写进这个头负责的那段输出。权重大的词,对结果贡献大——这就是“按相关性融合上下文”。</li>
-          </ol>
-        </figure>
-
-        <p><strong>第四步:把各个头的结果拼起来,再过一个输出投影融合。</strong></p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/self_attention.cpp · Forward ④输出</figcaption>
-          <pre class="code-walk__code"><code>output = ProjectSequence(last_merged_output_, output_weight_);   <b class="cw-tag">1</b></code></pre>
-          <ol class="code-walk__notes">
-            <li>所有头的输出已经按维度段拼在 <code>merged_output</code> 里;再乘一个输出权重矩阵 <var>W</var><sub>O</sub>,把多个头的信息混合成最终结果。至此,每个词都得到了一个“看过全局”的新向量。</li>
-          </ol>
-        </figure>
-
+        <h2>8. 到底用哪个?</h2>
+        <ul>
+          <li><strong>不知道选啥就用 Adam / AdamW</strong>:最省心,对学习率最不挑,收敛快。训大模型基本都是 AdamW。</li>
+          <li>想要<strong>极致泛化</strong>、且愿意仔细调学习率 → <strong>SGD + Momentum</strong> 有时能训出更好的最终精度(经典 CV 里常见)。</li>
+          <li>纯 <strong>SGD</strong> 一般只作为教学/基线。</li>
+        </ul>
         <div class="callout callout--tip reveal">
-          <span class="callout__title">回头看,全是老朋友</span>
+          <span class="callout__title">动手比一比</span>
           <p>
-            注意力听起来高大上,但拆开后:<strong>点积</strong>(第 1 章加权求和)、<strong>softmax</strong>(第 3 章)、
-            <strong>加权求和</strong>(还是第 1 章)。它真正的新意只有一个——
-            <em>让权重由“Query 和 Key 的相关性”当场算出来</em>,而不是固定写死。
+            仓库里有个现成的对比程序 <code>src/demo/optimizer_bench</code>,在同一个 MNIST 任务上并排跑
+            SGD / Momentum / Adam / AdamW / RMSProp / Adam+CosineLR。编译后运行,就能亲眼看到不同优化器
+            <strong>收敛速度和最终精度</strong>的差别——比读十遍公式都直观。
           </p>
         </div>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>每个词从输入算出三副面孔:Query(我找什么)、Key(我的标签)、Value(我的内容)。</li>
-            <li>流程:Q 和每个 K 点积打分 → 除以 √d 缩放 → softmax 成权重 → 对 V 加权求和。</li>
-            <li>causal mask 把“未来位置”的分数设为 −∞,确保模型预测时不能偷看后文。</li>
-            <li>多头 = 把维度切成几段,每段独立做注意力,学不同关系,最后拼接 + 输出投影融合。</li>
-            <li>self-attention 的“self”指 Q/K/V 都来自同一序列。</li>
+            <li>优化器决定“拿到梯度后参数怎么挪”。SGD 最朴素,但统一步长 + 峡谷震荡是两大痛点。</li>
+            <li><strong>Momentum</strong>:累积“速度”,靠惯性冲得更快、抚平横跳。</li>
+            <li><strong>RMSProp</strong>:按梯度平方缩放,给每个参数<strong>自适应步长</strong>(陡则小步、平则大步)。</li>
+            <li><strong>Adam</strong> = Momentum + RMSProp + 偏差校正,今天的默认优化器。</li>
+            <li><strong>AdamW</strong> 把 weight decay 从梯度里解耦,更干净,是训大模型的标配。</li>
+            <li>仓库用统一接口(<code>BeforeStep</code> + <code>CalcChangeValue</code>)实现全家,<code>optimizer_bench</code> 可直接对比。</li>
           </ul>
         </section>
 
-        <h2>动手与思考</h2>
-        <div class="quiz reveal">
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 1:打分用的是 Query 和 Key 的点积,为什么点积能衡量“相关性”?</summary>
-            <div class="quiz__a">
-              <p>点积越大,说明两个向量方向越一致、越“合拍”。所以当某个词的 Key 和当前 Query 方向相近时,点积大、得分高,注意力就更多地分给它。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 2:为什么要除以 √d?</summary>
-            <div class="quiz__a">
-              <p>维度 d 越大,点积的数值越容易变得很大,会把 softmax 推到极端(几乎全押在一个词上,梯度也变小)。除以 √d 把分数拉回合理范围,训练更稳定。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 3:causal mask 是怎么实现“看不到未来”的?</summary>
-            <div class="quiz__a">
-              <p>在打分阶段,把所有“未来位置”的分数设成负无穷;经过 softmax 后它们的权重≈0,等于完全不参与加权求和,于是模型只能依赖当前位置及之前的词。</p>
-            </div>
-          </details>
-        </div>
-
         <p class="muted">
-          注意力是核心,但单靠它还不够。下一章我们给它配上<strong>残差连接、LayerNorm、前馈网络和位置编码</strong>,
-          拼出一块真正能堆叠的完整积木——<strong>Transformer Block</strong>。
+          激活函数选好了、优化器也选好了,可训练还可能<strong>发散、卡住、忽快忽慢</strong>。
+          下一章我们把<strong>参数初始化、学习率调度、梯度裁剪</strong>这套“现代训练栈”一次配齐,让它真的训得动。
         </p>
       </div>
     </main>
 
     <script src="assets/book.js"></script>
-    <script src="assets/labs.js"></script>
   </body>
 </html>

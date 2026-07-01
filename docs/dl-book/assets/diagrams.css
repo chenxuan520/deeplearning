@@ -920,6 +920,73 @@ select {
   gap: 0.7rem;
 }
 
+/* ============================================================= */
+/* 手算示例的数值表格 (.table-wrap 负责窄屏横向滚动)              */
+/* ============================================================= */
+
+.table-wrap {
+  margin: 1.3rem 0;
+  overflow-x: auto;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+}
+
+.calc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--text-soft);
+  min-width: 460px;
+}
+
+.calc-table th,
+.calc-table td {
+  padding: 0.6rem 0.85rem;
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.calc-table thead th {
+  background: rgba(106, 195, 255, 0.12);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.calc-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.calc-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.calc-table td:first-child,
+.calc-table th:first-child {
+  text-align: left;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.calc-table .is-hot {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.calc-table .is-cold {
+  color: var(--text-dim);
+}
+
+.calc-table__cap {
+  margin: 0.55rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.86rem;
+  text-align: center;
+}
+
 @keyframes edgePulse {
   0% { opacity: 0.45; filter: brightness(1); }
   35% { opacity: 1; filter: brightness(1.7); }
@@ -958,4 +1025,123 @@ select {
   .network__edge-label {
     font-size: 9px;
   }
+}
+
+/* ============================================================= */
+/* MoE / 稀疏注意力图 (第 12 章)                                  */
+/* ============================================================= */
+
+.pattern-mats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.8rem;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.pattern-mat {
+  text-align: center;
+}
+
+.pattern-mat__title {
+  margin: 0 0 0.6rem;
+  color: var(--text-soft);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.pattern-mat__grid {
+  display: grid;
+  grid-template-columns: repeat(6, 20px);
+  grid-auto-rows: 20px;
+  gap: 3px;
+  margin: 0 auto;
+  width: max-content;
+}
+
+.pattern-mat__grid span {
+  border-radius: 3px;
+  background: rgba(149, 176, 227, 0.1);
+}
+
+.pattern-mat__grid span.on {
+  background: var(--primary);
+}
+
+.pattern-mat__grid span.on--g {
+  background: var(--accent);
+}
+
+.pattern-mat__cap {
+  margin: 0.6rem auto 0;
+  max-width: 11rem;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.diagram__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.1rem;
+  justify-content: center;
+  margin-top: 1.1rem;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+}
+
+.diagram__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.diagram__legend i {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  display: inline-block;
+  border: 1px solid var(--line);
+}
+
+/* ============================================================= */
+/* 术语表 (glossary.html)                                        */
+/* ============================================================= */
+
+.glossary {
+  list-style: none;
+  padding-left: 0;
+  margin: 1rem auto;
+  max-width: var(--reading-width);
+}
+
+.glossary li {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line);
+  line-height: 1.65;
+  color: var(--text-soft);
+}
+
+.glossary li strong {
+  color: var(--text);
+}
+
+.glossary li a {
+  white-space: nowrap;
+  margin-left: 0.35rem;
+  color: var(--primary);
+  font-size: 0.86rem;
+}
+
+/* 实验台按钮组 (梯度下降等) */
+.lab__btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.lab__btns .button {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
 }

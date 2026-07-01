@@ -26,7 +26,8 @@
             <li>“让机器学习”和“我们平时写程序”到底有什么本质区别;</li>
             <li>一个“模型”说白了是什么东西,“参数”又是什么;</li>
             <li>“训练”这件事,其实就是一个不断试错、不断微调的循环;</li>
-            <li>这本书会用什么顺序,带你从一个神经元走到大模型。</li>
+            <li>这本书会用什么顺序,带你从一个神经元走到大模型;</li>
+            <li>配套的 C++ 代码仓库长什么样,书里每个概念在代码里的“真身”在哪。</li>
           </ul>
         </section>
 
@@ -86,7 +87,7 @@
         </ul>
         <p>
           一个真实的大模型,可能有<strong>几十亿甚至上万亿个这样的旋钮</strong>。
-          但别怕,它们每一个的作用,都和我们第 1 章要拆开看的那一个神经元里的旋钮,
+          但别怕,它们每一个的作用,都和我们第 2 章要拆开看的那一个神经元里的旋钮,
           <em>本质上一模一样</em>。
         </p>
 
@@ -124,12 +125,12 @@
           <li>
             第 ③ 步“错得多离谱”,会被压缩成<strong>一个数字</strong>,叫
             <span class="term">损失(loss)</span>。损失越大,说明模型现在错得越厉害。
-            (这是<a href="chapter-03.html">第 3 章</a>的主题。)
+            (这是<a href="chapter-04.html">第 4 章</a>的主题。)
           </li>
           <li>
             第 ④ 步“朝更对的方向微调”,靠的是<span class="term">梯度下降(gradient descent)</span>
             和<span class="term">反向传播(backpropagation)</span>。
-            (这是<a href="chapter-04.html">第 4 章</a>和<a href="chapter-05.html">第 5 章</a>的主题。)
+            (这是<a href="chapter-05.html">第 5 章</a>和<a href="chapter-06.html">第 6 章</a>的主题。)
           </li>
         </ul>
 
@@ -174,11 +175,62 @@
         <h2>6. 这本书会怎么带你走</h2>
         <p>我们会严格按照“从简单到复杂”的顺序,每一步都踩在上一步的肩膀上:</p>
         <ul>
-          <li><strong>第一部分(第 1–2 章)</strong>:看懂<em>一个神经元</em>,再把它堆成一张网络,让数据向前流动。</li>
-          <li><strong>第二部分(第 3–6 章)</strong>:让网络“学起来”——衡量错误、梯度下降、反向传播,以及让训练真正稳定收敛的那些工程技巧。</li>
-          <li><strong>第三部分(第 7–9 章)</strong>:处理“一句话”这种序列数据,引出<em>注意力机制</em>,拼出完整的 <em>Transformer</em>。</li>
-          <li><strong>第四部分(第 10–11 章)</strong>:把它做成一个真能写字的<em>语言模型</em>,最后聊聊把它放大成<em>大模型</em>之后会发生什么。</li>
+          <li><strong>第一部分 · 打地基(第 1–3 章)</strong>:先补齐<em>看懂公式的一点点数学</em>,再看懂<em>一个神经元</em>,把它堆成网络、让数据向前流动。</li>
+          <li><strong>第二部分 · 学习是怎么发生的(第 4–11 章)</strong>:让网络“学起来”——损失、梯度下降、反向传播、激活函数、优化器,以及正则化、评估这些让它训得好又不过拟合的关键。</li>
+          <li><strong>第三部分 · 经典网络结构(第 12–14 章)</strong>:处理图像的 <em>CNN</em>、处理序列的 <em>RNN/LSTM</em>,以及让词有语义的<em>词嵌入</em>。</li>
+          <li><strong>第四部分 · 序列与 Transformer(第 15–17 章)</strong>:处理“一句话”这种序列数据,引出<em>注意力机制</em>,拼出完整的 <em>Transformer</em>。</li>
+          <li><strong>第五部分 · 通往大模型(第 18–21 章)</strong>:把它做成一个真能写字的<em>语言模型</em>,再讲透<em>大模型</em>的原理、训练(含后训练)、工程基础设施与实际使用。</li>
+          <li><strong>第六部分 · 代码实战(第 22–23 章)</strong>:对照仓库里两份真实的 C++ 程序(MNIST 与字符级语言模型),把整本书从头到尾在代码里对一遍号。</li>
         </ul>
+
+        <h2>7. 配套代码仓库:每个概念都有“真身”</h2>
+        <p>
+          这本书最特别的地方是:它<strong>对照一份从零手写的 C++ 实现</strong>,不依赖 PyTorch、TensorFlow 这类大框架。
+          这意味着书里讲的每一个概念——神经元、激活函数、反向传播、注意力——你都能在代码里翻到它<strong>真正是怎么算的</strong>,
+          而不是被一句 <code>import</code> 藏起来。仓库的结构是这样的:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">仓库结构(精简)</figcaption>
+          <pre class="code-walk__code"><code>deeplearning/
+├─ src/
+│  ├─ deeplearning/          <b class="cw-tag">1</b>  核心库(从零手写)
+│  │  ├─ neural_network.*       全连接网络: 前向 / 反向 / 训练
+│  │  ├─ activate/              激活函数 ReLU/Sigmoid/GELU…
+│  │  ├─ loss/  softmax/        损失函数 与 softmax
+│  │  ├─ optimizer/             SGD / Momentum / Adam / AdamW
+│  │  ├─ lr_scheduler/          学习率调度
+│  │  └─ transformer/           注意力 / Block / mini 语言模型
+│  ├─ demo/                  <b class="cw-tag">2</b>  可运行的示例程序
+│  │  ├─ mnist/                 手写数字识别   (第 22 章精读)
+│  │  ├─ transformer_char/      字符级语言模型 (第 23 章精读)
+│  │  └─ optimizer_bench/       优化器对比
+│  └─ test/                     单元测试
+└─ docs/dl-book/             <b class="cw-tag">3</b>  你正在读的这本书</code></pre>
+          <ol class="code-walk__notes">
+            <li><code>src/deeplearning/</code> 是<strong>库</strong>:所有原理的实现都在这里,一个概念对应一个子目录或文件。</li>
+            <li><code>src/demo/</code> 是<strong>把库用起来</strong>的完整程序。本书第 22、23 章就是逐行精读这里的 <code>mnist</code> 和 <code>transformer_char</code>。</li>
+            <li><code>docs/dl-book/</code> 就是这本电子书本身(纯静态 HTML,零依赖)。</li>
+          </ol>
+        </figure>
+        <p>下面这张表,是“书里的概念”和“代码里的真身”的对照速查——现在扫一眼即可,读到对应章节自然会懂:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>书里的概念</th><th>代码里的真身</th><th>章节</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>一个神经元 · 激活函数</td><td><code>activate/</code> + <code>neural_network</code></td><td>第 2 章</td></tr>
+              <tr><td>网络 · 前向传播</td><td><code>neural_network</code>(ForwardPropagation)</td><td>第 3 章</td></tr>
+              <tr><td>损失 · softmax</td><td><code>loss/</code> + <code>softmax/</code></td><td>第 4 章</td></tr>
+              <tr><td>梯度下降 · 反向传播</td><td><code>neural_network</code>(BackPropagation)</td><td>第 5–6 章</td></tr>
+              <tr><td>优化器 · 学习率调度</td><td><code>optimizer/</code> + <code>lr_scheduler/</code></td><td>第 9 章</td></tr>
+              <tr><td>注意力 · 多头</td><td><code>transformer/self_attention</code></td><td>第 15–16 章</td></tr>
+              <tr><td>Transformer Block</td><td><code>transformer/transformer_block</code>、<code>layer_norm</code></td><td>第 17 章</td></tr>
+              <tr><td>分词 · 词嵌入 · 生成</td><td><code>transformer/</code>(tokenizer / embedding / LM)</td><td>第 18 章</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">每一章末尾都有对应的“逐行代码”讲解;想跑起来,照第 22、23 章的运行提示即可。</p>
+        </div>
 
         <div class="callout callout--warn reveal">
           <span class="callout__title">怎么读最舒服</span>
@@ -197,6 +249,7 @@
             <li>训练 = 不断“预测 → 对答案 → 算损失 → 微调旋钮”的循环。</li>
             <li>损失是“错得多离谱”的一个数字;让损失变小,是后面所有数学的共同目标。</li>
             <li>“深度”= 很多层叠在一起,从而能自动学出有用的特征。</li>
+            <li>本书对照一份从零手写的 C++ 仓库,每个概念都有代码“真身”,第 22、23 章会带你逐行精读。</li>
           </ul>
         </section>
 
@@ -223,8 +276,8 @@
         </div>
 
         <p class="muted">
-          准备好了吗?下一章我们就把那台“带旋钮的机器”拆到最小的一个零件——
-          <strong>一个神经元</strong>——看看它内部到底在算什么。
+          准备好了吗?<strong>下一章</strong>先花一点点篇幅,把后面会用到的数学——向量、点积、矩阵、导数、链式法则——
+          用大白话过一遍(已经熟的话可直接跳到<strong>第 2 章「一个神经元」</strong>),再正式开拆那台“带旋钮的机器”。
         </p>
       </div>
     </main>

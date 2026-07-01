@@ -36,7 +36,7 @@
 
     <main class="toc-section" id="toc">
       <h2>全书目录</h2>
-      <p class="toc-section__hint">12 章,从最朴素的直觉,一直走到大模型的原理。</p>
+      <p class="toc-section__hint">24 章,从最朴素的直觉,一直走到大模型的原理、训练工程与实际使用,最后对照真实 C++ 代码从头跑一遍。</p>
 
       <p class="toc-part">第一部分 · 打地基</p>
       <div class="toc-grid">
@@ -47,11 +47,16 @@
         </a>
         <a class="toc-card reveal" href="chapter-01.html">
           <span class="toc-card__num">第 1 章</span>
-          <span class="toc-card__title">一个神经元</span>
-          <span class="toc-card__desc">加权求和 + 偏置 + 激活函数。深度学习里最小的那块积木。配可拖动的实验台。</span>
+          <span class="toc-card__title">数学预备:看懂公式的一点点数学</span>
+          <span class="toc-card__desc">向量、点积、矩阵、导数、链式法则、概率——后面所有公式的最小地基。可跳读、随用随查。</span>
         </a>
         <a class="toc-card reveal" href="chapter-02.html">
           <span class="toc-card__num">第 2 章</span>
+          <span class="toc-card__title">一个神经元</span>
+          <span class="toc-card__desc">加权求和 + 偏置 + 激活函数。深度学习里最小的那块积木。配可拖动的实验台。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-03.html">
+          <span class="toc-card__num">第 3 章</span>
           <span class="toc-card__title">搭成网络:前向传播</span>
           <span class="toc-card__desc">把神经元堆成层、层叠成网络,看数据怎么一层层向前流动算出预测。</span>
         </a>
@@ -59,58 +64,130 @@
 
       <p class="toc-part">第二部分 · 学习是怎么发生的</p>
       <div class="toc-grid">
-        <a class="toc-card reveal" href="chapter-03.html">
-          <span class="toc-card__num">第 3 章</span>
+        <a class="toc-card reveal" href="chapter-04.html">
+          <span class="toc-card__num">第 4 章</span>
           <span class="toc-card__title">怎么衡量「错」:损失函数</span>
           <span class="toc-card__desc">用一个数字衡量「模型错得多离谱」。MSE 与交叉熵,以及 softmax。</span>
         </a>
-        <a class="toc-card reveal" href="chapter-04.html">
-          <span class="toc-card__num">第 4 章</span>
+        <a class="toc-card reveal" href="chapter-05.html">
+          <span class="toc-card__num">第 5 章</span>
           <span class="toc-card__title">怎么变「好」:梯度下降</span>
           <span class="toc-card__desc">像在雾里下山一样,顺着最陡的方向一步步把损失降下去。学习率是步长。</span>
         </a>
-        <a class="toc-card reveal" href="chapter-05.html">
-          <span class="toc-card__num">第 5 章</span>
+        <a class="toc-card reveal" href="chapter-06.html">
+          <span class="toc-card__num">第 6 章</span>
           <span class="toc-card__title">反向传播</span>
           <span class="toc-card__desc">链式法则,把「错误」从输出层一路反着传回每一个参数。配前向/反向动画。</span>
         </a>
-        <a class="toc-card reveal" href="chapter-06.html">
-          <span class="toc-card__num">第 6 章</span>
-          <span class="toc-card__title">让它真的训得动</span>
-          <span class="toc-card__desc">初始化、Adam、学习率调度、梯度裁剪——让训练真的收敛而不是发散。</span>
-        </a>
-      </div>
-
-      <p class="toc-part">第三部分 · 序列与 Transformer</p>
-      <div class="toc-grid">
         <a class="toc-card reveal" href="chapter-07.html">
           <span class="toc-card__num">第 7 章</span>
-          <span class="toc-card__title">为什么需要注意力</span>
-          <span class="toc-card__desc">处理一句话这种「序列」,普通网络卡在哪?注意力到底要解决什么问题。</span>
+          <span class="toc-card__title">激活函数全家福</span>
+          <span class="toc-card__desc">Sigmoid/ReLU/Tanh/LeakyReLU/GELU:曲线、导数、优缺点与该用哪个,配可玩的曲线实验。</span>
         </a>
         <a class="toc-card reveal" href="chapter-08.html">
           <span class="toc-card__num">第 8 章</span>
-          <span class="toc-card__title">注意力机制</span>
-          <span class="toc-card__desc">Q / K / V、打分、softmax、causal mask、多头,一次讲透。配可玩的实验台。</span>
+          <span class="toc-card__title">优化器:从 SGD 到 Adam</span>
+          <span class="toc-card__desc">SGD→Momentum→RMSProp→Adam→AdamW,一步步看它们怎么把下山走得又快又稳,对照仓库实现。</span>
         </a>
         <a class="toc-card reveal" href="chapter-09.html">
           <span class="toc-card__num">第 9 章</span>
-          <span class="toc-card__title">Transformer 的完整结构</span>
-          <span class="toc-card__desc">残差连接、LayerNorm、前馈网络、位置编码,拼成一块完整的 Transformer 积木。</span>
+          <span class="toc-card__title">让它真的训得动</span>
+          <span class="toc-card__desc">初始化、学习率调度、梯度裁剪——让训练真的收敛而不是发散。</span>
         </a>
-      </div>
-
-      <p class="toc-part">第四部分 · 通往大模型</p>
-      <div class="toc-grid">
         <a class="toc-card reveal" href="chapter-10.html">
           <span class="toc-card__num">第 10 章</span>
-          <span class="toc-card__title">字符级语言模型</span>
-          <span class="toc-card__desc">tokenizer、embedding、预测下一个字、温度/top-k/top-p 采样、困惑度。配真实权重回放。</span>
+          <span class="toc-card__title">正则化与泛化</span>
+          <span class="toc-card__desc">过拟合是什么、怎么治:L2/weight decay、Dropout、early stopping、数据增强。</span>
         </a>
         <a class="toc-card reveal" href="chapter-11.html">
           <span class="toc-card__num">第 11 章</span>
-          <span class="toc-card__title">通往大模型</span>
-          <span class="toc-card__desc">把小模型放大会发生什么?预训练、微调、RLHF、涌现、上下文窗口与对齐。</span>
+          <span class="toc-card__title">评估与数据</span>
+          <span class="toc-card__desc">train/val/test 怎么分、指标怎么读(准确率/精确率/召回/F1/混淆矩阵)、数据怎么预处理。</span>
+        </a>
+      </div>
+
+      <p class="toc-part">第三部分 · 经典网络结构</p>
+      <div class="toc-grid">
+        <a class="toc-card reveal" href="chapter-12.html">
+          <span class="toc-card__num">第 12 章</span>
+          <span class="toc-card__title">CNN 卷积神经网络</span>
+          <span class="toc-card__desc">为什么图像要用卷积:局部感受野、权重共享、池化、通道,配卷积滑窗动画。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-13.html">
+          <span class="toc-card__num">第 13 章</span>
+          <span class="toc-card__title">RNN 与 LSTM</span>
+          <span class="toc-card__desc">注意力之前处理序列的主力:隐藏状态、按时间展开、梯度消失,以及 LSTM 的门控。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-14.html">
+          <span class="toc-card__num">第 14 章</span>
+          <span class="toc-card__title">词嵌入与 word2vec</span>
+          <span class="toc-card__desc">让词有「语义坐标」:one-hot 的毛病、分布式表示、CBOW/skip-gram、king−man+woman≈queen。</span>
+        </a>
+      </div>
+
+      <p class="toc-part">第四部分 · 序列与 Transformer</p>
+      <div class="toc-grid">
+        <a class="toc-card reveal" href="chapter-15.html">
+          <span class="toc-card__num">第 15 章</span>
+          <span class="toc-card__title">为什么需要注意力</span>
+          <span class="toc-card__desc">处理一句话这种「序列」,普通网络卡在哪?注意力到底要解决什么问题。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-16.html">
+          <span class="toc-card__num">第 16 章</span>
+          <span class="toc-card__title">注意力机制</span>
+          <span class="toc-card__desc">用三个词、几个小数字手把手算一遍:Q/K/V、打分、softmax、加权平均、causal mask、多头。配可玩的实验台。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-17.html">
+          <span class="toc-card__num">第 17 章</span>
+          <span class="toc-card__title">Transformer 的完整结构</span>
+          <span class="toc-card__desc">残差连接、LayerNorm、前馈网络、位置编码,拼成一块完整的 Transformer 积木,并读懂那张经典全图。</span>
+        </a>
+      </div>
+
+      <p class="toc-part">第五部分 · 通往大模型</p>
+      <div class="toc-grid">
+        <a class="toc-card reveal" href="chapter-18.html">
+          <span class="toc-card__num">第 18 章</span>
+          <span class="toc-card__title">字符级语言模型</span>
+          <span class="toc-card__desc">tokenizer、embedding、预测下一个字、温度/top-k/top-p 采样、困惑度。配真实权重回放。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-19.html">
+          <span class="toc-card__num">第 19 章</span>
+          <span class="toc-card__title">通往大模型:原理与训练</span>
+          <span class="toc-card__desc">分词/BPE、词嵌入与向量语义、规模定律与涌现、预训练/微调/RLHF/蒸馏,以及幻觉等局限。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-20.html">
+          <span class="toc-card__num">第 20 章</span>
+          <span class="toc-card__title">大模型的工程与基础设施</span>
+          <span class="toc-card__desc">GPU/显存为何是瓶颈、数据/张量/流水线并行、AllReduce/NCCL/NVLink、KV cache、MoE 与稀疏注意力。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-21.html">
+          <span class="toc-card__num">第 21 章</span>
+          <span class="toc-card__title">用好大模型:提示、RAG 与 Agent</span>
+          <span class="toc-card__desc">提示词/few-shot/思维链、RAG 外挂知识库、工具调用、Agent、MCP/A2A,以及安全底线。</span>
+        </a>
+      </div>
+
+      <p class="toc-part">第六部分 · 代码实战</p>
+      <div class="toc-grid">
+        <a class="toc-card reveal" href="chapter-22.html">
+          <span class="toc-card__num">第 22 章</span>
+          <span class="toc-card__title">MNIST 实战:把第一、二部分跑起来</span>
+          <span class="toc-card__desc">逐行精读 <code>src/demo/mnist</code>:数据→建网→训练→评估→保存,把前面的概念在代码里对上号。</span>
+        </a>
+        <a class="toc-card reveal" href="chapter-23.html">
+          <span class="toc-card__num">第 23 章</span>
+          <span class="toc-card__title">mini-LM 实战:把第四、五部分跑起来</span>
+          <span class="toc-card__desc">逐行精读 <code>src/demo/transformer_char</code>:分词→建模→训练→生成,看注意力/Transformer/采样如何落到代码。全书完。</span>
+        </a>
+      </div>
+
+      <p class="toc-part">附录</p>
+      <div class="toc-grid">
+        <a class="toc-card reveal" href="glossary.html">
+          <span class="toc-card__num">术语表</span>
+          <span class="toc-card__title">名词速查:黑话一句话解释</span>
+          <span class="toc-card__desc">MLP/CNN/RNN/Transformer/token/embedding/Adam/RLHF/MoE… 每个术语一句话讲清,并跳到对应章节。</span>
         </a>
       </div>
 

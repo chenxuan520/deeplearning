@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 5 章 · 反向传播 | 深度学习入门</title>
+    <title>第 5 章 · 怎么变“好”:梯度下降 | 深度学习入门</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -12,231 +12,208 @@
     <main class="chapter">
       <div class="chapter__inner">
         <p class="chapter__eyebrow">第 5 章 · 学习是怎么发生的</p>
-        <h1>反向传播</h1>
+        <h1>怎么变“好”:梯度下降</h1>
 
         <p class="lead">
-          第 4 章我们知道了“朝梯度反方向走”就能降低损失。可网络动辄成千上万个参数,
-          这么多梯度怎么算?<span class="term">反向传播(backpropagation)</span>就是那个高效算法。
-          它常被传得很神秘,但其实只是一个东西:<strong>链式法则</strong>,加一点耐心。
+          上一章我们把“错”变成了一个数字——损失。现在的问题非常具体:
+          <strong>该把每个参数往哪个方向、调多大,才能让这个数字变小?</strong>
+          答案是深度学习的发动机:<span class="term">梯度下降(gradient descent)</span>。
         </p>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>链式法则的直觉:把“最终的错”一段段分配责任回去;</li>
-            <li>反向传播的三步:从输出误差出发 → 逐层往回传 → 算出每个权重的梯度;</li>
-            <li>为什么前向时要存下每层的 <var>z</var>(第 2 章那个伏笔);</li>
-            <li>逐行读懂真实的反向传播实现。</li>
+            <li>“梯度”到底是什么,为什么它指向“下降最快的方向”;</li>
+            <li>参数更新那条核心公式 <var>w</var> ← <var>w</var> − <var>η</var>·梯度;</li>
+            <li>学习率 <var>η</var> 是什么、太大太小分别会怎样;</li>
+            <li>什么是 mini-batch SGD,并逐行读懂参数更新的真实代码。</li>
           </ul>
         </section>
 
-        <h2>1. 链式法则:一段段地追责任</h2>
+        <h2>1. 把训练想成“蒙着眼下山”</h2>
         <p>
-          先看最简单的情形:一个参数 <var>w</var>,它影响 <var>z</var>,<var>z</var> 影响激活值 <var>a</var>,
-          <var>a</var> 最终影响损失 <var>L</var>。这是一条“影响链”:
+          想象损失是一片山地的<strong>海拔</strong>:你站的位置由所有参数决定,海拔就是当前的损失。
+          我们想走到<strong>谷底</strong>(损失最小)。但你蒙着眼,看不到全局地形,只能感受
+          <strong>脚下哪个方向最陡</strong>,然后朝下坡迈一步;到了新位置再感受、再迈一步……
+          反复下去,通常就能走到一个谷底。
         </p>
 
         <div class="figure reveal">
           <div class="diagram">
-            <svg viewBox="0 0 640 200" role="img" aria-label="链式法则的影响链与梯度回传">
-              <!-- 正向链 -->
-              <g>
-                <circle cx="70" cy="70" r="26" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="2" />
-                <text x="70" y="76" text-anchor="middle" fill="#eef4ff" font-size="16" font-style="italic">w</text>
-                <circle cx="250" cy="70" r="26" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="2" />
-                <text x="250" y="76" text-anchor="middle" fill="#eef4ff" font-size="16" font-style="italic">z</text>
-                <circle cx="430" cy="70" r="26" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="2" />
-                <text x="430" y="76" text-anchor="middle" fill="#eef4ff" font-size="16" font-style="italic">a</text>
-                <circle cx="585" cy="70" r="26" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="2" />
-                <text x="585" y="76" text-anchor="middle" fill="#eef4ff" font-size="16" font-style="italic">L</text>
+            <svg viewBox="0 0 640 320" role="img" aria-label="损失曲线上的梯度下降示意">
+              <!-- 坐标轴 -->
+              <line x1="60" y1="280" x2="600" y2="280" stroke="#46587a" stroke-width="1.5" />
+              <line x1="60" y1="40" x2="60" y2="280" stroke="#46587a" stroke-width="1.5" />
+              <text x="600" y="300" text-anchor="end" fill="#8499bd" font-size="13">参数 w</text>
+              <text x="36" y="52" fill="#8499bd" font-size="13">损失 L</text>
+              <!-- 损失曲线 (U形) -->
+              <path d="M 90 70 Q 330 430 560 70" fill="none" stroke="#6ac3ff" stroke-width="2.5" />
+              <!-- 下降的点 -->
+              <circle cx="505" cy="120" r="8" fill="#ffcf72" />
+              <text x="525" y="118" fill="#ffcf72" font-size="13">当前参数(损失高)</text>
+              <circle cx="446" cy="180" r="7" fill="#ffcf72" opacity="0.8" />
+              <circle cx="392" cy="220" r="7" fill="#ffcf72" opacity="0.65" />
+              <circle cx="352" cy="240" r="7" fill="#ffcf72" opacity="0.5" />
+              <!-- 下降箭头 -->
+              <g stroke="#8ef0d1" stroke-width="2" fill="none">
+                <path d="M 497 128 L 454 172" marker-end="url(#a)" />
+                <path d="M 438 188 L 400 212" marker-end="url(#a)" />
               </g>
-              <g stroke="#46587a" stroke-width="2" fill="none" marker-end="url(#fwd)">
-                <line x1="98" y1="70" x2="222" y2="70" />
-                <line x1="278" y1="70" x2="402" y2="70" />
-                <line x1="458" y1="70" x2="557" y2="70" />
-              </g>
-              <text x="160" y="58" text-anchor="middle" fill="#8499bd" font-size="12">∂z/∂w</text>
-              <text x="340" y="58" text-anchor="middle" fill="#8499bd" font-size="12">∂a/∂z</text>
-              <text x="505" y="58" text-anchor="middle" fill="#8499bd" font-size="12">∂L/∂a</text>
-              <!-- 反向梯度 -->
-              <g stroke="#ff8fa3" stroke-width="2" fill="none" marker-end="url(#bwd)">
-                <line x1="557" y1="120" x2="458" y2="120" />
-                <line x1="402" y1="120" x2="278" y2="120" />
-                <line x1="222" y1="120" x2="98" y2="120" />
-              </g>
-              <text x="320" y="150" text-anchor="middle" fill="#ff8fa3" font-size="13">梯度反着传回来:三段局部导数连乘</text>
               <defs>
-                <marker id="fwd" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#46587a" /></marker>
-                <marker id="bwd" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ff8fa3" /></marker>
+                <marker id="a" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+                  <path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" />
+                </marker>
               </defs>
+              <!-- 谷底 -->
+              <circle cx="325" cy="248" r="9" fill="#8ef0d1" />
+              <text x="325" y="275" text-anchor="middle" fill="#8ef0d1" font-size="13">谷底 = 损失最小</text>
             </svg>
           </div>
-          <p class="figure__cap">前向:w → z → a → L。反向:把 L 的误差,按每一段的局部导数连乘,传回 w。</p>
+          <p class="figure__cap">每一步都朝“最陡下坡”方向走一小步,一步步逼近损失的谷底。</p>
         </div>
 
+        <h2>2. “梯度”就是最陡的方向</h2>
         <p>
-          要知道“<var>w</var> 动一点,<var>L</var> 会变多少”,链式法则说:把这条链上<strong>每一段的局部导数乘起来</strong>:
+          “脚下最陡的方向”,在数学里有个名字叫<span class="term">梯度(gradient)</span>。
+          它其实就是损失对每个参数的<strong>导数</strong>:导数告诉你“这个参数动一点点,损失会朝哪边变、变多快”。
+        </p>
+        <ul>
+          <li>导数为<strong>正</strong>:增大这个参数,损失会上升 → 所以我们要<strong>减小</strong>它;</li>
+          <li>导数为<strong>负</strong>:增大这个参数,损失会下降 → 所以我们要<strong>增大</strong>它。</li>
+        </ul>
+        <p>
+          两种情况合起来,规律惊人地一致:<strong>朝“梯度的反方向”走,损失就会下降。</strong>
+          这就是“梯度下降”名字的由来。写成公式就是那条你以后会见无数次的更新规则:
         </p>
         <div class="mathblock reveal">
-          <span class="frac"><span>∂<var>L</var></span><span>∂<var>w</var></span></span>
-          =
-          <span class="frac"><span>∂<var>L</var></span><span>∂<var>a</var></span></span>
-          ·
-          <span class="frac"><span>∂<var>a</var></span><span>∂<var>z</var></span></span>
-          ·
-          <span class="frac"><span>∂<var>z</var></span><span>∂<var>w</var></span></span>
-          <span class="label">总影响 = 损失对 a 的影响 × a 对 z 的影响 × z 对 w 的影响</span>
+          <var>w</var> ← <var>w</var> − <var>η</var> · <span class="frac"><span>∂<var>L</var></span><span>∂<var>w</var></span></span>
+          <span class="label">新参数 = 旧参数 − 学习率 × 梯度。对每一个参数都这么做一遍</span>
         </div>
-        <div class="callout callout--analogy reveal">
-          <span class="callout__title">一个类比</span>
+
+        <h2>3. 学习率 η:每一步迈多大</h2>
+        <p>
+          公式里的 <var>η</var>(读作 eta)就是<span class="term">学习率(learning rate)</span>,
+          它控制每一步的<strong>步子大小</strong>。这是整个训练里最关键、也最需要调的一个旋钮:
+        </p>
+        <ul>
+          <li><strong>太小</strong>:每步挪一点点,要走非常久才到谷底,训练慢得让人崩溃;</li>
+          <li><strong>太大</strong>:一步迈过头,直接越过谷底冲到对面更高的地方,损失反而<strong>来回震荡甚至发散</strong>;</li>
+          <li><strong>刚好</strong>:稳步下降,又快又稳。</li>
+        </ul>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">想亲眼看看?</span>
           <p>
-            像追查一次生产事故的责任:最终的损失(成品报废)要追到某个工人(参数)头上,
-            得沿着流水线一站站往回问“你这一步对最终结果影响多大”,把这些“影响”乘起来,
-            就得到这个工人应负的总责任。反向传播,就是给<strong>每个参数</strong>同时做这件追责。
+            下一章的“前向 / 反向传播动画”里有一个 <strong>Learning Rate 滑块</strong>,
+            你可以拖动它,观察同样的梯度下,参数每一步被改动的幅度如何随学习率变化。
+            到第 9 章我们还会让学习率在训练过程中<strong>动态变化</strong>(学习率调度)。
           </p>
         </div>
 
-        <h2>2. 反向传播的三步</h2>
-        <p>把上面的思路推广到整张多层网络,就是干净利落的三步。我们引入一个中间量 <var>δ</var>(delta),表示“某个神经元对最终损失的责任”。</p>
-
-        <h3>第一步:从输出层的误差开始</h3>
-        <p>反向传播的起点是<strong>最后一层</strong>。它的 <var>δ</var> 由“损失对输出的导数”乘上“激活函数的导数”得到:</p>
-        <div class="mathblock reveal">
-          <var>δ</var><sub>末层</sub> = <span class="frac"><span>∂<var>L</var></span><span>∂<var>a</var></span></span> · <var>f</var>′(<var>z</var>)
-          <span class="label">用到了第 3 章的 DerivLoss 和第 1 章的 DerivActivate</span>
-        </div>
-        <p>还记得第 3 章那个美妙巧合吗?如果用 softmax + 交叉熵,这一步直接简化成 <var>δ</var> = <var>p</var> − <var>t</var>。</p>
-
-        <h3>第二步:把误差一层层往回传</h3>
-        <p>有了后一层的 <var>δ</var>,前一层的 <var>δ</var> 就能算出来:把后一层的责任,按连接它们的权重“分摊”回来,再乘上本层激活的导数:</p>
-        <div class="mathblock reveal">
-          <var>δ</var><sub>l</sub> = ( <var>W</var><sub>l+1</sub><sup>T</sup> <var>δ</var><sub>l+1</sub> ) ⊙ <var>f</var>′(<var>z</var><sub>l</sub>)
-          <span class="label">⊙ 表示逐元素相乘;W<sup>T</sup> 是把权重“反过来用”,把后层责任分回前层</span>
-        </div>
-
-        <h3>第三步:用 δ 算出每个参数的梯度</h3>
-        <p>一旦每个神经元都有了自己的 <var>δ</var>,梯度就唾手可得——权重的梯度,就是“它两端的 <var>δ</var> 和输入”的乘积:</p>
-        <div class="mathblock reveal">
-          <span class="frac"><span>∂<var>L</var></span><span>∂<var>w</var><sub>l,o,i</sub></span></span> = <var>δ</var><sub>l,o</sub> · <var>a</var><sub>l−1,i</sub>
-          &nbsp;&nbsp;&nbsp;&nbsp;
-          <span class="frac"><span>∂<var>L</var></span><span>∂<var>b</var><sub>l,o</sub></span></span> = <var>δ</var><sub>l,o</sub>
-          <span class="label">权重梯度 = 本神经元的 δ × 上一层对应的输入;偏置梯度就是 δ 本身</span>
-        </div>
-
-        <h2>3. 边看动画边走一遍</h2>
+        <h2>4. 不必每次都看完所有数据:mini-batch SGD</h2>
         <p>
-          下面还是那个动画,这次请点 <strong>“切到反向传播”</strong>,再一步步点 <strong>“下一步”</strong>。
-          注意暖色信号是怎么从输出层<strong>反着</strong>流回输入层的——它传的不是数据,而是“误差/责任”。
-          你还可以 hover 公式里的彩色项,看它对应网络里的哪个节点或哪条边。
+          严格说,要算“真正的梯度”,得把<strong>所有</strong>训练样本都过一遍。但数据量动辄百万,
+          每走一步都全看一遍太慢了。实践中我们用一个聪明的折中:每次只<strong>随机抓一小批(mini-batch)</strong>
+          样本,用这一小批估算梯度,就更新一次。这叫<span class="term">小批量随机梯度下降(mini-batch SGD)</span>。
         </p>
+        <p>看看训练主循环是怎么做的(精简自 <code>Train</code>):</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/neural_network.cpp · Train(精简)</figcaption>
+          <pre class="code-walk__code"><code>// 每轮开始前打乱样本顺序
+std::shuffle(index_pos.begin(), index_pos.end(), shuffle_gen);  <b class="cw-tag">1</b>
+
+// 取出一小批样本, 走一遍 "前向 → 反向 → 更新"
+ForwardPropagationBatch(batch_data);   <b class="cw-tag">2</b>
+ResetGradients();
+BackPropagationBatch(batch_target);    <b class="cw-tag">3</b>
+ApplyGradient(B);                      <b class="cw-tag">4</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>打乱顺序,避免模型“记住样本的排列”,让每一批都更有代表性。</li>
+            <li>对这一小批做前向传播,得到预测(第 3 章)。</li>
+            <li>反向传播,算出这一批里每个参数的梯度(第 6 章马上讲)。</li>
+            <li>用算好的梯度更新一次参数。<code>B</code> 是这批的样本数,用来把梯度取平均。</li>
+          </ol>
+        </figure>
+
+        <h2>5. 逐行读懂“参数更新”</h2>
+        <p>真正执行 <var>w</var> ← <var>w</var> − <var>η</var>·梯度 的,是优化器。最朴素的 SGD 优化器只有几行:</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/optimizer/sgd_optimizer.cpp · CalcChangeValue</figcaption>
+          <pre class="code-walk__code"><code>double g = delta;                                  <b class="cw-tag">1</b>
+if (weight_pos != -1 &amp;&amp; weight_decay_ != 0.0)
+  g += weight_decay_ * param_value;                <b class="cw-tag">2</b>
+return learning_rate * g;                          <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li><code>delta</code> 就是这个参数的梯度(由反向传播算出)。</li>
+            <li>(可选)weight decay / L2 正则:把权重稍微往 0 拉一点,抑制过拟合;注意只对权重做,偏置不动(<code>weight_pos != -1</code> 才进来)。第 9 章细讲。</li>
+            <li>返回“这一步要改变的量” = 学习率 × 梯度。这正是更新公式里的 <var>η</var>·梯度。</li>
+          </ol>
+        </figure>
+        <p>而把这个改变量真正从参数里减掉的,是 <code>ApplyGradient</code>:</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/neural_network.cpp · ApplyGradient(精简)</figcaption>
+          <pre class="code-walk__code"><code>optimizer_function_-&gt;BeforeStep();                  <b class="cw-tag">1</b>
+
+double avg_dw = g_row[i] * inv_bs;                  <b class="cw-tag">2</b>
+double w_change = optimizer_function_-&gt;CalcChangeValue(
+    avg_dw, learning_rate_, {l, o}, i, w_row[i]);
+w_row[i] -= w_change;                               <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>先通知优化器“新的一步开始了”。对 SGD 这是空操作;但对 Adam 这类优化器,它会在这里推进内部的计步器(第 9 章)。</li>
+            <li>把累加的梯度乘以 <code>1/B</code>,得到这一批的<strong>平均梯度</strong>。</li>
+            <li>算出改变量,再从参数里<strong>减掉</strong>它——这一行,就是 <var>w</var> ← <var>w</var> − <var>η</var>·梯度 的代码版本。</li>
+          </ol>
+        </figure>
+
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">梯度下降不保证找到“全局最优”</span>
+          <p>
+            真实的损失地形坑坑洼洼,梯度下降可能停在某个“局部谷底”而不是最深的那个。
+            但好消息是:在深度学习里,绝大多数局部谷底的效果都已经足够好,
+            而且后面第 9 章的动量、Adam 等技巧,能帮我们更稳地走下去。
+          </p>
+        </div>
+
         <div class="figure reveal">
-          <div data-lab="propagation"></div>
-          <p class="figure__cap">前向(蓝绿)把数据往前算;反向(暖色)把误差往回传。两趟合起来,就是一次完整的训练步。</p>
-        </div>
-
-        <h2>4. 逐行读懂反向传播</h2>
-        <p>真实代码就是上面三步的忠实翻译。<strong>第一步:末层的 δ。</strong></p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/neural_network.cpp · BackPropagationBatch ①末层(精简)</figcaption>
-          <pre class="code-walk__code"><code>if (use_softmax) {
-  delta = softmax_function_-&gt;CalcDelta(output, target, loss_function_);  <b class="cw-tag">1</b>
-} else {
-  double dL = loss_function_-&gt;DerivLoss(target, output) / out_dim;       <b class="cw-tag">2</b>
-  delta = dL * activate_function_-&gt;DerivActivate(preact, output);        <b class="cw-tag">3</b>
-}
-neuron_delta_[last][b][o] = delta;                                       <b class="cw-tag">4</b></code></pre>
-          <ol class="code-walk__notes">
-            <li>若是 softmax + 交叉熵,直接用那个漂亮结果 <var>δ</var> = <var>p</var> − <var>t</var>。</li>
-            <li>否则,先算损失对输出的导数 <code>DerivLoss</code>(第 3 章)。</li>
-            <li>再乘上激活函数的导数 <code>DerivActivate</code>。注意它<strong>同时</strong>用到了 <code>preact</code>(也就是前向存下的 <var>z</var>)和 <code>output</code>——这就是第 1、2 章埋的伏笔:有些激活(如 GELU)必须知道 <var>z</var> 才能求导。</li>
-            <li>把末层每个神经元的 <var>δ</var> 存进 <code>neuron_delta_</code>,作为往回传的起点。</li>
-          </ol>
-        </figure>
-
-        <p><strong>第二步:把 δ 一层层往回传。</strong></p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/neural_network.cpp · BackPropagationBatch ②回传(精简)</figcaption>
-          <pre class="code-walk__code"><code>for (int l = last - 1; l &gt;= 1; l--) {            <b class="cw-tag">1</b>
-  for (int o = 0; o &lt; layer_[l]; o++) {
-    double sum = 0.0;
-    for (int k = 0; k &lt; layer_[l + 1]; k++)
-      sum += neuron_weight_[l + 1][k][o]
-             * neuron_delta_[l + 1][b][k];        <b class="cw-tag">2</b>
-    neuron_delta_[l][b][o] =
-        sum * activate_function_-&gt;DerivActivate(
-                  neuron_preact_[l][b][o],
-                  neuron_output_[l][b][o]);        <b class="cw-tag">3</b>
-  }
-}</code></pre>
-          <ol class="code-walk__notes">
-            <li>注意循环方向:<code>l</code> 从倒数第二层<strong>往前</strong>走到第 1 层——这就是“反向”二字的由来。</li>
-            <li>把后一层每个神经元的责任 <code>δ</code>,乘上连接的权重,累加起来——这正是公式里的 <var>W</var><sup>T</sup><var>δ</var>,把后层责任分摊回当前神经元。</li>
-            <li>再乘上当前层激活的导数,得到当前层的 <var>δ</var>。这一行就是 <var>δ</var><sub>l</sub> = (<var>W</var><sup>T</sup><var>δ</var>) ⊙ <var>f</var>′(<var>z</var>)。</li>
-          </ol>
-        </figure>
-
-        <p><strong>第三步:用 δ 把梯度累加出来。</strong></p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/neural_network.cpp · BackPropagationBatch ③累加梯度(精简)</figcaption>
-          <pre class="code-walk__code"><code>for (int l = 1; l &lt; L; l++) {
-  const auto &amp;in_vec = neuron_output_[l - 1][b];
-  for (int o = 0; o &lt; layer_[l]; o++) {
-    double d = neuron_delta_[l][b][o];
-    grad_bias_[l][o] += d;                        <b class="cw-tag">1</b>
-    for (int i = 0; i &lt; layer_[l - 1]; i++)
-      grad_weight_[l][o][i] += d * in_vec[i];     <b class="cw-tag">2</b>
-  }
-}</code></pre>
-          <ol class="code-walk__notes">
-            <li>偏置的梯度,就是这个神经元的 <var>δ</var> 本身(对应公式 ∂<var>L</var>/∂<var>b</var> = <var>δ</var>)。</li>
-            <li>权重的梯度,是 <var>δ</var> 乘以“上一层对应的输入”(对应 ∂<var>L</var>/∂<var>w</var> = <var>δ</var>·<var>a</var>)。注意是 <code>+=</code>:一批里每个样本都累加进来,最后在 <code>ApplyGradient</code> 里除以 <code>B</code> 取平均(第 4 章)。</li>
-          </ol>
-        </figure>
-
-        <div class="callout callout--note reveal">
-          <span class="callout__title">前向 + 反向 = 一次完整的训练步</span>
-          <p>
-            把这一章和前几章串起来:<strong>前向</strong>算出预测(第 2 章)→ <strong>损失</strong>衡量错误(第 3 章)→
-            <strong>反向</strong>算出每个参数的梯度(本章)→ <strong>优化器</strong>按梯度更新参数(第 4 章)。
-            这四步循环成千上万次,网络就“学”会了。这就是第 0 章那个训练循环的完整真相。
-          </p>
+          <div data-lab="gradient-descent"></div>
+          <p class="figure__cap">动手玩:拖动学习率 η,点“走一步 / 自动跑”,看小球怎么滑向谷底。把 η 调到很大(如 &gt; 10),它会<strong>反复横跳直到发散</strong>——这就是“学习率太大”的样子。</p>
         </div>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>反向传播 = 链式法则:把“最终损失”按每段局部导数连乘,分配责任回每个参数。</li>
-            <li>三步:① 末层 <var>δ</var> = ∂<var>L</var>/∂<var>a</var> · <var>f</var>′(<var>z</var>)(softmax+CE 时就是 <var>p</var>−<var>t</var>);② 逐层回传 <var>δ</var><sub>l</sub> = (<var>W</var><sup>T</sup><var>δ</var>) ⊙ <var>f</var>′(<var>z</var>);③ 梯度 = <var>δ</var> × 输入。</li>
-            <li>反向时要用前向存下的 <var>z</var>(<code>neuron_preact_</code>)来算激活导数。</li>
-            <li>前向 → 损失 → 反向 → 更新,四步一循环,反复多次即为训练。</li>
+            <li>训练就像蒙眼下山:每步朝“最陡下坡”走一小步,逼近损失谷底。</li>
+            <li>梯度 = 损失对参数的导数,指向“上升最快”的方向;朝它的<strong>反方向</strong>走,损失下降。</li>
+            <li>核心更新规则:<var>w</var> ← <var>w</var> − <var>η</var>·梯度,对每个参数都做一遍。</li>
+            <li>学习率 <var>η</var> 是步长:太小慢、太大震荡发散、刚好又快又稳。</li>
+            <li>实践用 mini-batch SGD:每次随机抓一小批样本估算梯度并更新一次。</li>
           </ul>
         </section>
 
         <h2>动手与思考</h2>
         <div class="quiz reveal">
           <details class="quiz__item">
-            <summary class="quiz__q">问题 1:为什么叫“反向”传播?</summary>
+            <summary class="quiz__q">问题 1:某个参数的梯度是 +3,学习率 0.1,这个参数应该怎么变?</summary>
             <div class="quiz__a">
-              <p>因为计算方向和前向相反:前向是数据从输入流到输出;反向是误差(δ)从输出层一层层流回输入层。代码里那句 <code>for (l = last-1; l &gt;= 1; l--)</code> 的倒序循环就是它的体现。</p>
+              <p>按 <var>w</var> ← <var>w</var> − <var>η</var>·梯度 = <var>w</var> − 0.1×3 = <var>w</var> − 0.3,也就是<strong>减小</strong> 0.3。因为梯度为正说明增大它会让损失上升,所以要往反方向减。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 2:权重 <var>w</var><sub>l,o,i</sub> 的梯度由哪两样东西相乘得到?</summary>
+            <summary class="quiz__q">问题 2:训练时损失剧烈上下震荡、甚至变成 NaN,最可能是哪个旋钮出了问题?</summary>
             <div class="quiz__a">
-              <p>由“这个权重指向的神经元的 <var>δ</var>(<code>neuron_delta_[l][o]</code>)”乘以“它接收的那个输入(上一层的输出 <code>in_vec[i]</code>)”。直觉:责任越大、输入越强,这个权重就该调得越多。</p>
+              <p>学习率太大。步子迈得太猛,一次次越过谷底冲到更高处,导致损失不降反增甚至发散。先把学习率调小试试。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 3:如果前向时没有保存每层的 <var>z</var>,反向传播会怎样?</summary>
+            <summary class="quiz__q">问题 3:为什么用“一小批”样本而不是每次都用全部数据?</summary>
             <div class="quiz__a">
-              <p>很多激活函数(尤其 GELU)的导数需要原始的 <var>z</var> 才能算准,缺了它就只能用粗略近似,梯度不准、训练变差。所以前向时顺手把 <var>z</var> 存进 <code>neuron_preact_</code> 是必要的。</p>
+              <p>全量数据每走一步都要算很久,太慢。小批量用少量样本就能得到对梯度的合理估计,更新更频繁、训练更快,还能借助随机性帮助跳出一些差的局部谷底。</p>
             </div>
           </details>
         </div>
 
         <p class="muted">
-          到这里,“学习”的完整原理就讲透了。但把它真正训<strong>稳</strong>、训<strong>快</strong>,还需要一整套工程技巧。
-          下一章我们就把初始化、Adam、学习率调度、梯度裁剪这套“现代训练栈”一次配齐。
+          我们一直说“反向传播会算出梯度”,但它到底怎么算?下一章就来揭开这个让无数初学者头疼、
+          其实只是“链式法则 + 一点耐心”的过程。
         </p>
       </div>
     </main>

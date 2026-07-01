@@ -446,7 +446,8 @@
       fMain: $("[data-prop-formula-main]"), fSub: $("[data-prop-formula-sub]"), fExp: $("[data-prop-formula-explain]"),
       cMain: $("[data-prop-chain-main]"), cSub: $("[data-prop-chain-sub]"), cExp: $("[data-prop-chain-explain]"),
       lrRead: $('[data-prop-read="lr"]'), lrNote: $("[data-prop-lr-note]"), status: $("[data-prop-status]"),
-      pulse: $("[data-network-pulse]")
+      pulse: $("[data-network-pulse]"),
+      modeForwardBtn: $('[data-prop-action="set-forward"]'), modeBackwardBtn: $('[data-prop-action="set-backward"]')
     };
     var timer = null, edgeTimers = [], mode = "forward", stepIndex = -1;
 
@@ -496,6 +497,16 @@
       refs.lrRead.textContent = state.learningRate.toFixed(2);
       refs.lrNote.textContent = "当前 learning rate = " + state.learningRate.toFixed(2) + "。它决定每一步参数改多少:越大改得越猛,越小改得越保守。";
     }
+    function updateModeButtons() {
+      if (refs.modeForwardBtn) {
+        refs.modeForwardBtn.classList.toggle("button--primary", mode === "forward");
+        refs.modeForwardBtn.classList.toggle("button--ghost", mode !== "forward");
+      }
+      if (refs.modeBackwardBtn) {
+        refs.modeBackwardBtn.classList.toggle("button--primary", mode === "backward");
+        refs.modeBackwardBtn.classList.toggle("button--ghost", mode !== "backward");
+      }
+    }
     function clearActive() {
       $$("[data-node]").forEach(function (n) { n.classList.remove("is-active-forward", "is-active-backward", "is-secondary-forward", "is-secondary-backward"); });
       $$("[data-edge]").forEach(function (e) { e.classList.remove("is-active-forward", "is-active-backward"); });
@@ -519,6 +530,7 @@
         '<div class="change-item"><strong>w(out,0)</strong><span>1.10 → 1.06</span></div>';
       refs.status.textContent = "当前模式:" + (mode === "forward" ? "前向传播" : "反向传播") + " / Step " + Math.max(0, stepIndex + 1);
       renderStatic();
+      updateModeButtons();
       bindFormulaLinks();
     }
     function show() {
@@ -785,13 +797,183 @@
     nextBtn.addEventListener("click", function () { if (!state.data || !Array.isArray(state.data.steps) || !state.data.steps.length) return; state.stepIndex = Math.min(state.data.steps.length - 1, state.stepIndex + 1); render(state.data); });
   }
 
+  /* ===================== 激活函数曲线实验台 ===================== */
+  var ACTC_TPL =
+    '<div class="lab">' +
+    '  <div class="lab__controls">' +
+    '    <label>激活函数' +
+    '      <select data-actc="fn">' +
+    '        <option value="sigmoid">Sigmoid</option>' +
+    '        <option value="tanh">Tanh</option>' +
+    '        <option value="relu">ReLU</option>' +
+    '        <option value="leaky_relu">LeakyReLU</option>' +
+    '        <option value="gelu">GELU</option>' +
+    '      </select>' +
+    '    </label>' +
+    '    <label>取值点 x<input type="range" min="-4" max="4" step="0.1" value="1.0" data-actc="x" /><span class="lab__value" data-actc-read="x"></span></label>' +
+    '  </div>' +
+    '  <div class="lab__viz">' +
+    '    <div class="formula-card">' +
+    '      <div data-actc-plot></div>' +
+    '      <p class="formula" data-actc-formula></p>' +
+    '      <p class="explain" data-actc-explain></p>' +
+    '    </div>' +
+    '  </div>' +
+    '</div>';
+
+  function actFn(x, name) {
+    if (name === "relu") return Math.max(0, x);
+    if (name === "tanh") return Math.tanh(x);
+    if (name === "leaky_relu") return x > 0 ? x : 0.01 * x;
+    if (name === "gelu") {
+      var s = x < 0 ? -1 : 1, ax = Math.abs(x / Math.SQRT2), t = 1 / (1 + 0.3275911 * ax);
+      var erf = s * (1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-ax * ax));
+      return 0.5 * x * (1 + erf);
+    }
+    return 1 / (1 + Math.exp(-x));
+  }
+
+  function initActivationCurve(root) {
+    root.innerHTML = ACTC_TPL;
+    var state = { fn: "sigmoid", x: 1.0 };
+    var W = 520, H = 250, padL = 34, padR = 14, padT = 14, padB = 24;
+    var xMin = -4, xMax = 4, yMin = -1.5, yMax = 4.2;
+    function PX(x) { return padL + (x - xMin) / (xMax - xMin) * (W - padL - padR); }
+    function PY(y) { return padT + (yMax - y) / (yMax - yMin) * (H - padT - padB); }
+    function clampY(y) { return Math.max(yMin, Math.min(yMax, y)); }
+    function render() {
+      root.querySelector('[data-actc-read="x"]').textContent = state.x.toFixed(2);
+      var pts = [];
+      for (var i = 0; i <= 120; i++) {
+        var xx = xMin + (xMax - xMin) * i / 120;
+        pts.push(PX(xx).toFixed(1) + "," + PY(clampY(actFn(xx, state.fn))).toFixed(1));
+      }
+      var fx = actFn(state.x, state.fn);
+      var h = 1e-3, d = (actFn(state.x + h, state.fn) - actFn(state.x - h, state.fn)) / (2 * h);
+      var tx1 = state.x - 0.9, tx2 = state.x + 0.9;
+      var ty1 = fx + d * (tx1 - state.x), ty2 = fx + d * (tx2 - state.x);
+      var svg =
+        '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="激活函数曲线" style="width:100%;height:auto;display:block">' +
+        '<line x1="' + PX(xMin) + '" y1="' + PY(0) + '" x2="' + PX(xMax) + '" y2="' + PY(0) + '" stroke="#46587a" stroke-width="1"/>' +
+        '<line x1="' + PX(0) + '" y1="' + padT + '" x2="' + PX(0) + '" y2="' + (H - padB) + '" stroke="#46587a" stroke-width="1"/>' +
+        '<polyline points="' + pts.join(" ") + '" fill="none" stroke="#6ac3ff" stroke-width="2.5"/>' +
+        '<line x1="' + PX(tx1) + '" y1="' + PY(clampY(ty1)) + '" x2="' + PX(tx2) + '" y2="' + PY(clampY(ty2)) + '" stroke="#8ef0d1" stroke-width="2" stroke-dasharray="4 3"/>' +
+        '<circle cx="' + PX(state.x) + '" cy="' + PY(clampY(fx)) + '" r="5" fill="#ffcf72"/>' +
+        "</svg>";
+      root.querySelector("[data-actc-plot]").innerHTML = svg;
+      root.querySelector("[data-actc-formula]").textContent =
+        "f(" + state.x.toFixed(2) + ") = " + fx.toFixed(3) + "    f′(" + state.x.toFixed(2) + ") = " + d.toFixed(3) + " (切线斜率)";
+      root.querySelector("[data-actc-explain]").textContent = Math.abs(d) < 0.05
+        ? "此处曲线几乎是平的、导数≈0 → 反向传播的梯度会在这里“断流”(梯度消失)。拖到中间试试。"
+        : "此处曲线有明显斜率、导数≠0 → 梯度能顺畅地传回去。拖到两端(尤其 Sigmoid/Tanh)看它怎么变平。";
+    }
+    root.querySelectorAll("[data-actc]").forEach(function (c) {
+      c.addEventListener("input", function () {
+        var k = c.getAttribute("data-actc");
+        state[k] = k === "x" ? parseFloat(c.value) : c.value;
+        render();
+      });
+    });
+    render();
+  }
+
+  /* ===================== 梯度下降实验台 ===================== */
+  var GD_TPL =
+    '<div class="lab">' +
+    '  <div class="lab__controls">' +
+    '    <label>学习率 η<input type="range" min="0.2" max="12" step="0.2" value="1.0" data-gd="lr" /><span class="lab__value" data-gd-read="lr"></span></label>' +
+    '    <div class="lab__btns">' +
+    '      <button type="button" class="button button--primary" data-gd-act="step">走一步</button>' +
+    '      <button type="button" class="button button--ghost" data-gd-act="run">自动跑</button>' +
+    '      <button type="button" class="button button--ghost" data-gd-act="reset">重置</button>' +
+    '    </div>' +
+    '  </div>' +
+    '  <div class="lab__viz">' +
+    '    <div class="formula-card">' +
+    '      <div data-gd-plot></div>' +
+    '      <p class="explain" data-gd-explain></p>' +
+    '    </div>' +
+    '  </div>' +
+    '</div>';
+
+  function initGradientDescent(root) {
+    root.innerHTML = GD_TPL;
+    var START = -4.4;
+    var state = { lr: 1.0, w: START, hist: [START], diverged: false };
+    function f(w) { return 0.1 * w * w; }
+    function df(w) { return 0.2 * w; }
+    var W = 520, H = 250, padL = 30, padR = 14, padT = 14, padB = 24;
+    var xMin = -5, xMax = 5, yMin = 0, yMax = 2.7;
+    function PX(x) { return padL + (x - xMin) / (xMax - xMin) * (W - padL - padR); }
+    function PY(y) { return padT + (yMax - y) / (yMax - yMin) * (H - padT - padB); }
+    function cx(x) { return Math.max(xMin, Math.min(xMax, x)); }
+    function render() {
+      root.querySelector('[data-gd-read="lr"]').textContent = state.lr.toFixed(1);
+      var pts = [];
+      for (var i = 0; i <= 120; i++) {
+        var xx = xMin + (xMax - xMin) * i / 120;
+        pts.push(PX(xx).toFixed(1) + "," + PY(Math.min(yMax, f(xx))).toFixed(1));
+      }
+      var dots = "", path = "";
+      state.hist.forEach(function (w, i) {
+        var X = PX(cx(w)), Y = PY(Math.min(yMax, f(cx(w))));
+        path += (i === 0 ? "M" : "L") + X.toFixed(1) + "," + Y.toFixed(1) + " ";
+        dots += '<circle cx="' + X.toFixed(1) + '" cy="' + Y.toFixed(1) + '" r="3" fill="#8ef0d1" opacity="0.7"/>';
+      });
+      var cw = state.hist[state.hist.length - 1];
+      var svg =
+        '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="梯度下降" style="width:100%;height:auto;display:block">' +
+        '<polyline points="' + pts.join(" ") + '" fill="none" stroke="#6ac3ff" stroke-width="2.5"/>' +
+        '<path d="' + path + '" fill="none" stroke="#8ef0d1" stroke-width="1.4" stroke-dasharray="3 3"/>' +
+        dots +
+        '<circle cx="' + PX(cx(cw)).toFixed(1) + '" cy="' + PY(Math.min(yMax, f(cx(cw)))).toFixed(1) + '" r="6" fill="#ffcf72"/>' +
+        "</svg>";
+      root.querySelector("[data-gd-plot]").innerHTML = svg;
+      var msg;
+      if (state.diverged) msg = "学习率太大,球冲出了谷底、损失反而越来越大 → 发散了!调小 η 再重置试试。";
+      else if (Math.abs(df(cw)) < 0.05) msg = "梯度≈0,已经滑到谷底附近,基本收敛。step = " + (state.hist.length - 1) + "。";
+      else msg = "还在下坡:step = " + (state.hist.length - 1) + ",w = " + cw.toFixed(2) + ",loss = " + f(cw).toFixed(3) + "。";
+      root.querySelector("[data-gd-explain]").textContent = msg;
+    }
+    function step() {
+      if (state.diverged) return;
+      var g = df(state.w);
+      state.w = state.w - state.lr * g;
+      state.hist.push(state.w);
+      if (Math.abs(state.w) > 30) state.diverged = true;
+      render();
+    }
+    function reset() { state.w = START; state.hist = [START]; state.diverged = false; render(); }
+    root.querySelector('[data-gd="lr"]').addEventListener("input", function () {
+      state.lr = parseFloat(this.value); render();
+    });
+    root.querySelectorAll("[data-gd-act]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var act = b.getAttribute("data-gd-act");
+        if (act === "step") step();
+        else if (act === "reset") reset();
+        else if (act === "run") {
+          var n = 0;
+          (function loop() {
+            if (n++ >= 20 || state.diverged) return;
+            step();
+            setTimeout(loop, 140);
+          })();
+        }
+      });
+    });
+    render();
+  }
+
   /* ===================== 自动挂载 ===================== */
   var INITS = {
     neuron: initNeuron,
     propagation: initPropagation,
     attention: initAttention,
     multihead: initMultihead,
-    "real-attention": initRealAttention
+    "real-attention": initRealAttention,
+    "activation-curve": initActivationCurve,
+    "gradient-descent": initGradientDescent
   };
 
   function mountAll() {
