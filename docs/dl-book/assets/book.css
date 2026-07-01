@@ -920,6 +920,9 @@ details[open] .quiz__q::after {
   position: relative;
   display: grid;
   gap: 0.4rem;
+  align-content: start;
+  height: auto;
+  min-height: 0;
   padding: 1.2rem 1.2rem 1.3rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -951,7 +954,8 @@ details[open] .quiz__q::after {
 .toc-card__desc {
   color: var(--text-soft);
   font-size: 0.92rem;
-  line-height: 1.6;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .toc-card--appendix {
