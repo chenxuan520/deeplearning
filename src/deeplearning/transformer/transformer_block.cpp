@@ -187,20 +187,16 @@ TransformerBlock::RC TransformerBlock::Backward(const Matrix &grad_output,
     }
   }
 
-  for (int out = 0; out < model_dim_; out++) {
-    feed_forward_bias_2_[out] -= learning_rate * grad_feed_forward_bias_2[out];
-    for (int in = 0; in < feed_forward_dim_; in++) {
-      feed_forward_weight_2_[out][in] -=
-          learning_rate * grad_feed_forward_weight_2[out][in];
-    }
-  }
-  for (int out = 0; out < feed_forward_dim_; out++) {
-    feed_forward_bias_1_[out] -= learning_rate * grad_feed_forward_bias_1[out];
-    for (int in = 0; in < model_dim_; in++) {
-      feed_forward_weight_1_[out][in] -=
-          learning_rate * grad_feed_forward_weight_1[out][in];
-    }
-  }
+  feed_forward_weight_2_optimizer_.Apply(feed_forward_weight_2_,
+                                         grad_feed_forward_weight_2,
+                                         learning_rate);
+  feed_forward_bias_2_optimizer_.Apply(feed_forward_bias_2_,
+                                       grad_feed_forward_bias_2, learning_rate);
+  feed_forward_weight_1_optimizer_.Apply(feed_forward_weight_1_,
+                                         grad_feed_forward_weight_1,
+                                         learning_rate);
+  feed_forward_bias_1_optimizer_.Apply(feed_forward_bias_1_,
+                                       grad_feed_forward_bias_1, learning_rate);
 
   Matrix grad_residual_1;
   if (attention_norm_.Backward(grad_norm_1, grad_residual_1, learning_rate) !=

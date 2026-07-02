@@ -1,3 +1,4 @@
+#include "lr_scheduler/warmup_cosine_lr.h"
 #include "transformer/character_dataset.h"
 #include "transformer/character_tokenizer.h"
 #include "transformer/mini_transformer_lm.h"
@@ -31,7 +32,7 @@ struct DemoOption {
   int block_num = 2;
   int context_size = 2;
   double learning_rate = 0.01;
-  double block_learning_rate_scale = 0.05;
+  double block_learning_rate_scale = 1.0;
   double temperature = 0.8;
   int top_k = 2;
   double top_p = 0.9;
@@ -186,7 +187,7 @@ string BuildConfigText(const DemoOption &option, const MiniTransformerLM &model,
          "head_num=" + std::to_string(model_config.head_num_) + "\n" +
          "feed_forward_dim=" + std::to_string(model_config.feed_forward_dim_) + "\n" +
          "block_num=" + std::to_string(model_config.block_num_) + "\n" +
-         "context_size=" + std::to_string(model.context_size()) + "\n" +
+         "context_size=" + std::to_string(option.context_size) + "\n" +
          "block_learning_rate_scale=" +
          std::to_string(model_config.block_learning_rate_scale_) + "\n" +
          "generate_num=" + std::to_string(option.generate_num) + "\n" +
@@ -405,7 +406,8 @@ int main(int argc, char **argv) {
   model_config.feed_forward_dim_ = option.feed_forward_dim;
   model_config.block_num_ = option.block_num;
   model_config.rand_seed_ = option.rand_seed;
-  model_config.use_positional_encoding_ = false;
+  model_config.max_context_size_ = option.context_size;
+  model_config.use_positional_encoding_ = true;
   model_config.scale_embedding_ = true;
   model_config.block_learning_rate_scale_ = option.block_learning_rate_scale;
   try {
@@ -418,12 +420,6 @@ int main(int argc, char **argv) {
   auto rc = model.Init(model_config);
   if (rc != MiniTransformerLM::SUCCESS) {
     cout << "Model init failed: " << model.err_msg() << endl;
-    return -1;
-  }
-
-  rc = model.InitTrainingHead(option.context_size);
-  if (rc != MiniTransformerLM::SUCCESS) {
-    cout << "InitTrainingHead failed: " << model.err_msg() << endl;
     return -1;
   }
 
@@ -465,8 +461,13 @@ int main(int argc, char **argv) {
     }
     active_model = &loaded_model;
   } else {
+    // Linear warmup + cosine decay, a common recipe for Transformer training.
+    int warmup_epochs = std::max(1, option.epoch_num / 20);
+    WarmupCosineLR lr_scheduler(option.learning_rate, warmup_epochs,
+                                option.epoch_num, option.learning_rate * 0.1);
     rc = model.TrainNextToken(input_samples, target_tokens, train_callback,
-                              option.epoch_num, option.learning_rate);
+                              option.epoch_num, option.learning_rate,
+                              &lr_scheduler);
     if (rc != MiniTransformerLM::SUCCESS) {
       cout << "TrainNextToken failed: " << model.err_msg() << endl;
       return -1;

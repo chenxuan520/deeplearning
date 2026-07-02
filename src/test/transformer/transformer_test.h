@@ -356,7 +356,6 @@ TEST(MiniTransformerLM, TrainAndReloadCharacterModel) {
   model.set_scale_embedding(true);
   MUST_EQUAL(model.Init(tokenizer.vocab_size(), 6, 1, 12, 0),
              MiniTransformerLM::SUCCESS);
-  MUST_EQUAL(model.InitTrainingHead(2), MiniTransformerLM::SUCCESS);
   MUST_EQUAL(model.TrainNextToken(input_samples, target_tokens, nullptr, 250, 0.1),
              MiniTransformerLM::SUCCESS);
 
@@ -415,7 +414,6 @@ TEST(MiniTransformerLM, CalcPerplexityAfterTraining) {
   model.set_scale_embedding(true);
   MUST_EQUAL(model.Init(tokenizer.vocab_size(), 6, 1, 12, 0),
              MiniTransformerLM::SUCCESS);
-  MUST_EQUAL(model.InitTrainingHead(2), MiniTransformerLM::SUCCESS);
   MUST_EQUAL(model.TrainNextToken(input_samples, target_tokens, nullptr, 250, 0.1),
              MiniTransformerLM::SUCCESS);
 
@@ -452,12 +450,11 @@ TEST(MiniTransformerLM, TrainSingleBlockCharacterModel) {
   MiniTransformerLM model;
   model.set_random_seed(0);
   model.set_backbone_type(MiniTransformerLM::BACKBONE_DECODER);
-  model.set_use_positional_encoding(false);
+  model.set_use_positional_encoding(true);
   model.set_scale_embedding(true);
-  model.set_block_learning_rate_scale(0.1);
+  model.set_max_context_size(2);
   MUST_EQUAL(model.Init(tokenizer.vocab_size(), 6, 1, 12, 1),
              MiniTransformerLM::SUCCESS);
-  MUST_EQUAL(model.InitTrainingHead(2), MiniTransformerLM::SUCCESS);
   auto query_weight_before = model.decoder().blocks()[0].self_attention().query_weight();
   MUST_EQUAL(model.TrainNextToken(input_samples, target_tokens, nullptr, 1000, 0.01),
              MiniTransformerLM::SUCCESS);
@@ -523,13 +520,11 @@ TEST(MiniTransformerLM, TrainTwoBlockDecoderCharacterModel) {
   MiniTransformerLM model;
   model.set_random_seed(0);
   model.set_backbone_type(MiniTransformerLM::BACKBONE_DECODER);
-  model.set_use_positional_encoding(false);
+  model.set_use_positional_encoding(true);
   model.set_scale_embedding(true);
-  model.set_block_learning_rate_scale(0.05);
+  model.set_max_context_size(2);
   MUST_EQUAL(model.Init(tokenizer.vocab_size(), 6, 1, 12, 2),
              MiniTransformerLM::SUCCESS);
-  MUST_EQUAL(model.InitTrainingHead(2), MiniTransformerLM::SUCCESS);
-
   auto train_callback = [](int, double average_loss, bool &early_stop) {
     if (average_loss < 0.02) {
       early_stop = true;

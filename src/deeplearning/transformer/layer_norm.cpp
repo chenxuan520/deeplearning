@@ -121,10 +121,8 @@ LayerNorm::RC LayerNorm::Backward(
     }
   }
 
-  for (int i = 0; i < feature_dim_; i++) {
-    scale_[i] -= learning_rate * grad_scale[i];
-    bias_[i] -= learning_rate * grad_bias[i];
-  }
+  scale_optimizer_.Apply(scale_, grad_scale, learning_rate);
+  bias_optimizer_.Apply(bias_, grad_bias, learning_rate);
   return SUCCESS;
 }
 

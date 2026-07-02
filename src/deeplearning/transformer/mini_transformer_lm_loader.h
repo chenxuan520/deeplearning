@@ -28,7 +28,7 @@ private:
     int head_num_;
     int feed_forward_dim_;
     int block_num_;
-    int context_size_;
+    int max_context_size_;
     int backbone_type_;
     int use_positional_encoding_;
     int scale_embedding_;

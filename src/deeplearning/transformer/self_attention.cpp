@@ -248,14 +248,10 @@ SelfAttention::RC SelfAttention::Backward(const Matrix &grad_output,
     }
   }
 
-  for (int out = 0; out < model_dim_; out++) {
-    for (int in = 0; in < model_dim_; in++) {
-      output_weight_[out][in] -= learning_rate * grad_output_weight[out][in];
-      query_weight_[out][in] -= learning_rate * grad_query_weight[out][in];
-      key_weight_[out][in] -= learning_rate * grad_key_weight[out][in];
-      value_weight_[out][in] -= learning_rate * grad_value_weight[out][in];
-    }
-  }
+  query_optimizer_.Apply(query_weight_, grad_query_weight, learning_rate);
+  key_optimizer_.Apply(key_weight_, grad_key_weight, learning_rate);
+  value_optimizer_.Apply(value_weight_, grad_value_weight, learning_rate);
+  output_optimizer_.Apply(output_weight_, grad_output_weight, learning_rate);
   return SUCCESS;
 }
 

@@ -2,6 +2,7 @@
 
 #include "layer_norm.h"
 #include "self_attention.h"
+#include "tensor_optimizer.h"
 
 #include <random>
 #include <string>
@@ -71,6 +72,10 @@ private:
   SelfAttention self_attention_;
   LayerNorm attention_norm_;
   LayerNorm feed_forward_norm_;
+  TensorOptimizer feed_forward_weight_1_optimizer_;
+  TensorOptimizer feed_forward_bias_1_optimizer_;
+  TensorOptimizer feed_forward_weight_2_optimizer_;
+  TensorOptimizer feed_forward_bias_2_optimizer_;
   std::string err_msg_;
   bool is_init_ = false;
 };

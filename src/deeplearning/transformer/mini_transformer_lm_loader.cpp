@@ -157,7 +157,7 @@ MiniTransformerLMLoader::ExportModelToFile(const MiniTransformerLM &model,
                         model.head_num(),
                         model.feed_forward_dim(),
                         model.block_num(),
-                        model.context_size(),
+                        model.max_context_size(),
                         model.backbone_type(),
                         model.use_positional_encoding() ? 1 : 0,
                         model.scale_embedding() ? 1 : 0,
@@ -165,9 +165,7 @@ MiniTransformerLMLoader::ExportModelToFile(const MiniTransformerLM &model,
   if (!ofs.write((const char *)&config, sizeof(config)).good() ||
       !WriteMatrix(ofs, model.token_embedding().embedding_table()) ||
       !WriteMatrix(ofs, model.output_weight()) ||
-      !WriteVector(ofs, model.output_bias()) ||
-      !WriteMatrix(ofs, model.context_weight()) ||
-      !WriteVector(ofs, model.context_bias())) {
+      !WriteVector(ofs, model.output_bias())) {
     ofs.close();
     return EXPORT_ERROR;
   }
@@ -205,6 +203,7 @@ MiniTransformerLMLoader::ImportModelFromFile(MiniTransformerLM &model,
       static_cast<MiniTransformerLM::BackboneType>(config.backbone_type_));
   model.set_use_positional_encoding(config.use_positional_encoding_ != 0);
   model.set_scale_embedding(config.scale_embedding_ != 0);
+  model.set_max_context_size(config.max_context_size_);
   model.set_block_learning_rate_scale(config.block_learning_rate_scale_);
   if (model.Init(config.vocab_size_, config.model_dim_, config.head_num_,
                  config.feed_forward_dim_, config.block_num_) !=
@@ -212,26 +211,16 @@ MiniTransformerLMLoader::ImportModelFromFile(MiniTransformerLM &model,
     ifs.close();
     return INPORT_ERROR;
   }
-  if (config.context_size_ > 0 &&
-      model.InitTrainingHead(config.context_size_) != MiniTransformerLM::SUCCESS) {
-    ifs.close();
-    return INPORT_ERROR;
-  }
 
   std::vector<std::vector<double>> embedding_table;
   std::vector<std::vector<double>> output_weight;
-  std::vector<std::vector<double>> context_weight;
   std::vector<double> output_bias;
-  std::vector<double> context_bias;
   if (!ReadMatrix(ifs, embedding_table) || !ReadMatrix(ifs, output_weight) ||
-      !ReadVector(ifs, output_bias) || !ReadMatrix(ifs, context_weight) ||
-      !ReadVector(ifs, context_bias) ||
+      !ReadVector(ifs, output_bias) ||
       model.token_embedding().set_embedding_table(embedding_table) !=
           TokenEmbedding::SUCCESS ||
       model.set_output_weight(output_weight) != MiniTransformerLM::SUCCESS ||
-      model.set_output_bias(output_bias) != MiniTransformerLM::SUCCESS ||
-      model.set_context_weight(context_weight) != MiniTransformerLM::SUCCESS ||
-      model.set_context_bias(context_bias) != MiniTransformerLM::SUCCESS) {
+      model.set_output_bias(output_bias) != MiniTransformerLM::SUCCESS) {
     ifs.close();
     return INPORT_ERROR;
   }

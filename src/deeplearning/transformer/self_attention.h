@@ -1,5 +1,7 @@
 #pragma once
 
+#include "tensor_optimizer.h"
+
 #include <random>
 #include <string>
 #include <vector>
@@ -59,6 +61,10 @@ private:
   Matrix last_mask_;
   bool has_last_mask_ = false;
   Tensor3D last_attention_weight_;
+  TensorOptimizer query_optimizer_;
+  TensorOptimizer key_optimizer_;
+  TensorOptimizer value_optimizer_;
+  TensorOptimizer output_optimizer_;
   std::string err_msg_;
   bool is_init_ = false;
 };

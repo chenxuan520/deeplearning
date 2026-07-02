@@ -12,6 +12,14 @@ namespace {
 
 using Matrix = MiniTransformerLM::Matrix;
 
+// Distinct seed offsets so each sub-module draws an independent initialization
+// stream from the same base seed. This keeps a run fully reproducible while
+// decorrelating the initial parameters of the embedding, encoder, decoder and
+// output head.
+constexpr int kEncoderSeedOffset = 7;
+constexpr int kDecoderSeedOffset = 11;
+constexpr int kOutputHeadSeedOffset = 13;
+
 Matrix CreateCausalMask(int sequence_length) {
   Matrix mask(sequence_length, std::vector<double>(sequence_length, 0));
   for (int i = 0; i < sequence_length; i++) {
@@ -78,23 +86,25 @@ MiniTransformerLM::RC MiniTransformerLM::Init(const Config &config) {
   feed_forward_dim_ = config.feed_forward_dim_;
   block_num_ = config.block_num_;
   rand_seed_ = config.rand_seed_;
+  max_context_size_ = config.max_context_size_;
   backbone_type_ = config.backbone_type_;
   use_positional_encoding_ = config.use_positional_encoding_;
   scale_embedding_ = config.scale_embedding_;
   block_learning_rate_scale_ = config.block_learning_rate_scale_;
+  sample_rng_.seed(static_cast<std::mt19937::result_type>(rand_seed_));
 
   token_embedding_.set_random_seed(rand_seed_);
   if (token_embedding_.Init(vocab_size_, model_dim_) != TokenEmbedding::SUCCESS) {
     err_msg_ = token_embedding_.err_msg();
     return INVALID_DATA;
   }
-  encoder_.set_random_seed(rand_seed_ + 7);
+  encoder_.set_random_seed(rand_seed_ + kEncoderSeedOffset);
   if (encoder_.Init(block_num_, model_dim_, head_num_, feed_forward_dim_) !=
       TransformerEncoder::SUCCESS) {
     err_msg_ = encoder_.err_msg();
     return INVALID_DATA;
   }
-  decoder_.set_random_seed(rand_seed_ + 11);
+  decoder_.set_random_seed(rand_seed_ + kDecoderSeedOffset);
   if (decoder_.Init(block_num_, model_dim_, head_num_, feed_forward_dim_) !=
       TransformerDecoder::SUCCESS) {
     err_msg_ = decoder_.err_msg();
@@ -104,7 +114,7 @@ MiniTransformerLM::RC MiniTransformerLM::Init(const Config &config) {
   output_weight_.assign(vocab_size_, std::vector<double>(model_dim_, 0));
   output_bias_.assign(vocab_size_, 0);
   const double limit = std::sqrt(6.0 / (vocab_size_ + model_dim_));
-  std::mt19937 gen(rand_seed_ + 13);
+  std::mt19937 gen(rand_seed_ + kOutputHeadSeedOffset);
   std::uniform_real_distribution<double> dist(-limit, limit);
   for (auto &row : output_weight_) {
     for (double &value : row) {
@@ -127,6 +137,7 @@ MiniTransformerLM::RC MiniTransformerLM::Init(int vocab_size, int model_dim,
   config.feed_forward_dim_ = feed_forward_dim;
   config.block_num_ = block_num;
   config.rand_seed_ = rand_seed_;
+  config.max_context_size_ = max_context_size_;
   config.backbone_type_ = backbone_type_;
   config.use_positional_encoding_ = use_positional_encoding_;
   config.scale_embedding_ = scale_embedding_;
@@ -192,6 +203,8 @@ MiniTransformerLM::RC MiniTransformerLM::EncodeSequence(
     mask_ptr = &mask;
   }
   if (backbone_type_ == BACKBONE_DECODER) {
+    // The decoder is always causal (it builds its own causal mask internally),
+    // so use_causal_mask only affects the encoder backbone and is ignored here.
     (void)mask_ptr;
     if (decoder_.Forward(hidden, encoded) != TransformerDecoder::SUCCESS) {
       err_msg_ = decoder_.err_msg();
@@ -274,9 +287,8 @@ MiniTransformerLM::RC MiniTransformerLM::SampleNextToken(
     value /= filtered_sum;
   }
 
-  std::mt19937 gen(rand_seed_ + token_ids.size());
   std::uniform_real_distribution<double> dist(0.0, 1.0);
-  double rand_value = dist(gen);
+  double rand_value = dist(sample_rng_);
   double prob_sum = 0;
   token_id = order[0];
   for (int i = 0; i < filtered_probs.size(); i++) {
@@ -383,83 +395,21 @@ MiniTransformerLM::RC MiniTransformerLM::CalcPerplexity(
   return SUCCESS;
 }
 
-MiniTransformerLM::RC MiniTransformerLM::InitTrainingHead(int context_size) {
-  if (!is_init_) {
-    err_msg_ = "[MiniTransformerLM::InitTrainingHead] MiniTransformerLM not init";
-    return NOT_INIT;
-  }
-  if (context_size <= 0) {
-    err_msg_ = "[MiniTransformerLM::InitTrainingHead] Invalid context size";
-    return INVALID_DATA;
-  }
-
-  context_size_ = context_size;
-  context_weight_.assign(vocab_size_,
-                         std::vector<double>(context_size_ * model_dim_, 0));
-  context_bias_.assign(vocab_size_, 0);
-
-  const double limit = std::sqrt(6.0 / (vocab_size_ + context_size_ * model_dim_));
-  std::mt19937 gen(rand_seed_ + 29);
-  std::uniform_real_distribution<double> dist(-limit, limit);
-  for (auto &row : context_weight_) {
-    for (double &value : row) {
-      value = dist(gen);
-    }
-  }
-  return SUCCESS;
-}
-
-std::vector<double>
-MiniTransformerLM::BuildContextFeature(const Matrix &encoded) const {
-  std::vector<double> feature(context_size_ * model_dim_, 0);
-  if (context_size_ == 0 || encoded.empty()) {
-    return feature;
-  }
-
-  int use_token_size = std::min((int)encoded.size(), context_size_);
-  int encoded_start = encoded.size() - use_token_size;
-  int feature_start = context_size_ - use_token_size;
-  for (int i = 0; i < use_token_size; i++) {
-    for (int j = 0; j < model_dim_; j++) {
-      feature[(feature_start + i) * model_dim_ + j] =
-          encoded[encoded_start + i][j];
-    }
-  }
-  return feature;
-}
-
-MiniTransformerLM::RC MiniTransformerLM::ForwardContextHead(
-    const std::vector<int> &token_ids, std::vector<double> &logits) {
-  if (context_size_ <= 0) {
-    err_msg_ = "[MiniTransformerLM::ForwardContextHead] Context head not init";
-    return NOT_INIT;
-  }
-
-  Matrix encoded;
-  auto rc = EncodeSequence(token_ids, encoded, true);
-  if (rc != SUCCESS) {
-    return rc;
-  }
-  auto feature = BuildContextFeature(encoded);
-  logits.assign(vocab_size_, 0);
-  for (int token_id = 0; token_id < vocab_size_; token_id++) {
-    logits[token_id] = context_bias_[token_id];
-    for (int i = 0; i < feature.size(); i++) {
-      logits[token_id] += context_weight_[token_id][i] * feature[i];
-    }
-  }
-  return SUCCESS;
-}
-
 MiniTransformerLM::RC MiniTransformerLM::CalcNextTokenLogits(
     const std::vector<int> &token_ids, std::vector<double> &logits,
     bool use_causal_mask) {
-  if (has_context_head()) {
-    return ForwardContextHead(token_ids, logits);
+  // Only keep the most recent max_context_size_ tokens so the fed positions stay
+  // within the range the model was trained on (keeps positional encoding valid).
+  const std::vector<int> *window = &token_ids;
+  std::vector<int> cropped;
+  if (max_context_size_ > 0 &&
+      static_cast<int>(token_ids.size()) > max_context_size_) {
+    cropped.assign(token_ids.end() - max_context_size_, token_ids.end());
+    window = &cropped;
   }
 
   Matrix all_logits;
-  auto rc = Forward(token_ids, all_logits, use_causal_mask);
+  auto rc = Forward(*window, all_logits, use_causal_mask);
   if (rc != SUCCESS) {
     return rc;
   }
@@ -472,13 +422,9 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextToken(
     const std::vector<int> &target_tokens,
     std::function<void(int epoch_num, double average_loss, bool &early_stop)>
         each_epoch_call,
-    int epoch_num, double learning_rate) {
+    int epoch_num, double learning_rate, LRScheduler *lr_scheduler) {
   if (!is_init_) {
     err_msg_ = "[MiniTransformerLM::TrainNextToken] MiniTransformerLM not init";
-    return NOT_INIT;
-  }
-  if (context_size_ <= 0) {
-    err_msg_ = "[MiniTransformerLM::TrainNextToken] Context head not init";
     return NOT_INIT;
   }
   if (input_samples.empty() || input_samples.size() != target_tokens.size() ||
@@ -490,64 +436,84 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextToken(
   const double embedding_scale =
       scale_embedding_ ? std::sqrt(static_cast<double>(model_dim_)) : 1.0;
   for (int epoch = 0; epoch < epoch_num; epoch++) {
+    const double epoch_learning_rate =
+        lr_scheduler != nullptr ? lr_scheduler->GetLR(epoch) : learning_rate;
+    const double block_learning_rate =
+        block_num_ == 0 ? epoch_learning_rate
+                        : epoch_learning_rate * block_learning_rate_scale_;
     double loss_sum = 0;
+    long long loss_count = 0;
     for (int sample_idx = 0; sample_idx < input_samples.size(); sample_idx++) {
       const auto &sample = input_samples[sample_idx];
-      int target_token = target_tokens[sample_idx];
-      if (target_token < 0 || target_token >= vocab_size_) {
+      if (sample.empty()) {
+        err_msg_ = "[MiniTransformerLM::TrainNextToken] Empty sample";
+        return INVALID_DATA;
+      }
+      if (target_tokens[sample_idx] < 0 ||
+          target_tokens[sample_idx] >= vocab_size_) {
         err_msg_ = "[MiniTransformerLM::TrainNextToken] Invalid target token";
         return INVALID_DATA;
       }
+
+      // Standard autoregressive targets: every position predicts the following
+      // token in the sequence, and the last position predicts target_tokens.
+      std::vector<int> position_targets(sample.size());
+      for (int i = 0; i + 1 < static_cast<int>(sample.size()); i++) {
+        position_targets[i] = sample[i + 1];
+      }
+      position_targets.back() = target_tokens[sample_idx];
 
       Matrix encoded;
       auto rc = EncodeSequence(sample, encoded, true);
       if (rc != SUCCESS) {
         return rc;
       }
-      auto feature = BuildContextFeature(encoded);
 
-      std::vector<double> logits(vocab_size_, 0);
-      for (int token_id = 0; token_id < vocab_size_; token_id++) {
-        logits[token_id] = context_bias_[token_id];
-        for (int i = 0; i < feature.size(); i++) {
-          logits[token_id] += context_weight_[token_id][i] * feature[i];
+      const int seq_len = static_cast<int>(encoded.size());
+      const double inv_seq_len = 1.0 / seq_len;
+      Matrix grad_encoded(seq_len, std::vector<double>(model_dim_, 0));
+      Matrix grad_output_weight(vocab_size_,
+                                std::vector<double>(model_dim_, 0));
+      std::vector<double> grad_output_bias(vocab_size_, 0);
+
+      for (int pos = 0; pos < seq_len; pos++) {
+        std::vector<double> logits(vocab_size_, 0);
+        for (int token_id = 0; token_id < vocab_size_; token_id++) {
+          logits[token_id] = output_bias_[token_id];
+          for (int dim = 0; dim < model_dim_; dim++) {
+            logits[token_id] += output_weight_[token_id][dim] * encoded[pos][dim];
+          }
+        }
+
+        auto probs = Softmax(logits);
+        const int target_token = position_targets[pos];
+        loss_sum += -std::log(std::max(probs[target_token], 1e-12));
+        loss_count++;
+
+        // Average the per-position gradient so the update matches a mean
+        // cross-entropy loss over the sequence regardless of its length.
+        std::vector<double> grad_logits = probs;
+        grad_logits[target_token] -= 1.0;
+        for (double &value : grad_logits) {
+          value *= inv_seq_len;
+        }
+
+        for (int token_id = 0; token_id < vocab_size_; token_id++) {
+          const double grad = grad_logits[token_id];
+          grad_output_bias[token_id] += grad;
+          for (int dim = 0; dim < model_dim_; dim++) {
+            grad_output_weight[token_id][dim] += grad * encoded[pos][dim];
+            grad_encoded[pos][dim] += output_weight_[token_id][dim] * grad;
+          }
         }
       }
 
-      auto probs = Softmax(logits);
-      loss_sum += -std::log(std::max(probs[target_token], 1e-12));
-      std::vector<double> grad_logits = probs;
-      grad_logits[target_token] -= 1.0;
-
-      std::vector<double> grad_feature(feature.size(), 0);
-      for (int token_id = 0; token_id < vocab_size_; token_id++) {
-        for (int i = 0; i < feature.size(); i++) {
-          grad_feature[i] += grad_logits[token_id] * context_weight_[token_id][i];
-        }
-      }
-
-      for (int token_id = 0; token_id < vocab_size_; token_id++) {
-        for (int i = 0; i < feature.size(); i++) {
-          context_weight_[token_id][i] -=
-              learning_rate * grad_logits[token_id] * feature[i];
-        }
-        context_bias_[token_id] -= learning_rate * grad_logits[token_id];
-      }
-
-      Matrix grad_encoded(encoded.size(), std::vector<double>(model_dim_, 0));
-      int use_token_size = std::min((int)sample.size(), context_size_);
-      int feature_start = context_size_ - use_token_size;
-      int encoded_start = encoded.size() - use_token_size;
-      for (int i = 0; i < use_token_size; i++) {
-        for (int dim = 0; dim < model_dim_; dim++) {
-          grad_encoded[encoded_start + i][dim] =
-              grad_feature[(feature_start + i) * model_dim_ + dim];
-        }
-      }
+      output_weight_optimizer_.Apply(output_weight_, grad_output_weight,
+                                     epoch_learning_rate);
+      output_bias_optimizer_.Apply(output_bias_, grad_output_bias,
+                                   epoch_learning_rate);
 
       Matrix grad_hidden;
-      double block_learning_rate =
-          block_num_ == 0 ? learning_rate : learning_rate * block_learning_rate_scale_;
       if (backbone_type_ == BACKBONE_DECODER) {
         if (decoder_.Backward(grad_encoded, grad_hidden, block_learning_rate) !=
             TransformerDecoder::SUCCESS) {
@@ -567,18 +533,24 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextToken(
         err_msg_ = "[MiniTransformerLM::TrainNextToken] Invalid backward result";
         return INVALID_DATA;
       }
-      for (int i = 0; i < sample.size(); i++) {
+      // Scatter the per-position hidden gradients back onto the embedding rows
+      // (a token may appear several times, so accumulate), then take one Adam
+      // step over the whole table.
+      Matrix grad_embedding(vocab_size_, std::vector<double>(model_dim_, 0));
+      for (int i = 0; i < static_cast<int>(sample.size()); i++) {
         int token_id = sample[i];
         for (int dim = 0; dim < model_dim_; dim++) {
-          embedding_table[token_id][dim] -=
-              learning_rate * grad_hidden[i][dim] * embedding_scale;
+          grad_embedding[token_id][dim] += grad_hidden[i][dim] * embedding_scale;
         }
       }
+      embedding_optimizer_.Apply(embedding_table, grad_embedding,
+                                 epoch_learning_rate);
     }
 
     bool early_stop = false;
     if (each_epoch_call != nullptr) {
-      each_epoch_call(epoch, loss_sum / input_samples.size(), early_stop);
+      each_epoch_call(epoch, loss_count == 0 ? 0.0 : loss_sum / loss_count,
+                      early_stop);
     }
     if (early_stop) {
       break;
@@ -587,7 +559,10 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextToken(
   return SUCCESS;
 }
 
-void MiniTransformerLM::set_random_seed(int seed) { rand_seed_ = seed; }
+void MiniTransformerLM::set_random_seed(int seed) {
+  rand_seed_ = seed;
+  sample_rng_.seed(static_cast<std::mt19937::result_type>(seed));
+}
 
 void MiniTransformerLM::set_backbone_type(BackboneType backbone_type) {
   backbone_type_ = backbone_type;
@@ -599,6 +574,10 @@ void MiniTransformerLM::set_use_positional_encoding(bool use_positional_encoding
 
 void MiniTransformerLM::set_scale_embedding(bool scale_embedding) {
   scale_embedding_ = scale_embedding;
+}
+
+void MiniTransformerLM::set_max_context_size(int max_context_size) {
+  max_context_size_ = max_context_size < 0 ? 0 : max_context_size;
 }
 
 void MiniTransformerLM::set_block_learning_rate_scale(double scale) {
@@ -628,41 +607,6 @@ MiniTransformerLM::set_output_bias(const std::vector<double> &bias) {
   return SUCCESS;
 }
 
-MiniTransformerLM::RC MiniTransformerLM::set_context_weight(const Matrix &weight) {
-  if (context_size_ == 0) {
-    if (weight.empty()) {
-      context_weight_.clear();
-      return SUCCESS;
-    }
-    err_msg_ = "[MiniTransformerLM::set_context_weight] Context head not init";
-    return NOT_INIT;
-  }
-  auto rc = ValidateContextWeight(weight, "set_context_weight");
-  if (rc != SUCCESS) {
-    return rc;
-  }
-  context_weight_ = weight;
-  return SUCCESS;
-}
-
-MiniTransformerLM::RC
-MiniTransformerLM::set_context_bias(const std::vector<double> &bias) {
-  if (context_size_ == 0) {
-    if (bias.empty()) {
-      context_bias_.clear();
-      return SUCCESS;
-    }
-    err_msg_ = "[MiniTransformerLM::set_context_bias] Context head not init";
-    return NOT_INIT;
-  }
-  if (bias.size() != vocab_size_) {
-    err_msg_ = "[MiniTransformerLM::set_context_bias] Invalid bias size";
-    return INVALID_DATA;
-  }
-  context_bias_ = bias;
-  return SUCCESS;
-}
-
 TokenEmbedding &MiniTransformerLM::token_embedding() { return token_embedding_; }
 
 TransformerEncoder &MiniTransformerLM::encoder() { return encoder_; }
@@ -689,8 +633,6 @@ int MiniTransformerLM::block_num() const { return block_num_; }
 
 int MiniTransformerLM::rand_seed() const { return rand_seed_; }
 
-int MiniTransformerLM::context_size() const { return context_size_; }
-
 MiniTransformerLM::BackboneType MiniTransformerLM::backbone_type() const {
   return backbone_type_;
 }
@@ -701,7 +643,7 @@ bool MiniTransformerLM::use_positional_encoding() const {
 
 bool MiniTransformerLM::scale_embedding() const { return scale_embedding_; }
 
-bool MiniTransformerLM::has_context_head() const { return context_size_ > 0; }
+int MiniTransformerLM::max_context_size() const { return max_context_size_; }
 
 double MiniTransformerLM::block_learning_rate_scale() const {
   return block_learning_rate_scale_;
@@ -715,6 +657,7 @@ MiniTransformerLM::Config MiniTransformerLM::config() const {
   config.feed_forward_dim_ = feed_forward_dim_;
   config.block_num_ = block_num_;
   config.rand_seed_ = rand_seed_;
+  config.max_context_size_ = max_context_size_;
   config.backbone_type_ = backbone_type_;
   config.use_positional_encoding_ = use_positional_encoding_;
   config.scale_embedding_ = scale_embedding_;
@@ -728,14 +671,6 @@ const MiniTransformerLM::Matrix &MiniTransformerLM::output_weight() const {
 
 const std::vector<double> &MiniTransformerLM::output_bias() const {
   return output_bias_;
-}
-
-const MiniTransformerLM::Matrix &MiniTransformerLM::context_weight() const {
-  return context_weight_;
-}
-
-const std::vector<double> &MiniTransformerLM::context_bias() const {
-  return context_bias_;
 }
 
 std::string MiniTransformerLM::err_msg() { return err_msg_; }
@@ -755,29 +690,6 @@ MiniTransformerLM::ValidateOutputWeight(const Matrix &weight,
   }
   for (const auto &row : weight) {
     if (row.size() != model_dim_) {
-      err_msg_ = std::string("[MiniTransformerLM::") + func_name +
-                 "] Invalid weight size";
-      return INVALID_DATA;
-    }
-  }
-  return SUCCESS;
-}
-
-MiniTransformerLM::RC
-MiniTransformerLM::ValidateContextWeight(const Matrix &weight,
-                                         const char *func_name) {
-  if (context_size_ == 0) {
-    err_msg_ = std::string("[MiniTransformerLM::") + func_name +
-               "] Context head not init";
-    return NOT_INIT;
-  }
-  if (weight.size() != vocab_size_) {
-    err_msg_ = std::string("[MiniTransformerLM::") + func_name +
-               "] Invalid weight size";
-    return INVALID_DATA;
-  }
-  for (const auto &row : weight) {
-    if (row.size() != context_size_ * model_dim_) {
       err_msg_ = std::string("[MiniTransformerLM::") + func_name +
                  "] Invalid weight size";
       return INVALID_DATA;

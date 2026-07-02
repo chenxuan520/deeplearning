@@ -1,5 +1,7 @@
 #pragma once
 
+#include "tensor_optimizer.h"
+
 #include <string>
 #include <vector>
 
@@ -35,6 +37,8 @@ private:
   std::vector<double> scale_;
   std::vector<double> bias_;
   std::vector<std::vector<double>> last_input_;
+  TensorOptimizer scale_optimizer_;
+  TensorOptimizer bias_optimizer_;
   std::string err_msg_;
   bool is_init_ = false;
 };
