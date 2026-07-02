@@ -68,6 +68,8 @@ cd src
 ./build.sh                  # 默认 Debug；可选 ./build.sh false Release
 ```
 
+IDE / clangd 索引：构建时会生成 `compile_commands.json`（同步到仓库根与 `src/`，已 gitignore）。Cursor 打开仓库后若头文件跳转异常，执行一次 `./build.sh` 并重载语言服务即可。
+
 产物在 `src/bin/`：
 
 ```bash

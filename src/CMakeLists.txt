@@ -17,6 +17,7 @@ project(deeplearning)
 set(PROJECT_ROOT_PATH .)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # default is Release
 set(CMAKE_BUILD_TYPE "Debug")

@@ -264,7 +264,7 @@
 ### 构建类型和工具
 - `src/CMakeLists.txt` 将 `CMAKE_BUILD_TYPE` 设置为 `"Debug"`。
 - `src/build.sh` 可选地传递 `-DCMAKE_BUILD_TYPE=<value>`。
-- 存在用于 C++ 工具（例如 clangd）的签入 `src/compile_commands.json`。
+- **clangd / LSP**: `src/CMakeLists.txt` 开启 `CMAKE_EXPORT_COMPILE_COMMANDS`；`./build.sh` 或 `cmake ..` 后会在 `src/build/compile_commands.json` 生成编译数据库，并复制到 `src/compile_commands.json` 与仓库根目录（均在 `.gitignore`，需本地生成）。根目录与 `src/.clangd` 已指向 `src/build` 作为 `CompilationDatabase`。
 
 ### Sanitizers (消毒剂)
 - `src/CMakeLists.txt` 包含注释掉的 Address/Leak/UB sanitizers 标志。

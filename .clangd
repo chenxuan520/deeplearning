@@ -1,2 +1,5 @@
+CompileFlags:
+  CompilationDatabase: src/build
+
 Diagnostics:
   Suppress: -Wc++17-extensions

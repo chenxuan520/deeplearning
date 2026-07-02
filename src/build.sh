@@ -18,4 +18,9 @@ fi
 mkdir -p ./build
 cd build
 cmake -DENABLE_DRAW=${CMAKE_USE_DRAW} ${CMAKE_BUILD_TYPE} ..
+# 给 clangd / LSP 用: build/ 里生成 compile_commands.json, 再同步到 src/ 与仓库根
+if [ -f compile_commands.json ]; then
+    cp compile_commands.json ..
+    cp compile_commands.json ../..
+fi
 make
