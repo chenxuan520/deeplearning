@@ -17,17 +17,18 @@
         <p class="lead">
           前向、损失、反向、梯度下降——“学习”的原理已经讲完了。但把原理变成
           <strong>真能训练成功</strong>的模型,中间还隔着一整套工程技巧。
-          这一章我们把四样最重要的配齐:<strong>好的初始化、聪明的优化器、会变化的学习率、防爆炸的梯度裁剪</strong>。
-          它们就是现代深度学习的“标准启动套件”。
+          这一章我们把<strong>现代训练栈</strong>拼齐:从<strong>初始化</strong>起步,
+          接上<a class="xref" href="chapter-08.html">第 8 章</a>选好的<strong>优化器</strong>,
+          再配<strong>学习率调度</strong>和<strong>梯度裁剪</strong>,最后看清它们在一个 minibatch 里怎么串起来。
         </p>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>为什么参数不能初始化成全 0,He/Xavier 初始化在解决什么;</li>
-            <li>优化器从 SGD → Momentum → Adam → AdamW 一路在补什么短板;</li>
-            <li>学习率为什么要“先热身、再退火”,以及 warmup + cosine 长什么样;</li>
-            <li>梯度裁剪和 weight decay 分别防的是什么问题。</li>
+            <li>He / Xavier 初始化各解决什么、配什么激活,以及为什么要设随机种子;</li>
+            <li>梯度<strong>消失</strong>和<strong>爆炸</strong>分别是什么、本章哪些零件在对症下药;</li>
+            <li>梯度裁剪的两种模式、学习率调度器家族,以及 warmup + cosine 为什么常用;</li>
+            <li>一个 minibatch 在 <code>Train</code> 里逐步发生什么,以及训练不稳时先拧哪几个旋钮。</li>
           </ul>
         </section>
 
@@ -40,15 +41,32 @@
         </p>
         <p>
           但随机也有讲究:初始值<strong>太大</strong>,信号逐层放大直到“爆炸”;<strong>太小</strong>,信号逐层衰减直到“消失”。
-          诀窍是让每层输出的“波动幅度”大致稳定。<span class="term">He 初始化</span>(配 ReLU 类激活)和
-          <span class="term">Xavier 初始化</span>(配 Sigmoid/Tanh)就是按这一层的<strong>输入个数(fan-in)</strong>来定随机范围:
+          诀窍是让每层输出的“波动幅度”大致稳定。仓库里两种常用方案:
         </p>
-        <div class="mathblock reveal">
-          limit = √( 6 / fan_in ),&nbsp;&nbsp; <var>w</var> ~ Uniform(−limit, +limit)
-          <span class="label">输入越多,初始权重就调得越小,避免求和后数值过大</span>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>初始化</th><th>随机范围(均匀分布)</th><th>通常搭配</th><th>代码开关</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>He</strong></td>
+                <td>limit = √(6 / fan_in)</td>
+                <td>ReLU / Leaky ReLU / GELU 等“半关半开”的激活(<a class="xref" href="chapter-07.html">第 7 章</a>)</td>
+                <td><code>PARAM_INIT_HE</code></td>
+              </tr>
+              <tr>
+                <td><strong>Xavier</strong></td>
+                <td>limit = √(6 / (fan_in + fan_out))</td>
+                <td>Sigmoid / Tanh 等两端饱和的激活</td>
+                <td><code>PARAM_INIT_XAVIER</code></td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap"><code>fan_in</code> 是本层每个神经元收到的输入个数;<code>fan_out</code> 是本层神经元个数。输入越多,随机范围越小,避免一层求和后数值过大。</p>
         </div>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/param_init/he_param_init.cpp(精简)</figcaption>
+          <figcaption class="code-walk__file">src/deeplearning/param_init/he_param_init.cpp · Xavier 同理(分母换成 fan_in+fan_out)</figcaption>
           <pre class="code-walk__code"><code>double limit = std::sqrt(6.0 / (double)fan_in);                 <b class="cw-tag">1</b>
 std::uniform_real_distribution&lt;double&gt; dis(-limit, limit);      <b class="cw-tag">2</b>
 
@@ -56,88 +74,155 @@ for (auto &amp;w : weight[i])
   for (auto &amp;w_ : w)
     w_ = dis(gen);                                              <b class="cw-tag">3</b></code></pre>
           <ol class="code-walk__notes">
-            <li><code>fan_in</code> 是这一层每个神经元接收的输入个数。输入越多,<code>limit</code> 越小。</li>
-            <li>在 [−limit, +limit] 上均匀随机——每个权重都不一样,打破了对称性。</li>
-            <li>逐个权重赋随机值。配套项目里这一切由 <code>set_param_init_function(PARAM_INIT_HE)</code> 一键启用,还支持设种子复现。</li>
+            <li>按 <code>fan_in</code> 缩放随机范围——这是“别让信号一层层爆炸/消失”的核心。</li>
+            <li>在 [−limit, +limit] 上均匀随机,每个权重都不一样,打破对称性。</li>
+            <li>偏置也用同一分布随机化。配 MNIST 时 ReLU + He 是常见组合(<a class="xref" href="chapter-22.html">第 22 章</a>)。</li>
           </ol>
         </figure>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">别忘了随机种子</span>
+          <p>
+            初始化、打乱 batch 都依赖随机数。<code>net.set_random_seed(42)</code> 会让同一份代码、同一份数据
+            <strong>每次跑出相同结果</strong>,方便对比“改了学习率/调度器到底有没有用”。种子会透传给参数初始化器。
+          </p>
+        </div>
 
-        <h2>2. 优化器进化史:从 SGD 到 AdamW</h2>
-        <p><a class="xref" href="chapter-05.html">第 5 章</a>的朴素 SGD(<var>w</var> ← <var>w</var> − <var>η</var>·梯度)能用,但有两个毛病:在“狭长峡谷”地形里来回横跳,在“平坦”地段又走得太慢。后面几代优化器,就是在逐个修补它。</p>
-
-        <h3>第一步加“惯性”:Momentum</h3>
+        <h2>2. 训练栈里挂上优化器</h2>
         <p>
-          Momentum(动量)给参数更新加上<strong>惯性</strong>:像一个滚下山的球,会累积“速度”。
-          这样同方向的梯度会越滚越快(冲过平地),来回抖动的方向则相互抵消(峡谷里更稳)。
+          “梯度算出来之后参数该怎么挪”——这是<strong>优化器</strong>的活。
+          <a class="xref" href="chapter-08.html">第 8 章</a>已经把 SGD → Momentum → RMSProp → Adam → AdamW 的演进、公式和仓库里的统一接口
+          (<code>BeforeStep</code> + <code>CalcChangeValue</code>)讲透了;这里不再复述,只关心在<strong>训练栈</strong>里通常怎么选、怎么配。
+        </p>
+        <p>
+          实务上的默认答案大多是 <strong>AdamW</strong>:Adam 那套“方向 + 自适应步长 + 偏差校正”省心又稳,
+          再把 <span class="term">weight decay</span>(权重衰减,<a class="xref" href="chapter-10.html">第 10 章</a>详讲)从梯度里<strong>解耦</strong>出来,
+          正则力度更可控,训 Transformer、训大模型几乎都是它。
+          不确定用啥时先 AdamW;想看 SGD / Momentum / Adam 在同任务上谁收敛更快,跑
+          <code>optimizer_bench</code> demo(<a class="xref" href="chapter-08.html#8-到底用哪个">第 8 章</a>)。
         </p>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/optimizer/momentum_optimizer.cpp(精简,v = 该参数的速度)</figcaption>
-          <pre class="code-walk__code"><code>v = momentum_ * v - learning_rate * g;   <b class="cw-tag">1</b>
-return -v;                               <b class="cw-tag">2</b></code></pre>
+          <figcaption class="code-walk__file">训练栈里的优化器两行配置(C++ 接口)</figcaption>
+          <pre class="code-walk__code"><code>net.set_optimizer_function(OPTIMIZER_ADAMW);       <b class="cw-tag">1</b>
+net.optimizer_function()-&gt;set_weight_decay(1e-4); <b class="cw-tag">2</b></code></pre>
           <ol class="code-walk__notes">
-            <li>新速度 = 旧速度 × 惯性系数(如 0.9)− 学习率 × 当前梯度。它把过去的更新方向“记”了下来。</li>
-            <li>用这个累积速度去更新参数,而不是只看当下这一步的梯度。</li>
+            <li>一行换优化器——和激活函数一样是可插拔策略(<a class="xref" href="chapter-08.html#7-代码里怎么统一起来">第 8 章</a>)。</li>
+            <li><code>weight_decay</code> 只作用在<strong>权重</strong>上,bias 不衰减;AdamW 把衰减独立加在更新量末尾,而不是混进梯度里被 √v 削弱。</li>
           </ol>
         </figure>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">AdamW 在代码里只多这一笔</span>
+          <p>
+            自适应步长照 Adam 算;差别是 weight decay <strong>单独</strong>叠上去。完整推导见
+            <a class="xref" href="chapter-08.html#6-adamw-把-weight-decay-解耦">第 8 章 AdamW 小节</a>:
+          </p>
+          <pre class="code-walk__code"><code>if (weight_pos != -1 &amp;&amp; weight_decay_ != 0.0)
+  adaptive += learning_rate * weight_decay_ * param_value;</code></pre>
+        </div>
 
-        <h3>第二步给每个参数“私人步长”:Adam</h3>
+        <h2>3. 梯度消失与梯度爆炸</h2>
         <p>
-          不同参数的梯度大小可能天差地别,用同一个学习率不公平。Adam 同时维护两样东西:
-          一阶矩 <var>m</var>(梯度的滑动平均,代表“惯性/方向”)和二阶矩 <var>v</var>(梯度平方的滑动平均,代表“最近这个参数有多活跃”),
-          再用 <var>v</var> 给每个参数<strong>自适应地缩放步长</strong>:
+          反向传播要把误差从输出层一路传回输入层。网络一深,这条链上会发生两类经典故障——
+          搞懂它们,才知道本章后面为什么要<strong>初始化、裁剪、热身</strong>:
         </p>
-        <div class="mathblock reveal">
-          <var>m</var> ← β<sub>1</sub><var>m</var> + (1−β<sub>1</sub>)<var>g</var> &nbsp;&nbsp;&nbsp; <var>v</var> ← β<sub>2</sub><var>v</var> + (1−β<sub>2</sub>)<var>g</var><sup>2</sup><br />
-          <var>m̂</var> = <var>m</var> / (1−β<sub>1</sub><sup>t</sup>) &nbsp;&nbsp;&nbsp; <var>v̂</var> = <var>v</var> / (1−β<sub>2</sub><sup>t</sup>)<br />
-          Δ<var>w</var> = <var>η</var> · <var>m̂</var> / ( √<var>v̂</var> + ε )
-          <span class="label">方向用 m,步长被 √v 自动缩放;m̂ / v̂ 是“偏差修正”,弥补训练初期 m、v 从 0 起步的冷启动</span>
+        <ul>
+          <li>
+            <span class="pill">梯度消失</span>误差信号越传越<strong>小</strong>,前面几层几乎收不到更新,学不动。
+            常见诱因:权重太小、激活函数在饱和区(Sigmoid/Tanh 两端)、网络太深。
+            <strong>对策</strong>:合适的初始化(本节 §1)、选 ReLU/GELU 等不易饱和的激活(<a class="xref" href="chapter-07.html">第 7 章</a>)、残差连接(<a class="xref" href="chapter-17.html">第 17 章</a>)。
+          </li>
+          <li>
+            <span class="pill">梯度爆炸</span>某一步梯度突然<strong>巨大</strong>,参数被一脚踹飞,损失变 NaN。
+            常见于 RNN/很深的网络、学习率过大、数据没归一化。
+            <strong>对策</strong>:调小学习率、<a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">warmup 热身</a>、
+            <a class="xref" href="chapter-09.html#4-防止训练踩空-梯度裁剪">梯度裁剪</a>(下一节)、先把输入缩放到合理尺度(<a class="xref" href="chapter-11.html#5-数据预处理-先把数据摆正">第 11 章</a>)。
+          </li>
+        </ul>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 520 200" role="img" aria-label="梯度消失与爆炸示意">
+              <text x="260" y="24" text-anchor="middle" fill="#8499bd" font-size="12">反向传播:误差信号沿层往回传</text>
+              <rect x="40" y="50" width="70" height="36" rx="6" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <text x="75" y="72" text-anchor="middle" fill="#eef4ff" font-size="11">输入层</text>
+              <rect x="150" y="50" width="70" height="36" rx="6" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" />
+              <text x="185" y="72" text-anchor="middle" fill="#eef4ff" font-size="11">隐藏层</text>
+              <rect x="260" y="50" width="70" height="36" rx="6" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" />
+              <text x="295" y="72" text-anchor="middle" fill="#eef4ff" font-size="11">隐藏层</text>
+              <rect x="370" y="50" width="70" height="36" rx="6" fill="rgba(255,207,114,0.15)" stroke="#ffcf72" />
+              <text x="405" y="72" text-anchor="middle" fill="#eef4ff" font-size="11">输出层</text>
+              <polyline points="110,68 150,68" fill="none" stroke="#46587a" marker-end="url(#arr)" />
+              <polyline points="220,68 260,68" fill="none" stroke="#46587a" />
+              <polyline points="330,68 370,68" fill="none" stroke="#46587a" />
+              <polyline points="405,86 295,120 185,150 75,170" fill="none" stroke="#ff6b8a" stroke-width="2" stroke-dasharray="6 4" />
+              <text x="300" y="138" fill="#ff6b8a" font-size="11">反向:信号逐层衰减 → 消失</text>
+              <text x="120" y="192" fill="#ffcf72" font-size="11">或某层突然放大 → 爆炸(NaN)</text>
+              <defs>
+                <marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                  <path d="M0,0 L6,3 L0,6 Z" fill="#46587a" />
+                </marker>
+              </defs>
+            </svg>
+          </div>
+          <p class="figure__cap">初始化管“起跑姿势”,激活函数管“坡度”,裁剪和 warmup 管“别一脚踩空”。几样配合,训练才稳。</p>
+        </div>
+
+        <h2>4. 防止训练“踩空”:梯度裁剪</h2>
+        <p>
+          上一节说的<span class="term">梯度爆炸</span>,实战里最常见的急救手段是<span class="term">梯度裁剪</span>:
+          给梯度设一个上限,防止某一步把参数推飞。本仓库支持两种模式,可以单独开,也可以<strong>先按值、再按范数</strong>连着用:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>模式</th><th>做法</th><th>直觉</th><th>接口</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>按全局范数</strong></td>
+                <td>把所有梯度拼成一个大向量,若 L2 长度超阈值,整体等比缩小</td>
+                <td>方向不变,只把“这一脚”收短;Transformer / RNN 最常用</td>
+                <td><code>set_gradient_clip_norm(1.0)</code></td>
+              </tr>
+              <tr>
+                <td><strong>按分量</strong></td>
+                <td>每个梯度分量单独 clamp 到 [−thresh, +thresh]</td>
+                <td>更“硬”,适合个别分量偶发尖峰</td>
+                <td><code>set_gradient_clip_value(0.5)</code></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/optimizer/adam_optimizer.cpp(精简)</figcaption>
-          <pre class="code-walk__code"><code>void AdamOptimizer::BeforeStep() {
-  step_ += 1;                                    <b class="cw-tag">1</b>
-  bias_correction1_ = 1.0 - std::pow(beta1_, step_);
-  bias_correction2_ = 1.0 - std::pow(beta2_, step_);
-}
-
-// CalcChangeValue 里(m、v 是该参数存下来的两个状态):
-m = beta1_ * m + (1.0 - beta1_) * g;             <b class="cw-tag">2</b>
-v = beta2_ * v + (1.0 - beta2_) * g * g;         <b class="cw-tag">3</b>
-double m_hat = m / bias_correction1_;            <b class="cw-tag">4</b>
-double v_hat = v / bias_correction2_;
-return learning_rate * m_hat / (std::sqrt(v_hat) + epsilon_);  <b class="cw-tag">5</b></code></pre>
+          <figcaption class="code-walk__file">src/deeplearning/neural_network.cpp · ClipGradients(by-norm,精简)</figcaption>
+          <pre class="code-walk__code"><code>double norm = std::sqrt(sq_sum);                 <b class="cw-tag">1</b>
+if (norm &gt; grad_clip_norm_ &amp;&amp; norm &gt; 0.0) {
+  double scale = grad_clip_norm_ / norm;        <b class="cw-tag">2</b>
+  // 所有梯度 *= scale, 整体缩回阈值以内
+}</code></pre>
           <ol class="code-walk__notes">
-            <li>每步开始,计步器 <code>step_</code> 加 1,并算好这一步的偏差修正系数(这就是<a class="xref" href="chapter-05.html">第 5 章</a> <code>BeforeStep</code> 对 SGD 是空操作、对 Adam 却有事做的原因)。</li>
-            <li>更新一阶矩 <var>m</var>:梯度的滑动平均,提供“方向/惯性”。</li>
-            <li>更新二阶矩 <var>v</var>:梯度<strong>平方</strong>的滑动平均,衡量这个参数最近的活跃程度。</li>
-            <li>偏差修正:训练初期 <var>m</var>、<var>v</var> 还很小,除以 (1−βᵗ) 把它们放大到合理水平。</li>
-            <li>最终更新量 = 学习率 × 方向 ÷ √活跃度。活跃(梯度大)的参数自动用更小的步长,稳。</li>
+            <li>先把累加梯度除以 batch 大小得到<strong>平均梯度</strong>,再算全局 L2 范数。</li>
+            <li>超阈值就整体乘以 <code>scale</code>——方向不变,只是变短。<code>Train</code> 里在 <code>ApplyGradient</code> 之前自动调用。</li>
           </ol>
         </figure>
 
-        <h3>第三步把正则“解耦”:AdamW</h3>
+        <h2>5. 学习率不必一成不变:调度器</h2>
         <p>
-          weight decay(权重衰减)是把权重轻轻往 0 拉,抑制过拟合。经典 Adam 把它<strong>混进梯度</strong>里
-          (<code>g += wd·w</code>),但这样会被自适应步长削弱,效果打折。AdamW 的改良是:
-          自适应那部分照算,weight decay <strong>单独、直接</strong>地作用在权重上(解耦),所以训 Transformer 时是标配。
+          <a class="xref" href="chapter-05.html">第 5 章</a>我们用固定学习率,但更聪明的做法是让它<strong>随训练进程变化</strong>。
+          仓库里 <code>lr_scheduler/</code> 提供一整族调度器,都和 <code>Train</code> 配合:每步开头调 <code>GetLR(step)</code> 更新当前学习率。
         </p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/optimizer/adamw_optimizer.cpp(关键差异)</figcaption>
-          <pre class="code-walk__code"><code>double adaptive = learning_rate * m_hat / (std::sqrt(v_hat) + epsilon_);
-
-// 解耦的 weight decay: 单独加在权重上, 不混进梯度, bias 不衰减
-if (weight_pos != -1 &amp;&amp; weight_decay_ != 0.0)
-  adaptive += learning_rate * weight_decay_ * param_value;   <b class="cw-tag">1</b>
-return adaptive;</code></pre>
-          <ol class="code-walk__notes">
-            <li>对比 Adam(把 <code>wd·w</code> 加进 <code>g</code> 再参与自适应),AdamW 把这一项<strong>独立</strong>加在更新量末尾——这就是“解耦 weight decay”。注意 <code>weight_pos != -1</code>:只衰减权重,不动偏置。</li>
-          </ol>
-        </figure>
-
-        <h2>3. 学习率不必一成不变:调度器</h2>
-        <p>
-          <a class="xref" href="chapter-05.html">第 5 章</a>我们用固定学习率,但更聪明的做法是让它<strong>随训练进程变化</strong>:
-        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>调度器</th><th>曲线形状</th><th>什么时候用</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>StepDecayLR</code></td><td>每隔固定步数乘 γ 阶梯下降</td><td>经典 CV、想“训一段降一档”</td></tr>
+              <tr><td><code>ExponentialDecayLR</code></td><td>每步按指数衰减</td><td>想快速降下来</td></tr>
+              <tr><td><code>CosineAnnealingLR</code></td><td>余弦平滑降到 min_lr</td><td>后期小步精修</td></tr>
+              <tr><td><code>WarmupCosineLR</code></td><td>先线性热身,再余弦退火</td><td><strong>默认推荐</strong>;MNIST demo、大模型预训练常见</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>下面展开本仓库和 MNIST demo 最常用的 <strong>warmup + cosine</strong>:</p>
         <ul>
           <li><strong>Warmup(热身)</strong>:开头几步用很小的学习率慢慢升上来,避免刚开始参数还很乱时一脚踩空、直接训崩;</li>
           <li><strong>Cosine 退火</strong>:热身之后,让学习率沿着余弦曲线平滑地降到一个很小的值,后期小步精修,稳稳落进谷底。</li>
@@ -150,11 +235,8 @@ return adaptive;</code></pre>
               <line x1="60" y1="40" x2="60" y2="230" stroke="#46587a" stroke-width="1.5" />
               <text x="600" y="252" text-anchor="end" fill="#8499bd" font-size="13">训练步数 step</text>
               <text x="36" y="52" fill="#8499bd" font-size="13">学习率</text>
-              <!-- warmup 段: 线性上升 -->
               <line x1="60" y1="225" x2="170" y2="60" stroke="#ffcf72" stroke-width="3" />
-              <!-- cosine 段 -->
               <path d="M 170 60 C 320 70, 470 200, 580 210" fill="none" stroke="#6ac3ff" stroke-width="3" />
-              <!-- 标注 -->
               <line x1="170" y1="40" x2="170" y2="230" stroke="#46587a" stroke-width="1" stroke-dasharray="4 4" />
               <text x="112" y="252" text-anchor="middle" fill="#ffcf72" font-size="12">warmup</text>
               <text x="380" y="120" text-anchor="middle" fill="#6ac3ff" font-size="12">cosine 退火</text>
@@ -176,31 +258,70 @@ return min_lr_ + 0.5 * (base_lr_ - min_lr_) * (1.0 + cos_val);  <b class="cw-tag
           <ol class="code-walk__notes">
             <li><strong>热身段</strong>:前 <code>warmup_steps_</code> 步,学习率从接近 0 线性升到 <code>base_lr_</code>。</li>
             <li><strong>进度</strong>:热身结束后,算出“退火走了百分之多少”。</li>
-            <li><strong>退火段</strong>:用余弦把学习率从 <code>base_lr_</code> 平滑降到 <code>min_lr_</code>(<code>cos</code> 从 1 平滑变到 −1,整体就从峰值滑到谷值)。训练时每一步由 <code>Train</code> 自动调用它来更新当前学习率。</li>
+            <li><strong>退火段</strong>:用余弦把学习率从 <code>base_lr_</code> 平滑降到 <code>min_lr_</code>。训练时每一步由 <code>Train</code> 自动调用。</li>
           </ol>
         </figure>
 
-        <h2>4. 防止训练“踩空”:梯度裁剪</h2>
+        <h2>6. 一个 minibatch 里发生什么</h2>
         <p>
-          有时某一步会冒出一个<strong>异常巨大</strong>的梯度(尤其在很深的网络或序列模型里),
-          一下子把参数推飞,损失瞬间变成 NaN——这叫<span class="term">梯度爆炸</span>。
-          对策是<span class="term">梯度裁剪</span>:给梯度的大小设一个上限。最常用的是“按全局范数裁剪”:
+          <a class="xref" href="chapter-05.html">第 5 章</a>看过 <code>Train</code> 的骨架;加上本章零件后,<strong>每一步</strong>其实是下面这一圈。
+          初始化只在建网时做一次;其余都在循环里转:
         </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 600 320" role="img" aria-label="一个训练 step 的流程">
+              <rect x="200" y="20" width="200" height="32" rx="16" fill="rgba(142,240,209,0.2)" stroke="#8ef0d1" />
+              <text x="300" y="40" text-anchor="middle" fill="#eef4ff" font-size="12">打乱 index · 组 batch</text>
+              <line x1="300" y1="52" x2="300" y2="72" stroke="#6ac3ff" stroke-width="2" />
+              <rect x="170" y="74" width="260" height="32" rx="16" fill="rgba(255,207,114,0.18)" stroke="#ffcf72" />
+              <text x="300" y="94" text-anchor="middle" fill="#eef4ff" font-size="12">scheduler→GetLR(step) 更新学习率</text>
+              <line x1="300" y1="106" x2="300" y2="126" stroke="#6ac3ff" stroke-width="2" />
+              <rect x="190" y="128" width="220" height="32" rx="16" fill="rgba(106,195,255,0.15)" stroke="#6ac3ff" />
+              <text x="300" y="148" text-anchor="middle" fill="#eef4ff" font-size="12">ForwardPropagationBatch</text>
+              <line x1="300" y1="160" x2="300" y2="180" stroke="#6ac3ff" stroke-width="2" />
+              <rect x="185" y="182" width="230" height="32" rx="16" fill="rgba(106,195,255,0.15)" stroke="#6ac3ff" />
+              <text x="300" y="202" text-anchor="middle" fill="#eef4ff" font-size="12">BackPropagationBatch</text>
+              <line x1="300" y1="214" x2="300" y2="234" stroke="#6ac3ff" stroke-width="2" />
+              <rect x="200" y="236" width="200" height="32" rx="16" fill="rgba(255,107,138,0.15)" stroke="#ff6b8a" />
+              <text x="300" y="256" text-anchor="middle" fill="#eef4ff" font-size="12">ClipGradients(可选)</text>
+              <line x1="300" y1="268" x2="300" y2="288" stroke="#6ac3ff" stroke-width="2" />
+              <rect x="175" y="290" width="250" height="32" rx="16" fill="rgba(142,240,209,0.2)" stroke="#8ef0d1" />
+              <text x="300" y="310" text-anchor="middle" fill="#eef4ff" font-size="12">ApplyGradient → 优化器更新参数</text>
+            </svg>
+          </div>
+          <p class="figure__cap">黄框是本章新增的两步;蓝框是第 3–6 章学过的前向/反向;绿框是第 8 章优化器落地。</p>
+        </div>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/neural_network.cpp · ClipGradients(by-norm,精简)</figcaption>
-          <pre class="code-walk__code"><code>double norm = std::sqrt(sq_sum);                 <b class="cw-tag">1</b>
-if (norm &gt; grad_clip_norm_ &amp;&amp; norm &gt; 0.0) {
-  double scale = grad_clip_norm_ / norm;        <b class="cw-tag">2</b>
-  // 把所有梯度统一乘以 scale, 整体缩回阈值以内
-}</code></pre>
+          <figcaption class="code-walk__file">src/deeplearning/neural_network.cpp · Train(含本章零件,精简)</figcaption>
+          <pre class="code-walk__code"><code>if (lr_scheduler_ != nullptr)
+  learning_rate_ = lr_scheduler_-&gt;GetLR(i);           <b class="cw-tag">1</b>
+
+ForwardPropagationBatch(batch_data);                 <b class="cw-tag">2</b>
+ResetGradients();
+BackPropagationBatch(batch_target);                    <b class="cw-tag">3</b>
+
+if (grad_clip_norm_ &gt; 0.0 || grad_clip_value_ &gt; 0.0)
+  ClipGradients(B);                                    <b class="cw-tag">4</b>
+ApplyGradient(B);                                      <b class="cw-tag">5</b></code></pre>
           <ol class="code-walk__notes">
-            <li>先把所有参数的梯度看成一个大向量,算它的总长度(L2 范数)。</li>
-            <li>如果总长度超过阈值,就整体按比例缩小(方向不变,只是变短),把这“一脚”收回到安全范围。项目里 <code>set_gradient_clip_norm(1.0)</code> 即可开启;还有一个“逐分量裁剪”的 by-value 版本。</li>
+            <li><strong>学习率调度</strong>:每步按当前 step 取学习率;没挂调度器就用固定 <code>learning_rate_</code>。</li>
+            <li><strong>前向</strong>:算这一批的预测和损失(<a class="xref" href="chapter-03.html">第 3</a>、<a class="xref" href="chapter-04.html">第 4 章</a>)。</li>
+            <li><strong>反向</strong>:累加每个参数的梯度(<a class="xref" href="chapter-06.html">第 6 章</a>)。</li>
+            <li><strong>梯度裁剪</strong>:可选;在更新前把梯度收进安全范围。</li>
+            <li><strong>更新</strong>:<code>BeforeStep</code> + <code>CalcChangeValue</code>,由优化器把参数往损失更低的方向挪(<a class="xref" href="chapter-08.html">第 8 章</a>)。</li>
           </ol>
         </figure>
 
-        <h2>5. 把它们拼成一个“现代训练循环”</h2>
-        <p>把这一章的零件全装上,配置一个网络大概长这样(概念上和你在 PyTorch 里写的那套完全对得上):</p>
+        <h2>7. 把它们拼成一个“现代训练循环”</h2>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">训练栈第 0 步:先把数据摆正</span>
+          <p>
+            再漂亮的初始化/优化器,也救不了<strong>没归一化的输入</strong>。MNIST 像素若是 0~255 直接喂进去,
+            大数值会让梯度失控。惯例是除以 255 压到 <code>[0,1]</code>(<a class="xref" href="chapter-11.html#5-数据预处理-先把数据摆正">第 11 章</a>)。
+            <strong>先确认数据尺度合理,再调本章旋钮。</strong>
+          </p>
+        </div>
+        <p>零件齐了,配置一个网络大概长这样(概念上和 PyTorch / JAX 训练脚本一一对应):</p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">现代训练栈的典型配置(C++ 接口)</figcaption>
           <pre class="code-walk__code"><code>net.set_random_seed(42);                  <span class="cw-cmt">// 可复现</span>
@@ -213,17 +334,66 @@ net.set_lr_scheduler(
     std::make_shared&lt;WarmupCosineLR&gt;(1e-3, 500, 10000));  <span class="cw-cmt">// 热身+退火</span>
 net.Train(data, target, callback, 10000, 64);</code></pre>
           <ol class="code-walk__notes">
-            <li>真正理解了这几个组件,你以后读任何框架(PyTorch / JAX)的训练脚本,都不再需要死记参数名——名字不同,背后的原理就是这一章这几样。</li>
+            <li>上面每一行都对应本章某一节;读懂它们,读任何框架的训练脚本都不再是死记参数名。</li>
+            <li>最后一行 <code>Train(..., 10000, 64)</code> 里,10000 是总 step 数,64 是 batch size——和<a class="xref" href="chapter-08.html#2-sgd-与-mini-batch-一次用多少数据">第 8 章 mini-batch</a>是同一回事。</li>
           </ol>
         </figure>
+
+        <h2>8. 训练不稳?先拧本章这几个旋钮</h2>
+        <p>
+          真上手训练十有八九会“不对劲”。完整排查见<a class="xref" href="chapter-11.html#6-训练不动一份排查清单">第 11 章清单</a>;
+          下面这张<strong>迷你表</strong>只列本章能直接动的开关,按顺序试往往就够:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>你看到的现象</th><th>优先试什么</th><th>对应本章</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>损失 NaN / 突然发散</td>
+                <td>学习率 ÷10;开 <code>set_gradient_clip_norm</code>;加长 warmup</td>
+                <td>§4 裁剪 · §5 调度</td>
+              </tr>
+              <tr>
+                <td>损失几乎不降</td>
+                <td>查数据是否归一化;换 He 初始化;学习率 ×2 或 ×5 试</td>
+                <td>§1 初始化 · §7 数据尺度</td>
+              </tr>
+              <tr>
+                <td>开头几步就炸</td>
+                <td>加 warmup;clip 设 1.0;确认没用全 0 初始化</td>
+                <td>§1 · §4 · §5</td>
+              </tr>
+              <tr>
+                <td>后期 loss 震荡不降</td>
+                <td>换 cosine 退火;略降 <code>base_lr</code></td>
+                <td>§5 调度</td>
+              </tr>
+              <tr>
+                <td>训练降、验证不降</td>
+                <td>多半是过拟合 → 去<a class="xref" href="chapter-10.html">第 10 章</a>加正则,不是本章主战场</td>
+                <td>—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">黄金第一步:先过拟合 10 条样本</span>
+          <p>
+            拿 <strong>10 条数据</strong>让模型死记到损失≈0。如果连这都做不到,先怀疑代码/数据管道,
+            而不是急着调 scheduler。<a class="xref" href="chapter-11.html#6-训练不动一份排查清单">第 11 章</a>也强调这一招。
+          </p>
+        </div>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li><strong>初始化</strong>:不能全 0(对称性);随机且按 fan-in 缩放(He/Xavier),避免信号爆炸或消失。</li>
-            <li><strong>优化器</strong>:SGD → 加惯性的 Momentum → 自适应步长的 Adam → 解耦正则的 AdamW。</li>
-            <li><strong><a class="xref" href="chapter-09.html#3-学习率不必一成不变-调度器">学习率调度</a></strong>:warmup 热身防早期训崩,cosine 退火让后期稳稳收敛。</li>
-            <li><strong>梯度裁剪</strong>:给梯度大小设上限,防止某一步爆炸把训练带飞;weight decay 抑制过拟合。</li>
+            <li><strong>初始化</strong>:不能全 0;He 配 ReLU 系,Xavier 配 Sigmoid/Tanh;<code>set_random_seed</code> 保证可复现。</li>
+            <li><strong>优化器</strong>:演进见<a class="xref" href="chapter-08.html">第 8 章</a>;训练栈默认 AdamW + <code>weight_decay</code>。</li>
+            <li><strong>梯度病</strong>:消失靠好 init/激活;爆炸靠 clip + warmup + 归一化。</li>
+            <li><strong><a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">学习率调度</a></strong>:一族调度器,warmup+cosine 是 MNIST / 大模型的常见默认。</li>
+            <li><strong>一步训练</strong>:打乱 → GetLR → 前向 → 反向 → (clip) → 优化器更新;§8 表列了不稳时先拧的旋钮。</li>
           </ul>
         </section>
 
@@ -236,15 +406,15 @@ net.Train(data, target, callback, 10000, 64);</code></pre>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 2:Adam 里的二阶矩 <var>v</var> 起什么作用?</summary>
+            <summary class="quiz__q">问题 2:梯度爆炸和梯度消失,分别优先用本章哪几招?</summary>
             <div class="quiz__a">
-              <p><var>v</var> 是梯度平方的滑动平均,衡量某个参数“最近有多活跃”。更新时除以 √<var>v</var>,相当于给每个参数一个自适应步长:梯度一直很大的参数自动用更小的步长,更稳。</p>
+              <p>爆炸:梯度裁剪、warmup、调小学习率、检查输入归一化。消失:合适的 He/Xavier 初始化、选不易饱和的激活(ReLU/GELU),深层结构还可靠残差连接——裁剪对消失帮助不大。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 3:训练到一半损失突然变成 NaN,除了调小学习率,还能开什么开关?</summary>
+            <summary class="quiz__q">问题 3:<code>Train</code> 里 scheduler、clip、优化器分别在什么时机介入?</summary>
             <div class="quiz__a">
-              <p>开梯度裁剪(<code>set_gradient_clip_norm</code>)。它给梯度总长度设上限,防止某一步出现异常巨大的梯度把参数推飞。配合 warmup 也能缓解早期的不稳定。</p>
+              <p>每步开头 <code>GetLR</code> 更新学习率;前向/反向算完梯度后、<code>ApplyGradient</code> 前做裁剪;最后由优化器的 <code>BeforeStep</code> + <code>CalcChangeValue</code> 真正改参数。初始化只在建网时做一次。</p>
             </div>
           </details>
         </div>

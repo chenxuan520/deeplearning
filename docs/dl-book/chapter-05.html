@@ -105,7 +105,7 @@
           <p>
             下一章的“前向 / 反向传播动画”里有一个 <strong>Learning Rate 滑块</strong>,
             你可以拖动它,观察同样的梯度下,参数每一步被改动的幅度如何随学习率变化。
-            到<a class="xref" href="chapter-09.html">第 9 章</a>我们还会让学习率在训练过程中<strong>动态变化</strong>(<a class="xref" href="chapter-09.html#3-学习率不必一成不变-调度器">学习率调度</a>)。
+            到<a class="xref" href="chapter-09.html">第 9 章</a>我们还会让学习率在训练过程中<strong>动态变化</strong>(<a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">学习率调度</a>)。
           </p>
         </div>
 
@@ -158,7 +158,7 @@ double w_change = optimizer_function_-&gt;CalcChangeValue(
     avg_dw, learning_rate_, {l, o}, i, w_row[i]);
 w_row[i] -= w_change;                               <b class="cw-tag">3</b></code></pre>
           <ol class="code-walk__notes">
-            <li>先通知优化器“新的一步开始了”。对 SGD 这是空操作;但对 Adam 这类优化器,它会在这里推进内部的计步器(<a class="xref" href="chapter-09.html">第 9 章</a>)。</li>
+            <li>先通知优化器“新的一步开始了”。对 SGD 这是空操作;但对 Adam 这类优化器,它会在这里推进内部的计步器(<a class="xref" href="chapter-08.html">第 8 章</a>)。</li>
             <li>把累加的梯度乘以 <code>1/B</code>,得到这一批的<strong>平均梯度</strong>。</li>
             <li>算出改变量,再从参数里<strong>减掉</strong>它——这一行,就是 <var>w</var> ← <var>w</var> − <var>η</var>·梯度 的代码版本。</li>
           </ol>

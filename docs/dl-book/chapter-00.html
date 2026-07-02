@@ -204,7 +204,7 @@
 │  │  ├─ activate/              激活函数 ReLU/Sigmoid/GELU…
 │  │  ├─ loss/  softmax/        损失函数 与 softmax
 │  │  ├─ optimizer/             SGD / Momentum / Adam / AdamW
-│  │  ├─ lr_scheduler/          <a class="xref" href="chapter-09.html#3-学习率不必一成不变-调度器">学习率调度</a>
+│  │  ├─ lr_scheduler/          <a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">学习率调度</a>
 │  │  └─ transformer/           注意力 / Block / mini 语言模型
 │  ├─ demo/                  <b class="cw-tag">2</b>  可运行的示例程序
 │  │  ├─ mnist/                 手写数字识别   (<a class="xref" href="chapter-22.html">第 22 章</a>精读)
@@ -229,7 +229,8 @@
               <tr><td>网络 · 前向传播</td><td><code>neural_network</code>(ForwardPropagation)</td><td><a class="xref" href="chapter-03.html">第 3 章</a></td></tr>
               <tr><td>损失 · softmax</td><td><code>loss/</code> + <code>softmax/</code></td><td><a class="xref" href="chapter-04.html">第 4 章</a></td></tr>
               <tr><td>梯度下降 · 反向传播</td><td><code>neural_network</code>(BackPropagation)</td><td>第 5–6 章</td></tr>
-              <tr><td>优化器 · <a class="xref" href="chapter-09.html#3-学习率不必一成不变-调度器">学习率调度</a></td><td><code>optimizer/</code> + <code>lr_scheduler/</code></td><td><a class="xref" href="chapter-09.html">第 9 章</a></td></tr>
+              <tr><td>优化器</td><td><code>optimizer/</code></td><td><a class="xref" href="chapter-08.html">第 8 章</a></td></tr>
+              <tr><td>初始化 · <a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">学习率调度</a> · 梯度裁剪</td><td><code>param_init/</code> + <code>lr_scheduler/</code></td><td><a class="xref" href="chapter-09.html">第 9 章</a></td></tr>
               <tr><td>注意力 · 多头</td><td><code>transformer/self_attention</code></td><td>第 15–16 章</td></tr>
               <tr><td>Transformer Block</td><td><code>transformer/transformer_block</code>、<code>layer_norm</code></td><td><a class="xref" href="chapter-17.html">第 17 章</a></td></tr>
               <tr><td>分词 · 词嵌入 · 生成</td><td><code>transformer/</code>(tokenizer / embedding / LM)</td><td><a class="xref" href="chapter-18.html">第 18 章</a></td></tr>

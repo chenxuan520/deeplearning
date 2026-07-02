@@ -115,26 +115,26 @@ demo_network.set_optimizer_function(OPTIMIZER_ADAM);       <b class="cw-tag">7</
             <li><strong>激活函数 ReLU(<a class="xref" href="chapter-02.html">第 2 章</a>)</strong>:每个神经元加权求和之后过一道 ReLU,给网络“掰弯”的非线性能力。</li>
             <li><strong>softmax(<a class="xref" href="chapter-04.html">第 4 章</a>)</strong>:把输出层的 10 个分数变成加起来为 1 的概率。</li>
             <li><strong>交叉熵损失(<a class="xref" href="chapter-04.html">第 4 章</a>)</strong>:衡量“预测的概率分布”和 one-hot 答案差多少——分类任务的黄金搭档。</li>
-            <li><strong>优化器 Adam(<a class="xref" href="chapter-09.html">第 9 章</a>)</strong>:决定拿到梯度后“怎么拧旋钮”,比朴素 SGD 收敛更快更稳。</li>
+            <li><strong>优化器 Adam(<a class="xref" href="chapter-08.html">第 8 章</a>)</strong>:决定拿到梯度后“怎么拧旋钮”,比朴素 SGD 收敛更快更稳。</li>
           </ol>
         </figure>
         <div class="callout callout--analogy reveal">
           <span class="callout__title">看,整本书前半部分都在这七行里</span>
           <p>
-            层(<a class="xref" href="chapter-03.html">第 3 章</a>)+ 激活(<a class="xref" href="chapter-02.html">第 2 章</a>)+ softmax/损失(<a class="xref" href="chapter-04.html">第 4 章</a>)+ 初始化/优化器(<a class="xref" href="chapter-09.html">第 9 章</a>)。
-            这就是<strong>“可插拔策略”</strong>的好处:换个激活、换个优化器,只需改一行。<a class="xref" href="chapter-09.html#2-优化器进化史-从-sgd-到-adamw">第 9 章的 <code>optimizer_bench</code></a>
+            层(<a class="xref" href="chapter-03.html">第 3 章</a>)+ 激活(<a class="xref" href="chapter-02.html">第 2 章</a>)+ softmax/损失(<a class="xref" href="chapter-04.html">第 4 章</a>)+ 初始化(<a class="xref" href="chapter-09.html">第 9 章</a>)/优化器(<a class="xref" href="chapter-08.html">第 8 章</a>)。
+            这就是<strong>“可插拔策略”</strong>的好处:换个激活、换个优化器,只需改一行。<a class="xref" href="chapter-08.html#8-到底用哪个">第 8 章的 <code>optimizer_bench</code></a>
             demo 就是靠这种一行切换,把 SGD / Momentum / Adam 拉出来赛跑的。
           </p>
         </div>
 
-        <h2>4. 第三步 · <a class="xref" href="chapter-09.html#3-学习率不必一成不变-调度器">学习率调度</a>:先热身,再缓降</h2>
+        <h2>4. 第三步 · <a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">学习率调度</a>:先热身,再缓降</h2>
         <p>
           <a class="xref" href="chapter-09.html">第 9 章</a>说过,学习率(每次拧旋钮的步子)不该一成不变。这里用 <span class="term">WarmupCosineLR</span>:
           开头一个 epoch <strong>从很小慢慢升到设定值</strong>(热身,防止一上来步子太大把网络“踹飞”),
           之后沿<strong>余弦曲线平滑下降</strong>(后期小步微调,稳稳落地)。
         </p>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/demo/mnist/main.cpp · 挂上<a class="xref" href="chapter-09.html#3-学习率不必一成不变-调度器">学习率调度</a>器</figcaption>
+          <figcaption class="code-walk__file">src/demo/mnist/main.cpp · 挂上<a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">学习率调度</a>器</figcaption>
           <pre class="code-walk__code"><code>int batch_size = 64, epochs = 5;
 int steps_per_epoch = (N_train + batch_size - 1) / batch_size;
 int total_steps = epochs * steps_per_epoch;
@@ -182,7 +182,7 @@ demo_network.Train(train_data, train_target,
               <div class="pipe__box">更新<small>第 4/6 章:Adam 按学习率拧旋钮</small></div>
             </div>
           </div>
-          <p class="figure__cap"><code>Train</code> 内部每一 step 都跑这一圈(可选还有<a class="xref" href="chapter-09.html#4-防止训练踩空-梯度裁剪">第 9 章的梯度裁剪</a>),循环几千步,损失就降下来了。</p>
+          <p class="figure__cap"><code>Train</code> 内部每一 step 都跑<a class="xref" href="chapter-09.html#6-一个-minibatch-里发生什么">第 9 章那一圈</a>(含可选的<a class="xref" href="chapter-09.html#4-防止训练踩空-梯度裁剪">梯度裁剪</a>),循环几千步,损失就降下来了。</p>
         </div>
         <div class="callout callout--note reveal">
           <span class="callout__title">一 step = <a class="xref" href="chapter-00.html#3-训练就是自动拧旋钮的过程">第 0 章那张“训练循环”图</a>转一圈</span>
@@ -246,7 +246,7 @@ NeuralNetworkLoader::ExportParamToFile(param, option, "demo.v2.param");</code></
           <ul>
             <li>一个完整训练程序 = <strong>数据 → 建网 → 训练 → 评估 → 保存</strong>五步,每步都对应前面某一章。</li>
             <li>数据:图片摊平成 784 维并归一化(特征),标签变 one-hot(第 0、4 章)。</li>
-            <li>建网:<code>Init</code> 定层(<a class="xref" href="chapter-03.html">第 3 章</a>)+ 激活(<a class="xref" href="chapter-02.html">第 2 章</a>)+ softmax/交叉熵(<a class="xref" href="chapter-04.html">第 4 章</a>)+ 初始化/Adam(<a class="xref" href="chapter-09.html">第 9 章</a>),一行一个概念。</li>
+            <li>建网:<code>Init</code> 定层(<a class="xref" href="chapter-03.html">第 3 章</a>)+ 激活(<a class="xref" href="chapter-02.html">第 2 章</a>)+ softmax/交叉熵(<a class="xref" href="chapter-04.html">第 4 章</a>)+ 初始化(<a class="xref" href="chapter-09.html">第 9 章</a>)/Adam(<a class="xref" href="chapter-08.html">第 8 章</a>),一行一个概念。</li>
             <li>训练:一句 <code>Train</code> 背后是“前向(2)→反向(5)→Adam 更新(4/6)”的循环,配学习率热身+余弦衰减(6)。</li>
             <li>评估:<code>PredictBatch</code> 前向 + <code>argmax</code> 比对,得到 ~98% 准确率;最后把参数存盘可续训。</li>
           </ul>
@@ -263,7 +263,7 @@ NeuralNetworkLoader::ExportParamToFile(param, option, "demo.v2.param");</code></
           <details class="quiz__item">
             <summary class="quiz__q">问题 2:那一行 <code>Train(...)</code> 内部,每一步(step)依次做了哪几件事?</summary>
             <div class="quiz__a">
-              <p>打乱数据并取一个 batch → <a class="xref" href="chapter-03.html#2-前向传播-数据一层层往前流">前向算出预测</a>(<a class="xref" href="chapter-03.html">第 3 章</a>)→ 用交叉熵算损失 → 反向传播算出每个参数的梯度(<a class="xref" href="chapter-06.html">第 6 章</a>)→(可选梯度裁剪)→ 用 Adam 按当前学习率更新参数(<a class="xref" href="chapter-05.html">第 5</a>、<a class="xref" href="chapter-09.html">第 9 章</a>)。循环成千上万步。</p>
+              <p>打乱数据并取一个 batch → <a class="xref" href="chapter-03.html#2-前向传播-数据一层层往前流">前向算出预测</a>(<a class="xref" href="chapter-03.html">第 3 章</a>)→ 用交叉熵算损失 → 反向传播算出每个参数的梯度(<a class="xref" href="chapter-06.html">第 6 章</a>)→(可选梯度裁剪,<a class="xref" href="chapter-09.html">第 9 章</a>)→ 用 Adam 按当前学习率更新参数(<a class="xref" href="chapter-05.html">第 5</a>、<a class="xref" href="chapter-08.html">第 8 章</a>)。循环成千上万步。</p>
             </div>
           </details>
           <details class="quiz__item">
