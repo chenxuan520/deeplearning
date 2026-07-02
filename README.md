@@ -4,6 +4,11 @@
 
 配套一份中文交互电子书（24 章 + 术语表），每个概念都能在本仓库源码里找到对应实现。
 
+<p align="center">
+  <img src="docs/dl-book/assets/cover-hero.png" alt="深度学习速查图:网络结构、基础公式与反向传播" width="480" />
+</p>
+<p align="center"><sub>配套速查图 · 结构 / 公式 / 反向传播</sub></p>
+
 | | |
 |---|---|
 | **在线阅读** | [**chenxuan520.github.io/deeplearning**](https://chenxuan520.github.io/deeplearning/) |

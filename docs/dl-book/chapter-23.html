@@ -117,7 +117,7 @@ model.InitTrainingHead(context_size);   // 接上“预测下一个字”的输�
         <h2>4. 训练:反复练习“预测下一个 token”</h2>
         <p>
           训练目标朴素得就一句话:让模型对每个样本<strong>“上文 → 下一个字”猜得越来越准</strong>。
-          用的还是<a class="xref" href="chapter-04.html#4-用交叉熵衡量两个概率的差距">第 4 章的交叉熵</a>、<a class="xref" href="chapter-06.html#2-反向传播的三步">第 6 章的反向传播</a>,只是任务换成了预测 token。
+          用的还是<a class="xref" href="chapter-04.html#4-用交叉熵衡量两个概率的差距">第 4 章的交叉熵</a>、<a class="xref" href="chapter-06.html#3-反向传播的三步">第 6 章的反向传播</a>,只是任务换成了预测 token。
         </p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/demo/transformer_char/main.cpp · 训练(精简)</figcaption>
