@@ -59,6 +59,14 @@ attention_norm_.Forward(last_residual_1_, last_norm_1_);    <b class="cw-tag">3<
             <li>再交给 LayerNorm(下一节)。这种“子层 → 加残差 → 归一化”的三连,在 block 里会出现两次。</li>
           </ol>
         </figure>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">为什么这条“捷径”能让梯度直通</span>
+          <p>
+            反向传播是把梯度从后往前<strong>连乘</strong>回去。对 <var>y</var> = <var>x</var> + F(<var>x</var>) 求导:<code>∂y/∂x = 1 + ∂F/∂x</code>。
+            关键是那个 <strong>“+1”</strong>——哪怕子层 F 的梯度 <code>∂F/∂x</code> 很小甚至接近 0,梯度也能靠这个 1 <strong>原样传回前一层</strong>,不会被一路乘没。
+            没有残差时,深层梯度是一串小于 1 的数连乘,越乘越小(这就是<strong>梯度消失</strong>);有了残差,等于永远留了一条“直达车道”,几十上百层也传得回去。
+          </p>
+        </div>
 
         <h2>2. LayerNorm:把每个词的特征“拉回正常范围”</h2>
         <p>
@@ -89,6 +97,28 @@ for (int i = 0; i &lt; feature_dim_; i++)
             <li>标准化(减均值、除标准差),再乘 <code>scale</code>(γ)、加 <code>bias</code>(β)。注意:它是对<em>每个词自己</em>归一化,和样本数无关,这正是它适合序列的原因。</li>
           </ol>
         </figure>
+        <p>抽象?把一个词向量 <code>[1, 2, 3]</code> 亲手归一化一遍就通了(设 γ=1、β=0):</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead><tr><th>步骤</th><th>算式</th><th>结果</th></tr></thead>
+            <tbody>
+              <tr><td>① 均值 μ</td><td>(1 + 2 + 3) / 3</td><td>2</td></tr>
+              <tr><td>② 方差 σ²</td><td>[(1−2)² + (2−2)² + (3−2)²] / 3</td><td>≈ 0.667</td></tr>
+              <tr><td>③ 标准差</td><td>√0.667</td><td>≈ 0.816</td></tr>
+              <tr><td>④ 标准化</td><td>(x − 2) / 0.816</td><td>[−1.22, 0, 1.22]</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">忽大忽小的 [1,2,3] 被拉成一组均值 0、波动 1 的数;γ、β 再在此基础上做可学习的微调(初始 γ=1、β=0 就原样输出)。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">为什么是“每个词各自归一化”,而不是按 batch</span>
+          <p>
+            注意上面全程<strong>只用了这一个词自己的几个数</strong>——和同批里别的句子、同句里别的词<strong>统统无关</strong>。
+            这正是 <strong>Layer</strong>Norm 与 <strong>Batch</strong>Norm 的分水岭:BatchNorm 要跨一批样本统计,句子一变长、batch 一变小就很别扭;
+            LayerNorm 只看“一个词的这几十/几百个特征”,于是<strong>不依赖 batch 大小、对变长序列天然友好、训练和推理表现一致</strong>——序列模型因此偏爱它。
+            好处很直接:每层拿到的输入分布都被拉回稳定范围,梯度不易忽大忽小,就能用更大的学习率、堆更深也不易训崩。
+          </p>
+        </div>
 
         <h2>3. 前馈网络 FFN:逐个词再加工一次</h2>
         <p>
@@ -111,6 +141,15 @@ ff_output = ApplyLinear(hidden, W2, b2);  // ff_dim → model_dim <b class="cw-t
             <li>第二层线性:再压回 <code>model_dim</code>,方便接下来继续残差相加。每个词都独立走这一遍。</li>
           </ol>
         </figure>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">两句话记住 FFN 的定位</span>
+          <p>
+            <strong>· “逐词(position-wise)”是什么意思?</strong> 同一套 <var>W</var><sub>1</sub>/<var>W</var><sub>2</sub> 对每个词<strong>各算各的</strong>,词与词之间不交换任何信息。
+            所以分工很清楚:<strong>attention 负责“跨词混合”,FFN 负责“逐词深加工”</strong>,一横一纵。<br />
+            <strong>· 为什么先升维、再降维(常是 4 倍)?</strong> 把每个词摊到更宽的空间里,ReLU 才能切出更多“分段”、拟合更复杂的非线性变换;
+            加工完再压回原维度,好和残差相加、继续往下堆。像“摊到大桌上加工,再收回口袋”。
+          </p>
+        </div>
 
         <h2>4. 把它们拼成一块 Block</h2>
         <p>一块标准 Transformer Block,就是“注意力 + 残差 + 归一化”和“FFN + 残差 + 归一化”这两段串起来:</p>
@@ -181,6 +220,56 @@ encoding[pos][i + 1] = std::cos(angle);
             <li>把位置编码<strong>加</strong>到词向量上,词向量从此既带“是什么词”也带“在第几位”的信息。</li>
           </ol>
         </figure>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">直觉:像时钟的指针,也像二进制计数器</span>
+          <p>
+            为什么要用<strong>好几个不同频率</strong>的 sin/cos,而不是一个数字?想想时钟:秒针快、分针中、时针慢——
+            单看一根针说不清“几点”,<strong>三根合起来</strong>就能唯一锁定一个时刻。位置编码同理:
+            <strong>高频维度</strong>变化快,负责“精确到第几个词”;<strong>低频维度</strong>变化慢,负责“大致在句子前段还是后段”。
+            多个频率叠在一起,每个位置就拿到一串<strong>独一无二又有规律</strong>的指纹。
+          </p>
+        </div>
+        <p>这和<strong>二进制计数</strong>是一个道理——低位翻得快、高位翻得慢,合起来给每个数一个唯一编码:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>位置</th><th>高位(慢)</th><th>中位</th><th>低位(快)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+              <tr><td>1</td><td>0</td><td>0</td><td class="is-hot">1</td></tr>
+              <tr><td>2</td><td>0</td><td class="is-hot">1</td><td>0</td></tr>
+              <tr><td>3</td><td>0</td><td class="is-hot">1</td><td class="is-hot">1</td></tr>
+              <tr><td>4</td><td class="is-hot">1</td><td>0</td><td>0</td></tr>
+              <tr><td>5</td><td class="is-hot">1</td><td>0</td><td class="is-hot">1</td></tr>
+              <tr><td>6</td><td class="is-hot">1</td><td class="is-hot">1</td><td>0</td></tr>
+              <tr><td>7</td><td class="is-hot">1</td><td class="is-hot">1</td><td class="is-hot">1</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">低位每 1 步就翻一次(高频),高位每 4 步才翻一次(低频)。位置编码就是它的“连续版”:把 0/1 换成不同频率的 sin/cos。</p>
+        </div>
+        <p>把公式真代进去,给一个 4 维位置编码算前几个位置(<code>d=4</code>,偶数维用 sin、奇数维用 cos):</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>位置 pos</th><th>维0 = sin(pos)</th><th>维1 = cos(pos)</th><th>维2 = sin(pos/100)</th><th>维3 = cos(pos/100)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>0</td><td>0.00</td><td>1.00</td><td>0.00</td><td>1.00</td></tr>
+              <tr><td>1</td><td>0.84</td><td>0.54</td><td>0.01</td><td>1.00</td></tr>
+              <tr><td>2</td><td>0.91</td><td>−0.42</td><td>0.02</td><td>1.00</td></tr>
+              <tr><td>3</td><td>0.14</td><td>−0.99</td><td>0.03</td><td>1.00</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">左两维(高频)相邻位置就明显不同——管“精确位次”;右两维(低频)几乎没动——管“大致段落”。每行合起来各不相同,就是该位置的指纹。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">两个常见疑问</span>
+          <p>
+            <strong>· 为什么是“加”到词向量上,而不是拼接?</strong> 相加<strong>不增加维度、不多花参数</strong>,模型能在同一组数里同时读到“是什么词 + 在第几位”。(也有模型改用<strong>可学习</strong>的位置向量,思路一样,只是编码从公式改成训练得到。)<br />
+            <strong>· sin/cos 还有个隐藏好处:</strong> 位置 <code>pos+k</code> 的编码可以由位置 <code>pos</code> 的编码<strong>线性组合</strong>出来。于是模型很容易学会“相对位置”(比如“往前第三个词”),而不只是死记绝对位次。
+          </p>
+        </div>
 
         <h2>6. Encoder 与 Decoder</h2>
         <p>同样的 Block,按“能看到哪些词”分成两种用法:</p>

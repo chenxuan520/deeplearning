@@ -125,6 +125,15 @@
           </div>
           <p class="figure__cap">注意力的数据流。句子里每个词都会走一遍,各自得到一个融合了上下文的新向量。</p>
         </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">为什么第②步偏偏除以 √<var>d</var>(不是 d、也不是别的)</span>
+          <p>
+            点积是 <var>d</var> 个乘积<strong>加起来</strong>的和。<var>d</var> 越大,这个和越容易“攒”得很大——
+            统计上它的<strong>典型幅度大约随 √<var>d</var> 增长</strong>(<var>d</var> 项一起相加,标准差≈√<var>d</var>)。
+            比如 <var>d</var>=64,点积动不动就到 ±8 上下。分数一旦太大,softmax 会变得极端<strong>尖锐</strong>(几乎把全部权重压给某一个词),
+            反传时梯度还会趋近 0、学不动。<strong>除以 √<var>d</var> 恰好把分数拉回“幅度≈1”的舒适区</strong>,softmax 不至于一家独大,训练也更稳。
+          </p>
+        </div>
 
         <h2>4. 跟着算一遍:一个能手算的小例子</h2>
         <p>
@@ -277,6 +286,16 @@
             如果模型维度是 <var>d</var> = 64、头数是 8,那每个头分到 <var>d</var> / 8 = 8 维,
             在自己那 8 维上独立算注意力,互不干扰。代码里就是一句
             <code>head_dim_ = model_dim_ / head_num_</code>。
+          </p>
+        </div>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">拿 4 维、2 个头走一遍“切分 → 各算 → 拼接”</span>
+          <p>
+            设每个词是 4 维向量 <code>[a, b, c, d]</code>、头数 = 2,则每个头分 4 / 2 = 2 维:
+            <strong>头 1</strong> 只在前两维 <code>[a, b]</code> 上独立走完“打分 → softmax → 加权求和”那四步,
+            <strong>头 2</strong> 只在后两维 <code>[c, d]</code> 上走一遍;两头<strong>互不干扰</strong>,可能关注完全不同的词。
+            各自得到一个 2 维结果后,按原样<strong>拼回</strong> 4 维 <code>[头1两维 ｜ 头2两维]</code>,最后乘输出矩阵 <var>W</var><sub>O</sub> 把两位“读者”的意见融合。
+            <strong>进去 4 维、出来还是 4 维</strong>,只是中途兵分两路、各看各的。
           </p>
         </div>
         <div class="figure reveal">

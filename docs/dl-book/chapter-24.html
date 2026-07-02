@@ -91,10 +91,10 @@ cfg.head_num_         = 1;    // 多头注意力的“头”数(<a class="xref" 
 cfg.feed_forward_dim_ = 12;   // Block 里前馈网络的宽度(<a class="xref" href="chapter-17.html">第 17 章</a>)        <b class="cw-tag">4</b>
 cfg.block_num_        = 2;    // 堆几层 Transformer Block(<a class="xref" href="chapter-17.html">第 17 章</a>)      <b class="cw-tag">5</b>
 cfg.backbone_type_    = BACKBONE_DECODER;  // 解码器主干, 带 causal mask  <b class="cw-tag">6</b>
+cfg.max_context_size_ = context_size;      // 上下文窗口:生成时只看最近这么多字 <b class="cw-tag">7</b>
 
 MiniTransformerLM model;
-model.Init(cfg);
-model.InitTrainingHead(context_size);   // 接上“预测下一个字”的输出层     <b class="cw-tag">7</b></code></pre>
+model.Init(cfg);   // LM Head(投影到词表)在 Init 里自动建好</code></pre>
           <ol class="code-walk__notes">
             <li><code>vocab_size</code> 决定最后 LM Head 要在多少个候选字里做选择(<a class="xref" href="chapter-18.html">第 18 章</a>)。</li>
             <li><code>model_dim</code> = 每个 token 的 embedding 维度,也是信息在网络里流动的“管道宽度”。真实大模型是几千,这里只有 6。</li>
@@ -102,7 +102,7 @@ model.InitTrainingHead(context_size);   // 接上“预测下一个字”的输�
             <li><code>feed_forward_dim</code> = 每个 Block 里前馈网络(FFN)的隐藏宽度(<a class="xref" href="chapter-17.html">第 17 章</a>)。</li>
             <li><code>block_num</code> = 把 Transformer Block 叠几层。叠得越深,能力越强也越难训——大模型就是把这个数字堆到几十上百(第 17、19 章)。</li>
             <li><code>backbone_type</code> = decoder:带 <strong>causal mask</strong>,只能看左边、不能偷看未来(第 16、17 章),正是生成式模型要的。</li>
-            <li><code>InitTrainingHead</code>:接上把 Transformer 输出投影到词表、算“下一个字概率”的那层(<a class="xref" href="chapter-18.html">第 18 章</a>的 LM Head)。</li>
+            <li><code>max_context_size</code>:生成时只把<strong>最近这么多个 token</strong> 喂进模型(滑动窗口),让位置编码始终落在训练见过的范围内(第 16、19 章)。而把 Transformer 输出投影到词表、算“下一个字概率”的 <strong>LM Head</strong>(<a class="xref" href="chapter-18.html">第 18 章</a>)在 <code>Init</code> 里就自动建好了。</li>
           </ol>
         </figure>
         <div class="callout callout--analogy reveal">
@@ -126,11 +126,13 @@ model.InitTrainingHead(context_size);   // 接上“预测下一个字”的输�
   if (loss &lt; 0.02) early_stop = true;      // 学得够好就提前收手        <b class="cw-tag">1</b>
 };
 
+// 学习率用 warmup + 余弦退火(概念见第 9 章;现代 Transformer 常用)
+WarmupCosineLR sched(learning_rate, warmup_epochs, epoch_num, learning_rate * 0.1);
 model.TrainNextToken(input_samples, target_tokens,
-                     cb, epoch_num, learning_rate);                    <b class="cw-tag">2</b></code></pre>
+                     cb, epoch_num, learning_rate, &amp;sched);           <b class="cw-tag">2</b></code></pre>
           <ol class="code-walk__notes">
             <li>回调每 50 轮打印一次损失,并在损失足够低时<strong>提前停止</strong>(early stop)——省得白训。</li>
-            <li>核心一句:把样本喂进去反复训。每一轮内部,对每个样本做前向、算交叉熵、反向传播、更新参数——和<a class="xref" href="chapter-23.html">第 23 章</a> MNIST 的循环是同一套机制,只是输出从“10 个数字”换成了“整个词表”。</li>
+            <li>核心一句:把样本喂进去反复训。每一轮内部,对序列<strong>每个位置</strong>都做“预测下一个字”的前向、算交叉熵、反向传播,再用 <strong>Adam</strong>(<a class="xref" href="chapter-08.html">第 8 章</a>的优化器,和<a class="xref" href="chapter-23.html">第 23 章</a> MNIST 同一套)更新参数;学习率还挂了 <a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">warmup + 余弦退火调度</a>(第 9 章)。机制和 MNIST 相同,只是输出从“10 个数字”换成了“整个词表”。</li>
           </ol>
         </figure>
 

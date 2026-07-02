@@ -222,29 +222,87 @@ if (norm &gt; grad_clip_norm_ &amp;&amp; norm &gt; 0.0) {
             </tbody>
           </table>
         </div>
-        <p>下面展开本仓库和 MNIST demo 最常用的 <strong>warmup + cosine</strong>:</p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">先说清“step(步)”是什么</span>
+          <p>
+            这里的 <code>step</code> 指<strong>一次参数更新</strong>——即“取一个 minibatch → 前向 → 反向 → 更新一次权重”算 <strong>1 步</strong>,
+            <em>不是</em>一个 epoch。把整份数据过一遍(一个 epoch)通常包含很多步。下面所有“第几步”都是这个意思。
+          </p>
+        </div>
+
+        <p>下面展开本仓库和 MNIST demo 最常用的 <strong>warmup + cosine</strong>。它把整个训练分成<strong>前后两段</strong>,
+          分界点就是一个你自己设的步数 <code>warmup_steps</code>:</p>
         <ul>
-          <li><strong>Warmup(热身)</strong>:开头几步用很小的学习率慢慢升上来,避免刚开始参数还很乱时一脚踩空、直接训崩;</li>
-          <li><strong>Cosine 退火</strong>:热身之后,让学习率沿着余弦曲线平滑地降到一个很小的值,后期小步精修,稳稳落进谷底。</li>
+          <li><strong>① 热身(warmup),第 0 → warmup_steps 步</strong>:学习率从<strong>接近 0 线性升到峰值</strong> <code>base_lr</code>。
+            为什么不一上来就用大步子?因为刚开始参数还是随机的、梯度很乱,一步迈太大容易直接把训练搞崩(loss 飞到 NaN)。先小步“热热身”,等方向稳了再加速。</li>
+          <li><strong>② 退火(cosine),warmup_steps → t_max 步</strong>:学习率<strong>从峰值 <code>base_lr</code> 沿余弦曲线平滑降到 <code>min_lr</code></strong>。
+            越接近终点步子越小,像快到谷底时收油门,免得在最低点附近反复横跳、稳稳落进谷里。</li>
         </ul>
+        <p>
+          所以“<strong>什么时候开始退火</strong>”答案很干脆:<strong>第 <code>warmup_steps</code> 步</strong>。在这一步之前是热身(升),到达这一步时学习率正好冲到峰值 <code>base_lr</code>,从这一步往后就一路余弦下降,直到第 <code>t_max</code> 步落到 <code>min_lr</code>。
+        </p>
 
         <div class="figure reveal">
           <div class="diagram">
-            <svg viewBox="0 0 640 280" role="img" aria-label="warmup 加 cosine 学习率曲线">
-              <line x1="60" y1="230" x2="600" y2="230" stroke="#46587a" stroke-width="1.5" />
-              <line x1="60" y1="40" x2="60" y2="230" stroke="#46587a" stroke-width="1.5" />
-              <text x="600" y="252" text-anchor="end" fill="#8499bd" font-size="13">训练步数 step</text>
-              <text x="36" y="52" fill="#8499bd" font-size="13">学习率</text>
-              <line x1="60" y1="225" x2="170" y2="60" stroke="#ffcf72" stroke-width="3" />
-              <path d="M 170 60 C 320 70, 470 200, 580 210" fill="none" stroke="#6ac3ff" stroke-width="3" />
-              <line x1="170" y1="40" x2="170" y2="230" stroke="#46587a" stroke-width="1" stroke-dasharray="4 4" />
-              <text x="112" y="252" text-anchor="middle" fill="#ffcf72" font-size="12">warmup</text>
-              <text x="380" y="120" text-anchor="middle" fill="#6ac3ff" font-size="12">cosine 退火</text>
-              <text x="178" y="54" fill="#8ef0d1" font-size="12">峰值 = base_lr</text>
-              <text x="585" y="205" text-anchor="end" fill="#8499bd" font-size="12">min_lr</text>
+            <svg viewBox="0 0 660 300" role="img" aria-label="warmup 加 cosine 学习率曲线,标注峰值、退火起点与最小值">
+              <!-- 坐标轴 -->
+              <line x1="60" y1="20" x2="60" y2="250" stroke="#46587a" stroke-width="1.5" />
+              <line x1="60" y1="250" x2="632" y2="250" stroke="#46587a" stroke-width="1.5" />
+              <text x="30" y="26" fill="#8499bd" font-size="13">学习率 lr</text>
+              <text x="632" y="292" text-anchor="end" fill="#8499bd" font-size="13">step(第几次参数更新)</text>
+              <!-- 参考虚线:base_lr 峰值 / min_lr -->
+              <line x1="60" y1="50" x2="116" y2="50" stroke="#8ef0d1" stroke-width="1" stroke-dasharray="4 4" />
+              <line x1="60" y1="230" x2="620" y2="230" stroke="#8499bd" stroke-width="1" stroke-dasharray="4 4" />
+              <text x="54" y="54" text-anchor="end" fill="#8ef0d1" font-size="12">base_lr</text>
+              <text x="54" y="234" text-anchor="end" fill="#8499bd" font-size="12">min_lr</text>
+              <!-- 退火起点竖虚线 -->
+              <line x1="116" y1="50" x2="116" y2="250" stroke="#ffcf72" stroke-width="1" stroke-dasharray="4 4" />
+              <!-- ① 热身:线性上升 -->
+              <line x1="60" y1="248" x2="116" y2="50" stroke="#ffcf72" stroke-width="3" />
+              <!-- ② 退火:余弦下降(采样点连线) -->
+              <polyline points="116,50 172,55 228,71 284,95 340,124 396,156 452,185 508,209 564,225 620,230" fill="none" stroke="#6ac3ff" stroke-width="3" />
+              <circle cx="116" cy="50" r="4" fill="#8ef0d1" />
+              <!-- 阶段标注 -->
+              <text x="66" y="110" fill="#ffcf72" font-size="12">① 热身(线性升)</text>
+              <text x="392" y="108" fill="#6ac3ff" font-size="12">② 退火(余弦降)</text>
+              <text x="120" y="44" fill="#8ef0d1" font-size="12">峰值 = base_lr</text>
+              <!-- x 轴刻度 -->
+              <text x="60" y="268" text-anchor="middle" fill="#8499bd" font-size="12">0</text>
+              <text x="116" y="268" text-anchor="middle" fill="#ffcf72" font-size="12">warmup_steps</text>
+              <text x="620" y="268" text-anchor="middle" fill="#8499bd" font-size="12">t_max</text>
             </svg>
           </div>
-          <p class="figure__cap">先线性热身到峰值(黄),再沿余弦曲线平滑退火到最小值(蓝)。</p>
+          <p class="figure__cap">黄线=热身(线性升到峰值 base_lr),黄色竖虚线处(第 warmup_steps 步)<strong>开始退火</strong>,蓝线=余弦平滑降到 min_lr。</p>
+        </div>
+
+        <p>两段各用一个公式,其实就是把上图翻译成算式(<code>base_lr</code>=峰值学习率,<code>min_lr</code>=最低学习率,<code>t_max</code>=总步数):</p>
+        <ul>
+          <li><strong>热身段</strong>(<code>step &lt; warmup_steps</code>):<code>lr = base_lr × (step+1) / warmup_steps</code>。就是一条直线,step 越大 lr 越大,到 <code>warmup_steps</code> 时正好等于 <code>base_lr</code>。</li>
+          <li><strong>退火段</strong>(<code>step ≥ warmup_steps</code>):先算“退火走了几成” <code>progress =(step − warmup_steps) /(t_max − warmup_steps)</code>(从 0 走到 1),再
+            <code>lr = min_lr + ½ ×(base_lr − min_lr)×(1 + cos(π × progress))</code>。</li>
+        </ul>
+        <p>
+          余弦这段之所以是“<strong>两头慢、中间快</strong>”:<code>progress=0</code> 时 <code>cos0=1</code>,lr 还等于 <code>base_lr</code>(刚过峰值,先缓降、多学一会);
+          <code>progress=0.5</code> 时 <code>cos(π/2)=0</code>,lr 正好落在 <code>base_lr</code> 与 <code>min_lr</code> 的<strong>正中间</strong>(下降最快);
+          <code>progress=1</code> 时 <code>cos(π)=−1</code>,lr 降到 <code>min_lr</code> 并停住(小步精修、稳稳落底)。
+        </p>
+
+        <p>把数字代进去走一遍最直观。假设 <code>base_lr=0.1</code>、<code>warmup_steps=100</code>、<code>t_max=1000</code>、<code>min_lr=0.01</code>:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>第几步 step</th><th>处于哪一段</th><th>学习率 lr</th><th>怎么来的</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>0</td><td>热身·第 1 步</td><td>0.001</td><td>0.1 × 1/100,几乎从 0 起步</td></tr>
+              <tr><td>50</td><td>热身·爬升中</td><td>0.051</td><td>0.1 × 51/100,直线往上</td></tr>
+              <tr><td><strong>100</strong></td><td><strong>热身结束 = 退火起点</strong></td><td><strong>0.100</strong></td><td>冲到峰值 base_lr,<strong>从这步开始退火</strong></td></tr>
+              <tr><td>325</td><td>退火·前段</td><td>≈ 0.087</td><td>progress=0.25,刚过峰值先缓降</td></tr>
+              <tr><td>550</td><td>退火·中点</td><td>0.055</td><td>progress=0.5,正好是两者中间值</td></tr>
+              <tr><td>775</td><td>退火·后段</td><td>≈ 0.023</td><td>progress=0.75,越降越慢</td></tr>
+              <tr><td>1000</td><td>退火终点 = t_max</td><td>0.010</td><td>progress=1,落到 min_lr,不再降</td></tr>
+            </tbody>
+          </table>
         </div>
 
         <figure class="code-walk reveal">
