@@ -271,7 +271,7 @@
 
 ## 7) 交互式电子书 (`docs/dl-book/`)
 
-配套深度学习入门电子书，静态站点位于 `docs/dl-book/`，共 24 章 + 术语表，含交互示意图与实验台。
+配套深度学习入门电子书，静态站点位于 `docs/dl-book/`，共 25 章 + 术语表，含交互示意图与实验台。
 
 ### 链接
 - **在线阅读 (GitHub Pages)**: https://chenxuan520.github.io/deeplearning/

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 24 章 · mini-LM 实战:把第四、五部分跑起来 | 深度学习入门</title>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body data-chapter="24">
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">第 24 章 · 代码实战</p>
+        <h1>mini-LM 实战:把第四、五部分跑起来</h1>
+
+        <p class="lead">
+          最后一站。我们来读那个<strong>真能训练、真能一个字一个字往下写</strong>的字符级语言模型——
+          它就是仓库里的 <code>src/demo/transformer_char/main.cpp</code>,配上 <code>src/deeplearning/transformer/</code>
+          那一堆模块。你会看到第四部分的<strong>注意力、Transformer</strong>,和第五部分的<strong>分词、embedding、生成、采样、困惑度</strong>,
+          全都变成了可以运行、可以改参数的具体代码。读完这一章,你就真正“从一个神经元走到了大模型”的完整代码。
+        </p>
+
+        <section class="objectives reveal">
+          <h2>读完这一章,你会明白</h2>
+          <ul>
+            <li>一个语言模型程序的完整链路:<strong>语料 → 分词 → 数据集 → 建模 → 训练 → 评估 → 生成 → 存盘</strong>;</li>
+            <li><code>MiniTransformerLM::Config</code> 里每个字段,对应第 16、17 章的哪个结构;</li>
+            <li>“预测下一个 token”的训练和“自回归生成”在代码里长什么样;</li>
+            <li>greedy 与带温度/top-k/top-p 采样,在命令行怎么一键切换;</li>
+            <li>从这个几千参数的玩具,到上千亿参数的大模型,中间隔着的正是第 19–21 章。</li>
+          </ul>
+        </section>
+
+        <h2>1. 全景:一条从文本到文本的流水线</h2>
+        <p>
+          <a class="xref" href="chapter-18.html">第 18 章</a>已经讲过这条链路的道理,这一章我们对着代码把它跑通。默认这个 demo 会拿一小段语料
+          (比如 <code>"abcabcabc..."</code>)训练一个极小的模型,然后按你的提示往下续写。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">语料<small>一段文本</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">Tokenizer<small>字符↔id</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">Dataset<small>切成(上文→下一字)</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">MiniTransformerLM<small>Embedding+Transformer</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">训练/生成<small>预测下一个 token</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">这正是<a class="xref" href="chapter-18.html">第 18 章</a>那张图,只不过现在每个方框都对应 <code>transformer/</code> 下的一个真实模块。</p>
+        </div>
+
+        <h2>2. 语料 → 分词 → 数据集</h2>
+        <p>
+          第一步和<a class="xref" href="chapter-18.html">第 18 章</a>一致:扫一遍语料建<strong>词表</strong>,再把字符串编码成 id 序列。然后
+          <span class="term">CharacterDataset</span> 把这条长序列切成一堆<strong>“上文 → 下一个字”</strong>的训练样本
+          ——这就是语言模型的“题目和答案”。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/transformer_char/main.cpp · 分词与数据集(精简)</figcaption>
+          <pre class="code-walk__code"><code>CharacterTokenizer tokenizer;
+tokenizer.Init(CharacterTokenizer::BuildVocabularyFromText(corpus));  <b class="cw-tag">1</b>
+tokenizer.Encode(corpus, corpus_token_ids);                          <b class="cw-tag">2</b>
+
+CharacterDataset dataset;
+dataset.Init(corpus_token_ids, context_size);                        <b class="cw-tag">3</b>
+dataset.BuildNextTokenSamples(input_samples, target_tokens);         <b class="cw-tag">4</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>建词表:统计语料里出现过的所有字符,每个配一个唯一 id(<a class="xref" href="chapter-18.html">第 18 章</a>)。</li>
+            <li>编码:把整段语料翻译成一串 id。</li>
+            <li><code>context_size</code> 是“一次最多看几个字”——就是模型的<strong>上下文窗口</strong>(第 16、19 章都提过)。</li>
+            <li>切样本:用滑动窗口生成一批 <code>(上文 tokens → 下一个 token)</code>。<code>input_samples[i]</code> 是上文,<code>target_tokens[i]</code> 是它该预测的下一个字。</li>
+          </ol>
+        </figure>
+
+        <h2>3. 建模:一个 Config 描述整座 Transformer</h2>
+        <p>
+          第 16、17 章拆过的所有结构,在这里被浓缩进一个 <span class="term">Config</span> 结构体。填几个数字,
+          一座(迷你)Transformer 就定义好了:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/transformer_char/main.cpp · 配置并初始化模型(精简)</figcaption>
+          <pre class="code-walk__code"><code>MiniTransformerLM::Config cfg;
+cfg.vocab_size_       = tokenizer.vocab_size();   // 词表大小(输出层宽度)  <b class="cw-tag">1</b>
+cfg.model_dim_        = 6;    // 每个 token 的向量维度                   <b class="cw-tag">2</b>
+cfg.head_num_         = 1;    // 多头注意力的“头”数(<a class="xref" href="chapter-16.html">第 16 章</a>)           <b class="cw-tag">3</b>
+cfg.feed_forward_dim_ = 12;   // Block 里前馈网络的宽度(<a class="xref" href="chapter-17.html">第 17 章</a>)        <b class="cw-tag">4</b>
+cfg.block_num_        = 2;    // 堆几层 Transformer Block(<a class="xref" href="chapter-17.html">第 17 章</a>)      <b class="cw-tag">5</b>
+cfg.backbone_type_    = BACKBONE_DECODER;  // 解码器主干, 带 causal mask  <b class="cw-tag">6</b>
+
+MiniTransformerLM model;
+model.Init(cfg);
+model.InitTrainingHead(context_size);   // 接上“预测下一个字”的输出层     <b class="cw-tag">7</b></code></pre>
+          <ol class="code-walk__notes">
+            <li><code>vocab_size</code> 决定最后 LM Head 要在多少个候选字里做选择(<a class="xref" href="chapter-18.html">第 18 章</a>)。</li>
+            <li><code>model_dim</code> = 每个 token 的 embedding 维度,也是信息在网络里流动的“管道宽度”。真实大模型是几千,这里只有 6。</li>
+            <li><code>head_num</code> = 多头注意力的头数:请几位“专家”各看一遍再汇总(<a class="xref" href="chapter-16.html">第 16 章</a>)。</li>
+            <li><code>feed_forward_dim</code> = 每个 Block 里前馈网络(FFN)的隐藏宽度(<a class="xref" href="chapter-17.html">第 17 章</a>)。</li>
+            <li><code>block_num</code> = 把 Transformer Block 叠几层。叠得越深,能力越强也越难训——大模型就是把这个数字堆到几十上百(第 17、19 章)。</li>
+            <li><code>backbone_type</code> = decoder:带 <strong>causal mask</strong>,只能看左边、不能偷看未来(第 16、17 章),正是生成式模型要的。</li>
+            <li><code>InitTrainingHead</code>:接上把 Transformer 输出投影到词表、算“下一个字概率”的那层(<a class="xref" href="chapter-18.html">第 18 章</a>的 LM Head)。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">同一个 Config,放大就是 GPT</span>
+          <p>
+            把 <code>model_dim</code> 从 6 改到几千、<code>block_num</code> 从 2 改到几十、<code>head_num</code> 从 1 改到几十,
+            再喂上万亿 token、用上千张 GPU——结构<strong>一模一样</strong>,就成了第 19、20 章说的那种大模型。
+            你现在读的这个 demo,和 GPT 的差别只是这几个数字的大小。
+          </p>
+        </div>
+
+        <h2>4. 训练:反复练习“预测下一个 token”</h2>
+        <p>
+          训练目标朴素得就一句话:让模型对每个样本<strong>“上文 → 下一个字”猜得越来越准</strong>。
+          用的还是<a class="xref" href="chapter-04.html#4-用交叉熵衡量两个概率的差距">第 4 章的交叉熵</a>、<a class="xref" href="chapter-06.html#3-反向传播的三步">第 6 章的反向传播</a>,只是任务换成了预测 token。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/transformer_char/main.cpp · 训练(精简)</figcaption>
+          <pre class="code-walk__code"><code>auto cb = [](int epoch, double loss, bool &amp;early_stop) {
+  if (epoch % 50 == 0) cout &lt;&lt; "epoch " &lt;&lt; epoch &lt;&lt; " loss " &lt;&lt; loss &lt;&lt; endl;
+  if (loss &lt; 0.02) early_stop = true;      // 学得够好就提前收手        <b class="cw-tag">1</b>
+};
+
+model.TrainNextToken(input_samples, target_tokens,
+                     cb, epoch_num, learning_rate);                    <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>回调每 50 轮打印一次损失,并在损失足够低时<strong>提前停止</strong>(early stop)——省得白训。</li>
+            <li>核心一句:把样本喂进去反复训。每一轮内部,对每个样本做前向、算交叉熵、反向传播、更新参数——和<a class="xref" href="chapter-23.html">第 23 章</a> MNIST 的循环是同一套机制,只是输出从“10 个数字”换成了“整个词表”。</li>
+          </ol>
+        </figure>
+
+        <h2>5. 评估:损失与困惑度</h2>
+        <p>
+          训练完,用<a class="xref" href="chapter-18.html">第 18 章</a>的两个指标看它学得好不好:平均<strong>交叉熵损失</strong>,以及它的指数——<span class="term">困惑度(perplexity)</span>。
+          困惑度可以理解成“模型平均在几个候选字里纠结”,越接近 1 越笃定。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/transformer_char/main.cpp · 评估(精简)</figcaption>
+          <pre class="code-walk__code"><code>model.CalcNextTokenLoss(input_samples, target_tokens, average_loss);  <b class="cw-tag">1</b>
+model.CalcPerplexity(input_samples, target_tokens, perplexity);      <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>平均交叉熵:对所有样本,取“正确的下一个字”被预测到的概率,算 −log 再平均(第 4、18 章)。</li>
+            <li>困惑度 = e<sup>平均损失</sup>。训练有效时,你会看到它随损失一起稳步下降(<a class="xref" href="chapter-18.html">第 18 章</a>)。</li>
+          </ol>
+        </figure>
+
+        <h2>6. 生成:greedy 与采样,一键切换</h2>
+        <p>
+          最好玩的一步:让它<strong>写字</strong>。程序同时演示了两种挑字策略——死板但确定的 <strong>greedy</strong>,
+          和带随机性的<strong>采样</strong>(温度 / top-k / top-p)。它们的道理<a class="xref" href="chapter-18.html">第 18 章</a>讲透了,这里看它们怎么被调用:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/transformer_char/main.cpp · 两种生成(精简)</figcaption>
+          <pre class="code-walk__code"><code>tokenizer.Encode(prompt, token_ids);   // 把提示词也编码成 id
+
+// (A) greedy: 每步都取概率最高的字
+model.Generate(token_ids, generate_num, greedy_ids);                  <b class="cw-tag">1</b>
+
+// (B) 采样: 由温度 / top-k / top-p 控制随机性
+MiniTransformerLM::SamplingOption opt;
+opt.temperature_ = 0.8;  opt.top_k_ = 2;  opt.top_p_ = 0.9;           <b class="cw-tag">2</b>
+model.GenerateSample(token_ids, generate_num, sampled_ids, opt);      <b class="cw-tag">3</b>
+
+tokenizer.Decode(greedy_ids,  greedy_text);    // id 序列还原成文字     <b class="cw-tag">4</b></code></pre>
+          <ol class="code-walk__notes">
+            <li><code>Generate</code> 就是<a class="xref" href="chapter-18.html">第 18 章</a>的<strong>自回归</strong>:预测一个字 → 接回输入 → 再预测下一个,循环 <code>generate_num</code> 次。</li>
+            <li>三个采样旋钮:温度控制“大胆程度”,top-k / top-p 把候选裁到“靠谱的一小撮”(<a class="xref" href="chapter-18.html">第 18 章</a>)。</li>
+            <li><code>GenerateSample</code> 在每步的候选里按概率掷骰子,于是同样的提示每次可能写出不同内容。</li>
+            <li>最后 <code>Decode</code> 把生成的 id 序列翻译回人能读的字符串。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">这就是 ChatGPT “逐字往外蹦”的原理</span>
+          <p>
+            你在聊天框看到答案一个字一个字冒出来,底层跑的就是这个 <code>Generate</code> 循环:
+            每一步只决定“下一个 token”,然后把它接回上文继续。规模天差地别,机制分毫不差。
+          </p>
+        </div>
+
+        <h2>7. 存盘、加载与观察注意力</h2>
+        <p>
+          和 MNIST 一样,训练好的模型会存成文件(<code>.param</code>),下次可直接<strong>加载复用</strong>或用
+          <code>--eval-only</code> 只评估不训练。更妙的是,这个 demo 还能把<strong>真实的注意力权重</strong>导出成 JSON:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/transformer_char/main.cpp · 存模型 / 导出注意力(精简)</figcaption>
+          <pre class="code-walk__code"><code>MiniTransformerLMLoader::ExportModelToFile(model, model_file);        <b class="cw-tag">1</b>
+// ... 下次运行会自动 ImportModelFromFile 加载续用 ...
+
+// 可选: 把每层每个头的注意力权重导成 JSON, 供讲解页回放
+WriteAttentionJson(attention_file, model, tokenizer, ...);           <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>把整座模型(embedding、各层 Block、输出层)序列化到磁盘。</li>
+            <li>导出的 JSON,正是第 16、18 章那个“<strong>真实注意力回放</strong>”交互实验读取的数据——你在书里看到的热力图,就是这里跑出来的,不是示意图。</li>
+          </ol>
+        </figure>
+
+        <h2>8. 从这个玩具,到真正的大模型</h2>
+        <p>
+          你手里这个几千参数、几秒训完的小模型,和 GPT 的<strong>骨架完全相同</strong>。差距不在“原理”,而在第 19–21 章讲的那些事:
+        </p>
+        <ul>
+          <li><strong>放大(<a class="xref" href="chapter-19.html">第 19 章</a>)</strong>:把 <code>model_dim / block_num / head_num</code> 调大,语料换成整个互联网,靠 Scaling Law 换来质变与涌现;</li>
+          <li><strong>后训练(<a class="xref" href="chapter-19.html">第 19 章</a>)</strong>:预训练之后再做 SFT、RLHF/DPO,把“会接话”调成“听话、有用、无害”的助手;</li>
+          <li><strong>工程(<a class="xref" href="chapter-20.html">第 20 章</a>)</strong>:上千张 GPU、显存优化、数据/张量/流水线并行、KV cache,才跑得起来;</li>
+          <li><strong>用好(<a class="xref" href="chapter-21.html">第 21 章</a>)</strong>:提示词、RAG、工具调用、Agent,把它接到真实世界里干活。</li>
+        </ul>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">自己跑一遍</span>
+          <p>
+            在 <code>src/</code> 目录下:<code>./build.sh</code> 编译后,试试<br />
+            <code>./bin/transformer_char --prompt "ab" --generate-num 20</code><br />
+            再玩玩这些旋钮,亲眼看它们如何影响输出:<br />
+            <code>--temperature 1.2</code>(更大胆)、<code>--top-k 3</code>、<code>--block-num 2</code>、
+            <code>--backbone encoder</code>、<code>--corpus "你的语料"</code>。
+          </p>
+        </div>
+
+        <section class="summary reveal">
+          <h2>小结</h2>
+          <ul>
+            <li>语言模型程序 = 语料 → 分词 → 数据集(上文→下一字)→ 建模 → 训练 → 评估 → 生成 → 存盘。</li>
+            <li><code>Config</code> 用几个数字描述整座 Transformer:<code>model_dim / head_num / feed_forward_dim / block_num / backbone</code>,一一对应第 16、17 章的结构。</li>
+            <li>训练就是反复练“预测下一个 token”,机制和<a class="xref" href="chapter-23.html">第 23 章</a> MNIST 相同,只是输出是整个词表。</li>
+            <li>生成 = 自回归循环;greedy 确定、采样(温度/top-k/top-p)更自然(<a class="xref" href="chapter-18.html">第 18 章</a>)。</li>
+            <li>放大这个骨架 + 后训练 + 工程 + 会用,就是第 19–21 章讲的“大模型”。</li>
+          </ul>
+        </section>
+
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:<code>Config</code> 里的 <code>block_num</code> 和 <code>head_num</code> 分别控制什么?</summary>
+            <div class="quiz__a">
+              <p><code>block_num</code> 是堆叠多少层 Transformer Block(越深越强也越难训,<a class="xref" href="chapter-17.html">第 17 章</a>);<code>head_num</code> 是多头注意力的头数,让模型从多个“角度”同时看序列再汇总(<a class="xref" href="chapter-16.html">第 16 章</a>)。放大它们是走向大模型的关键一步。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:decoder 主干为什么要带 causal mask?</summary>
+            <div class="quiz__a">
+              <p>因为它要做“预测下一个字”,训练和生成时都<strong>不能偷看未来</strong>的字。causal mask 挡住每个位置右边的 token,保证它只能依据左边的上文来预测(第 16、17 章)。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:这个 demo 和真正的大模型,本质差别在哪?</summary>
+            <div class="quiz__a">
+              <p>骨架(Embedding + Transformer + 预测下一个 token + 自回归生成)完全一样。差别在规模(参数/数据/算力,<a class="xref" href="chapter-19.html">第 19 章</a>)、后训练(SFT/RLHF,<a class="xref" href="chapter-19.html">第 19 章</a>)、工程基础设施(<a class="xref" href="chapter-20.html">第 20 章</a>)和使用方式(<a class="xref" href="chapter-21.html">第 21 章</a>),而不在原理。</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="summary reveal" style="text-align:center">
+          <h2>全书完 · 谢谢你读到这里</h2>
+          <p>
+            你从<strong>一个神经元</strong>的加权求和出发,一路搭起网络、学会反向传播、拼出 Transformer、
+            做成语言模型,又看懂了大模型的原理、训练、工程与用法——最后,还把这一切在<strong>两份真实的 C++ 代码</strong>里
+            逐行对上了号。原理和代码,你都握在手里了。
+          </p>
+          <p class="muted">
+            接下来最好的学习,是<strong>动手改</strong>:换激活、换优化器、改 Config、喂自己的语料,看数字怎么变。
+            好奇心带你入门,动手让你真正拥有它。
+          </p>
+          <p style="margin-top:1.4rem"><a class="button button--primary" href="index.html">返回目录 / 重读某章</a></p>
+        </div>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>

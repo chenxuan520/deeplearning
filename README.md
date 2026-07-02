@@ -2,7 +2,7 @@
 
 一个**从零手写**的 C++ 深度学习小库：不依赖 PyTorch / TensorFlow，用 `std::vector` 和三重循环把 MLP、训练栈、最小 Transformer / 字符级语言模型都跑通。
 
-配套一份中文交互电子书（24 章 + 术语表），每个概念都能在本仓库源码里找到对应实现。
+配套一份中文交互电子书（25 章 + 术语表），每个概念都能在本仓库源码里找到对应实现。
 
 <p align="center">
   <img src="docs/dl-book/assets/cover-hero.png" alt="深度学习速查图:网络结构、基础公式与反向传播" width="480" />
@@ -97,7 +97,7 @@ cd src/build && cmake .. && make && sudo make install
 
 - **源码目录**：[`docs/dl-book/`](./docs/dl-book/)
 - **线上地址**：<https://chenxuan520.github.io/deeplearning/>
-- **结构**：6 大部分、24 章 + 术语表；含神经元 / 传播 / 注意力等交互实验，章节间可点击跳转到对应小节。
+- **结构**：6 大部分、25 章 + 术语表；含神经元 / 传播 / 注意力等交互实验，章节间可点击跳转到对应小节。
 
 ### 本地预览
 

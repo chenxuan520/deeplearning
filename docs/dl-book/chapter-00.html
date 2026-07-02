@@ -179,8 +179,8 @@
           <li><strong>第二部分 · 学习是怎么发生的(第 4–11 章)</strong>:让网络“学起来”——损失、梯度下降、反向传播、激活函数、优化器,以及正则化、评估这些让它训得好又不过拟合的关键。</li>
           <li><strong>第三部分 · 经典网络结构(第 12–14 章)</strong>:处理图像的 <em>CNN</em>、处理序列的 <em>RNN/LSTM</em>,以及让词有语义的<em>词嵌入</em>。</li>
           <li><strong>第四部分 · 序列与 Transformer(第 15–17 章)</strong>:处理“一句话”这种序列数据,引出<em>注意力机制</em>,拼出完整的 <em>Transformer</em>。</li>
-          <li><strong>第五部分 · 通往大模型(第 18–21 章)</strong>:把它做成一个真能写字的<em>语言模型</em>,再讲透<em>大模型</em>的原理、训练(含后训练)、工程基础设施与实际使用。</li>
-          <li><strong>第六部分 · 代码实战(第 22–23 章)</strong>:对照仓库里两份真实的 C++ 程序(MNIST 与字符级语言模型),把整本书从头到尾在代码里对一遍号。</li>
+          <li><strong>第五部分 · 通往大模型(第 18–22 章)</strong>:把它做成语言模型,再讲透大模型的原理、训练(含后训练与强化学习)、工程基础设施与实际使用。</li>
+          <li><strong>第六部分 · 代码实战(第 23–24 章)</strong>:对照仓库里两份真实的 C++ 程序(MNIST 与字符级语言模型),把整本书从头到尾在代码里对一遍号。</li>
         </ul>
 
         <h2>7. 配套代码仓库:每个概念都有“真身”</h2>
@@ -207,14 +207,14 @@
 │  │  ├─ lr_scheduler/          <a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">学习率调度</a>
 │  │  └─ transformer/           注意力 / Block / mini 语言模型
 │  ├─ demo/                  <b class="cw-tag">2</b>  可运行的示例程序
-│  │  ├─ mnist/                 手写数字识别   (<a class="xref" href="chapter-22.html">第 22 章</a>精读)
-│  │  ├─ transformer_char/      字符级语言模型 (<a class="xref" href="chapter-23.html">第 23 章</a>精读)
+│  │  ├─ mnist/                 手写数字识别   (<a class="xref" href="chapter-23.html">第 23 章</a>精读)
+│  │  ├─ transformer_char/      字符级语言模型 (<a class="xref" href="chapter-24.html">第 24 章</a>精读)
 │  │  └─ optimizer_bench/       优化器对比
 │  └─ test/                     单元测试
 └─ docs/dl-book/             <b class="cw-tag">3</b>  你正在读的这本书</code></pre>
           <ol class="code-walk__notes">
             <li><code>src/deeplearning/</code> 是<strong>库</strong>:所有原理的实现都在这里,一个概念对应一个子目录或文件。</li>
-            <li><code>src/demo/</code> 是<strong>把库用起来</strong>的完整程序。本书第 22、23 章就是逐行精读这里的 <code>mnist</code> 和 <code>transformer_char</code>。</li>
+            <li><code>src/demo/</code> 是<strong>把库用起来</strong>的完整程序。本书第 23、24 章就是逐行精读这里的 <code>mnist</code> 和 <code>transformer_char</code>。</li>
             <li><code>docs/dl-book/</code> 就是这本电子书本身(纯静态 HTML,零依赖)。</li>
           </ol>
         </figure>
@@ -236,7 +236,7 @@
               <tr><td>分词 · 词嵌入 · 生成</td><td><code>transformer/</code>(tokenizer / embedding / LM)</td><td><a class="xref" href="chapter-18.html">第 18 章</a></td></tr>
             </tbody>
           </table>
-          <p class="calc-table__cap">每一章末尾都有对应的“逐行代码”讲解;想跑起来,照第 22、23 章的运行提示即可。</p>
+          <p class="calc-table__cap">每一章末尾都有对应的“逐行代码”讲解;想跑起来,照第 23、24 章的运行提示即可。</p>
         </div>
 
         <div class="callout callout--warn reveal">
@@ -256,7 +256,7 @@
             <li>训练 = 不断“预测 → 对答案 → 算损失 → 微调旋钮”的循环。</li>
             <li>损失是“错得多离谱”的一个数字;让损失变小,是后面所有数学的共同目标。</li>
             <li>“深度”= 很多层叠在一起,从而能自动学出有用的特征。</li>
-            <li>本书对照一份从零手写的 C++ 仓库,每个概念都有代码“真身”,第 22、23 章会带你逐行精读。</li>
+            <li>本书对照一份从零手写的 C++ 仓库,每个概念都有代码“真身”,第 23、24 章会带你逐行精读。</li>
           </ul>
         </section>
 

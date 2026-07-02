@@ -28,7 +28,8 @@
             <li>RAG 怎么用“外挂知识库”治好幻觉和知识截止;</li>
             <li>function calling / 工具调用怎么让模型学会“借外力”;</li>
             <li>Agent 是什么,MCP 和 A2A 又想解决什么问题;</li>
-            <li>用大模型时该守的安全与常识底线。</li>
+            <li>用大模型时该守的安全与常识底线;</li>
+            <li>为什么同一模型在不同产品/参数下会“有时很聪明、有时像降智”。</li>
           </ul>
         </section>
 
@@ -164,6 +165,32 @@
           把这些记在心里,你就能既享受它的强大,又不被它的“自信”带偏。理解原理的人,用起工具来总是更稳、更有分寸。
         </p>
 
+        <h2>7. 为什么有时觉得它“变笨了”?</h2>
+        <p>
+          作为使用者,你碰到的“<strong>降智</strong>”往往不是模型一夜之间重训坏了,而是<strong>使用链路</strong>里的某个环节在起作用:
+        </p>
+        <table class="reveal">
+          <thead><tr><th>环节</th><th>发生了什么</th><th>去哪章细读</th></tr></thead>
+          <tbody>
+            <tr><td><strong>采样参数</strong></td><td>温度太高答案飘;太低又死板像“不会想”</td><td><a class="xref" href="chapter-18.html">第 18 章</a></td></tr>
+            <tr><td><strong>上下文被截断</strong></td><td>长文档只喂进去一半,它只能瞎猜前半段</td><td><a class="xref" href="chapter-19.html">第 19 章</a>长上下文</td></tr>
+            <tr><td><strong>量化/小模型</strong></td><td>本地 4-bit 或蒸馏版,能力上限更低</td><td><a class="xref" href="chapter-20.html">第 20 章</a></td></tr>
+            <tr><td><strong>MoE 激活过少</strong></td><td>为省算力把 top-k、专家规模压太狠,每步只走很窄的子网络</td><td><a class="xref" href="chapter-20.html">第 20 章</a> MoE §④</td></tr>
+            <tr><td><strong>对齐与安全策略</strong></td><td>拒答变多、口吻变保守</td><td><a class="xref" href="chapter-19.html">第 19 章</a>对齐税</td></tr>
+            <tr><td><strong>系统提示 / 护栏</strong></td><td>产品加了 hidden system prompt、输出过滤,限制风格与话题</td><td>本节下文</td></tr>
+            <tr><td><strong>RAG 检索失败</strong></td><td>知识库没召回到正确段落,它只能硬编</td><td>本章 §2</td></tr>
+          </tbody>
+        </table>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">系统提示(system prompt)与护栏</span>
+          <p>
+            你看到的往往只是<strong>用户消息</strong>,但服务端通常还塞了一段你看不见的<strong>系统提示</strong>:
+            规定角色、语气、哪些话不能说、输出格式等。再叠加<strong>内容安全过滤</strong>(敏感词、分类器拦截),
+            同一底座在不同 App 里可以<strong>判若两“智”</strong>——这不是玄学,是产品策略叠在模型外面。
+            调 API 时若你能设 <code>system</code> 字段,就是在改这一层。
+          </p>
+        </div>
+
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
@@ -172,6 +199,7 @@
             <li>function calling 让模型调用计算器/搜索/API,补上它不会算、查不到的短板。</li>
             <li>Agent = 大模型当大脑 + 感知与执行 + 多步循环;MCP 统一“接工具”、A2A 规范“Agent 互联”。</li>
             <li>始终核对关键事实、防提示注入、护隐私——理解原理才能用得稳。</li>
+            <li>“降智”多来自量化、截断、对齐、系统提示、<strong>MoE 激活过少</strong>等<strong>链路上的权衡</strong>,先排查环节再怀疑底座。</li>
           </ul>
         </section>
 
@@ -200,15 +228,14 @@
         <div class="callout callout--tip reveal">
           <span class="callout__title">原理讲完了,但别急着合上</span>
           <p>
-            从一个神经元到大模型的<strong>原理主干</strong>,到这里就全通了。不过本书还留了最后一部分——
-            <strong>第六部分 · 代码实战</strong>:接下来两章,我们对着仓库里两份真实的 C++ 程序,把整本书从头到尾在代码里对一遍号。
-            <strong><a class="xref" href="chapter-22.html">第 22 章</a></strong>精读 MNIST(兑现第一、二部分),<strong><a class="xref" href="chapter-23.html">第 23 章</a></strong>精读字符级语言模型(兑现第四、五部分)。
-            读完,你就真正走通了“<strong>从仓库 C++ 代码到大模型</strong>”这条完整的路。
+            从一个神经元到大模型的<strong>原理主干</strong>,到这里就全通了。我们还用<a class="xref" href="chapter-22.html">第 22 章</a>补了<strong>强化学习</strong>基础;
+            接下来<strong>第六部分 · 代码实战</strong>对着两份 C++ 程序把全书对一遍号:
+            <strong><a class="xref" href="chapter-23.html">第 23 章</a></strong> MNIST,<strong><a class="xref" href="chapter-24.html">第 24 章</a></strong> 字符级语言模型。
           </p>
         </div>
 
         <p class="muted">
-          下一章,我们把第一、二部分的所有概念,在一个真能到 ~98% 准确率的手写数字识别程序里<strong>逐行对上号</strong>。
+          下一章先读<strong><a class="xref" href="chapter-22.html">强化学习</a></strong>(可选,帮你读懂 RLHF),再进 MNIST 代码实战。
         </p>
       </div>
     </main>

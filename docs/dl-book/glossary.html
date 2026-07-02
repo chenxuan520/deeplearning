@@ -101,12 +101,18 @@
           <li id="g-emergent"><strong>涌现能力 emergent abilities</strong> — 规模越过门槛后突然出现的新能力。<a href="chapter-19.html">→ 第 19 章</a></li>
           <li id="g-selfsup"><strong>自监督 self-supervised</strong> — 答案从数据本身自动抠出(如遮词预测),不用人工标注。<a href="chapter-19.html">→ 第 19 章</a></li>
           <li id="g-pretrain"><strong>预训练 / 后训练</strong> — 海量文本上练底座 / SFT+RLHF+蒸馏调成好用的助手。<a href="chapter-19.html">→ 第 19 章</a></li>
-          <li id="g-rlhf"><strong>RLHF / SFT</strong> — 按人类偏好对齐 / 用指令范文微调。<a href="chapter-19.html">→ 第 19 章</a></li>
+          <li id="g-rlhf"><strong>RLHF / SFT</strong> — 按人类偏好对齐 / 用指令范文微调。<a href="chapter-19.html">→ 第 19 章</a> · <a href="chapter-22.html">RL → 第 22 章</a></li>
+          <li id="g-rl"><strong>强化学习 RL</strong> — 靠奖励试错学策略;MDP / Q-learning / PPO。<a href="chapter-22.html">→ 第 22 章</a></li>
+          <li id="g-align-tax"><strong>对齐税 alignment tax</strong> — RLHF 后更安全听话,但部分能力/创造性可能下降。<a href="chapter-19.html">→ 第 19 章</a></li>
+          <li id="g-forget"><strong>灾难性遗忘</strong> — 微调新任务时旧本领丢失;可用 LoRA/混训缓解。<a href="chapter-19.html">→ 第 19 章</a></li>
+          <li id="g-multimodal"><strong>多模态 multimodal</strong> — 图/音 patch→编码→投影,与文字拼序列进 Transformer。<a href="chapter-19.html">→ 第 19 章</a></li>
           <li id="g-distill"><strong>知识蒸馏 distillation</strong> — 让小学生模型模仿大教师模型的输出分布。<a href="chapter-19.html">→ 第 19 章</a></li>
+          <li id="g-dumb"><strong>模型降智</strong> — 多因量化、MoE 压 k/缩专家、截断、小模型、对齐过猛等链路权衡。<a href="chapter-20.html">→ 第 20 章</a> · <a href="chapter-21.html">第 21 章</a></li>
+          <li id="g-quant"><strong>量化 quantization</strong> — 权重压到 INT8/INT4 省显存提速,可能损失精细能力。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-hallucination"><strong>幻觉 hallucination</strong> — 一本正经地生成通顺却编造的内容。<a href="chapter-19.html">→ 第 19 章</a></li>
           <li id="g-kvcache"><strong>KV cache</strong> — 缓存已生成词的 Key/Value,避免重复计算,加速生成。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-parallel"><strong>数据/张量/流水线并行</strong> — 把训练切到多卡的三种拆法。<a href="chapter-20.html">→ 第 20 章</a></li>
-          <li id="g-moe"><strong>MoE 混合专家</strong> — 每个 token 只激活少数专家,参数多但算得少。<a href="chapter-20.html">→ 第 20 章</a></li>
+          <li id="g-moe"><strong>MoE 混合专家</strong> — 每 token 只激活 top-k 个专家;总参多但算得少,压 k 过猛会掉能力。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-sparseattn"><strong>稀疏注意力</strong> — 只算部分 token 对,把 O(n²) 降下来。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-prompt"><strong>提示工程 / 思维链</strong> — 把话说清楚 / 让它“一步步想”提升推理。<a href="chapter-21.html">→ 第 21 章</a></li>
           <li id="g-rag"><strong>RAG 检索增强</strong> — 先检索资料再让模型基于资料回答,治幻觉、补新知。<a href="chapter-21.html">→ 第 21 章</a></li>

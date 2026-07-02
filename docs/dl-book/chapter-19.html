@@ -28,7 +28,8 @@
             <li>“词嵌入”把词变成<strong>语义坐标</strong>,为什么向量夹角能表示“意思相近”;</li>
             <li>规模定律(Scaling Law)和涌现能力,到底在说什么;</li>
             <li><strong>预训练</strong>与<strong>后训练</strong>(SFT、RLHF、蒸馏)的分工,以及“底座模型”和“对话模型”的区别;</li>
-            <li>推理模型、多模态、长上下文等最近的新方向,大致是怎么回事;</li>
+            <li>推理模型、多模态(图像/语音怎么进 Transformer)、长上下文等最近的新方向,大致是怎么回事;</li>
+            <li>常见“体感”问题:<strong>模型降智</strong>、<strong>对齐税</strong>、<strong>灾难性遗忘</strong>各自发生在训练链路的哪一环;</li>
             <li>一串训练“黑话”:自监督、泛化、过拟合、epoch/batch/step、超参数;</li>
             <li>大模型的本质与局限——它为什么会“一本正经地胡说八道”。</li>
           </ul>
@@ -239,6 +240,14 @@
             而不是把指令当普通文本接着往下续。这里<strong>质量远比数量重要</strong>——几万条精挑细选的,常胜过几百万条粗制滥造的。
           </p>
         </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">灾难性遗忘(catastrophic forgetting)</span>
+          <p>
+            在预训练底座上继续 SFT/微调时,模型可能<strong>新任务学会了、旧本领丢了</strong>——比如微调成“只会写邮件”,通用推理变差。
+            缓解办法包括:混一定比例的原预训练数据、用小学习率、只训少量参数(<span class="term">LoRA/PEFT</span>——在权重旁加低秩小矩阵,只更新这部分),
+            以及控制微调轮次。这不是 bug,而是<strong>在旧分布与新任务之间抢参数</strong>的必然张力。
+          </p>
+        </div>
 
         <h3>③ RLHF:按人类的喜好“对齐”</h3>
         <p>
@@ -261,8 +270,16 @@
         <ol>
           <li><strong>收集偏好</strong>:同一个问题让模型给出多个回答,请人<strong>排序</strong>哪个更好。这种“比较题”标起来又快又稳。</li>
           <li><strong>训练奖励模型</strong>:用这些排序,训练一个专门的<strong>打分模型(reward model)</strong>,让它学会给任意回答打出一个“人类有多喜欢”的分数——相当于把“人的口味”蒸馏成一个可自动打分的裁判。</li>
-          <li><strong>用强化学习优化</strong>:让大模型不停生成回答、让裁判打分,再用强化学习(如 PPO)把它朝<strong>高分</strong>方向推。同时挂一个“别跑太偏”的约束(<strong>KL 惩罚</strong>),防止它为了<strong>讨好打分器</strong>而说出一堆通顺却怪异的废话。</li>
+          <li><strong>用强化学习优化</strong>:让大模型不停生成回答、让裁判打分,再用强化学习(如 PPO)把它朝<strong>高分</strong>方向推。同时挂一个“别跑太偏”的约束(<strong>KL 惩罚</strong>),防止它为了<strong>讨好打分器</strong>而说出一堆通顺却怪异的废话。(PPO、策略梯度等 RL 基础见<a class="xref" href="chapter-22.html">第 22 章</a>。)</li>
         </ol>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">对齐税(alignment tax)</span>
+          <p>
+            RLHF/DPO 把模型调得更<strong>安全、听话、像助手</strong>,但往往要付一点能力代价——复杂推理、创造性、某些专业深度可能不如对齐前的底座。
+            俗称“<strong>对齐税</strong>”:不是模型“坏了”,而是优化目标从“接话像互联网”变成了“人类更喜欢”。KL 惩罚、保守的奖励模型、过度拒绝有害内容,
+            都会让这种体感更明显。工程上常在<strong>能力评测</strong>与<strong>安全评测</strong>之间找平衡。
+          </p>
+        </div>
         <p>
           今天聊天助手那种得体的语气、拒绝有害请求的分寸,很多就来自这一步。近来也流行更简化的
           <span class="term">DPO</span>:跳过“单独训一个奖励模型”,直接拿人类偏好数据把模型“掰”过去,工程上更省事,思路完全一致。
@@ -280,6 +297,14 @@
             蒸馏时常把 softmax 的<strong>温度调高</strong>(<a class="xref" href="chapter-18.html">第 18 章</a>),让那些低概率但有意义的选项“显形”,
             学生才学得到这些“隐藏知识”。DeepSeek 就曾用 R1 蒸馏出多个小模型(如
             <code>DeepSeek-R1-Distill-Qwen-14B</code>,140 亿参数)开源给社区——学生虽小,却继承了老师不少本事。
+          </p>
+        </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">蒸馏、小模型与“降智”的一种来源</span>
+          <p>
+            蒸馏和直接做小模型,换的是<strong>体积与速度</strong>,付的是<strong>能力上限</strong>。学生很难 100% 复制教师的“暗知识”,
+            复杂推理、长尾知识、细腻概率偏好最容易丢——用起来就像“同款但没那么聪明”。这和<a class="xref" href="chapter-20.html#4-省显存两招-混合精度与量化">量化</a>、<a class="xref" href="chapter-20.html#8-moe-不是每次都动用全部参数">MoE 压 k</a>导致的降智是不同环节,
+            但体感类似:<strong>不是不会,而是浅了、窄了</strong>。
           </p>
         </div>
 
@@ -314,16 +339,56 @@
 
         <h3>多模态:不只吃文字</h3>
         <p>
-          <span class="term">多模态(multimodal)</span>模型能同时处理文字、图像、音频甚至视频。秘诀还是老一套:
-          把图像、声音也切成 <strong>token、变成向量</strong>,和文字 token 拼在一起喂进同一个 Transformer。
-          于是“看图说话”“语音对话”就和“预测下一个 token”变成了同构的问题。
+          <span class="term">多模态(multimodal)</span>模型(GPT-4V、Gemini、Qwen-VL 等)能同时处理图、音、视频和文字。
+          <strong>内核不变</strong>:各模态都切成 token → 编成向量 → 拼成一条序列 → 送进同一个 Transformer → 往往仍自回归生成文字。
         </p>
+        <h4>① 各模态怎么切成 token</h4>
+        <table class="reveal">
+          <thead><tr><th>模态</th><th>切法</th><th>直觉</th></tr></thead>
+          <tbody>
+            <tr><td>文字</td><td>BPE / 子词</td><td>本章 §2</td></tr>
+            <tr><td>图像</td><td>16×16 等 <span class="term">patch</span> 小块</td><td>一张图 ≈ 一句由上百个“图块词”组成的句子(<a class="xref" href="chapter-12.html">第 12 章</a>局部块思想)</td></tr>
+            <tr><td>音频</td><td>频谱片段或神经 codec 码</td><td>声音也排成 token 序列</td></tr>
+            <tr><td>视频</td><td>抽帧后每帧走图像流程</td><td>序列更长,更吃算力</td></tr>
+          </tbody>
+        </table>
+        <h4>② 编码、投影、拼进 LLM</h4>
+        <p>
+          图像经 <span class="term">ViT</span> 等视觉编码器变成 patch 向量,再经<strong>投影层 MLP</strong>拉到与词嵌入相同维度;
+          文字照常 BPE + 嵌入。推理时典型序列:
+        </p>
+        <pre class="code-walk__code" style="margin:0.8rem 0"><code>[系统提示] [图开始] patch₁…patchₙ [图结束] [用户问题 tokens] [模型开始生成…]</code></pre>
+        <p>
+          <a class="xref" href="chapter-16.html">自注意力</a>让“猫”这类文字 token 直接关注猫所在的 patch——<strong>跨模态对齐靠统一注意力</strong>,不必硬接两套系统。
+        </p>
+        <h4>③ 训练通常分阶段</h4>
+        <ol>
+          <li><strong>CLIP 式对齐</strong>:成对“图+配文”,用<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积/余弦</a>把配对拉近、非配对推远。</li>
+          <li><strong>接 LLM + 训投影</strong>:冻住或轻微微调语言模型,用“图→描述”学连接器。</li>
+          <li><strong>多模态指令微调</strong>:图+问答三元组(VQA 等),类似 SFT。</li>
+          <li><strong>(可选) RLHF</strong>:按人类偏好再对齐(<a class="xref" href="chapter-22.html">第 22 章</a>)。</li>
+        </ol>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">早融合 vs 双塔</span>
+          <p>
+            名字不同,套路都是:<strong>编码 → 对齐维度 → 拼序列 → 注意力融合 → 预测下一个 token</strong>。
+            LLaVA、Qwen-VL 等主流属于 patch 向量直接与文字 token <strong>早融合</strong>进一个 Transformer。
+          </p>
+        </div>
 
         <h3>更长的上下文</h3>
         <p>
           早期模型一次只能读几千 token,如今动辄支持几十万甚至上百万——你能把一整本书、一个代码仓库丢进去让它一起看。
           难点在<a class="xref" href="chapter-16.html">第 16 章</a>那句话:注意力计算量随长度<strong>平方</strong>增长,所以需要稀疏注意力等优化(<a class="xref" href="chapter-20.html">第 20 章</a>)才扛得住。
         </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">上下文不够长,也会像“降智”</span>
+          <p>
+            若产品侧把输入<strong>截断</strong>(只保留最后几千 token),或你贴的代码/文档超出窗口被 silently 砍掉,
+            模型等于<strong>没看到关键前文</strong>——回答变短、变偏、变健忘,常被误以为是“模型变笨了”。
+            长上下文能力取决于<strong>训练时的长度扩展</strong>与<strong>推理时的显存/KV cache</strong>(<a class="xref" href="chapter-20.html">第 20 章</a>),也取决于你有没有真的把材料完整送进去。
+          </p>
+        </div>
 
         <h3>更省的架构、更强的“手脚”</h3>
         <ul>
@@ -384,7 +449,8 @@
             <li>词嵌入把词变成“语义坐标”,<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦相似度衡量语义远近;词向量可迁移复用。</li>
             <li>Scaling Law:参数、数据、算力一起放大,性能可预测提升;超过门槛会“涌现”新能力。</li>
             <li>预训练(自监督)练出底座能力;后训练(SFT → RLHF/DPO → 蒸馏)把它调成好用的助手,这也是 base 与 chat 模型的区别。</li>
-            <li>最近方向:推理模型(先想很久再答)、多模态、长上下文、MoE——内核仍是 token + Transformer + 预测下一个 token。</li>
+            <li>最近方向:推理模型、多模态(patch→ViT→投影→拼序列)、长上下文、MoE——内核仍是 token + Transformer。</li>
+            <li>降智/对齐税/遗忘等多半发生在<strong>后训练、蒸馏、量化、MoE 压 k、截断、产品护栏</strong>等环节,先定位链路再判断能力。</li>
             <li>它本质是概率预测器,所以会幻觉、有知识截止和偏见——要理性使用,并靠 RAG/工具补救。</li>
           </ul>
         </section>
