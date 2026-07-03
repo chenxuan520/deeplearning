@@ -44,8 +44,9 @@
           <h2>读完这一章,你会明白</h2>
           <ul>
             <li>从文本到预测,数据要经过 tokenizer → embedding → Transformer → 输出层这一条完整链路;</li>
+            <li><strong>LM Head</strong> 如何把 Transformer 向量变成词表上的 logits / 概率,和 <a class="xref" href="chapter-23.html">MNIST 输出层</a> 有何同异;</li>
             <li><strong>模型到底怎么“学”</strong>:训练数据怎么造、损失怎么算、反向传播怎么一路更新到<a class="xref" href="chapter-17.html">第 17 章</a>那三个矩阵;</li>
-            <li>“预测下一个字”怎么变成“写出一整段”(自回归生成);</li>
+            <li>“预测下一个字”怎么变成“写出一整段”(自回归生成),以及 <strong>KV cache</strong> 为什么能让每一步不必重算前文;</li>
             <li>greedy、temperature、top-k、top-p 这些采样策略各自的脾气;</li>
             <li>怎么用困惑度(perplexity)评估一个语言模型的好坏。</li>
           </ul>
@@ -133,10 +134,84 @@ decoder_.Forward(hidden, encoded);  // 或 encoder_       <b class="cw-tag">3</b
 
         <h2>4. LM Head:把表示投影成“下一字概率”</h2>
         <p>
-          主干输出的还是向量,得再过一个输出层(<span class="term">LM Head</span>),
-          把每个位置的向量投影到<strong>词表大小</strong>,得到对每个候选字符的打分(logits)。
-          再过 softmax,就是“下一个字是谁”的概率分布。
+          Transformer 主干吐出的 <code>encoded[pos]</code> 仍是长度为 <code>model_dim</code> 的向量——它表示“看过上文后,这个位置对下一个字有什么判断”,
+          但还不是概率。<span class="term">LM Head(Language Model Head, 语言模型输出头)</span> 就是整条链路的<strong>最后一层线性分类器</strong>:
+          把向量映射成<strong>词表上每个候选字的打分</strong>(logits),再经 softmax 变成概率。
+          结构和 <a class="xref" href="chapter-23.html">MNIST 最后一层 64→10</a> 一模一样,只是输入维是 <code>model_dim</code>、输出维是 <code>vocab_size</code>。
         </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">encoded[pos]<small>model_dim 维</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">LM Head<small>线性: W·h + b</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">logits<small>vocab_size 个分数</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">softmax<small>概率分布</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">LM Head 后面<strong>不再接 ReLU</strong>,直接 softmax——和 MNIST 输出层相同,分类任务的标准收尾。</p>
+        </div>
+
+        <h3>4.1 参数长什么样:一张“候选字打分表”</h3>
+        <p>
+          在本项目 <code>MiniTransformerLM</code> 里,LM Head 就是两组可训练参数
+          <code>output_weight_</code> 和 <code>output_bias_</code>(注意:这是<strong>输出头</strong>的名字,
+          和注意力里把多头拼回去的 <var>W</var><sub>O</sub> 不是一回事,后者藏在 Transformer Block 内部)。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>参数</th><th>形状</th><th>含义</th></tr></thead>
+            <tbody>
+              <tr><td><code>output_weight_</code></td><td>vocab_size × model_dim</td><td>词表里<strong>每个字一行</strong>,这一行是和 hidden 做点积的“模板向量”</td></tr>
+              <tr><td><code>output_bias_</code></td><td>vocab_size</td><td>每个候选字一个偏置,没上下文时也有的先验偏好</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          初始化时随机填小数(和 embedding 类似,用 <code>sqrt(6/(vocab+dim))</code> 缩放),训练后再慢慢长出“哪个 hidden 模式该对应哪个字”:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · Init 里建 LM Head(精简)</figcaption>
+          <pre class="code-walk__code"><code>output_weight_.assign(vocab_size_, vector&lt;double&gt;(model_dim_, 0));
+output_bias_.assign(vocab_size_, 0);
+const double limit = sqrt(6.0 / (vocab_size_ + model_dim_));
+// 对 output_weight_ 每行随机初始化 …                              <b class="cw-tag">1</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>词表有多大,就有多少行“候选字模板”;每行 <code>model_dim</code> 维,和 Transformer 输出的向量长度对齐。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">和输入侧 embedding 的对称关系</span>
+          <p>
+            <a class="xref" href="chapter-15.html">第 15 章</a>的 <code>embedding_table_</code> 是“id → 向量”(进网络);
+            LM Head 是“向量 → 在词表上打分”(出网络)。形状上 embedding 是 vocab×dim,LM Head 也是 vocab×dim——
+            很多大模型会把两者<strong>绑成同一张表</strong>(权重共享),本仓库为了教学清晰分开存,但数学形式一样,都是线性投影。
+          </p>
+        </div>
+
+        <h3>4.2 前向:每个位置对每个字算一个分</h3>
+        <p>
+          对序列里<strong>每一个位置</strong> <code>pos</code>,拿它的 hidden 向量 <var>h</var> = <code>encoded[pos]</code>,
+          和词表里<strong>每一个</strong>候选字 <var>w</var> 的模板行做点积,再加偏置:
+        </p>
+        <div class="mathblock reveal">
+          logit<sub>w</sub> = <var>b</var><sub>w</sub> + <var>h</var> · <var>W</var><sub>w</sub>
+          <span class="label"><var>W</var><sub>w</sub> 就是 <code>output_weight_[w]</code> 那一行;<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>越大,模型越倾向选这个字</span>
+        </div>
+        <p>手算一个极简例子:词表只有 3 个字 <em>h / e / l</em>,<code>model_dim = 2</code>,某一位置的 hidden 是 <var>h</var> = [0.8, −0.2]:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>候选字 w</th><th>模板行 W<sub>w</sub></th><th>偏置 b<sub>w</sub></th><th>logit = b + h·W</th></tr></thead>
+            <tbody>
+              <tr><td>h</td><td>[1.0, 0.5]</td><td>0.1</td><td>0.1 + 0.8×1.0 + (−0.2)×0.5 = <strong>0.8</strong></td></tr>
+              <tr><td>e</td><td>[0.2, 1.0]</td><td>0.0</td><td>0.0 + 0.8×0.2 + (−0.2)×1.0 = <strong>−0.04</strong></td></tr>
+              <tr><td>l</td><td>[−0.5, 0.3]</td><td>0.2</td><td>0.2 + 0.8×(−0.5) + (−0.2)×0.3 = <strong>−0.26</strong></td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">三个 logit → softmax 后 <em>h</em> 概率最高。直觉:当前 hidden 和 “h 的模板” 最合拍。</p>
+        </div>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · Forward(精简)</figcaption>
           <pre class="code-walk__code"><code>for (int pos = 0; pos &lt; encoded.size(); pos++)
@@ -147,9 +222,61 @@ decoder_.Forward(hidden, encoded);  // 或 encoder_       <b class="cw-tag">3</b
           output_weight_[token_id][dim] * encoded[pos][dim];   <b class="cw-tag">1</b>
   }</code></pre>
           <ol class="code-walk__notes">
-            <li>对每个位置,把它的向量和每个候选字符的权重做点积(还是“加权求和”),得到这个字符的分数。<code>vocab_size</code> 个分数,就是这个位置对“下一个字”的全部打分。</li>
+            <li>双重循环:每个位置 × 词表每个字 = 一次“模板匹配”打分。结果 <code>logits[pos]</code> 是长度 <code>vocab_size</code> 的向量,再过 <code>Softmax</code> 就是该位置“下一个字是谁”的概率。</li>
           </ol>
         </figure>
+
+        <h3>4.3 推理时为什么只取最后一行?</h3>
+        <p>
+          <code>Forward</code> 会对<strong>输入序列每个位置</strong>都算一遍 logits(训练时要用的,见第 6 节)。
+          但<strong>生成下一个字</strong>时,我们只关心“看完整个上文后,下一个该是谁”——这对应<strong>最后一个位置</strong>的预测:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · CalcNextTokenLogits(精简)</figcaption>
+          <pre class="code-walk__code"><code>Forward(*window, all_logits, use_causal_mask);
+logits = all_logits.back();                              <b class="cw-tag">1</b></code></pre>
+          <ol class="code-walk__notes">
+            <li><code>.back()</code> 只取最后一个位置的 logits。前面位置的 logits 对应“若上下文只到那里,下一个字是谁”——生成时不需要,训练时用来多学几条监督信号。</li>
+          </ol>
+        </figure>
+        <p>
+          例子:输入 <code>"hel"</code>,三个位置都会出 logits,但只有<strong>第三个位置</strong>(刚看过 <code>l</code>) 的分布才是“下一个字该是啥”。
+          若上下文超过 <code>max_context_size</code>,代码会<strong>只保留最近一段</strong>再前向,避免位置编码越界。
+        </p>
+
+        <h3>4.4 反向:LM Head 的梯度往哪流</h3>
+        <p>
+          训练时,softmax + 交叉熵对 logits 的梯度仍是 <code>probs − one-hot(答案)</code>(<a class="xref" href="chapter-06.html">第 6 章</a>)。
+          这条梯度会<strong>同时更新 LM Head 和前面的 Transformer</strong>:
+        </p>
+        <ul>
+          <li><strong>偏置</strong>:<code>grad_output_bias[w] += grad_logit_w</code></li>
+          <li><strong>权重行</strong>:<code>grad_output_weight[w][dim] += grad_logit_w × h[dim]</code>(和普通线性层一样)</li>
+          <li><strong>传回主干</strong>:<code>grad_h[dim] += output_weight_[w][dim] × grad_logit_w</code> —— 于是损失能继续流进 decoder / embedding</li>
+        </ul>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · TrainNextToken 里 LM Head 反传(精简)</figcaption>
+          <pre class="code-walk__code"><code>grad_logits = probs;  grad_logits[target] -= 1.0;       <b class="cw-tag">1</b>
+for (token_id …) {
+  grad_output_bias[token_id] += grad;
+  grad_output_weight[token_id][dim] += grad * encoded[pos][dim];
+  grad_encoded[pos][dim] += output_weight_[token_id][dim] * grad;  <b class="cw-tag">2</b>
+}
+output_weight_optimizer_.Apply(output_weight_, …);       <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>对正确答案那一维减 1,得到 logits 上的梯度。</li>
+            <li>一边更新 LM Head,一边把梯度累加到 <code>grad_encoded</code>,交给 <code>decoder_.Backward</code>。</li>
+            <li>先用优化器更新 LM Head,再反传进 Transformer——输出头是损失的“第一站”,也是梯度回流的“最后一站”。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">和 MNIST 对照一眼</span>
+          <p>
+            MNIST:隐藏层向量 → 全连接 → 10 维 logits → softmax → 交叉熵。<br />
+            语言模型:Transformer 向量 → LM Head → <code>vocab_size</code> 维 logits → softmax → 交叉熵。<br />
+            <strong>差别只在前面用什么网络抽特征</strong>(MLP vs Transformer),<strong>最后一截分类头完全同构</strong>。
+          </p>
+        </div>
 
         <h2>5. 训练数据:答案就藏在“下一个字”里</h2>
         <p>
@@ -231,10 +358,10 @@ decoder_.Backward(grad_encoded, grad_hidden, lr);  // 或 encoder_    <b class="
             <tbody>
               <tr><td><strong>词嵌入表</strong> <code>embedding_table_</code></td><td>每个字一行向量,查表得到词向量(第 3 节)</td><td>vocab_size × model_dim</td><td>新种类:一大堆权重</td></tr>
               <tr><td><strong>Q/K/V 矩阵</strong> <code>query/key/value_weight_</code></td><td>把每个词投影成查询 / 键 / 值(<a class="xref" href="chapter-17.html">第 17 章</a>),<em>每块 Block 各一套</em></td><td>model_dim × model_dim</td><td>就是权重矩阵</td></tr>
-              <tr><td><strong>输出投影</strong> <code>output_weight_</code>(W<sub>O</sub>)</td><td>把多头拼接的结果融合回去(<a class="xref" href="chapter-17.html">第 17 章</a>)</td><td>model_dim × model_dim</td><td>权重矩阵</td></tr>
+              <tr><td><strong>注意力输出投影</strong> <code>output_weight_</code>(Block 内 W<sub>O</sub>)</td><td>把多头拼接的结果融合回去(<a class="xref" href="chapter-17.html">第 17 章</a>)</td><td>model_dim × model_dim</td><td>权重矩阵</td></tr>
               <tr><td><strong>前馈网络</strong> FFN 的 W₁/b₁/W₂/b₂</td><td>逐词再加工的两层小网络(<a class="xref" href="chapter-18.html">第 18 章</a>)</td><td>model_dim×ff_dim 等</td><td>就是个小 MLP(第 2、3 章)</td></tr>
               <tr><td><strong>LayerNorm</strong> 的 γ、β</td><td>每层的缩放 / 平移系数(<a class="xref" href="chapter-18.html">第 18 章</a>)</td><td>model_dim</td><td>新种类:类似偏置</td></tr>
-              <tr><td><strong>LM Head</strong> <code>output_weight_/bias_</code></td><td>把向量投影成“下一个字的概率”(第 4 节)</td><td>model_dim × vocab_size</td><td>和 MNIST 输出层一模一样</td></tr>
+              <tr><td><strong>LM Head</strong> <code>output_weight_</code> / <code>output_bias_</code>(<code>MiniTransformerLM</code> 顶层)</td><td>把向量投影成词表 logits(<a href="#4-lm-head-把表示投影成下一字概率">第 4 节</a>)</td><td>vocab_size × model_dim</td><td>和 MNIST 输出层一模一样</td></tr>
             </tbody>
           </table>
           <p class="calc-table__cap">位置编码在本项目是<strong>固定的 sin/cos、不参与训练</strong>(有的模型改成可学习的);其余全部都是要训练的参数。</p>
@@ -312,8 +439,119 @@ for (int i = 0; i &lt; generate_num; i++) {
             <li>把它接到末尾,然后回到第 1 步——下一轮的“上文”就多了一个字。这就是自回归生成。</li>
           </ol>
         </figure>
+        <p>
+          你可能会顺手追问一句:那它怎么知道“该停了”?真实大模型通常会把“<strong>结束</strong>”也当成一个普通 token 来学,
+          比如 <code>&lt;eos&gt;</code> (end of sequence) 或一轮对话结束标记。训练时,样本末尾会显式放上这个结束 token,
+          于是模型学到:当前文已经完整时,下一个最合理的输出就该是“结束”。推理程序一旦看到它,就<strong>停止生成</strong>。
+          本书配套的这个最小字符级 demo 为了把主线讲清楚,没有额外引入 <code>&lt;eos&gt;</code> 机制,所以命令行用
+          <code>generate_num</code> 作为一个外部“硬停”上限。真实系统里通常是“<strong>结束 token + 最大长度上限</strong>”双保险。
+        </p>
 
-        <h2>9. 它学得好不好?用困惑度衡量</h2>
+        <h2>9. KV cache:别让自回归每步都重算前文</h2>
+        <p>
+          上一节的自回归有个让人不安的细节。生成第 100 个字时,输入是前 99 个字;生成第 101 个字时,输入变成前 100 个字……
+          <strong>每多写一个字,就要把越来越长的前文<span class="term">整段重新跑一遍</span>模型</strong>。
+          写到第 1000 字,前面 999 个字已经被反复前向了上千次。这不是浪费吗?
+        </p>
+        <p>
+          <span class="term">KV cache(KV 缓存)</span>就是消除这个浪费的关键一招,也是今天几乎所有大模型推理都在用的标配。
+          要讲清它<strong>到底缓存了什么</strong>,得先回到<a class="xref" href="chapter-17.html">第 17 章</a>的 Q、K、V。
+        </p>
+
+        <h3>9.1 先问:每一步计算里,哪些东西其实没变?</h3>
+        <p>
+          回忆注意力:每个词进来,都要乘三个矩阵,算出自己的
+          <strong>Query(<var>q</var>)</strong>、<strong>Key(<var>k</var>)</strong>、<strong>Value(<var>v</var>)</strong>。
+          生成第 <var>t</var>+1 个字时,当前这个词的 <var>q</var> 要和<strong>前面所有词的 <var>k</var></strong> 打分,
+          再用得到的权重去加权<strong>前面所有词的 <var>v</var></strong>。
+        </p>
+        <p>
+          关键在于:第 <var>i</var> 个词的 <var>k</var><sub>i</sub>、<var>v</var><sub>i</sub> <strong>只由第 <var>i</var> 个词自己算出</strong>
+          (<var>k</var><sub>i</sub> = <var>x</var><sub>i</sub><var>W</var><sub>K</sub>,<var>v</var><sub>i</sub> = <var>x</var><sub>i</sub><var>W</var><sub>V</sub>),
+          <strong>一旦算出来就不会再变</strong>。这正是<a class="xref" href="chapter-17.html#7-不能偷看未来-causal-mask">第 17 章 causal mask</a>那张下三角图的直接推论——
+          后面新增的词落在下三角的右侧,对前面的词毫无影响。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">那为什么不缓存 Q?</span>
+          <p>
+            因为注意力是“<strong>当前这个词的 Query,去查历史所有词的 Key/Value</strong>”。
+            历史某个词的 <var>q</var>,在它<strong>当时那一步</strong>用完就再也用不到了——新词不会去用旧词的 Query。
+            所以只需要把每个词的 <strong>K 和 V</strong> 存下来,Q 用完即弃。名字叫“KV cache”而不是“QKV cache”,原因就在这。
+          </p>
+        </div>
+
+        <h3>9.2 缓存前后:计算量的对比</h3>
+        <p>
+          把“每一步要算哪些词的 K/V”画成方格(行 = 第几步,列 = 第几个词的 K/V,亮 = 这一步真的现算了它):
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pattern-mats">
+              <div class="pattern-mat">
+                <p class="pattern-mat__title">无 KV cache(每步重算整段)</p>
+                <div class="pattern-mat__grid">
+                  <span class="on"></span><span></span><span></span><span></span><span></span><span></span>
+                  <span class="on"></span><span class="on"></span><span></span><span></span><span></span><span></span>
+                  <span class="on"></span><span class="on"></span><span class="on"></span><span></span><span></span><span></span>
+                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span><span></span>
+                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span>
+                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span>
+                </div>
+                <p class="pattern-mat__cap">每一步都把前面所有词的 K/V 重算一遍:总量是整个下三角(n² 量级)</p>
+              </div>
+              <div class="pattern-mat">
+                <p class="pattern-mat__title">有 KV cache(只算新词)</p>
+                <div class="pattern-mat__grid">
+                  <span class="on--g"></span><span></span><span></span><span></span><span></span><span></span>
+                  <span></span><span class="on--g"></span><span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span class="on--g"></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span class="on--g"></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span><span class="on--g"></span><span></span>
+                  <span></span><span></span><span></span><span></span><span></span><span class="on--g"></span>
+                </div>
+                <p class="pattern-mat__cap">每一步只算<strong>新增那一个词</strong>的 K/V,历史的直接从缓存里取:总量只剩对角线(n 量级)</p>
+              </div>
+            </div>
+            <div class="diagram__legend">
+              <span><i style="background: var(--primary)"></i>这一步现算的 K/V</span>
+              <span><i style="background: var(--accent)"></i>只算新词(其余从 cache 读)</span>
+            </div>
+          </div>
+          <p class="figure__cap">
+            左边每步重算整段,做了大量重复功;右边把历史 K/V 存进 cache,每步只把<strong>新词那一份</strong>算出来追加进去——从“算一个三角”降到“算一条线”。
+          </p>
+        </div>
+        <p>
+          所以 KV cache 的做法一句话:<strong>每生成一个新词,就把它的 <var>k</var>、<var>v</var> 追加到缓存末尾;
+          下一步直接复用缓存里全部历史 K/V,只为最新的词算一次投影</strong>。前文再长,每步的新增计算都是固定的一小份。
+        </p>
+
+        <h3>9.3 它到底存成什么样、占多大</h3>
+        <p>
+          缓存的内容是<strong>每一层、每个注意力头、每个已经处理过的位置</strong>各自的一个 <var>k</var> 向量和一个 <var>v</var> 向量。
+          写成形状大致是:
+        </p>
+        <div class="mathblock reveal">
+          KV cache ≈ [层数 <var>L</var>] × [K 和 V 两份] × [头数 <var>h</var>] × [已生成长度 <var>t</var>] × [每头维度 <var>d</var><sub>head</sub>]
+          <span class="label">生成越长,<var>t</var> 这一维就越长,缓存越大——这就是“长上下文吃显存”的直接来源</span>
+        </div>
+        <p>
+          它的代价是<strong>拿显存换计算</strong>:省掉了海量重复前向,但要一直把这些 K/V 驻留在显存里。
+          序列越长、并发用户越多,KV cache 就越吃显存,常常比模型权重本身还占地方——
+          <a class="xref" href="chapter-21.html">第 21 章</a>会讲工程上怎么进一步<strong>分页管理、复用、压缩</strong>它
+          (以及 GQA/MQA 这类“让多个头共享一组 K/V”的省法)。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">对照本书的 mini demo</span>
+          <p>
+            本仓库 <code>src/demo/transformer_char</code> 是<strong>教学向</strong>实现,生成时每步都把当前整段重新前向一遍
+            (就是上图<strong>左边</strong>那种“老实但浪费”的算法),<strong>没有</strong>实现增量 KV cache——因为序列短、图省事,
+            重点是把原理讲清楚。真实推理服务(如 vLLM、TensorRT-LLM)则一定会上 KV cache,否则长文本生成会慢到不可用。
+            如果你想动手,把生成循环改成“维护 K/V 缓存、每步只投影新 token”会是一个很好的练习。
+          </p>
+        </div>
+
+        <h2>10. 它学得好不好?用困惑度衡量</h2>
         <p>
           评估语言模型最常用的指标是<span class="term">困惑度(perplexity)</span>。它是“平均交叉熵损失”取指数:
         </p>
@@ -335,7 +573,7 @@ perplexity = std::exp(average_loss);                     <b class="cw-tag">2</b>
           </ol>
         </figure>
 
-        <h2>10. 看真实模型的注意力(回放)</h2>
+        <h2>11. 看真实模型的注意力(回放)</h2>
         <p>
           下面这个工具能读取本项目<strong>真实导出</strong>的 attention 权重(不是教学示意),
           逐步回放生成时每一层、每个头的注意力。点“读取内置样例”,再用“上一步/下一步”观察:
@@ -359,10 +597,13 @@ perplexity = std::exp(average_loss);                     <b class="cw-tag">2</b>
           <h2>小结</h2>
           <ul>
             <li>语言模型的任务:看前文,预测下一个字。链路 = Tokenizer → Embedding(+位置)→ Transformer → LM Head → 概率。</li>
+            <li><strong>LM Head</strong> = 线性层 <code>output_weight_[vocab×dim] + bias</code>,hidden 与每行模板点积得 logits;推理取 <code>all_logits.back()</code>。</li>
             <li>Tokenizer 把字符 ↔ id;Embedding 把 id 查表成可学习向量。</li>
             <li>训练:滑动窗口造“输入 → 下一字”样本(自监督);交叉熵损失反向传播,一路更新到<a class="xref" href="chapter-17.html">第 17 章</a>的 Q/K/V 矩阵和词嵌入。</li>
             <li>挑字:greedy(取最高)死板;采样(temperature / top-k / top-p)更自然有创意。</li>
             <li>自回归:把生成的字接回输入,循环往下写——这就是大模型逐字输出的原理。</li>
+            <li><strong>KV cache</strong>:每个词的 K/V 只由它自己决定、算出就不变,于是缓存历史 K/V、每步只算新词,把 n² 的重复计算降到 n;代价是显存驻留(长上下文/高并发的开销来源)。</li>
+            <li>“停下来”通常也是预测出来的:模型学会输出一个结束 token;推理程序看到它就停止生成。</li>
             <li>困惑度 = e^(平均交叉熵),衡量模型“平均在几个选项里纠结”,越低越好。</li>
           </ul>
         </section>
@@ -385,6 +626,18 @@ perplexity = std::exp(average_loss);                     <b class="cw-tag">2</b>
             <summary class="quiz__q">问题 3:困惑度从 20 降到 4 说明了什么?</summary>
             <div class="quiz__a">
               <p>说明模型对“下一个字”的预测从“平均在约 20 个候选里纠结”进步到“约 4 个里纠结”,即预测准了很多、更有把握。困惑度越低,语言模型通常越好。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:生成时为什么用 all_logits.back(),而不是第一个位置?</summary>
+            <div class="quiz__a">
+              <p>我们要预测的是“看完<strong>整段当前上文</strong>后,下一个字是谁”,这对应序列<strong>最后一个位置</strong>的 hidden 经 LM Head 得到的分布。前面位置的 logits 对应更短的上下文,训练时当额外监督用,生成时不取。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 5:KV cache 缓存的到底是什么?为什么缓存的是 K、V,而不是 Q?</summary>
+            <div class="quiz__a">
+              <p>缓存的是<strong>每一层、每个头、每个已处理位置</strong>各自的 Key 向量和 Value 向量。因为第 i 个词的 k/v 只由它自己算出、算完就不再变(causal mask 决定后面的词影响不到它),所以历史 K/V 可以存起来复用,每步只为新词算一份。而 Q 是“当前词拿去查历史”的,历史词的 Q 用完即弃、新词不会用到,所以不缓存。效果:把每步“重算整段前文”的 n² 计算降到只算新词的 n,代价是 K/V 要一直驻留显存。</p>
             </div>
           </details>
         </div>

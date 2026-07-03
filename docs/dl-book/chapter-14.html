@@ -86,14 +86,176 @@
           </p>
         </div>
 
-        <h2>3. 怎么训练:从下一词预测走一遍</h2>
+        <h3>一步里到底吃什么、吐什么?</h3>
         <p>
-          §2 只讲了“读进去时怎么更新记忆”。<strong>训练</strong>还要回答三件事:目标是什么、前向怎么按时推进、
-          误差怎么沿时间传回去。下面用最常见的任务——<strong>语言建模 / 下一词预测</strong>——把整条链路讲清楚;
-          它和<a class="xref" href="chapter-20.html">第 20 章</a>大模型预训练是同一类思想,只是规模小得多。
+          如果把 RNN 看成“<strong>主干</strong> + <strong>输出头</strong>”,那在第 <var>t</var> 步里,主干真正吃进去的是两样东西:
+          <strong>当前输入 <var>x</var><sub>t</sub></strong> 和<strong>上一刻记忆 <var>h</var><sub>t−1</sub></strong>;真正一路往后传的,是新的隐藏状态
+          <var>h</var><sub>t</sub>。如果任务是“猜下一个词”,再在 <var>h</var><sub>t</sub> 上接一个<strong>线性层 + softmax</strong>,
+          就得到这一步的输出概率 <var>ŷ</var><sub>t</sub>。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 620 250" role="img" aria-label="RNN 单步输入输出示意">
+              <defs>
+                <marker id="rnn-step" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8499bd" /></marker>
+              </defs>
+              <rect x="32" y="34" width="152" height="44" rx="10" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" />
+              <text x="108" y="53" text-anchor="middle" fill="#eef4ff" font-size="13">上一刻记忆 h<tspan baseline-shift="sub" font-size="10">t−1</tspan></text>
+              <text x="108" y="68" text-anchor="middle" fill="#b6c5e1" font-size="10">形状: d_hidden</text>
+
+              <rect x="32" y="170" width="152" height="44" rx="10" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="2" />
+              <text x="108" y="189" text-anchor="middle" fill="#eef4ff" font-size="13">当前输入 x<tspan baseline-shift="sub" font-size="10">t</tspan></text>
+              <text x="108" y="204" text-anchor="middle" fill="#b6c5e1" font-size="10">one-hot 或 embedding</text>
+
+              <rect x="236" y="92" width="156" height="70" rx="12" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="2" />
+              <text x="314" y="118" text-anchor="middle" fill="#eef4ff" font-size="13">RNN 单元</text>
+              <text x="314" y="139" text-anchor="middle" fill="#b6c5e1" font-size="10">h<tspan baseline-shift="sub" font-size="8">t</tspan> = tanh(W<tspan baseline-shift="sub" font-size="8">x</tspan>x<tspan baseline-shift="sub" font-size="8">t</tspan> + W<tspan baseline-shift="sub" font-size="8">h</tspan>h<tspan baseline-shift="sub" font-size="8">t−1</tspan> + b)</text>
+
+              <rect x="438" y="108" width="150" height="44" rx="10" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" />
+              <text x="513" y="127" text-anchor="middle" fill="#eef4ff" font-size="13">新记忆 h<tspan baseline-shift="sub" font-size="10">t</tspan></text>
+              <text x="513" y="142" text-anchor="middle" fill="#b6c5e1" font-size="10">传给下一步</text>
+
+              <rect x="438" y="34" width="150" height="44" rx="10" fill="rgba(142,240,209,0.16)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="513" y="53" text-anchor="middle" fill="#eef4ff" font-size="13">输出头</text>
+              <text x="513" y="68" text-anchor="middle" fill="#b6c5e1" font-size="10">W<tspan baseline-shift="sub" font-size="8">o</tspan>h<tspan baseline-shift="sub" font-size="8">t</tspan> → softmax → ŷ<tspan baseline-shift="sub" font-size="8">t</tspan></text>
+
+              <g stroke="#8499bd" stroke-width="2" fill="none" marker-end="url(#rnn-step)">
+                <line x1="184" y1="56" x2="236" y2="112" />
+                <line x1="184" y1="192" x2="236" y2="142" />
+                <line x1="392" y1="127" x2="438" y2="127" />
+                <line x1="514" y1="108" x2="514" y2="78" />
+              </g>
+            </svg>
+          </div>
+          <p class="figure__cap">单步 RNN:输入 x<sub>t</sub> 和上一刻记忆 h<sub>t−1</sub> 一起算出新记忆 h<sub>t</sub>。如果任务是下一词预测,再把 h<sub>t</sub> 送进输出层得到词表概率 ŷ<sub>t</sub>。</p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>名字</th><th>它是什么</th><th>典型形状</th><th>这一章里扮演什么角色</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>x<sub>t</sub></strong></td><td>当前这个词的表示</td><td><code>d_input</code>（one-hot 时常等于词表大小；embedding 时等于词向量维度）</td><td>“现在读到了什么”</td></tr>
+              <tr><td><strong>h<sub>t−1</sub></strong></td><td>上一刻隐藏状态</td><td><code>d_hidden</code></td><td>“到上一刻为止记住了什么”</td></tr>
+              <tr><td><strong>h<sub>t</sub></strong></td><td>新隐藏状态</td><td><code>d_hidden</code></td><td>更新后的记忆,继续传给下一步</td></tr>
+              <tr><td><strong>o<sub>t</sub></strong></td><td>输出层打分 logits</td><td><code>vocab_size</code></td><td>对词表里每个候选词打一个分</td></tr>
+              <tr><td><strong>ŷ<sub>t</sub></strong></td><td>softmax 后的概率分布</td><td><code>vocab_size</code></td><td>“下一个词最可能是谁”</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">真正沿时间一步步往后传的是隐藏状态 h；输出头接不接、接在每一步还是最后一步,取决于具体任务。</p>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rnn/mini_rnn_lm.cpp · 输入编码 + 输出层(精简)</figcaption>
+          <pre class="code-walk__code"><code>input_sequence[i][token_id] = 1.0;                 <b class="cw-tag">1</b>
+rnn_.Forward(input_sequence, hidden_sequence);    <b class="cw-tag">2</b>
+
+logits[pos][token_id] = output_bias_[token_id];
+logits[pos][token_id] += output_weight_[token_id][dim] *
+                         hidden_sequence[pos][dim];   <b class="cw-tag">3</b>
+auto probs = Softmax(logits[pos]);                    <b class="cw-tag">4</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>这个最小字符级实现里,每个 token 先被写成 one-hot 向量——也就是当前步的输入 <code>x_t</code>。</li>
+            <li><code>SimpleRNN::Forward</code> 吃完整条输入序列,吐出每一步的隐藏状态 <code>h_1, h_2, ...</code>。</li>
+            <li>输出头把某一步的隐藏状态 <code>h_t</code> 乘上 <code>W_o</code>、加偏置,变成对词表里每个词的打分 <code>o_t</code>。</li>
+            <li>最后过 softmax,就得到“下一个词是谁”的概率分布 <code>ŷ_t</code>。</li>
+          </ol>
+        </figure>
+        <p>
+          抓住一个最重要的区分就够了: <strong>RNN 主干负责维护“记忆” h</strong>,而<strong>输出头负责把这份记忆翻译成具体任务的答案</strong>。
+          做语言模型时,几乎每一步都接输出头去猜下一个词;做句子分类时,常常只拿最后一步的 <var>h</var><sub>T</sub> 去做一次判断。
         </p>
 
-        <h3>① 任务:每一步猜“下一个词”</h3>
+        <h2>3. 这个 RNN 语言模型怎么训练、怎么推理?</h2>
+        <p>
+          §2 讲清了“单步里怎么算一个新的隐藏状态”。可真正跑起来时,模型吃进去的不是单独一个 <var>x</var><sub>t</sub>,
+          而是一整段前缀序列;吐出来的也不是一个数,而是<strong>每个时间步各一份“下一个词概率”</strong>。
+          先把这座最小 RNN 语言模型的全貌看清,再去拆训练和推理就容易很多。
+        </p>
+
+        <h3>① 先看清整座网络</h3>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">输入 token 序列<small>例如 a b c</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">输入表示 x₁..xₜ<small>one-hot 或 embedding</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">SimpleRNN 主干<small>逐步算 h₁..hₜ</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">输出头<small>Wₒhₜ + bₒ</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">每步的下一个词概率<small>ŷ₁..ŷₜ</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">最小 RNN 语言模型 = 输入编码层 + RNN 主干 + 输出头。主干维护记忆 h,输出头把每一步的记忆翻译成词表概率。</p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>模块</th><th>吃进去什么</th><th>吐出来什么</th><th>主要可训练参数</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>输入编码层</strong></td>
+                <td>token id 序列</td>
+                <td><var>x</var><sub>1</sub>..<var>x</var><sub>T</sub></td>
+                <td>最小实现里直接用 one-hot(无额外参数);若换 embedding,就是一张词向量表</td>
+              </tr>
+              <tr>
+                <td><strong>RNN 主干</strong></td>
+                <td><var>x</var><sub>t</sub> 与 <var>h</var><sub>t−1</sub></td>
+                <td><var>h</var><sub>t</sub></td>
+                <td><var>W</var><sub>x</sub>、<var>W</var><sub>h</sub>、<var>b</var></td>
+              </tr>
+              <tr>
+                <td><strong>输出头</strong></td>
+                <td><var>h</var><sub>t</sub></td>
+                <td>logits / 概率 <var>ŷ</var><sub>t</sub></td>
+                <td><var>W</var><sub>o</sub>、<var>b</var><sub>o</sub></td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">本书配套的最小实现里,输入维度就等于词表大小(vocab_size),因为每个词先写成 one-hot 再送入 RNN。若换成第 15 章的 embedding,主干和训练流程并不会变。</p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>场景</th><th>喂给模型什么</th><th>拿哪一步输出</th><th>接下来做什么</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>训练</strong></td>
+                <td>真实前缀序列</td>
+                <td>几乎每一步的 <var>ŷ</var><sub>t</sub></td>
+                <td>和真实下一个词算交叉熵,再 BPTT 更新参数</td>
+              </tr>
+              <tr>
+                <td><strong>推理</strong></td>
+                <td>prompt + 已生成前缀</td>
+                <td>只看最后一步的 <var>ŷ</var><sub>T</sub></td>
+                <td>挑一个新词,接回输入末尾继续</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">训练和推理共用同一座网络。区别不在“网络换了”,而在“<strong>拿哪些输出、后面怎么处理</strong>”。</p>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rnn/mini_rnn_lm.cpp · Forward(精简)</figcaption>
+          <pre class="code-walk__code"><code>EncodeTokenIds(token_ids, input_sequence);         <b class="cw-tag">1</b>
+rnn_.Forward(input_sequence, hidden_sequence);    <b class="cw-tag">2</b>
+
+for (pos : 0..T)
+  logits[pos] = W_o · hidden_sequence[pos] + b_o; <b class="cw-tag">3</b>
+// 之后: Softmax(logits[pos]) 得到 ŷ_t             <b class="cw-tag">4</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>先把 token id 序列编码成每一步的输入 <code>x_t</code>。这个最小实现里用的是 one-hot。</li>
+            <li>RNN 主干顺着时间推进,得到整条隐藏状态序列 <code>h_1..h_T</code>。</li>
+            <li>输出头把每一步的隐藏状态翻译成词表大小的打分(logits)。</li>
+            <li>每一步各自过 softmax,就得到“下一个词是谁”的概率分布 <code>ŷ_t</code>。</li>
+          </ol>
+        </figure>
+
+        <h3>② 训练时的任务:每一步猜“下一个词”</h3>
         <p>
           拿句子「我 / 喜欢 / 深度 / 学习」当训练样本。RNN 从左到右读,读到第 <var>t</var> 个词时,
           手里握着隐藏状态 <var>h</var><sub>t</sub>(“到目前为止的理解”),再接一个小头
@@ -126,7 +288,7 @@
           </p>
         </div>
 
-        <h3>② 前向:按时推进,并把中间结果存下来</h3>
+        <h3>③ 前向:按时推进,并把中间结果存下来</h3>
         <p>一条样本的训练步,前向可以写成下面这个循环——和<a class="xref" href="chapter-03.html#5-逐行读懂前向传播">第 3 章前向</a>一样,只是“层”换成了“时间步”:</p>
         <ol>
           <li><strong>初始化</strong>:<var>h</var><sub>0</sub> 常设为全 0,或学一个可训练的初始向量。</li>
@@ -143,7 +305,7 @@
           第 <var>t</var> 步<strong>必须等</strong>第 <var>t</var>−1 步的 <var>h</var> 算完,所以前向天然串行——这也是后面“没法并行”的根源。
         </p>
 
-        <h3>③ 损失:每一步各算一次,再汇总</h3>
+        <h3>④ 损失:每一步各算一次,再汇总</h3>
         <p>
           第 <var>t</var> 步的预测 <var>ŷ</var><sub>t</sub> 和真实下一个词 <var>y</var><sub>t</sub> 比,用
           <strong>交叉熵</strong>(<a class="xref" href="chapter-04.html">第 4 章</a>)打分。整句的损失通常是各步之和或平均:
@@ -166,8 +328,29 @@
             </tbody>
           </table>
         </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rnn/mini_rnn_lm.cpp · TrainNextToken(精简)</figcaption>
+          <pre class="code-walk__code"><code>position_targets[i] = sample[i + 1];               <b class="cw-tag">1</b>
+position_targets.back() = target_tokens[sample_idx];
 
-        <h3>④ 反向:BPTT 与“同一套权重,梯度要相加”</h3>
+rnn_.Forward(input_sequence, hidden_sequence);     <b class="cw-tag">2</b>
+for (int t = 0; t &lt; seq_len; t++) {
+  probs = Softmax(logits_t);
+  loss += -log(probs[position_targets[t]]);        <b class="cw-tag">3</b>
+  grad_logits[target] -= 1.0;
+}
+rnn_.Backward(grad_hidden, grad_inputs);           <b class="cw-tag">4</b>
+rnn_.ApplyGradient(lr);                            <b class="cw-tag">5</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>先把每一步真正该猜的目标词准备好:前几个位置猜“下一个真实词”,最后一个位置猜样本外面接着的那个目标词。</li>
+            <li>整条前缀先走一遍前向,拿到所有时间步的隐藏状态。</li>
+            <li>每一步各算一次 softmax + 交叉熵,把损失累起来。</li>
+            <li>把所有时间步的梯度一起交给 BPTT,让误差沿时间倒着传回去。</li>
+            <li>最后更新 RNN 主干和输出头参数。也就是说,训练不是“只改最后一步”,而是整条序列一起学。</li>
+          </ol>
+        </figure>
+
+        <h3>⑤ 反向:BPTT 与“同一套权重,梯度要相加”</h3>
         <p>
           损失 <var>L</var> 对参数求导,还是<a class="xref" href="chapter-06.html#2-反向传播的三步">第 6 章反向传播</a>的三步:
           从输出层误差出发 → 沿计算图往回传 → 得到每个参数的梯度。只不过这里的“深”是<strong>沿时间展开</strong>的,
@@ -224,7 +407,7 @@
           按学习率更新 <var>W</var><sub>x</sub>、<var>W</var><sub>h</sub>、<var>W</var><sub>o</sub> 等——和全连接网络没有本质区别。
         </p>
 
-        <h3>⑤ 工程上绕不开的两招</h3>
+        <h3>⑥ 工程上绕不开的两招</h3>
         <ul>
           <li>
             <strong>截断 BPTT (Truncated BPTT)</strong>:句子很长时,既不现实也不稳定把梯度从句末一路传回句首。
@@ -242,9 +425,37 @@
             <strong>前向</strong>:<var>h</var><sub>0</sub> 起步 → 逐步算 <var>h</var><sub>t</sub>、<var>ŷ</var><sub>t</sub> 并缓存 → 各步交叉熵求和得 <var>L</var>。<br />
             <strong>反向</strong>:从 <var>t</var>=<var>T</var> 往前做 BPTT → 每步对共享权重<strong>累加梯度</strong> → (可选)裁剪 → 优化器更新。<br />
             <strong>外圈</strong>:多个句子组成 minibatch,每条序列各自前向/反传,梯度再在 batch 上平均(<a class="xref" href="chapter-09.html#6-一个-minibatch-里发生什么">第 9 章</a>)。
-            本仓库没有 RNN 训练代码,但<a class="xref" href="chapter-23.html">第 23 章</a> MNIST 的 Train 循环是同一套“前向 → 损失 → 反传 → 更新”,只是时间维换成了样本维。
+            如果你已经看过<a class="xref" href="chapter-23.html">第 23 章</a>里 MLP 的训练循环,会发现这里的骨架其实没变:仍然是“前向 → 损失 → 反传 → 更新”,只是把这套流程沿着时间步展开,并让同一组参数在每一步反复复用。
           </p>
         </div>
+
+        <h3>⑦ 推理:只看最后一步,再把输出接回去</h3>
+        <p>
+          推理时没有标准答案可抄,所以不会像训练那样对每一步都算损失。做法是:先把当前前缀整条跑一遍,
+          再<strong>只看最后一个时间步</strong>的输出,挑一个新词,把它接回输入末尾,然后整条链路再跑一遍。
+          这就是字符级生成、聊天模型逐字往外蹦的共同骨架。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rnn/mini_rnn_lm.cpp · PredictNextToken + Generate(精简)</figcaption>
+          <pre class="code-walk__code"><code>Forward(token_ids, logits);                        <b class="cw-tag">1</b>
+last_logits = logits.back();                      <b class="cw-tag">2</b>
+token_id = argmax(last_logits);                   <b class="cw-tag">3</b>
+
+generated_token_ids.push_back(token_id);          <b class="cw-tag">4</b>
+// 然后带着更长的前缀,再回到第 1 步</code></pre>
+          <ol class="code-walk__notes">
+            <li>先把当前前缀完整跑一遍前向。</li>
+            <li>虽然前向会产出每一步的 logits,但生成时真正关心的只有<strong>最后一步</strong>。</li>
+            <li>从最后一步里挑出概率最高的词(或用采样挑一个词)。</li>
+            <li>把这个新词接回输入末尾。下一轮的前缀更长,模型就继续往下写。</li>
+          </ol>
+        </figure>
+        <p>
+          训练和推理最大的差别就浓缩在这里:
+          <strong>训练</strong>时每一步都拿真实答案监督,目标是把整条序列的参数都学好;
+          <strong>推理</strong>时没有答案,只能相信自己刚吐出的词,因此错误会一步步累积。这也是为什么 RNN 一旦前面接错几个词,
+          后面就容易越写越偏。
+        </p>
 
         <h2>4. 两个硬伤</h2>
         <p>正是“链条特别长 + 严格按顺序”,带来了 RNN 的两个致命短板:</p>
@@ -266,15 +477,132 @@
 
         <h2>5. LSTM:给记忆装上“门”</h2>
         <p>
-          为了缓解“失忆”,<span class="term">LSTM(长短期记忆网络)</span>给 RNN 加了一条<strong>专门的记忆传送带
-          (cell state)</strong>,并用三个<strong>“门”</strong>来精细地管理它。门就是一个输出 0~1 的小开关(用 Sigmoid,<a class="xref" href="chapter-07.html">第 7 章</a>),
-          0 = 关掉、1 = 放行:
+          为了缓解“失忆”,<span class="term">LSTM(长短期记忆网络)</span>做的第一件事,不是简单把 RNN 变深或变宽,
+          而是把“记忆”拆成了<strong>两条通道</strong>:一条负责把长期信息尽量稳稳往前送,一条负责向外暴露“当前这一步该输出什么”。
+          然后它又加上三个<strong>“门”</strong>,按需决定“旧记忆留多少、新信息写多少、这一步拿多少出来用”。
         </p>
-        <ul>
-          <li><span class="pill">遗忘门</span>决定<strong>旧记忆丢掉多少</strong>(读到新主语,可以忘掉旧主语)。</li>
-          <li><span class="pill">输入门</span>决定<strong>新信息写入多少</strong>到记忆里。</li>
-          <li><span class="pill">输出门</span>决定<strong>这一步向外吐出多少</strong>记忆。</li>
-        </ul>
+        <h3>① 先分清:它其实有两份“状态”</h3>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>名字</th><th>记号</th><th>它像什么</th><th>主要干嘛</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>细胞状态 / 记忆传送带</strong></td>
+                <td><var>c</var><sub>t</sub></td>
+                <td>一条尽量平稳往前流的长期记忆</td>
+                <td>保存“哪些重要信息要带很久”</td>
+              </tr>
+              <tr>
+                <td><strong>隐藏状态 / 当前输出</strong></td>
+                <td><var>h</var><sub>t</sub></td>
+                <td>这一步真正对外可见的表示</td>
+                <td>拿去传给下一步、或接输出层做预测</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">普通 RNN 基本只有一份 <var>h</var> 在兼任“记忆”和“输出”;LSTM 则把这两件事拆开了: <var>c</var> 偏长期记忆,<var>h</var> 偏当前输出。</p>
+        </div>
+        <p>
+          你可以把 <var>c</var><sub>t</sub> 想成“仓库里的长期库存”,把 <var>h</var><sub>t</sub> 想成“这一步柜台上拿出来给人看的东西”。
+          LSTM 的精妙之处就在于:柜台上不一定把仓库全搬出来,仓库里的东西也不必每次全部重写。
+        </p>
+
+        <h3>② 三个门和一个“候选内容”,到底各管什么?</h3>
+        <p>
+          门不是魔法,本质上就是三个小神经层:把当前输入 <var>x</var><sub>t</sub> 和上一刻隐藏状态 <var>h</var><sub>t−1</sub>
+          拼起来,过一层线性变换,再过 <a class="xref" href="chapter-07.html">Sigmoid</a> 变成 0~1 之间的数。
+          这些数不是一个标量,而是<strong>一整条向量</strong>,和隐藏维度一样长——也就是每个记忆维度都能被单独控制。
+        </p>
+        <div class="mathblock reveal">
+          <var>f</var><sub>t</sub> = σ(<var>W</var><sub>f</sub>[<var>x</var><sub>t</sub>;<var>h</var><sub>t−1</sub>] + <var>b</var><sub>f</sub>)<br />
+          <var>i</var><sub>t</sub> = σ(<var>W</var><sub>i</sub>[<var>x</var><sub>t</sub>;<var>h</var><sub>t−1</sub>] + <var>b</var><sub>i</sub>)<br />
+          <var>g</var><sub>t</sub> = tanh(<var>W</var><sub>g</sub>[<var>x</var><sub>t</sub>;<var>h</var><sub>t−1</sub>] + <var>b</var><sub>g</sub>)<br />
+          <var>o</var><sub>t</sub> = σ(<var>W</var><sub>o</sub>[<var>x</var><sub>t</sub>;<var>h</var><sub>t−1</sub>] + <var>b</var><sub>o</sub>)
+          <span class="label"><var>f</var> = forget 遗忘门, <var>i</var> = input 输入门, <var>g</var> = 候选写入内容, <var>o</var> = output 输出门。方括号表示“把 x 和 h 拼在一起”。</span>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>量</th><th>中文直觉</th><th>接近 0 时</th><th>接近 1 时</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong><var>f</var><sub>t</sub></strong></td>
+                <td>遗忘门</td>
+                <td>旧记忆这一维大多丢掉</td>
+                <td>旧记忆这一维大多保留</td>
+              </tr>
+              <tr>
+                <td><strong><var>i</var><sub>t</sub></strong></td>
+                <td>输入门</td>
+                <td>候选新信息几乎不写入</td>
+                <td>候选新信息大量写入</td>
+              </tr>
+              <tr>
+                <td><strong><var>g</var><sub>t</sub></strong></td>
+                <td>候选内容</td>
+                <td colspan="2">“如果允许写,准备往记忆里写什么”</td>
+              </tr>
+              <tr>
+                <td><strong><var>o</var><sub>t</sub></strong></td>
+                <td>输出门</td>
+                <td>这一步少往外暴露记忆</td>
+                <td>这一步多往外暴露记忆</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>③ 一步里到底按什么顺序更新?</h3>
+        <p>
+          上面四个量算出来后,LSTM 的核心更新只有两行,却把“保留旧记忆 + 写入新记忆 + 对外输出”全做完了:
+        </p>
+        <div class="mathblock reveal">
+          <var>c</var><sub>t</sub> = <var>f</var><sub>t</sub> ⊙ <var>c</var><sub>t−1</sub> + <var>i</var><sub>t</sub> ⊙ <var>g</var><sub>t</sub><br />
+          <var>h</var><sub>t</sub> = <var>o</var><sub>t</sub> ⊙ tanh(<var>c</var><sub>t</sub>)
+          <span class="label">⊙ 是逐元素相乘。第一行先更新长期记忆 c,第二行再决定这一步把多少记忆暴露成输出 h。</span>
+        </div>
+        <ol>
+          <li><strong>先看旧仓库要留多少</strong>:遗忘门 <var>f</var><sub>t</sub> 去乘旧记忆 <var>c</var><sub>t−1</sub>。某一维若 <var>f</var>≈1,这维旧记忆基本原样保留;若 <var>f</var>≈0,这维旧记忆基本被清掉。</li>
+          <li><strong>再看新信息要写多少</strong>:输入门 <var>i</var><sub>t</sub> 控制候选内容 <var>g</var><sub>t</sub> 写进来多少。这样“写什么”和“写多少”被拆成了两件事。</li>
+          <li><strong>两者相加,形成新记忆</strong>:于是新的细胞状态 <var>c</var><sub>t</sub> 既保留了该留的旧信息,又写入了该写的新信息。</li>
+          <li><strong>最后决定往外拿多少</strong>:输出门 <var>o</var><sub>t</sub> 再从 <var>c</var><sub>t</sub> 里筛出这一步要暴露给下一层/输出头的那部分,得到 <var>h</var><sub>t</sub>。</li>
+        </ol>
+        <p>
+          你可以把这四步想成一套非常朴素的流程:先清理旧档案,再把新内容写进档案,最后从档案里抽一份摘要交给当前这一步使用。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>量(只看 1 个维度)</th><th>数值</th><th>解释</th></tr></thead>
+            <tbody>
+              <tr><td>旧记忆 <var>c</var><sub>t−1</sub></td><td>0.90</td><td>上一刻这维记忆很强</td></tr>
+              <tr><td>遗忘门 <var>f</var><sub>t</sub></td><td>0.80</td><td>保留 80% 旧记忆</td></tr>
+              <tr><td>输入门 <var>i</var><sub>t</sub></td><td>0.30</td><td>只写入一部分新信息</td></tr>
+              <tr><td>候选内容 <var>g</var><sub>t</sub></td><td>0.70</td><td>准备写入的新内容</td></tr>
+              <tr><td>新记忆 <var>c</var><sub>t</sub></td><td>0.80×0.90 + 0.30×0.70 = 0.93</td><td>旧的没丢太多,新的也补进来一点</td></tr>
+              <tr><td>输出门 <var>o</var><sub>t</sub></td><td>0.60</td><td>这一步拿出 60%</td></tr>
+              <tr><td>输出 <var>h</var><sub>t</sub></td><td>0.60 × tanh(0.93) ≈ 0.44</td><td>当前对外可见的状态</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">哪怕只看一维,也能看出 LSTM 不是“全改掉”或“全保留”,而是在每一步细粒度地调节。</p>
+        </div>
+
+        <h3>④ 为什么这样就更能记住远处?</h3>
+        <p>
+          普通 RNN 的记忆更新更像“整块重写”:每一步都要重新算一个新的 <var>h</var><sub>t</sub>,旧信息很容易在反复乘矩阵、过激活里被磨没。
+          LSTM 则把长期记忆那条主线改成了<strong>加法更新</strong>:
+        </p>
+        <div class="mathblock reveal">
+          <var>c</var><sub>t</sub> = <var>f</var><sub>t</sub> ⊙ <var>c</var><sub>t−1</sub> + ...
+          <span class="label">当某些维度的遗忘门 <var>f</var> 接近 1、输入门 <var>i</var> 接近 0 时,这几维记忆几乎能原样穿过去。</span>
+        </div>
+        <p>
+          这意味着:如果模型觉得“这个信息很重要,暂时别动”,它完全可以让某些维度的 <var>f</var>≈1、<var>i</var>≈0,
+          于是那部分记忆几乎沿着 <var>c</var> 这条线<strong>原样直通</strong>。反向传播时,梯度也更容易顺着这条线传回来,
+          不会像普通 RNN 那样在长链上一路越乘越小。它当然不是“永不衰减”的魔法,但比每步都重写整块记忆要稳得多。
+        </p>
         <div class="callout callout--analogy reveal">
           <span class="callout__title">像一条能“选择性记忆”的传送带</span>
           <p>
@@ -298,12 +626,77 @@
           </p>
         </div>
 
+        <h2>7. 对照真实代码:最小 RNN 怎么展开和回传</h2>
+        <p>
+          如果把这一章的式子落到代码,核心其实很朴素:一个 <code>SimpleRNN</code> 负责按时间推进隐藏状态,
+          一个小输出层负责“根据当前隐藏状态猜下一个词”。真正关键的,反而是<strong>把整条序列缓存下来</strong>,好让 BPTT 倒着走回来。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rnn/simple_rnn.cpp · Forward(精简)</figcaption>
+          <pre class="code-walk__code"><code>last_hidden_sequence_.assign(input_sequence.size() + 1,
+                             std::vector&lt;double&gt;(hidden_dim_, 0.0));   <b class="cw-tag">1</b>
+
+for (int t = 0; t &lt; input_sequence.size(); t++) {
+  const auto &amp;input = input_sequence[t];
+  const auto &amp;prev_hidden = last_hidden_sequence_[t];
+  for (int h = 0; h &lt; hidden_dim_; h++) {
+    double sum = bias_[h];
+    for (int i = 0; i &lt; input_dim_; i++)  sum += input_weight_[h][i] * input[i];
+    for (int i = 0; i &lt; hidden_dim_; i++) sum += hidden_weight_[h][i] * prev_hidden[i];
+    hidden[h] = std::tanh(sum);                                        <b class="cw-tag">2</b>
+  }
+  last_hidden_sequence_[t + 1] = hidden;                              <b class="cw-tag">3</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>先放一个全 0 的 <var>h</var><sub>0</sub> 进去,后面每个时间步都从这里往后接。也就是说,“记忆链”在代码里就是一整条 <code>hidden_sequence</code>。</li>
+            <li>这一行正对应第 2 节的公式:<code>tanh(Wx·x + Wh·h_prev + b)</code>。当前输入和上一刻记忆一起决定新的隐藏状态。</li>
+            <li>算完的 <var>h</var><sub>t</sub> 不只拿去喂下一步,还要<strong>缓存下来</strong>。没有这条缓存,后面就没法做 BPTT。</li>
+          </ol>
+        </figure>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rnn/simple_rnn.cpp · Backward(BPTT,精简)</figcaption>
+          <pre class="code-walk__code"><code>for (int t = grad_hidden_sequence.size() - 1; t &gt;= 0; t--) {       <b class="cw-tag">1</b>
+  std::vector&lt;double&gt; grad_hidden_total = grad_hidden_sequence[t];
+  for (int h = 0; h &lt; hidden_dim_; h++)
+    grad_hidden_total[h] += grad_from_future[h];                    <b class="cw-tag">2</b>
+
+  for (int h = 0; h &lt; hidden_dim_; h++) {
+    double dz = grad_hidden_total[h] * (1.0 - hidden[h] * hidden[h]); <b class="cw-tag">3</b>
+    grad_bias_[h] += dz;
+    for (int i = 0; i &lt; input_dim_; i++)
+      grad_input_weight_[h][i] += dz * input[i];
+    for (int i = 0; i &lt; hidden_dim_; i++) {
+      grad_hidden_weight_[h][i] += dz * prev_hidden[i];            <b class="cw-tag">4</b>
+      grad_from_prev[i] += hidden_weight_[h][i] * dz;              <b class="cw-tag">5</b>
+    }
+  }
+  grad_from_future = grad_from_prev;
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>从最后一个时间步往前循环,这就是 <strong>BPTT</strong> 的本体:时间上“倒着做反向传播”。</li>
+            <li>当前步自己的梯度,和“从未来时间步传回来的梯度”要先加在一起。因为后面的记忆也依赖现在这一步。</li>
+            <li><code>1 - h²</code> 是 tanh 的导数。链式法则到这里,和<a class="xref" href="chapter-06.html">第 6 章</a>完全同一个套路。</li>
+            <li>同一套 <var>W</var><sub>x</sub> / <var>W</var><sub>h</sub> / <var>b</var> 在每个时间步都被复用,所以梯度必须<strong>累加</strong>,不能覆盖。</li>
+            <li>这一项把误差继续沿“记忆连线”往回传到上一刻隐藏状态。也正因为它会反复相乘,长序列才容易梯度消失或爆炸。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">自己跑一个</span>
+          <p>
+            配套项目里有个最小 demo: <code>src/demo/rnn_char</code>。在 <code>src/</code> 目录编译后运行
+            <code>./bin/rnn_char --prompt "abc" --generate-num 12 --epochs 300 --hidden-dim 16 --gradient-clip-norm 1.0</code>,
+            你会看到它用一小段字符语料做“下一字预测”,训练完再把自己预测出来的字一个个接回去生成。
+            这就是本章说的 teacher forcing 训练 + 自回归生成,只是规模压到了最容易看懂的版本。
+          </p>
+        </div>
+
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
             <li>序列数据有顺序、需记忆,MLP 不合适;RNN 用<strong>隐藏状态</strong>边读边记,按时间展开成很深的网络。</li>
             <li><strong>下一词预测</strong>:每步用 <var>h</var><sub>t</sub> 猜下一个词;训练用 teacher forcing;损失多为各步交叉熵之和。</li>
             <li><strong>BPTT</strong>:展开后按时间反传;共享的 <var>W</var><sub>h</sub>、<var>W</var><sub>x</sub> 在各步的梯度要<strong>累加</strong>;长序列常用截断 BPTT + 梯度裁剪。</li>
+            <li>代码里的最小实现通常就是<strong>缓存整条隐藏状态序列</strong>,再从后往前做 BPTT;“按时间展开”在实现上真的就是一个正向循环加一个反向循环。</li>
             <li>两大硬伤:长依赖<strong>梯度消失/爆炸</strong>(记不住远处)、严格<strong>串行不能并行</strong>(慢)。</li>
             <li><strong>LSTM</strong> 用遗忘/输入/输出三个门 + 记忆传送带,让重要信息走直通车,缓解长依赖(GRU 是简化版)。</li>
             <li>但“串行慢”没解决——这正是 Transformer 用注意力取而代之的原因(第四部分)。</li>

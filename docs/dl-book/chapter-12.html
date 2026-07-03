@@ -21,6 +21,7 @@
           <em>没有逐条的标准答案</em>,只有“这一步做得好不好”的<strong>反馈(奖励)</strong>。
           这一章用大白话搭起<span class="term">强化学习(Reinforcement Learning, RL)</span>的骨架,
           让你日后读到 <a class="xref" href="chapter-20.html">RLHF、PPO(第 20 章)</a>时,不再觉得它们是凭空冒出来的黑魔法。
+          配套仓库里还有一个可运行的<strong>井字棋 Q-learning</strong> demo(<code>src/bin/rl_tictactoe</code>),本章多处会对照它的源码讲。
         </p>
 
         <section class="objectives reveal">
@@ -28,11 +29,15 @@
           <ul>
             <li>监督学习与强化学习<strong>差在哪</strong>,为什么有些任务没法靠“标注答案”解决;</li>
             <li>跟着一只<strong>走迷宫的小老鼠</strong>,建立起 状态 / 动作 / 奖励 / 策略 / 价值 的直觉;</li>
-            <li><strong>回报</strong>为什么要给未来“打折”(折扣 γ);</li>
-            <li><strong>探索与利用</strong>为什么永远是一对矛盾;</li>
-            <li><strong>Q-learning</strong> 怎么用一张表,一步步把“价值”从终点<strong>倒灌</strong>回起点(含一次手算更新);</li>
-            <li>状态太多 → <strong>DQN</strong> 用神经网络近似;动作太多 → <strong>策略梯度 / PPO</strong> 直接学策略;</li>
-            <li><a class="xref" href="chapter-20.html">第 20 章</a> 的 <strong>RLHF</strong> 其实就是一次强化学习:大模型当“策略”、奖励模型当“裁判”。</li>
+            <li><strong>回合、轨迹、时间步</strong>分别指什么,以及<strong>稀疏奖励</strong>为什么让 RL 难训;</li>
+            <li><strong>回报</strong>为什么要给未来“打折”(折扣 γ),以及<strong>贝尔曼方程</strong>如何把“长远价值”拆成“眼前一步 + 下一步”;</li>
+            <li><strong>探索与利用</strong>为什么永远是一对矛盾,ε-greedy 怎么折中;</li>
+            <li><strong>Q-learning</strong> 怎么用一张表把价值从终点<strong>倒灌</strong>回起点(含多步手算与 Q 表演化);</li>
+            <li><strong>SARSA</strong> 与 Q-learning 差在哪(on-policy / off-policy);</li>
+            <li>状态太多 → <strong>DQN</strong>(经验回放、目标网络);动作太多 → <strong>策略梯度 / Actor-Critic / PPO</strong>;</li>
+            <li>一条典型的 <strong>RL 训练循环</strong>长什么样;</li>
+            <li>对照仓库 <code>rl_tictactoe</code>(<a class="xref" href="chapter-25.html">第 25 章</a> 逐行精读),把环境、Q 表、ε-greedy、TD 更新和训练主循环<strong>对上号</strong>;</li>
+            <li><a class="xref" href="chapter-20.html">第 20 章</a> 的 <strong>RLHF</strong> 如何对应到本章五件套。</li>
           </ul>
         </section>
 
@@ -133,6 +138,59 @@
         </div>
         <p class="chain-map__note">“马尔可夫”只是说:<strong>下一步去哪,只取决于“现在这一格”,和你之前怎么绕过来的没关系</strong>。迷宫正好满足。</p>
 
+        <h3>回合、轨迹与时间步</h3>
+        <p>
+          上面那个循环会<strong>重复很多次</strong>,直到环境说“结束了”。从起点到终点的这一整趟,叫一个<span class="term">回合(episode)</span>;
+          其中每一步留下的“状态—动作—奖励”序列,叫<span class="term">轨迹(trajectory)</span>。强化学习通常不是只训一步,
+          而是让智能体<strong>跑完许多回合</strong>,从大量轨迹里统计“什么习惯长期更赚”。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 520 100" role="img" aria-label="一条回合的时间线">
+              <text x="24" y="24" fill="#b6c5e1" font-size="11">回合开始</text>
+              <circle cx="40" cy="52" r="10" fill="rgba(106,195,255,0.25)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="32" y="56" fill="#eef4ff" font-size="9">t=0</text>
+              <text x="28" y="78" fill="#8499bd" font-size="9">s₀</text>
+              <line x1="52" y1="52" x2="88" y2="52" stroke="#8499bd" stroke-width="1.5" marker-end="url(#rlarr)" />
+              <text x="58" y="44" fill="#8ef0d1" font-size="9">a₀,r₀</text>
+              <circle cx="104" cy="52" r="10" fill="rgba(106,195,255,0.25)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="96" y="56" fill="#eef4ff" font-size="9">t=1</text>
+              <text x="92" y="78" fill="#8499bd" font-size="9">s₁</text>
+              <line x1="116" y1="52" x2="152" y2="52" stroke="#8499bd" stroke-width="1.5" marker-end="url(#rlarr)" />
+              <text x="122" y="44" fill="#8ef0d1" font-size="9">a₁,r₁</text>
+              <circle cx="168" cy="52" r="10" fill="rgba(106,195,255,0.25)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="160" y="56" fill="#eef4ff" font-size="9">t=2</text>
+              <text x="156" y="78" fill="#8499bd" font-size="9">s₂</text>
+              <line x1="180" y1="52" x2="216" y2="52" stroke="#8499bd" stroke-width="1.5" marker-end="url(#rlarr)" />
+              <text x="186" y="44" fill="#ffcf72" font-size="9">a₂,r₂=+10</text>
+              <circle cx="232" cy="52" r="10" fill="rgba(255,207,114,0.35)" stroke="#ffcf72" stroke-width="2" />
+              <text x="224" y="56" fill="#eef4ff" font-size="9">结束</text>
+              <text x="218" y="78" fill="#ffcf72" font-size="9">奶酪</text>
+              <defs><marker id="rlarr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8499bd" /></marker></defs>
+              <rect x="280" y="34" width="220" height="52" rx="6" fill="rgba(139,123,255,0.08)" stroke="#8b7bff" stroke-width="1" />
+              <text x="292" y="52" fill="#eef4ff" font-size="10">轨迹 τ = (s₀,a₀,r₀) → (s₁,a₁,r₁) → (s₂,a₂,r₂)</text>
+              <text x="292" y="72" fill="#8499bd" font-size="10">算法用整条轨迹(或其中片段)更新 Q 或策略</text>
+            </svg>
+          </div>
+          <p class="figure__cap">老鼠走廊里,一次“从格子 0 走到奶酪”就是<strong>一个回合</strong>;路上每一步的 (s, a, r) 连起来就是<strong>轨迹</strong>。</p>
+        </div>
+
+        <h3>稀疏奖励:为什么 RL 常常很难训</h3>
+        <p>
+          我们的迷宫里,只有到奶酪才给 +10,中间全是 0——这叫<span class="term">稀疏奖励(sparse reward)</span>。
+          智能体在摸到奶酪之前,几乎收不到“你走对了”的信号,只能靠随机乱撞偶然碰运气;价值要从终点<strong>倒灌</strong>很多步才能传到起点(第 7 节)。
+          若改成<strong>每往右一步就给 +1</strong>,就是<span class="term">密集奖励(dense reward)</span>,学起来会快得多,但也可能学到“绕圈刷分”的歪路。
+          真实任务(下棋赢一局才 +1、对话写完才由裁判打分)往往更接近稀疏奖励,这也是 RL 比监督学习更“费样本、费调参”的原因之一。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">和代码怎么对应?</span>
+          <p>
+            仓库 <code>TicTacToeEnv</code> 就是第 3 节这个循环:<code>StepAgent</code> 让 X 落子,<code>StepOpponent*</code> 让 O 回应,
+            返回的 <code>StepResult</code> 里带着 <code>reward</code>、<code>done</code> 和下一状态的 <code>agent_state_key</code>。
+            第 12 节会把五件套和源码逐项对齐。
+          </p>
+        </div>
+
         <h2>4. 回报:为什么要给未来“打折”</h2>
         <p>
           强化学习优化的从来不是“眼前这一步的奖励”,而是<strong>从现在起、一路加下去的总奖励</strong>,叫<span class="term">回报(return)</span>。
@@ -147,6 +205,18 @@
           γ 就像“利率的反面”。取 <strong>γ = 0.9</strong>:下一步的奖励只算 0.9 倍,两步后算 0.81 倍……
           于是老鼠会倾向<strong>尽快</strong>拿到奶酪,而不是绕远路——因为绕得越久,那 +10 被折得越狠。
           γ 越接近 1 越“有耐心、看长远”;越接近 0 越“只顾眼前”。
+        </p>
+        <h3>手算一笔回报</h3>
+        <p>
+          仍用老鼠走廊、γ=0.9。假设某次轨迹是:在格子 0 往右(r=0) → 格子 1 往右(r=0) → 格子 2 往右(r=+10,回合结束)。
+          从<strong>格子 0 出发</strong>这一刻算起的回报是:
+        </p>
+        <div class="mathblock reveal">
+          <var>G</var><sub>0</sub> = 0 + 0.9·0 + 0.9²·10 = <strong>8.1</strong>
+          <span class="label">眼前 0 分 + 打折后的未来;若 γ=1 则是 10,γ=0 则只算眼前 0</span>
+        </div>
+        <p>
+          强化学习要学的,正是“从每个状态出发,<strong>按当前策略走下去,预期能拿多少 G</strong>”——这就是下一节的<strong>价值</strong>。
         </p>
 
         <h2>5. 策略与价值:到底在学什么</h2>
@@ -178,6 +248,33 @@
           </p>
         </div>
 
+        <h3>贝尔曼方程:把“长远”拆成“眼前一步 + 下一步”</h3>
+        <p>
+          价值不是拍脑袋填的,它满足一条递推关系,叫<span class="term">贝尔曼方程(Bellman equation)</span>。
+          对动作价值 Q 而言,在<strong>最优策略</strong>下可以写成:
+        </p>
+        <div class="mathblock reveal">
+          <var>Q</var>*(<var>s</var>,<var>a</var>) = E[ <var>r</var> + γ · max<sub><var>a</var>′</sub> <var>Q</var>*(<var>s</var>′,<var>a</var>′) ]
+          <span class="label">“这一步的奖励 + 打折后下一步的最好选择”= 这一步的真实长期价值</span>
+        </div>
+        <p>
+          右边正是 Q-learning 更新公式里方括号中的<strong>目标值</strong>。算法并不知道真值 <var>Q</var>*,而是用每次试错得到的
+          <code>r + γ·max Q(s′,·)</code> 去<strong>逼近</strong>它——这叫<span class="term">时序差分(TD)</span>学习:
+          不必等整局下完(像蒙特卡洛那样把 G 全加起来),每走一步就能用“下一步的估计”修正“这一步的估计”。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">Q(s,a)<small>这一步值多少?</small></div>
+              <div class="pipe__arrow">=</div>
+              <div class="pipe__box">r<small>即时奖励</small></div>
+              <div class="pipe__arrow">+</div>
+              <div class="pipe__box">γ·max Q(s′,·)<small>下一步最好还能拿多少</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">贝尔曼思想:任何一格的价值,都能拆成“眼前奖励 + 打折后的未来”。Q-learning 每次用新样本把左边往右边靠拢。</p>
+        </div>
+
         <h2>6. 探索与利用:走老路,还是试新路?</h2>
         <p>
           这里有个绕不开的两难。老鼠已经发现“往右能吃到奶酪”,那它是该<strong>一直走这条已知的路(利用 exploitation)</strong>,
@@ -192,66 +289,335 @@
           就像去餐厅:多数时候点你爱吃的招牌菜(利用),偶尔手一抖点个没吃过的(探索)——万一发现新宠呢。
           训练前期把 ε 调大(多探索),后期慢慢调小(多利用),是常见套路。
         </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>训练阶段</th><th>典型 ε</th><th>行为</th></tr></thead>
+            <tbody>
+              <tr><td>刚开始,Q 表全是 0</td><td>0.8 ~ 1.0</td><td>几乎乱走,先把走廊摸熟</td></tr>
+              <tr><td>中期,终点附近 Q 已有值</td><td>0.1 ~ 0.3</td><td>多数走已知好路,偶尔试岔路</td></tr>
+              <tr><td>后期,策略基本定型</td><td>0 ~ 0.05</td><td>几乎总走最优,只做微调</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">ε 不必手动写死,也可以按步数线性或指数衰减;核心是<strong>先广后窄</strong>。</p>
+        </div>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">掷骰子<small>随机数 u ~ [0,1]</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">u &lt; ε ?<small>探索分支</small></div>
+              <div class="pipe__arrow">是 →</div>
+              <div class="pipe__box">随机动作<small>左或右各 50%</small></div>
+              <div class="pipe__arrow" style="margin-top:8px">否 →</div>
+              <div class="pipe__box">argmax Q(s,·)<small>利用:挑 Q 最大</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">ε-greedy 决策:先决定“试新路还是走老路”,再选具体动作。</p>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rl/tabular_q_learning.cpp · SelectAction(精简)</figcaption>
+          <pre class="code-walk__code"><code>if (explore &amp;&amp; config_.epsilon &gt; 0.0) {
+  double sample = random.CreateRandom() / 1000000.0;
+  if (sample &lt; config_.epsilon)                                    <b class="cw-tag">1</b>
+    return TicTacToeEnv::ChooseRandomAction(legal_actions, ...);   // 探索
+}
+return ArgmaxQ(state_key, legal_actions);                          <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>以概率 ε 从<strong>合法动作</strong>里随机挑一个——对应本节“偶尔试新路”。</li>
+            <li>否则在合法动作里挑 Q 最大的那个——对应“走当前已知最优”。井字棋里合法动作就是棋盘上还没子的 0–8 位置。</li>
+          </ol>
+        </figure>
 
         <h2>7. Q-learning:用一张表,把价值从终点倒灌回起点</h2>
         <p>
           上面那张漂亮的价值表,老鼠<strong>怎么自己算出来</strong>?这就是 <span class="term">Q-learning</span> 干的事。
-          它维护一张 <var>Q</var>(<var>s</var>,<var>a</var>) 表(一开始全填 0),每走一步就用这条<strong>更新公式</strong>修一下对应的格子:
+          它维护一张 <var>Q</var>(<var>s</var>,<var>a</var>) 表(一开始全填 0),每走一步就用这条<strong>更新公式</strong>修一下对应的格子。
+          Q-learning 是<span class="term">离策略(off-policy)</span>的:更新时方括号里用的是“下一步<strong>理论上最好</strong>的动作”
+          (<code>max<sub>a′</sub> Q(s′,a′)</code>),不必等于你实际会走的动作——所以表学的是<strong>最优</strong>价值,和当前乱探索的策略可以脱钩。
         </p>
         <div class="mathblock reveal">
           <var>Q</var>(<var>s</var>,<var>a</var>) ← <var>Q</var>(<var>s</var>,<var>a</var>) + α · [ <var>r</var> + γ · max<sub><var>a</var>′</sub> <var>Q</var>(<var>s</var>′,<var>a</var>′) − <var>Q</var>(<var>s</var>,<var>a</var>) ]
-          <span class="label">α 是学习率(步子多大);方括号里是“新估计 − 旧估计”,叫 TD 误差</span>
+          <span class="label">α 是学习率(步子多大);方括号里是 TD 目标 − 旧估计,叫 TD 误差 δ</span>
         </div>
         <p>
-          别被公式吓到,它说的是一句大白话:<strong>“我原本以为这一步值这么多,实际走完发现(即时奖励 <var>r</var> + 打折后的‘下一步最好能有多少’),两者有差距,就朝实际那边挪一点点。”</strong>
-          其中 <code>r + γ·max Q(s′,·)</code> 是“走完这步后对价值的<strong>新估计</strong>”,减去旧的 Q 就是<strong>误差</strong>,乘以 α 挪过去。
+          公式可以读成三句话:① <code>r + γ·max Q(s′,·)</code> 是走完这一步后对价值的<strong>新估计(目标)</strong>;
+          ② 减去旧的 <var>Q</var>(<var>s</var>,<var>a</var>) 得到<strong>误差 δ</strong>; ③ 用学习率 α 把旧值往目标挪一点。
+          这和<a class="xref" href="chapter-06.html">第 6 章</a>里“预测 − 标签 = 误差,再反传”是同一套逻辑,只是这里的“标签”来自环境和自己对未来的估计,不是人工标注。
         </p>
-        <h3>手算一次更新</h3>
-        <p>设 α=0.5、γ=0.9,表全是 0。老鼠这次在<strong>格子2 往右</strong>,一步到奶酪(格子3),拿到 <var>r</var>=+10。格子3 是终点,之后没得走,所以 max Q(s′,·)=0:</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rl/tabular_q_learning.cpp · Update(精简)</figcaption>
+          <pre class="code-walk__code"><code>double old_q = QRow(state_key)[action];
+double target = reward;
+if (!terminal)
+  target += config_.gamma * MaxQ(next_state_key, legal_actions_next);  <b class="cw-tag">1</b>
+QRow(state_key)[action] = old_q + config_.alpha * (target - old_q);    <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li><code>MaxQ</code> 就是在下一状态的<strong>合法动作</strong>里取 max——正是 Q-learning 的 off-policy 目标 <code>r + γ·max Q(s′,·)</code>。</li>
+            <li><code>target − old_q</code> 是 TD 误差;乘以 α 写回 Q 表。Q 表用 <code>unordered_map&lt;state_key, vector&lt;double&gt;&gt;</code> 懒创建,没见过的局面默认全 0。</li>
+          </ol>
+        </figure>
+
+        <h3>初始 Q 表长什么样</h3>
+        <p>四格走廊、每格两个动作(左/右),表只有 4×2=8 个格子。训练开始前通常<strong>全 0</strong>(表示“还不知道好不好”):</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead><tr><th></th><th>往左</th><th>往右</th></tr></thead>
+            <tbody>
+              <tr><td>格子0</td><td>0</td><td>0</td></tr>
+              <tr><td>格子1</td><td>0</td><td>0</td></tr>
+              <tr><td>格子2</td><td>0</td><td>0</td></tr>
+              <tr><td>格子3(终点)</td><td>—</td><td>—</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">终点不再行动,一般不更新。边界格“往左”可能撞墙(本例简化为不动且 r=0)。</p>
+        </div>
+
+        <h3>手算:从终点往回渗</h3>
+        <p>设 α=0.5、γ=0.9,表全是 0。下面按<strong>时间顺序</strong>看几次关键更新(老鼠每次都碰巧选对了“往右”):</p>
+        <p><strong>第 1 次</strong>——在格子2 往右,一步到奶酪, <var>r</var>=+10。格子3 是终点,之后没得走, max Q(格子3,·)=0:</p>
         <div class="mathblock reveal">
           <var>Q</var>(格子2, 右) ← 0 + 0.5 · [ 10 + 0.9·0 − 0 ] = <strong>5</strong>
-          <span class="label">第一次:从 0 挪到 5(只挪了“误差 10”的一半,因为 α=0.5)</span>
         </div>
-        <p>下次它又走这一步,旧 Q 已经是 5 了:</p>
+        <p><strong>第 2 次</strong>——又在格子2 往右(旧 Q 已是 5):</p>
         <div class="mathblock reveal">
-          <var>Q</var>(格子2, 右) ← 5 + 0.5 · [ 10 + 0 − 5 ] = <strong>7.5</strong> → 再来 8.75 → 9.375 → … → <strong>逼近 10</strong>
-          <span class="label">反复走,Q(格子2,右) 会稳稳收敛到真值 10</span>
+          <var>Q</var>(格子2, 右) ← 5 + 0.5 · [ 10 − 5 ] = <strong>7.5</strong> → 再来几次 → <strong>10</strong>
+        </div>
+        <p><strong>第 3 次</strong>——在格子1 往右,到格子2, <var>r</var>=0。此时 max Q(格子2,·) 已是 10:</p>
+        <div class="mathblock reveal">
+          <var>Q</var>(格子1, 右) ← 0 + 0.5 · [ 0 + 0.9·10 − 0 ] = <strong>4.5</strong> → … → <strong>9</strong>
+        </div>
+        <p><strong>第 4 次</strong>——在格子0 往右,到格子1, <var>r</var>=0, max Q(格子1,·)=9:</p>
+        <div class="mathblock reveal">
+          <var>Q</var>(格子0, 右) ← 0 + 0.5 · [ 0 + 0.9·9 − 0 ] = <strong>4.05</strong> → … → <strong>8.1</strong>
+        </div>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 480 120" role="img" aria-label="价值从终点倒灌">
+              <rect x="30" y="50" width="70" height="40" rx="6" fill="rgba(106,195,255,0.15)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="65" y="75" text-anchor="middle" fill="#eef4ff" font-size="11">Q₀右≈8.1</text>
+              <line x1="102" y1="70" x2="138" y2="70" stroke="#8ef0d1" stroke-width="2" marker-end="url(#rlarr2)" />
+              <rect x="144" y="50" width="70" height="40" rx="6" fill="rgba(106,195,255,0.2)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="179" y="75" text-anchor="middle" fill="#eef4ff" font-size="11">Q₁右≈9</text>
+              <line x1="216" y1="70" x2="252" y2="70" stroke="#8ef0d1" stroke-width="2" marker-end="url(#rlarr2)" />
+              <rect x="258" y="50" width="70" height="40" rx="6" fill="rgba(106,195,255,0.28)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="293" y="75" text-anchor="middle" fill="#eef4ff" font-size="11">Q₂右=10</text>
+              <line x1="330" y1="70" x2="366" y2="70" stroke="#ffcf72" stroke-width="2" marker-end="url(#rlarr2)" />
+              <rect x="372" y="50" width="70" height="40" rx="6" fill="rgba(255,207,114,0.35)" stroke="#ffcf72" stroke-width="2" />
+              <text x="407" y="75" text-anchor="middle" fill="#eef4ff" font-size="11">+10</text>
+              <defs><marker id="rlarr2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" /></marker></defs>
+              <text x="240" y="28" text-anchor="middle" fill="#8499bd" font-size="11">价值沿“往右”链从奶酪 ← 一格一格回传</text>
+            </svg>
+          </div>
+          <p class="figure__cap">一旦终点旁的动作学到真值,它就成为前一格更新公式里的“下一步价值”,形成<strong>倒灌</strong>。</p>
         </div>
         <p>
-          精彩的地方在于<strong>“倒灌”</strong>:一旦 Q(格子2,右) 变成了 10,下次老鼠在<strong>格子1 往右</strong>走到格子2 时,
-          那条更新里的 <code>max Q(格子2,·)</code> 就不再是 0,而是 10——于是 Q(格子1,右) 开始朝 <code>0 + 0.9·10 = 9</code> 爬。
-          同理再倒灌到格子0。<strong>价值就这样从奶酪所在的终点,一格一格地往回“渗”到起点</strong>,最后长成第 5 节那张表。没有人给过任何一格“标准答案”,全是试错 + 这条更新公式自己算出来的。
+          精彩之处在于:<strong>没有人给过任何一格“标准答案”</strong>,全是试错 + 贝尔曼式更新自己算出来的。
+          若老鼠偶尔往左绕远,只要最终还能到奶酪,终点附近的 Q 仍会先涨起来,再慢慢纠正中间格子的估计。
         </p>
+
+        <h3>收敛后的 Q 表与策略</h3>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead><tr><th></th><th>往左</th><th>往右</th><th>最优动作</th></tr></thead>
+            <tbody>
+              <tr><td>格子0</td><td>≈0</td><td class="is-hot">8.1</td><td><strong>右</strong></td></tr>
+              <tr><td>格子1</td><td>≈0</td><td class="is-hot">9</td><td><strong>右</strong></td></tr>
+              <tr><td>格子2</td><td>≈0</td><td class="is-hot">10</td><td><strong>右</strong></td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">每行挑 Q 最大的动作,就得到策略“一路向右”。<strong>学 Q,策略免费送。</strong></p>
+        </div>
+
+        <h3>SARSA:若下一步按“实际会走的动作”来更新</h3>
+        <p>
+          与 Q-learning 几乎并列的还有 <span class="term">SARSA</span>。差别只在方括号里:不用 <code>max Q(s′,·)</code>,
+          而用<strong>下一步真正采取的动作</strong> <var>a</var>′ 的 Q 值:
+        </p>
+        <div class="mathblock reveal">
+          <var>Q</var>(<var>s</var>,<var>a</var>) ← <var>Q</var>(<var>s</var>,<var>a</var>) + α · [ <var>r</var> + γ · <var>Q</var>(<var>s</var>′,<var>a</var>′) − <var>Q</var>(<var>s</var>,<var>a</var>) ]
+          <span class="label">SARSA 是 on-policy:估计的是“当前这套出招习惯(含探索)”下的价值</span>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th></th><th>Q-learning</th><th>SARSA</th></tr></thead>
+            <tbody>
+              <tr><td><strong>下一步用谁</strong></td><td>max<sub>a′</sub> Q(s′,a′) 最优动作</td><td>实际会执行的 a′</td></tr>
+              <tr><td><strong>on / off-policy</strong></td><td>off-policy(可边乱探索边学最优)</td><td>on-policy(学的是当前策略)</td></tr>
+              <tr><td><strong>直觉</strong></td><td>“假设以后每一步都走最好”</td><td>“假设以后仍按现在的习惯(含偶尔乱试)走”</td></tr>
+              <tr><td><strong>悬崖行走</strong></td><td>更敢贴悬崖抄近路(因假设以后最优)</td><td>更保守绕远(因担心探索时踩空)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>走廊例子太简单,两者差别不大;遇到<strong>探索有风险</strong>的环境,SARSA 往往更稳,Q-learning 往往更激进。知道这对概念,读论文时就不会被 on/off-policy 绊住。</p>
 
         <h2>8. 状态太多怎么办:用神经网络近似(DQN)</h2>
         <p>
           四格走廊只有 4 个状态,一张表绰绰有余。可要是状态是<strong>一整屏雅达利游戏画面</strong>呢?可能的画面近乎无穷,表根本存不下。
-          办法很自然:<strong>别存表了,训一个神经网络来“预测” Q 值</strong>——输入状态,输出每个动作的 Q。这就是大名鼎鼎的
+          办法很自然:<strong>别存表了,训一个神经网络 <var>Q</var><sub>θ</sub>(<var>s</var>,<var>a</var>)</strong>——输入状态(像素),输出每个动作的 Q 值。这就是
           <span class="term">DQN(Deep Q-Network)</span>。
         </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">游戏画面 s<small>高维状态</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">卷积 / 全连接<small>Q 网络 θ</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">[Q(s,←), Q(s,→), …]<small>每个动作一个分数</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">argmax 或 ε-greedy<small>选动作</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">表 lookup 换成函数逼近:同一个网络在所有状态上<strong>共享参数</strong>,相似画面会得到相似 Q。</p>
+        </div>
         <p>
-          注意:这里用的还是你<a class="xref" href="chapter-03.html">第 3 章</a>的网络、<a class="xref" href="chapter-06.html">第 6 章</a>的反向传播,<strong>一套新算法都不需要</strong>。
-          唯一的不同是“训练目标”从哪来:监督学习的目标是人工标签,而 DQN 的目标是上面那条更新公式里的
-          <code>r + γ·max Q(s′,·)</code>——<strong>目标来自智能体自己的试错,而不是人工标注</strong>。DeepMind 当年用它让 AI 仅看画面就学会玩几十种雅达利游戏,一战成名。
+          训练目标和 Q-learning 一样,只是把表上的 TD 误差换成<strong>网络的均方误差</strong>:
+        </p>
+        <div class="mathblock reveal">
+          损失 <var>L</var>(θ) = [ <var>Q</var><sub>θ</sub>(<var>s</var>,<var>a</var>) − ( <var>r</var> + γ · max<sub><var>a</var>′</sub> <var>Q</var><sub>θ<sup>−</sup></sub>(<var>s</var>′,<var>a</var>′) ) ]²
+          <span class="label">θ<sup>−</sup> 是目标网络(下面解释);对 θ 做<a class="xref" href="chapter-06.html">反向传播</a>最小化 L</span>
+        </div>
+        <p>
+          注意:这里用的还是<a class="xref" href="chapter-03.html">第 3 章</a>的网络、<a class="xref" href="chapter-06.html">第 6 章</a>的反向传播,<strong>没有发明新优化器</strong>。
+          区别只在于“标签”从人工标注换成了<strong>自己试错算出来的 TD 目标</strong> <code>r + γ·max Q(s′,·)</code>。
         </p>
 
-        <h2>9. 动作太多怎么办:直接学策略(策略梯度 / PPO)</h2>
+        <h3>经验回放(experience replay)</h3>
+        <p>
+          智能体连续玩游戏的相邻帧<strong>高度相关</strong>(这一帧和下一帧几乎一样),若每步都立刻拿来训网络,梯度会严重偏、训练不稳。
+          DQN 把每次转移 (<var>s</var>,<var>a</var>,<var>r</var>,<var>s</var>′) 存进一个<strong>回放缓冲区</strong>,训练时<strong>随机抽一批旧经验</strong>来算损失——
+          相当于把轨迹打碎、混洗,让样本更接近独立同分布,和<a class="xref" href="chapter-11.html">第 11 章</a>里打乱 minibatch 是同一精神。
+        </p>
+
+        <h3>目标网络(target network)</h3>
+        <p>
+          若 TD 目标里的 <var>Q</var>(<var>s</var>′,·) 和正在更新的 <var>Q</var><sub>θ</sub> 是<strong>同一个网络</strong>,目标会跟着参数一起动,
+          像“追自己的影子”,容易发散。DQN 复制一份<strong>目标网络</strong> θ<sup>−</sup>,每隔固定步数才从主网络同步一次;
+          算目标时用 θ<sup>−</sup>,算预测时用 θ——目标在一段时间内<strong>保持相对稳定</strong>,训练就稳得多。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">和 supervised 对照</span>
+          <p>
+            监督学习:输入 x,标签 y 固定,最小化 (ŷ−y)²。<br />
+            DQN:输入 s,动作 a,标签是<strong>动态的</strong> r+γ·max Q(s′,·),且随训练慢慢变准——这叫<strong>自举(bootstrapping)</strong>。
+          </p>
+        </div>
+        <p>DeepMind 2015 年用这套办法让 AI 仅看像素就学会玩几十种雅达利游戏,是深度强化学习的里程碑。</p>
+
+        <h2>9. 动作太多怎么办:直接学策略(策略梯度 / Actor-Critic / PPO)</h2>
         <p>
           Q-learning 每步都要 <code>max Q(s′,·)</code>——把所有动作比一遍挑最大。动作只有“左/右”时没问题;
           可要是动作空间<strong>大得吓人</strong>呢?比如语言模型每一步要从<strong>几万个 token</strong> 里挑一个(<a class="xref" href="chapter-19.html">第 19 章</a>),
-          挨个比 Q 就不现实了。
+          为每个 token 维护 Q 并取 max,代价和存储都难以接受。
         </p>
         <p>
-          这时换个思路:<strong>不去费劲估每个动作的价值,而是直接学那个“出招习惯”——策略 π<sub>θ</sub>(<var>a</var>|<var>s</var>) 本身</strong>,用一个网络输出各动作的概率。
-          训练信号也很直白:<strong>某个动作最终带来的回报高,就调参数让它下次概率更大;回报低,就调小</strong>。这类方法叫<span class="term">策略梯度(policy gradient)</span>。
-        </p>
-        <p>
-          纯策略梯度容易“步子迈太大”——一次更新就把好不容易学到的策略带偏。<span class="term">PPO(近端策略优化)</span>给它加了两道保险:
-          <strong>裁剪</strong>(每次更新幅度别超过一个范围)和 <strong>KL 惩罚</strong>(新策略别离旧策略太远)。
-          正因为“稳”,PPO 成了<a class="xref" href="chapter-20.html">第 20 章</a> RLHF 里最常用的算法。
+          这时换个思路:<strong>不去估每个动作的价值,直接学“出招习惯” π<sub>θ</sub>(<var>a</var>|<var>s</var>)</strong>——
+          一个网络输入状态,输出<strong>动作概率分布</strong>(语言模型里就是下一个 token 的 softmax)。
         </p>
 
-        <h2>10. 回到大模型:RLHF 就是一次强化学习</h2>
+        <h3>策略梯度:回报高,就加大该动作概率</h3>
+        <p>
+          最朴素的 <span class="term">REINFORCE</span> 算法:跑完一整局,若总回报 <var>G</var> 高,就对轨迹里每个 (<var>s</var>,<var>a</var>)
+          <strong>增大 π<sub>θ</sub>(a|s)</strong>;回报低就减小。梯度里会出现 log π,直觉是“在概率空间里往高回报方向挪”。
+          缺点:要<strong>等一局结束</strong>才有 <var>G</var>,方差大、学得慢。
+        </p>
+        <div class="mathblock reveal">
+          ∇<sub>θ</sub> J ≈ Σ<sub>t</sub> ∇<sub>θ</sub> log π<sub>θ</sub>(<var>a</var><sub>t</sub>|<var>s</var><sub>t</sub>) · <var>G</var><sub>t</sub>
+          <span class="label">不必背公式:记住“log 概率 × 回报”驱动参数更新即可</span>
+        </div>
+
+        <h3>Actor-Critic:演员出招,评论家打分</h3>
+        <p>
+          <span class="term">Actor-Critic</span> 把两个网络拆开:<strong>Actor</strong>(演员) 就是策略 π<sub>θ</sub>,负责选动作;
+          <strong>Critic</strong>(评论家) 估计价值 <var>V</var>(<var>s</var>) 或 <var>Q</var>(<var>s</var>,<var>a</var>),负责告诉演员“这一步比平均好还是差”。
+          用<strong>优势 A = G − V(s)</strong>(或 TD 残差) 代替裸回报 <var>G</var>,方差小很多,也不必等整局结束——
+          Critic 用 TD 更新,Critic 的反馈指导 Actor 更新。DQN 只有“评论家味”;Actor-Critic 是<strong>策略 + 价值</strong>双头并进。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">状态 s</div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">Actor π<sub>θ</sub><small>选动作 a</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">环境<small>r, s′</small></div>
+              <div class="pipe__arrow">↺</div>
+              <div class="pipe__box">Critic V<sub>φ</sub><small>这步好不好?</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">Actor 改策略,Critic 提供基线/优势,两者一起训。</p>
+        </div>
+
+        <h3>PPO:别一次更新迈太大</h3>
+        <p>
+          纯策略梯度容易“步子迈太大”——一次更新就把好不容易学到的策略带偏。<span class="term">PPO(近端策略优化)</span> 在 Actor-Critic 上加两道保险:
+        </p>
+        <ul>
+          <li><strong>裁剪(clipping)</strong>:新策略相对旧策略的概率比若偏离 1 太远,就把梯度<strong>截断</strong>,单次更新幅度受限;</li>
+          <li><strong>KL 惩罚</strong>:显式惩罚新策略与旧策略的 KL 散度,别让分布一夜之间面目全非。</li>
+        </ul>
+        <p>
+          正因为<strong>实现简单、训练相对稳定</strong>,PPO 成了<a class="xref" href="chapter-20.html">第 20 章</a> RLHF 与许多大模型后训练里的默认选项之一。
+          语言场景里,动作是离散 token,策略网络就是<strong>语言模型本身</strong>,输出层 softmax 即 π(·|s)。
+        </p>
+
+        <h2>10. 一条典型的 RL 训练循环</h2>
+        <p>把前面散落的步骤收成一张“流水线”,大多数 Q-learning / DQN / PPO 代码都是这个壳子:</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">强化学习训练循环 · 示意伪代码</figcaption>
+          <pre class="code-walk__code"><code>初始化 策略 π 或 Q 网络、环境 env
+重复很多个回合:
+  s = env.reset()                          // 回到起点           <b class="cw-tag">1</b>
+  重复直到回合结束:
+    用 ε-greedy 或 π 采样动作 a            // 探索或按策略出招   <b class="cw-tag">2</b>
+    s′, r, done = env.step(a)              // 环境反馈           <b class="cw-tag">3</b>
+    存 (s,a,r,s′) 到回放缓冲区(若用 DQN)   <b class="cw-tag">4</b>
+    用 TD 目标或策略梯度更新参数           // 核心学习步         <b class="cw-tag">5</b>
+    s = s′
+  可选: 衰减 ε、同步目标网络、记录回报曲线</code></pre>
+          <ol class="code-walk__notes">
+            <li>每个回合从初始状态开始;老鼠走廊里就是回到格子 0。</li>
+            <li>前期多探索,后期多利用;PPO 则按概率分布采样 token。</li>
+            <li>环境只给即时奖励和下一状态,不给“标准动作”。</li>
+            <li>表格式 Q-learning 可跳过;DQN 几乎必用回放。</li>
+            <li>Q-learning 改表/网络;PPO 改 Actor,并常同时训 Critic。</li>
+          </ol>
+        </figure>
+        <p>
+          与<a class="xref" href="chapter-06.html">第 6 章</a>监督训练对比:那里 epoch 遍历<strong>固定数据集</strong>;这里数据是智能体<strong>自己玩出来的</strong>,
+          分布随策略变化(<span class="term">非平稳</span>),所以更依赖回放、目标网络、PPO 裁剪这类稳定技巧。
+        </p>
+        <p>
+          上面是通用壳子。仓库里 <code>TabularQLearning::RunEpisode</code> 把“智能体走一步 → 对手走一步 → 更新 Q”直接写进了一个函数:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rl/tabular_q_learning.cpp · RunEpisode(精简)</figcaption>
+          <pre class="code-walk__code"><code>env.Reset();
+while (!env.IsTerminal()) {
+  int state_key = env.AgentStateKey();
+  int action = SelectAction(state_key, env.LegalActions(), true);     <b class="cw-tag">1</b>
+  env.StepAgent(action, agent_step);
+  if (agent_step.done) {
+    Update(state_key, action, agent_step.reward, -1, {}, true);      <b class="cw-tag">2</b>
+    break;
+  }
+  env.StepOpponentRandom(opponent_action, opponent_step);            <b class="cw-tag">3</b>
+  if (opponent_step.done) {
+    Update(state_key, action, opponent_step.reward, -1, {}, true);
+    break;
+  }
+  Update(state_key, action, 0.0, opponent_step.agent_state_key,
+         env.LegalActions(), false);                                  <b class="cw-tag">4</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li><code>Reset</code> 开新回合;<code>SelectAction(..., true)</code> 开启 ε-greedy 探索。</li>
+            <li>若智能体这一步直接终局(如井字棋连成三子),立刻用终局奖励更新 Q,<code>terminal=true</code>。</li>
+            <li>否则环境再让对手走一步——训练时对手可以是随机或 minimax 最优。</li>
+            <li>中间步奖励为 0,但要把“对手走完后、轮到我再走”的局面当作 <var>s</var>′ 去 bootstrap 未来价值。</li>
+          </ol>
+        </figure>
+
+        <h2>11. 回到大模型:RLHF 就是一次强化学习</h2>
         <p>
           绕了一圈,回到本书主线。你在<a class="xref" href="chapter-20.html">第 20 章</a>会读到,大模型训练的最后一步 <strong>RLHF(基于人类反馈的强化学习)</strong>,
           用的正是本章这套语言——只要把五个概念对号入座,它立刻就不神秘了:
@@ -266,21 +632,119 @@
             拴得太紧或奖励模型有偏,就会付出<a class="xref" href="chapter-20.html">第 20 章</a>说的<strong>对齐税</strong>——更安全听话,但某些能力、创造性可能打折。
           </p>
         </div>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">预训练 LM<small>初始策略</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">生成回答<small>轨迹 τ</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">奖励模型<small>打分 r</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">PPO 更新 π<small>+ KL 约束</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">RLHF 流水线:模型自己采样动作序列,裁判给延迟奖励,PPO 调策略。细节见<a class="xref" href="chapter-20.html">第 20 章</a>。</p>
+        </div>
         <p>
           最近火的<strong>推理模型</strong>(如 o1、DeepSeek-R1)也沿用这套:对数学、代码这类<strong>有标准答案</strong>的题,
           用“答对给正奖励、答错给负奖励”的强化学习,让模型自己摸索出好的推理套路(<a class="xref" href="chapter-20.html">第 20 章</a>)。可见强化学习这套“靠奖励试错”的思想,正越来越深地嵌进大模型。
         </p>
 
+        <h2>12. 对照真实代码:井字棋环境怎么拼起来</h2>
+        <p>
+          第 2 节的老鼠走廊是纸上例子;配套项目用<strong>井字棋</strong>把同一套 MDP 五件套落到代码里。
+          下面是与源码的简要对照;<strong>完整逐行导读</strong>见实战部分的
+          <a class="xref" href="chapter-25.html">第 25 章</a>(与<a class="xref" href="chapter-23.html">第 23 章</a> MNIST、
+          <a class="xref" href="chapter-24.html">第 24 章</a> mini-LM 同一写法)。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>本章概念</th><th>老鼠走廊</th><th>井字棋 demo</th><th>代码位置</th></tr></thead>
+            <tbody>
+              <tr><td>状态 <var>s</var></td><td>在第几格</td><td>当前棋盘局面</td><td><code>TicTacToeEnv::AgentStateKey()</code></td></tr>
+              <tr><td>动作 <var>a</var></td><td>左 / 右</td><td>落子位置 0–8</td><td><code>LegalActions()</code></td></tr>
+              <tr><td>奖励 <var>r</var></td><td>到奶酪 +10</td><td>赢 +1 / 输 −1 / 和 0</td><td><code>ApplyMove</code> 里赋值</td></tr>
+              <tr><td>策略 / Q</td><td>Q 表</td><td><code>unordered_map</code> Q 表</td><td><code>TabularQLearning</code></td></tr>
+              <tr><td>训练循环</td><td>多回合试错</td><td><code>RunEpisode</code> × N</td><td><code>demo/rl_tictactoe/main.cpp</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rl/tic_tac_toe_env.cpp · 状态编码(精简)</figcaption>
+          <pre class="code-walk__code"><code>int TicTacToeEnv::EncodeBoardKey(const std::array&lt;Cell, 9&gt; &amp;board) {
+  int key = 0, base = 1;
+  for (int i = 0; i &lt; 9; i++) {
+    key += static_cast&lt;int&gt;(board[i]) * base;   // 空=0, X=1, O=2   <b class="cw-tag">1</b>
+    base *= 3;
+  }
+  return key;
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>9 格棋盘按三进制压成一个整数 <code>state_key</code>,当作 Q 表的行号。只在<strong>轮到 X 落子</strong>时编码,和 Q-learning“从智能体视角”一致。</li>
+          </ol>
+        </figure>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rl/tic_tac_toe_env.cpp · ApplyMove 奖励(精简)</figcaption>
+          <pre class="code-walk__code"><code>board_[action] = player;
+result_ = CheckResult();
+out.done = IsTerminal();
+
+if (result_ == GameResult::X_WIN)      out.reward = 1.0;              <b class="cw-tag">1</b>
+else if (result_ == GameResult::O_WIN)   out.reward = -1.0;
+else if (result_ == GameResult::DRAW)    out.reward = 0.0;
+
+if (!out.done) {
+  agent_turn_ = !agent_turn_;
+  out.agent_state_key = agent_turn_ ? AgentStateKey() : -1;           <b class="cw-tag">2</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>环境只负责“判输赢 + 给分”,不负责教该怎么下——这正是 RL 与监督学习的分界。</li>
+            <li>若没结束,交换行棋方,并返回<strong>下一轮智能体行动时</strong>的 <code>state_key</code>,供 <code>RunEpisode</code> 做 TD 更新。</li>
+          </ol>
+        </figure>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/rl_tictactoe/main.cpp · 训练入口(精简)</figcaption>
+          <pre class="code-walk__code"><code>TabularQLearning agent;
+agent.Init(config);                              // α, γ, ε 等超参     <b class="cw-tag">1</b>
+TicTacToeEnv env;
+
+for (int episode = 0; episode &lt; option.episodes; episode++) {
+  agent.RunEpisode(env, train_opponent, stats);  // 第 10 节内循环       <b class="cw-tag">2</b>
+  agent.DecayEpsilon();
+}
+auto eval = agent.Evaluate(env, OpponentType::RANDOM, eval_games); <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>超参与第 7 节手算一致:<code>alpha=0.5</code>、<code>gamma=0.99</code>、ε 从 1.0 指数衰减到 0.05。</li>
+            <li>外层只是重复很多<strong>回合</strong>;每回合内的 reset / step / update 全在 <code>RunEpisode</code> 里。</li>
+            <li><code>Evaluate</code> 把 <code>explore=false</code>,纯 greedy 下棋,统计对随机 / 最优对手的胜率和。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">自己跑一个</span>
+          <p>
+            配套项目 demo 在 <code>src/demo/rl_tictactoe</code>。在 <code>src/</code> 目录编译后运行:
+            <code>./bin/rl_tictactoe --episodes 30000 --eval-games 1000 --show-sample</code>。
+            默认 3 万局对<strong>随机对手</strong>训练后,greedy 评估约 <strong>99%</strong> 胜率;对 minimax 最优对手可<strong>稳守和棋</strong>。
+            加 <code>--play</code> 可在 stdin 里下一盘(你是 O,输入 0–8)。
+            更全的参数说明见仓库 <code>docs/rl-tictactoe-demo.md</code>;逐行精读见 <a class="xref" href="chapter-25.html">第 25 章</a>。
+          </p>
+        </div>
+
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>强化学习是与监督学习并列的<strong>另一种学习范式</strong>:没有标准答案,靠<strong>奖励</strong>在试错中学策略,适合决策、控制、对齐。</li>
-            <li>五件套(MDP):状态 s、动作 a、奖励 r、转移、折扣 γ;优化的是<strong>打过折的长期回报</strong>,不是眼前一步。</li>
-            <li><strong>策略 π</strong> 是“该怎么出招”,<strong>价值 Q</strong> 是“这么出招值多少”;知道了 Q,策略就是“每步挑 Q 最大的动作”。</li>
-            <li><strong>探索 vs 利用</strong>:ε-greedy——多数走最优,偶尔随机试。</li>
-            <li><strong>Q-learning</strong> 用一条更新公式,把价值从终点一格格<strong>倒灌</strong>回起点;状态太多就用 <strong>DQN</strong> 拿神经网络近似 Q。</li>
-            <li>动作空间巨大(如词表)时,用<strong>策略梯度 / PPO</strong> 直接学策略;PPO 靠裁剪 + KL 保持稳定。</li>
-            <li><strong>RLHF</strong>(<a class="xref" href="chapter-20.html">第 20 章</a>)= 把大模型当策略、奖励模型当裁判的一次强化学习。</li>
+            <li>强化学习是与监督学习并列的<strong>另一种学习范式</strong>:没有标准答案,靠<strong>奖励</strong>在试错中学策略;数据由智能体与环境<strong>在线</strong>产生。</li>
+            <li>五件套(MDP):状态 s、动作 a、奖励 r、转移、折扣 γ;<strong>回合</strong>是从起点到结束的一趟,<strong>轨迹</strong>是其中的 (s,a,r) 序列。</li>
+            <li>优化目标是<strong>打过折的长期回报 G</strong>;贝尔曼方程把价值写成“即时奖励 + 打折后的下一步”。</li>
+            <li><strong>策略 π</strong> 是“该怎么出招”,<strong>价值 Q</strong> 是“这么出招值多少”;知道 Q 后策略即 argmax<sub>a</sub> Q(s,a)。</li>
+            <li><strong>稀疏奖励</strong>让学习变慢;ε-greedy 在探索与利用间折中。</li>
+            <li><strong>Q-learning</strong>(off-policy) 用 TD 目标把价值从终点<strong>倒灌</strong>回起点;<strong>SARSA</strong>(on-policy) 用实际下一步动作更新。</li>
+            <li>状态太多 → <strong>DQN</strong>:神经网络近似 Q,配合<strong>经验回放</strong>与<strong>目标网络</strong>稳定训练。</li>
+            <li>动作太多 → <strong>策略梯度 / Actor-Critic / PPO</strong> 直接学 π;PPO 用裁剪与 KL 限制更新幅度。</li>
+            <li>典型训练循环:reset → 采样动作 → step → 更新 Q;<code>RunEpisode</code> 封装内层,<code>main.cpp</code> 外层重复多回合。</li>
+            <li><strong>RLHF</strong>(<a class="xref" href="chapter-20.html">第 20 章</a>)= 大模型当策略、奖励模型当裁判、PPO 当优化器的一次强化学习。</li>
+            <li><code>TicTacToeEnv</code> + <code>TabularQLearning</code> 见 <code>src/demo/rl_tictactoe</code>;<a class="xref" href="chapter-25.html">第 25 章</a> 逐行精读。</li>
           </ul>
         </section>
 
@@ -320,6 +784,24 @@
             <summary class="quiz__q">问题 6:把 RLHF 翻译成 RL 的五件套,分别对应什么?</summary>
             <div class="quiz__a">
               <p>状态 = 问题 + 已生成前缀;动作 = 下一个 token;奖励 = 整段回答由奖励模型打的分;策略 = 当前大模型;算法 = PPO(加 KL 约束别偏离原模型太远)。本质就是让大模型在“对话环境”里试错,朝“人更喜欢”的方向调。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 7:Q-learning 和 SARSA 更新公式差在哪?各是 on-policy 还是 off-policy?</summary>
+            <div class="quiz__a">
+              <p>Q-learning 用 <code>r + γ·max<sub>a′</sub> Q(s′,a′)</code>,假设下一步走最优,是 <strong>off-policy</strong>;SARSA 用 <code>r + γ·Q(s′,a′)</code>,其中 a′ 是实际会执行的动作,是 <strong>on-policy</strong>。前者更激进地学最优价值,后者更贴合当前探索策略。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 8:DQN 为什么要经验回放和目标网络?</summary>
+            <div class="quiz__a">
+              <p>相邻游戏帧高度相关,立刻训练会导致梯度偏、不稳定;<strong>回放</strong>把旧转移打乱再抽样,样本更接近独立。<strong>目标网络</strong>让 TD 目标在一段时间内固定,避免“追自己移动的靶子”导致发散。两者都是为深度 Q 学习提供稳定训练。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 9:仓库里井字棋 demo 的 state_key 怎么编码?奖励在哪给?</summary>
+            <div class="quiz__a">
+              <p><code>TicTacToeEnv::EncodeBoardKey</code> 把 9 格棋盘按三进制(空/X/O → 0/1/2)压成一个整数,作为 Q 表键;只在轮到智能体 X 时编码。<code>ApplyMove</code> 在判赢/判输/判和后设置 <code>reward=+1/−1/0</code>,中间步为 0。<code>TabularQLearning::Update</code> 用第 7 节 TD 公式写回 Q 表。</p>
             </div>
           </details>
         </div>

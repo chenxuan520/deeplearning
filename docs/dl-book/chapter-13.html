@@ -89,6 +89,88 @@
             <li>加偏置、过激活(<a class="xref" href="chapter-07.html">第 7 章</a>),得到特征图上的一个像素。<strong>同一个核扫遍全图</strong>——这就是下一节的“权重共享”。</li>
           </ol>
         </figure>
+        <h3>② 一层卷积层,到底吃什么、吐什么?</h3>
+        <p>
+          真正的卷积层,输入和输出都不是“一串数”,而更像<strong>一摞图</strong>。
+          灰度图可以看成 <strong>1 个通道</strong>,彩图通常是 <strong>R/G/B 3 个通道</strong>。卷积层吃进去的是
+          <code>[输入通道数, 高, 宽]</code>,吐出来的是 <code>[输出通道数, 高, 宽]</code>。所谓“输出通道数”,其实就是
+          <strong>你放了多少个卷积核</strong>——一个核产出一张特征图,多个核就产出多张特征图。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>名字</th><th>形状怎么记</th><th>直觉</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>输入图</strong></td>
+                <td><code>[C_in, H, W]</code></td>
+                <td>一张灰度图是 1 个通道;一张 RGB 图是 3 个通道</td>
+              </tr>
+              <tr>
+                <td><strong>一个卷积核</strong></td>
+                <td><code>[C_in, K_h, K_w]</code></td>
+                <td>它不只看 2D 小块,而是会把<strong>所有输入通道一起看</strong></td>
+              </tr>
+              <tr>
+                <td><strong>一层卷积</strong></td>
+                <td><code>C_out</code> 组核 + <code>C_out</code> 个偏置</td>
+                <td>放几组核,就产出几张特征图</td>
+              </tr>
+              <tr>
+                <td><strong>输出特征图</strong></td>
+                <td><code>[C_out, H_out, W_out]</code></td>
+                <td>每个输出通道对应“某一种花纹检测器”的响应图</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">最小例子:MNIST 是 1 通道 28×28。若你放 8 个 5×5 核,这一层的输出就是 8 张特征图。</p>
+        </div>
+        <p>
+          这也解释了一个容易忽略的点:如果输入是 RGB 三通道,那<strong>一个核不是 3×3,而是 3×3×3</strong>。
+          它要同时看红、绿、蓝三张图在同一位置的小块,再把它们合成一个输出值。也就是说,输出的“1 个通道”
+          往往是对<strong>所有输入通道共同加工</strong>的结果,不是只盯某个单独颜色通道。
+        </p>
+        <h3>③ stride 和 padding 在控制什么?</h3>
+        <p>
+          卷积核并不是只能“一格一格慢慢挪”。它每次往右/往下滑几格,由 <span class="term">stride(步幅)</span> 决定;
+          边缘要不要先补一圈 0,由 <span class="term">padding(填充)</span> 决定。它们直接决定输出特征图的大小:
+        </p>
+        <div class="mathblock reveal">
+          <var>H</var><sub>out</sub> = <span class="frac"><span><var>H</var> + 2<var>P</var> − <var>K</var><sub>h</sub></span><span><var>S</var></span></span> + 1,
+          <var>W</var><sub>out</sub> = <span class="frac"><span><var>W</var> + 2<var>P</var> − <var>K</var><sub>w</sub></span><span><var>S</var></span></span> + 1
+          <span class="label"><var>S</var> = stride, <var>P</var> = padding。实际实现里要求整除,否则边缘会对不上格子。</span>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>设置</th><th>效果</th><th>直觉</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>stride 小</strong></td>
+                <td>输出更大,看得更细</td>
+                <td>像拿放大镜一格一格细扫</td>
+              </tr>
+              <tr>
+                <td><strong>stride 大</strong></td>
+                <td>输出更小,算得更快</td>
+                <td>像跳着看,更快但更粗</td>
+              </tr>
+              <tr>
+                <td><strong>padding = 0</strong></td>
+                <td>图会越卷越小</td>
+                <td>边缘没有额外空间,核滑不到最外侧外面去</td>
+              </tr>
+              <tr>
+                <td><strong>padding > 0</strong></td>
+                <td>可以保住边缘信息,也更容易让输出尺寸不变</td>
+                <td>先给图片外面垫一圈“缓冲带”</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">比如 28×28 输入,5×5 卷积核,若 stride=1 且 padding=2,输出仍是 28×28;这就是很多 CNN 的常见设定。</p>
+        </div>
 
         <h2>3. 权重共享:参数暴减,还自带平移不变</h2>
         <p>这看似普通的“滑动”,一举解决了第 1 节的三个硬伤:</p>
@@ -114,6 +196,48 @@
           <li><strong>缩小尺寸</strong>、减少后续计算;</li>
           <li><strong>增强鲁棒性</strong>:物体轻微移动几个像素,最大值往往不变,识别更稳。</li>
         </ul>
+        <p>
+          很多人第一次学 CNN 会把池化和卷积混在一起。其实它们分工完全不同:
+          <strong>卷积层负责“学花纹检测器”</strong>,有可训练权重;而<strong>池化层通常没有可训练参数</strong>,只是把已经提出来的特征图
+          缩一缩、留一个代表值。前者更像“发现有什么”,后者更像“把发现过的东西压缩保存”。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>层</th><th>有没有可训练权重</th><th>主要做什么</th><th>输出尺寸</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>卷积</strong></td>
+                <td>有</td>
+                <td>检测边缘 / 纹理 / 局部部件</td>
+                <td>由 kernel / stride / padding 决定</td>
+              </tr>
+              <tr>
+                <td><strong>池化</strong></td>
+                <td>通常没有</td>
+                <td>下采样,压缩空间尺寸,提高鲁棒性</td>
+                <td>通常明显变小</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/cnn/max_pool2d.cpp · Forward(精简)</figcaption>
+          <pre class="code-walk__code"><code>for (int out_row = 0; out_row &lt; out_height; out_row++)
+  for (int out_col = 0; out_col &lt; out_width; out_col++) {
+    best_value = -∞;                                      <b class="cw-tag">1</b>
+    for (int kh = 0; kh &lt; kernel_height_; kh++)
+      for (int kw = 0; kw &lt; kernel_width_; kw++)
+        best_value = max(best_value, input[channel][row][col]); <b class="cw-tag">2</b>
+    output[channel][out_row][out_col] = best_value;      <b class="cw-tag">3</b>
+  }</code></pre>
+          <ol class="code-walk__notes">
+            <li>先假设这一小块里最好的值还不存在。</li>
+            <li>扫完整个 2×2 或 3×3 小窗口,只留下最大的那个。</li>
+            <li>输出层拿到的是“这一小块里最强的响应”。所以池化不是在学新特征,而是在<strong>保留最显著的旧特征</strong>。</li>
+          </ol>
+        </figure>
 
         <h2>5. 通道与堆叠:从边缘到物体</h2>
         <p>
@@ -135,6 +259,190 @@
           </div>
           <p class="figure__cap">越往深层,特征越抽象——从边缘,到部件,到整个物体。这正是<a class="xref" href="chapter-00.html">第 0 章</a>说的“网络自己逐层提炼特征”。</p>
         </div>
+        <p>
+          这里再强调一次“通道”这个词,因为它在 CNN 里会出现两次、容易混:
+          <strong>输入通道</strong>说的是“进来有几张图一起看”(灰度 1 张、RGB 3 张);
+          <strong>输出通道</strong>说的是“这一层产出了几张特征图”,它等于<strong>卷积核的个数</strong>。
+          所以“通道变多”通常不是原图变彩了,而是模型在同一层里学会了更多种花纹检测器。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>场景</th><th>输入通道</th><th>卷积核个数</th><th>输出通道</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>MNIST 灰度图</td>
+                <td>1</td>
+                <td>8</td>
+                <td>8</td>
+              </tr>
+              <tr>
+                <td>RGB 彩图</td>
+                <td>3</td>
+                <td>32</td>
+                <td>32</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">“输出通道 = 核的个数”是最该记住的一条。一个核负责一种花纹,多个核并排工作,就得到多张特征图。</p>
+        </div>
+        <h3>② 最后怎么从特征图变成“这是一只猫 / 这是数字 7”?</h3>
+        <p>
+          卷积、池化一路做下来,拿到的还是<strong>特征图</strong>,不是最终类别。真正把“看见了哪些边缘 / 部件”翻译成
+          “这张图属于哪一类”的,通常是最后那几层<strong>分类头</strong>:先把多通道特征图<strong>拉平(flatten)</strong>,
+          再接一层或几层全连接,最后在类别数上输出 logits,过 softmax 得到概率。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">输入图片<small>28×28×1</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">卷积 + 激活<small>提局部特征</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">池化<small>缩小特征图</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">Flatten<small>把多张特征图摊平</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">线性层<small>汇总成类别分数</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">CNN 前半段做的是“提特征”,最后那层线性层做的是“拿这些特征做决策”。</p>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/cnn/mini_cnn_classifier.cpp · Flatten + 分类头(精简)</figcaption>
+          <pre class="code-walk__code"><code>pool_.Forward(relu_output, pooled_output);         <b class="cw-tag">1</b>
+flattened = FlattenTensor(pooled_output);          <b class="cw-tag">2</b>
+
+for (int cls = 0; cls &lt; class_num_; cls++) {
+  logits[cls] = fc_bias_[cls];
+  for (int dim = 0; dim &lt; flattened_dim_; dim++)
+    logits[cls] += fc_weight_[cls][dim] * flattened[dim]; <b class="cw-tag">3</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>先把池化后的特征图准备好。到这一步为止,模型还只是在“看图提特征”。</li>
+            <li><code>Flatten</code> 把多通道二维特征图摊成一个长向量,方便交给普通线性层。</li>
+            <li>最后那层线性层把“看见了哪些特征”汇总成每个类别的分数(logits)。这一步和<a class="xref" href="chapter-23.html">MNIST 的 MLP 输出层</a>在本质上是一回事。</li>
+          </ol>
+        </figure>
+
+        <h3>③ 这个最小 CNN 分类网络长什么样?</h3>
+        <p>
+          到这里,卷积、池化、分类头这些零件都认识了。把它们按顺序拼起来,一个最小 CNN 分类器其实非常朴素:
+          <strong>图片进来 → 卷积提局部特征 → ReLU 加非线性 → 池化缩图 → Flatten 拉平 → 线性层输出类别分数</strong>。
+          下面拿本仓库的 MNIST 小 CNN 举一个具体尺寸的例子(1 通道 28×28 输入,8 个 5×5 卷积核,padding=2,2×2 池化):
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">输入图 X<small>1 × 28 × 28</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">Conv + ReLU<small>8 × 28 × 28</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">MaxPool 2×2<small>8 × 14 × 14</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">Flatten<small>1568 维</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">Linear + Softmax<small>10 类概率</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">这就是本仓库最小 CNN 的完整前向链路:前半段提特征,最后一层把特征翻译成类别概率。</p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>模块</th><th>吃进去什么</th><th>吐出来什么</th><th>主要可训练参数</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>卷积层</strong></td>
+                <td>图片张量 <code>[C_in, H, W]</code></td>
+                <td>特征图 <code>[C_out, H_out, W_out]</code></td>
+                <td>卷积核权重 + 偏置</td>
+              </tr>
+              <tr>
+                <td><strong>ReLU</strong></td>
+                <td>卷积输出</td>
+                <td>非负特征图</td>
+                <td>无</td>
+              </tr>
+              <tr>
+                <td><strong>池化层</strong></td>
+                <td>特征图</td>
+                <td>尺寸更小的特征图</td>
+                <td>通常无</td>
+              </tr>
+              <tr>
+                <td><strong>Flatten</strong></td>
+                <td>多通道二维特征图</td>
+                <td>一条长向量</td>
+                <td>无</td>
+              </tr>
+              <tr>
+                <td><strong>分类头</strong></td>
+                <td>Flatten 后向量</td>
+                <td>10 个 logits / 概率</td>
+                <td>全连接权重 + 偏置</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">所以 CNN 并不是“只有卷积”。真正完整的分类网络是“卷积特征提取器 + 最后的分类头”一起组成的。</p>
+        </div>
+
+        <h3>④ 训练和推理各在做什么?</h3>
+        <p>
+          训练和推理用的是<strong>同一座 CNN</strong>,区别不在网络换了,而在于后面有没有标签、有无反向传播。
+          训练时,图片和正确类别一起喂进去,前向算出 10 类概率,再用交叉熵算损失,把误差一路反着传回去更新卷积层和分类头;
+          推理时则只有图片,做完前向后直接挑概率最高的那一类即可。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>场景</th><th>喂给模型什么</th><th>拿到什么</th><th>后面还做什么</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>训练</strong></td>
+                <td>图片 + 正确标签</td>
+                <td>10 类概率</td>
+                <td>算交叉熵,再反向传播更新参数</td>
+              </tr>
+              <tr>
+                <td><strong>推理</strong></td>
+                <td>只有图片</td>
+                <td>10 类概率</td>
+                <td>取概率最高的类别作为答案</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/cnn/mini_cnn_classifier.cpp · Train(精简)</figcaption>
+          <pre class="code-walk__code"><code>ForwardFeature(image, conv_output, relu_output,
+               pooled_output, flattened);                 <b class="cw-tag">1</b>
+logits = fc(flattened);
+probs = Softmax(logits);                                 <b class="cw-tag">2</b>
+loss += -log(max(probs[label], 1e-12));                 <b class="cw-tag">3</b>
+
+grad_logits = probs;
+grad_logits[label] -= 1.0;                              <b class="cw-tag">4</b>
+pool_.Backward(grad_pooled, grad_relu);                 <b class="cw-tag">5</b>
+conv_.Backward(grad_conv, grad_input, learning_rate);   <b class="cw-tag">6</b>
+fc_weight_[cls][dim] -= learning_rate * grad_fc_weight[cls][dim]; <b class="cw-tag">7</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>先做完整前向:卷积、ReLU、池化、Flatten,拿到分类头要吃的特征向量。</li>
+            <li>分类头把特征向量变成 10 个类别分数,再经 softmax 变成概率。</li>
+            <li>用正确标签算交叉熵损失。分类头越不相信正确类别,损失越大。</li>
+            <li>softmax + 交叉熵的梯度仍是那条老规律: <code>probs - one-hot(label)</code>。</li>
+            <li>误差先从分类头传回池化输出,再经池化层把梯度路由回“刚才赢了的那个位置”。</li>
+            <li>再经过 ReLU 门控回到卷积层,更新卷积核权重。</li>
+            <li>最后把全连接分类头也一起更新。也就是说,训练时卷积层和最后分类头是<strong>整网一起学</strong>的。</li>
+          </ol>
+        </figure>
+        <p>
+          推理时就简单得多:只做前向,拿到 10 类概率后取最大值。你可以把它理解成“训练 = 前向 + 反向 + 更新”,
+          “推理 = 只有前向 + 选最大”。这和前面学过的 MLP 没有本质区别,区别只是前半段从“全连接提特征”换成了“卷积提特征”。
+        </p>
 
         <h2>6. 一眼看过经典结构</h2>
         <p>套路都是“<strong>卷积/池化叠很多层做特征,最后接几层全连接做分类</strong>”,只是越做越深、越做越巧:</p>
@@ -152,6 +460,63 @@
           </p>
         </div>
 
+        <h2>7. 对照真实代码:最小 CNN 怎么拼起来</h2>
+        <p>
+          上面讲的“卷积 → 激活 → 池化 → 分类头”,在配套项目里就被写成了一个非常小的分类器。
+          你可以把它理解成:前半段负责<strong>在图上找特征</strong>,最后一层负责<strong>拿这些特征做分类</strong>。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/cnn/conv2d.cpp · Forward(精简)</figcaption>
+          <pre class="code-walk__code"><code>output = MakeTensor3D(output_channels_, out_height, out_width);
+for (int oc = 0; oc &lt; output_channels_; oc++)
+  for (int out_row = 0; out_row &lt; out_height; out_row++)
+    for (int out_col = 0; out_col &lt; out_width; out_col++) {
+      double sum = bias_[oc];                                  <b class="cw-tag">1</b>
+      int base_row = out_row * stride_, base_col = out_col * stride_;
+      for (int ic = 0; ic &lt; input_channels_; ic++)
+        for (int kh = 0; kh &lt; kernel_height_; kh++)
+          for (int kw = 0; kw &lt; kernel_width_; kw++)
+            sum += weight_[oc][ic][kh][kw] *                  <b class="cw-tag">2</b>
+                   last_input_padded_[ic][base_row + kh][base_col + kw];
+      output[oc][out_row][out_col] = sum;                     <b class="cw-tag">3</b>
+    }</code></pre>
+          <ol class="code-walk__notes">
+            <li>一个输出通道 = 一组卷积核权重 + 一个偏置。你可以把它想成“一个专门找某种花纹的检测器”。</li>
+            <li>这正是第 2 节那句“小块和核做点积”:对每个输出位置,把覆盖到的局部区域和核逐项相乘再求和。</li>
+            <li>三层循环扫完整张图,同一组权重在所有位置反复复用。<strong>这就是权重共享</strong>,也是 CNN 参数少、能适应平移的根源。</li>
+          </ol>
+        </figure>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/cnn/mini_cnn_classifier.cpp · 特征提取 + 分类头(精简)</figcaption>
+          <pre class="code-walk__code"><code>conv_.Forward(input, conv_output);                 <b class="cw-tag">1</b>
+relu_output = conv_output;
+ApplyRelu(relu_output);                           <b class="cw-tag">2</b>
+pool_.Forward(relu_output, pooled_output);       <b class="cw-tag">3</b>
+flattened = FlattenTensor(pooled_output);        <b class="cw-tag">4</b>
+
+for (int cls = 0; cls &lt; class_num_; cls++) {
+  logits[cls] = fc_bias_[cls];
+  for (int dim = 0; dim &lt; flattened_dim_; dim++)
+    logits[cls] += fc_weight_[cls][dim] * flattened[dim];
+}                                                 <b class="cw-tag">5</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>先做卷积:拿一组小核在图上滑,把边缘、角点之类的局部花纹提出来。</li>
+            <li>再过 ReLU(<a class="xref" href="chapter-07.html">第 7 章</a>),让网络有非线性表达能力。</li>
+            <li>池化把特征图“缩一缩”,减少后面计算,也让轻微平移更不容易把结果弄乱。</li>
+            <li>把多通道特征图拉平成一个长向量,准备交给分类头。</li>
+            <li>最后还是一层全连接:把“看见了哪些局部特征”汇总成 10 类分数。也就是说,<strong>CNN 不是不要全连接,而是把它放在最后做决策</strong>。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">自己跑一个</span>
+          <p>
+            配套项目里有个最小 demo: <code>src/demo/cnn_mnist</code>。在 <code>src/</code> 目录编译后运行
+            <code>./bin/cnn_mnist --epochs 3 --train-limit 2000 --test-limit 1000</code>,
+            你会看到它直接在 MNIST 上训练一个 <code>conv → ReLU → max-pool → linear</code> 的小 CNN。
+            它和<a class="xref" href="chapter-23.html">第 23 章</a>做的是同一个“识别手写数字”任务,只是前半段的特征提取器从 MLP 换成了 CNN。
+          </p>
+        </div>
+
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
@@ -160,6 +525,7 @@
             <li><strong>权重共享</strong>(同核扫全图):参数暴减 + 保留空间 + <strong>平移不变</strong>。</li>
             <li><strong>池化</strong>缩小特征图、增强鲁棒;<strong>多核 = 多通道</strong>,堆叠出“边缘→部件→物体”的层级特征。</li>
             <li>经典结构 LeNet/AlexNet/ResNet 都是“卷积池化做特征 + 全连接分类”,ResNet 用残差堆到很深。</li>
+            <li>配套项目里的最小 CNN 骨架就是 <strong>conv → ReLU → max-pool → linear</strong>:前半段提特征,最后一层做分类。</li>
           </ul>
         </section>
 

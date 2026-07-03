@@ -2,7 +2,7 @@
 
 本仓库是一个小型的 C++ 深度学习 / 神经网络学习项目。
 当前仓库已经不是纯头文件库：`src/deeplearning/` 下同时包含头文件和 `.cpp` 实现，并通过 CMake 构建静态库。
-除原有的 MLP / MNIST 路线外，仓库现在还包含一个最小 Transformer / 字符级语言模型实验链路。
+除原有的 MLP / MNIST 路线外，仓库现在还包含最小 CNN / RNN / Transformer 实验链路。
 
 在此仓库中未找到代理/编辑器规则文件（没有 `.cursor/rules/`，`.trae/rules/` 或 `.github/copilot-instructions.md`）。
 
@@ -14,6 +14,10 @@
   - `mnist`：MNIST 手写数字 10 类分类示例。默认 `784→128→64→10` / ReLU + He +
     Softmax + Cross-Entropy + Adam + `WarmupCosineLR`，batch=64，5 epochs，
     测试准确率约 97.8%。详见 `docs/mnist-demo.md`。
+  - `cnn_mnist`：最小 CNN (`conv + ReLU + max-pool + linear`) 在 MNIST 子集上的训练示例
+  - `rnn_char`：最小字符级 RNN 语言模型示例（BPTT 训练 / 生成 / perplexity）
+  - `rl_tictactoe`：井字棋 Q-learning 示例（表格式 TD 学习 / ε-greedy / 对战随机或最优对手）
+  - `word2vec`：skip-gram / CBOW + 负采样词向量训练，见 `docs/word2vec-demo.md`
   - `transformer_char`：最小字符级语言模型示例
   - `optimizer_bench`：不同 optimizer 在 MNIST 上的对比 benchmark
     （SGD / Momentum / Adam / AdamW / RMSProp / Adam+CosineLR）
@@ -99,6 +103,32 @@
   - `MiniTransformerLM::Config` 统一描述模型结构与主干配置
   - demo 可导出真实 attention 权重 JSON 供静态讲解页观察
 
+**CNN**
+- `src/deeplearning/cnn/` 下提供最小 CNN 相关模块：
+  - `Conv2D`
+  - `MaxPool2D`
+  - `MiniCNNClassifier`
+- `MiniCNNClassifier` 当前支持：
+  - 单层卷积 + ReLU + 最大池化 + 线性分类头
+  - 单样本 SGD 训练与 softmax 预测
+  - 适合 MNIST / 小型二维图像教学示例
+
+**RNN**
+- `src/deeplearning/rnn/` 下提供最小 RNN 相关模块：
+  - `SimpleRNN`
+  - `MiniRNNLM`
+- `MiniRNNLM` 当前支持：
+  - tanh RNN 按时间展开前向
+  - BPTT 训练
+  - next-token loss / perplexity / greedy 生成
+  - 可选梯度裁剪与 LR scheduler
+
+**强化学习 (RL)**
+- `src/deeplearning/rl/` 下提供最小表格式强化学习模块：
+  - `TicTacToeEnv`：井字棋环境（状态编码、合法动作、随机/最优对手、渲染）
+  - `TabularQLearning`：Q-learning（ε-greedy、TD 更新、训练回合、评估胜率）
+- `rl_tictactoe` demo 默认训练 30000 局 vs 随机对手，greedy 评估约 **99%+ 胜率**（对随机）且对最优对手可稳守和棋。
+
 **可选绘图**
 - `src/drawtool/matplot_draw.h` 中的 `drawtool::MatplotDraw` 在使用 `_MATPLOTLIB_CPP_LOAD_` 编译时绘制损失曲线。
 - 该宏由 CMake 选项 `ENABLE_DRAW` 控制（见 `src/CMakeLists.txt`）。
@@ -123,8 +153,12 @@
 - 可执行文件配置为通过子项目中的 `EXECUTABLE_OUTPUT_PATH` 放置在 `src/bin/` 下：
   - 测试：`src/bin/test_bin`（来自 `src/test/CMakeLists.txt`）
   - MNIST 演示：`src/bin/mnist`（来自 `src/demo/mnist/CMakeLists.txt`）
+  - CNN on MNIST 演示：`src/bin/cnn_mnist`（来自 `src/demo/cnn_mnist/CMakeLists.txt`）
   - 字符级 Transformer 演示：`src/bin/transformer_char`（来自 `src/demo/transformer_char/CMakeLists.txt`）
+  - 字符级 RNN 演示：`src/bin/rnn_char`（来自 `src/demo/rnn_char/CMakeLists.txt`）
   - 优化器对比 benchmark: `src/bin/optimizer_bench`（来自 `src/demo/optimizer_bench/CMakeLists.txt`）
+  - 井字棋 Q-learning：`src/bin/rl_tictactoe`（来自 `src/demo/rl_tictactoe/CMakeLists.txt`）
+  - word2vec 词向量训练：`src/bin/word2vec`（来自 `src/demo/word2vec/CMakeLists.txt`）
 
 ### 运行
 
@@ -165,6 +199,66 @@
   - `--no-save-model`
   - `--eval-only`
   - `--force-train`
+
+**CNN on MNIST 演示**
+- 在工作目录 `src/` 下运行：
+  - `./bin/cnn_mnist`
+- 常用参数：
+  - `--epochs`
+  - `--learning-rate`
+  - `--train-limit`
+  - `--test-limit`
+  - `--rand-seed`
+  - `--conv-channels`
+  - `--kernel-size`
+
+**RNN 字符级演示**
+- 在工作目录 `src/` 下运行：
+  - `./bin/rnn_char`
+- 常用参数：
+  - `--prompt`
+  - `--generate-num`
+  - `--epochs`
+  - `--learning-rate`
+  - `--rand-seed`
+  - `--hidden-dim`
+  - `--context-size`
+  - `--gradient-clip-norm`
+  - `--corpus`
+  - `--corpus-file`
+
+**井字棋 Q-learning 演示**
+- 在工作目录 `src/` 下运行：
+  - `./bin/rl_tictactoe`
+  - `./bin/word2vec`（`--query-word cat --compare-word dog` 等，见 `docs/word2vec-demo.md`）
+- 常用参数：
+  - `--episodes`
+  - `--eval-games`
+  - `--rand-seed`
+  - `--alpha`
+  - `--gamma`
+  - `--epsilon`
+  - `--epsilon-min`
+  - `--epsilon-decay`
+  - `--opponent random|optimal`
+  - `--show-sample`
+  - `--play`（stdin 人机对战，你是 O）
+- 详见 `docs/rl-tictactoe-demo.md`。
+
+**word2vec 演示**
+- 在工作目录 `src/` 下运行：
+  - `./bin/word2vec`
+- 常用参数：
+  - `--corpus-file`
+  - `--mode skip-gram|cbow`
+  - `--embed-dim`
+  - `--window-size`
+  - `--negative-num`
+  - `--epochs`
+  - `--query-word`
+  - `--compare-word`
+  - `--show-pairs`
+- 详见 `docs/word2vec-demo.md`。
 
 **静态讲解页**
 - `docs/attention-guide/index.html` 是一个独立的 HTML/CSS/JS 静态讲解站。
@@ -271,7 +365,7 @@
 
 ## 7) 交互式电子书 (`docs/dl-book/`)
 
-配套深度学习入门电子书，静态站点位于 `docs/dl-book/`，共 25 章 + 术语表，含交互示意图与实验台。
+配套深度学习入门电子书，静态站点位于 `docs/dl-book/`，共 26 章 + 术语表，含交互示意图与实验台。
 
 ### 链接
 - **在线阅读 (GitHub Pages)**: https://chenxuan520.github.io/deeplearning/

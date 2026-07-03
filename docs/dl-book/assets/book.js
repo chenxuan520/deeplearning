@@ -34,10 +34,12 @@
     { num: "21", title: "大模型的工程与基础设施", file: "chapter-21.html", part: "第五部分 · 通往大模型" },
     { num: "22", title: "用好大模型:提示、RAG 与 Agent", file: "chapter-22.html", part: "第五部分 · 通往大模型" },
     { num: "23", title: "MNIST 实战:第一、二部分", file: "chapter-23.html", part: "第六部分 · 代码实战" },
-    { num: "24", title: "mini-LM 实战:第四、五部分", file: "chapter-24.html", part: "第六部分 · 代码实战" }
+    { num: "24", title: "mini-LM 实战:第四、五部分", file: "chapter-24.html", part: "第六部分 · 代码实战" },
+    { num: "25", title: "井字棋 Q-learning 实战:强化学习", file: "chapter-25.html", part: "第六部分 · 代码实战" }
   ];
 
   var STORAGE_LAST = "dlbook:last";
+  var REPO_URL = "https://github.com/chenxuan520/deeplearning";
 
   var store = {
     get: function (k) {
@@ -283,8 +285,14 @@
     menuBtn.setAttribute("aria-label", "打开目录");
     menuBtn.addEventListener("click", toc.open);
 
-    var home = el("a", "book-header__home", "深度学习入门");
-    home.href = "index.html";
+    var home = el("a", "book-header__home");
+    home.href = REPO_URL;
+    home.target = "_blank";
+    home.rel = "noopener noreferrer";
+    home.setAttribute("aria-label", "在 GitHub 上查看源码");
+    home.innerHTML =
+      '<span class="book-header__home-icon">' + GITHUB_ICON + "</span>" +
+      '<span class="book-header__home-text">深度学习入门</span>';
 
     var current = el("span", "book-header__current", currentLabel);
     var pct = el("span", "book-header__pct");
@@ -410,6 +418,9 @@
 
   var SEARCH_ICON =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg>';
+
+  var GITHUB_ICON =
+    '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
 
   // 把一章的 .chapter__inner 拆成若干"以小标题分段"的可搜索片段
   function extractSections(inner, ch, chIdx) {
@@ -608,6 +619,320 @@
     });
   }
 
+  // ---------- 术语表:点击弹出释义 ----------
+  var GLOSSARY = { byId: {}, matchers: [], ready: false, loading: null };
+
+  // 正文自动匹配只用 data-aliases; 这些太泛, 即便写了别名也不链
+  var GLOSSARY_ALIAS_BLOCK = {
+    model: true, token: true, tokens: true, training: true, train: true, data: true,
+    hidden: true, attention: true, parameter: true, parameters: true, vector: true,
+    matrix: true, tensor: true, tensors: true, quantization: true, softmax: true,
+    embedding: true, encoder: true, decoder: true, loss: true, gradient: true,
+    模型: true, 训练: true, 数据: true, 参数: true, 向量: true, 矩阵: true, 张量: true,
+    量化: true, 分词: true, 点积: true, 归一化: true, 注意力: true, 嵌入: true,
+    编码: true, 解码: true, 损失: true, 梯度: true, 前馈: true, 残差: true
+  };
+
+  function glossaryAliasOk(alias) {
+    if (!alias) return false;
+    var a = alias.trim();
+    if (!a) return false;
+    if (GLOSSARY_ALIAS_BLOCK[a.toLowerCase()]) return false;
+    if (/^[a-zA-Z_]+$/.test(a) && a.length < 4) return false;
+    if (/^[\u4e00-\u9fff]+$/.test(a) && a.length < 3) return false;
+    return true;
+  }
+
+  function glossaryBasePath() {
+    var path = location.pathname || "";
+    if (/\/docs\/dl-book\//.test(path) || /\/dl-book\//.test(path)) return "glossary.html";
+    if (/chapter-\d+\.html$/.test(path) || /glossary\.html$/.test(path) || /index\.html$/.test(path)) {
+      return "glossary.html";
+    }
+    return "glossary.html";
+  }
+
+  function parseGlossaryItem(li) {
+    if (!li.id) return null;
+    var strong = li.querySelector("strong");
+    var title = strong ? strong.textContent.replace(/\s+/g, " ").trim() : li.id;
+    var link = li.querySelector("a[href]");
+    var href = link ? link.getAttribute("href") : ("glossary.html#" + li.id);
+    // 释义里常有 “预测 → 对答案 → …”, 不能按 → 截断; 先去掉章节链接再取 — 后正文
+    var clone = li.cloneNode(true);
+    [].slice.call(clone.querySelectorAll("a")).forEach(function (a) { a.remove(); });
+    var raw = (clone.textContent || "").replace(/\s+/g, " ").trim();
+    var def = "";
+    var dash = raw.indexOf("—");
+    if (dash !== -1) def = raw.slice(dash + 1).trim();
+    var aliases = (li.getAttribute("data-aliases") || "").split(",").map(function (s) {
+      return s.trim();
+    }).filter(glossaryAliasOk);
+    var seen = {};
+    aliases = aliases.filter(function (a) {
+      var k = a.toLowerCase();
+      if (seen[k]) return false;
+      seen[k] = true;
+      return true;
+    });
+    return { id: li.id, title: title, def: def, href: href, aliases: aliases };
+  }
+
+  function aliasRegex(alias) {
+    var escaped = escapeRegExp(alias);
+    if (/^[A-Za-z_][\w.\-/]*$/.test(alias)) {
+      return new RegExp("\\b" + escaped + "_?\\b", "gi");
+    }
+    return new RegExp(escaped, "gi");
+  }
+
+  function loadGlossary() {
+    if (GLOSSARY.ready) return Promise.resolve(GLOSSARY);
+    if (GLOSSARY.loading) return GLOSSARY.loading;
+    GLOSSARY.loading = fetch(glossaryBasePath())
+      .then(function (r) { return r.text(); })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, "text/html");
+        var items = [].slice.call(doc.querySelectorAll(".glossary li[id]"));
+        GLOSSARY.byId = {};
+        GLOSSARY.matchers = [];
+        items.forEach(function (li) {
+          var entry = parseGlossaryItem(li);
+          if (!entry) return;
+          GLOSSARY.byId[entry.id] = entry;
+          entry.aliases.forEach(function (alias) {
+            if (!glossaryAliasOk(alias)) return;
+            GLOSSARY.matchers.push({ id: entry.id, alias: alias, regex: aliasRegex(alias) });
+          });
+        });
+        GLOSSARY.matchers.sort(function (a, b) { return b.alias.length - a.alias.length; });
+        GLOSSARY.ready = true;
+        return GLOSSARY;
+      })
+      .catch(function () {
+        GLOSSARY.ready = true;
+        return GLOSSARY;
+      });
+    return GLOSSARY.loading;
+  }
+
+  function glossaryShouldSkip(node) {
+    var p = node;
+    while (p) {
+      if (!p.tagName) { p = p.parentElement; continue; }
+      var tag = p.tagName.toUpperCase();
+      if (tag === "SCRIPT" || tag === "STYLE" || tag === "SVG" || tag === "TEXTAREA" ||
+          tag === "INPUT" || tag === "CODE" || tag === "KBD" || tag === "SAMP" || tag === "PRE") return true;
+      if (/^H[1-6]$/.test(tag)) return true;
+      if (p.classList) {
+        if (p.classList.contains("chapter__eyebrow") || p.classList.contains("glossary-popover") ||
+            p.classList.contains("glossary") || p.classList.contains("code-walk__code") ||
+            p.classList.contains("code-walk") || p.classList.contains("diagram") ||
+            p.classList.contains("term--glossary")) return true;
+      }
+      if (p.classList && p.classList.contains("chapter__inner")) return false;
+      p = p.parentElement;
+    }
+    return true;
+  }
+
+  function findGlossaryMatches(text) {
+    var all = [];
+    GLOSSARY.matchers.forEach(function (matcher) {
+      var re = matcher.regex;
+      re.lastIndex = 0;
+      var m;
+      while ((m = re.exec(text)) !== null) {
+        all.push({ start: m.index, end: m.index + m[0].length, id: matcher.id, text: m[0] });
+      }
+    });
+    all.sort(function (a, b) {
+      if (a.start !== b.start) return a.start - b.start;
+      return (b.end - b.start) - (a.end - a.start);
+    });
+    var picked = [];
+    var lastEnd = 0;
+    all.forEach(function (m) {
+      if (m.start < lastEnd) return;
+      picked.push(m);
+      lastEnd = m.end;
+    });
+    return picked;
+  }
+
+  function wrapGlossaryTextNode(node) {
+    var text = node.nodeValue;
+    if (!text || !text.trim()) return;
+    var matches = findGlossaryMatches(text);
+    if (!matches.length) return;
+    var frag = document.createDocumentFragment();
+    var last = 0;
+    matches.forEach(function (m) {
+      if (m.start > last) frag.appendChild(document.createTextNode(text.slice(last, m.start)));
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "term--glossary";
+      btn.textContent = text.slice(m.start, m.end);
+      btn.setAttribute("data-glossary-id", m.id);
+      btn.setAttribute("aria-label", "查看术语释义: " + text.slice(m.start, m.end));
+      frag.appendChild(btn);
+      last = m.end;
+    });
+    if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+    node.parentNode.replaceChild(frag, node);
+  }
+
+  function linkGlossaryInText(root) {
+    if (!GLOSSARY.ready || !GLOSSARY.matchers.length) return;
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    var nodes = [];
+    while (walker.nextNode()) {
+      if (!glossaryShouldSkip(walker.currentNode.parentElement)) nodes.push(walker.currentNode);
+    }
+    nodes.forEach(wrapGlossaryTextNode);
+  }
+
+  function findGlossaryForTermLabel(label) {
+    var lower = String(label || "").toLowerCase();
+    var best = null;
+    var bestScore = 0;
+    Object.keys(GLOSSARY.byId).forEach(function (id) {
+      var e = GLOSSARY.byId[id];
+      var score = 0;
+      e.aliases.forEach(function (a) {
+        var al = a.toLowerCase();
+        if (lower.indexOf(al) !== -1) score = Math.max(score, al.length);
+        if (al.indexOf(lower) !== -1) score = Math.max(score, lower.length);
+      });
+      if (e.title.toLowerCase().indexOf(lower) !== -1) score = Math.max(score, lower.length);
+      if (score > bestScore) { bestScore = score; best = e; }
+    });
+    return bestScore >= 3 ? best : null;
+  }
+
+  function enhanceManualTerms(root) {
+    [].slice.call(root.querySelectorAll("span.term")).forEach(function (span) {
+      if (span.classList.contains("term--glossary")) return;
+      if (glossaryShouldSkip(span)) return;
+      var entry = findGlossaryForTermLabel(span.textContent);
+      if (!entry) return;
+      span.classList.add("term--glossary");
+      span.setAttribute("data-glossary-id", entry.id);
+      span.setAttribute("tabindex", "0");
+      span.setAttribute("role", "button");
+      span.setAttribute("aria-label", "查看术语释义: " + span.textContent.replace(/\s+/g, " ").trim());
+    });
+  }
+
+  function createGlossaryPopover() {
+    var backdrop = el("div", "glossary-backdrop");
+    backdrop.hidden = true;
+    var pop = el("div", "glossary-popover is-below");
+    pop.hidden = true;
+    pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-modal", "false");
+    pop.innerHTML =
+      '<div class="glossary-popover__arrow"></div>' +
+      '<div class="glossary-popover__inner">' +
+      '  <p class="glossary-popover__title" data-glossary-title></p>' +
+      '  <p class="glossary-popover__body" data-glossary-body></p>' +
+      '  <div class="glossary-popover__foot">' +
+      '    <a class="glossary-popover__link" data-glossary-link href="glossary.html">术语表</a>' +
+      '    <span class="glossary-popover__hint">Esc 关闭</span>' +
+      "  </div>" +
+      "</div>";
+    document.body.appendChild(backdrop);
+    document.body.appendChild(pop);
+
+    var activeTrigger = null;
+
+    function close() {
+      backdrop.hidden = true;
+      pop.hidden = true;
+      if (activeTrigger) activeTrigger.classList.remove("is-active");
+      activeTrigger = null;
+    }
+
+    function positionNear(trigger) {
+      var rect = trigger.getBoundingClientRect();
+      var margin = 10;
+      var popRect = pop.getBoundingClientRect();
+      var top = rect.bottom + margin;
+      var placeBelow = true;
+      if (top + popRect.height > window.innerHeight - margin) {
+        top = rect.top - popRect.height - margin;
+        placeBelow = false;
+      }
+      if (top < margin) top = margin;
+      var left = rect.left + rect.width / 2 - popRect.width / 2;
+      left = Math.max(margin, Math.min(left, window.innerWidth - popRect.width - margin));
+      pop.style.top = top + "px";
+      pop.style.left = left + "px";
+      pop.classList.toggle("is-below", placeBelow);
+      pop.classList.toggle("is-above", !placeBelow);
+      var arrowX = rect.left + rect.width / 2 - left - 5;
+      arrowX = Math.max(12, Math.min(arrowX, popRect.width - 20));
+      pop.style.setProperty("--arrow-x", arrowX + "px");
+    }
+
+    function open(trigger, entry) {
+      if (activeTrigger === trigger) { close(); return; }
+      if (activeTrigger) activeTrigger.classList.remove("is-active");
+      activeTrigger = trigger;
+      activeTrigger.classList.add("is-active");
+      pop.querySelector("[data-glossary-title]").textContent = entry.title;
+      pop.querySelector("[data-glossary-body]").textContent = entry.def || "详见术语表。";
+      var link = pop.querySelector("[data-glossary-link]");
+      link.href = entry.href || ("glossary.html#" + entry.id);
+      link.textContent = entry.href && entry.href.indexOf("glossary") === 0 ? "术语表" : "详解章节 →";
+      backdrop.hidden = false;
+      pop.hidden = false;
+      requestAnimationFrame(function () { positionNear(trigger); });
+    }
+
+    backdrop.addEventListener("click", close);
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !pop.hidden) { e.preventDefault(); close(); }
+    });
+    window.addEventListener("resize", function () {
+      if (!pop.hidden && activeTrigger) positionNear(activeTrigger);
+    });
+    window.addEventListener("scroll", function () {
+      if (!pop.hidden && activeTrigger) positionNear(activeTrigger);
+    }, true);
+
+    return {
+      open: open,
+      close: close,
+      handleClick: function (e) {
+        var t = e.target.closest(".term--glossary,[data-glossary-id]");
+        if (!t || !t.getAttribute("data-glossary-id")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var entry = GLOSSARY.byId[t.getAttribute("data-glossary-id")];
+        if (entry) open(t, entry);
+      },
+      handleKeydown: function (e) {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        var t = e.target.closest(".term--glossary,[data-glossary-id]");
+        if (!t) return;
+        e.preventDefault();
+        t.click();
+      }
+    };
+  }
+
+  var glossaryPopover = null;
+
+  function setupGlossary(root) {
+    if (!root || /glossary\.html$/.test(location.pathname)) return;
+    enhanceManualTerms(root);
+    linkGlossaryInText(root);
+    if (!glossaryPopover) glossaryPopover = createGlossaryPopover();
+    root.addEventListener("click", glossaryPopover.handleClick);
+    root.addEventListener("keydown", glossaryPopover.handleKeydown);
+  }
+
   // 跨页跳转到 #锚点: id 是 JS 运行期才赋的, 浏览器原生跳转会失败, 这里补一次带偏移的滚动
   function handleInitialHash() {
     if (!window.location.hash) return;
@@ -670,6 +995,10 @@
     setupProgress(refs);
     setupReveal();
     handleInitialHash();
+    loadGlossary().then(function () {
+      var inner = document.querySelector(".chapter__inner");
+      if (inner) setupGlossary(inner);
+    });
     if (isChapter) store.set(STORAGE_LAST, CHAPTERS[idx].file);
   }
 

@@ -49,7 +49,8 @@
             <li>前馈网络(FFN)在 attention 之后又补了什么;</li>
             <li>位置编码怎么把“词的顺序”告诉模型,以及 encoder 和 decoder 的区别;</li>
             <li>读懂那张<strong>最经典的 Transformer 全架构图</strong>:编码器、解码器,以及它们之间的 cross-attention;</li>
-            <li>self / masked / cross <strong>三种注意力</strong>的区别,以及 GPT / BERT / T5 三种家族的由来。</li>
+            <li>self / masked / cross <strong>三种注意力</strong>的区别,以及 GPT / BERT / T5 三种家族的由来;</li>
+            <li>用一句诗走完 GPT 前向:<strong>每一步向量长什么样、具体怎么算</strong>,以及它和 <a class="xref" href="chapter-23.html">MNIST</a> 在“关联方式”上的同异。</li>
           </ul>
         </section>
 
@@ -64,8 +65,46 @@
           <span class="label">不是用子层的输出替换 x,而是在 x 的基础上“加一个增量”</span>
         </div>
         <p>
+          这里的 <var>x</var> 不是“整篇文章”那样的抽象输入,而是<strong>某个位置当前这一个 token 的隐藏向量</strong>。
+          如果整层输入是一条序列矩阵 <var>X</var> = [<var>x</var><sub>1</sub>; <var>x</var><sub>2</sub>; ...; <var>x</var><sub>n</sub>],
+          那残差相加做的其实是:
+        </p>
+        <div class="mathblock reveal">
+          <var>Y</var> = <var>X</var> + Sublayer(<var>X</var>) = [<var>x</var><sub>1</sub> + Δ<sub>1</sub>; <var>x</var><sub>2</sub> + Δ<sub>2</sub>; ...; <var>x</var><sub>n</sub> + Δ<sub>n</sub>]
+          <span class="label">序列长度和每个 token 的维度都不变,只是每个位置的表示被“加一笔修正”</span>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>量</th><th>典型形状</th><th>它是什么</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong><var>x</var><sub>t</sub></strong></td>
+                <td><code>d_model</code></td>
+                <td>第 <var>t</var> 个 token 当前那条隐藏向量</td>
+              </tr>
+              <tr>
+                <td><strong>Δ<sub>t</sub> = Sublayer(<var>x</var><sub>t</sub>)</strong></td>
+                <td><code>d_model</code></td>
+                <td>子层(注意力或 FFN)给这个 token 算出来的“增量修正”</td>
+              </tr>
+              <tr>
+                <td><strong><var>x</var><sub>t</sub> + Δ<sub>t</sub></strong></td>
+                <td><code>d_model</code></td>
+                <td>残差相加后的新表示,继续往下一层送</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">最该记住的一点:残差不会改变 token 个数、顺序或宽度,只是给每个 token 当前表示加上一笔“改进量”。</p>
+        </div>
+        <p>
           这条“<var>x</var> +”的捷径有两个好处:① 梯度可以<strong>原路直通</strong>回前面的层(高速公路),
           深网络也不怕梯度消失;② 每个子层只需要学“在原有基础上改进多少”,比从零学一个新表示容易得多。
+        </p>
+        <p>
+          例如 attention 子层输出的不是“最后答案”,而是“这个 token 看完整句后该往哪边改一点”;FFN 子层输出的也不是“替换掉原表示的新向量”,
+          而是“这个 token 经过逐词加工后该补上的那一笔”。残差连接把这些“改一点”的结果稳稳叠回去,网络就能一层层细修,而不是每层都推翻重来。
         </p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/transformer/transformer_block.cpp · 残差(精简)</figcaption>
@@ -98,6 +137,45 @@ attention_norm_.Forward(last_residual_1_, last_norm_1_);    <b class="cw-tag">3<
           LN(<var>x</var>) = <span class="frac"><span><var>x</var> − μ</span><span>√(σ<sup>2</sup> + ε)</span></span> · <var>γ</var> + <var>β</var>
           <span class="label">μ、σ² 是这个词向量自己的均值和方差;ε 防止除以 0;γ、β 可学习</span>
         </div>
+        <p>
+          这里的 <var>x</var> 同样指<strong>某一个 token 当前那一条向量</strong>,不是整句一起混着算。
+          如果一层输入是一整条序列矩阵 <var>X</var> = [<var>x</var><sub>1</sub>; ...; <var>x</var><sub>n</sub>],
+          那 LayerNorm 做的是:
+        </p>
+        <div class="mathblock reveal">
+          LN(<var>X</var>) = [LN(<var>x</var><sub>1</sub>); LN(<var>x</var><sub>2</sub>); ...; LN(<var>x</var><sub>n</sub>)]
+          <span class="label">一行一行各自归一化;不同 token 之间互不影响</span>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>量</th><th>典型形状</th><th>它到底是什么</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong><var>x</var><sub>t</sub></strong></td>
+                <td><code>d_model</code></td>
+                <td>第 <var>t</var> 个 token 当前的隐藏向量</td>
+              </tr>
+              <tr>
+                <td><strong>μ<sub>t</sub>、σ²<sub>t</sub></strong></td>
+                <td>标量</td>
+                <td>只由 <var>x</var><sub>t</sub> 自己这 <code>d_model</code> 个分量算出来的均值和方差</td>
+              </tr>
+              <tr>
+                <td><strong><var>γ</var>、<var>β</var></strong></td>
+                <td><code>d_model</code></td>
+                <td>全层共享的可学习缩放/平移参数,对每个 token 都按同样规则使用</td>
+              </tr>
+              <tr>
+                <td><strong>LN(<var>x</var><sub>t</sub>)</strong></td>
+                <td><code>d_model</code></td>
+                <td>归一化后送往下一步的 token 向量</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">LayerNorm 不改变序列长度,也不改变每个 token 的维度;它做的是“把每个 token 自己内部各维的尺度拉回稳定范围”。</p>
+        </div>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/transformer/layer_norm.cpp · Forward(精简)</figcaption>
           <pre class="code-walk__code"><code>double mean = 0;
@@ -117,7 +195,12 @@ for (int i = 0; i &lt; feature_dim_; i++)
             <li>标准化(减均值、除标准差),再乘 <code>scale</code>(γ)、加 <code>bias</code>(β)。注意:它是对<em>每个词自己</em>归一化,和样本数无关,这正是它适合序列的原因。</li>
           </ol>
         </figure>
-        <p>抽象?把一个词向量 <code>[1, 2, 3]</code> 亲手归一化一遍就通了(设 γ=1、β=0):</p>
+        <p>
+          下面把一个最小的“未归一化 token 向量”手算一遍。假设某个词在经过子层和残差相加后,当前表示变成了
+          <code>[1, 2, 3]</code>:三个维度整体偏正,均值不在 0 附近,尺度也还没被拉回稳定范围。
+          如果一层层传下去的向量总是这样忽大忽小、整体漂移,后面的 attention 和 FFN 就得不断适应输入分布的变化,训练会更不稳。
+          先设 γ=1、β=0,看看 LayerNorm 怎么把它拉回标准范围:
+        </p>
         <div class="table-wrap reveal">
           <table class="calc-table">
             <thead><tr><th>步骤</th><th>算式</th><th>结果</th></tr></thead>
@@ -128,8 +211,12 @@ for (int i = 0; i &lt; feature_dim_; i++)
               <tr><td>④ 标准化</td><td>(x − 2) / 0.816</td><td>[−1.22, 0, 1.22]</td></tr>
             </tbody>
           </table>
-          <p class="calc-table__cap">忽大忽小的 [1,2,3] 被拉成一组均值 0、波动 1 的数;γ、β 再在此基础上做可学习的微调(初始 γ=1、β=0 就原样输出)。</p>
+          <p class="calc-table__cap">这个原本整体偏正、尺度未对齐的向量,被拉成一组均值 0、波动 1 的数;γ、β 再在此基础上做可学习的微调(初始 γ=1、β=0 就原样输出)。</p>
         </div>
+        <p>
+          所以你可以把 LayerNorm 理解成“给<strong>每个 token 自己</strong>洗一遍数值”。它不负责让 token 之间互相交流,
+          也不负责提取新特征;它只是保证“这个 token 现在这条向量的各维数值别乱飘”,让后面的 attention 和 FFN 都在更稳定的尺度上工作。
+        </p>
         <div class="callout callout--note reveal">
           <span class="callout__title">为什么是“每个词各自归一化”,而不是按 batch</span>
           <p>
@@ -150,26 +237,78 @@ for (int i = 0; i &lt; feature_dim_; i++)
           FFN(<var>x</var>) = ReLU(<var>x</var> <var>W</var><sub>1</sub> + <var>b</var><sub>1</sub>) <var>W</var><sub>2</sub> + <var>b</var><sub>2</sub>
           <span class="label">W₁ 把维度升上去,ReLU 加非线性,W₂ 再压回来</span>
         </div>
+        <p>
+          这里最容易误解的就是公式里的 <var>x</var>。它<strong>不是整句文本</strong>,也不是“所有 token 一起拼成的大矩阵”直接一次性揉成一个向量;
+          它指的是<strong>某一个位置当前那一个 token 的隐藏向量</strong>。如果 attention 之后整条序列的表示是
+          <var>X</var> = [<var>x</var><sub>1</sub>; <var>x</var><sub>2</sub>; ...; <var>x</var><sub>n</sub>], 那 FFN 真正在做的是:
+        </p>
+        <div class="mathblock reveal">
+          FFN(<var>X</var>) = [FFN(<var>x</var><sub>1</sub>); FFN(<var>x</var><sub>2</sub>); ...; FFN(<var>x</var><sub>n</sub>)]
+          <span class="label">同一套 W₁/W₂ 对每个位置各算各的; token 与 token 之间不在 FFN 里交换信息</span>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>对象</th><th>典型形状</th><th>它到底是什么</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong><var>x</var><sub>t</sub></strong></td>
+                <td><code>d_model</code></td>
+                <td>第 <var>t</var> 个 token 经过 attention 和归一化后的那一条向量</td>
+              </tr>
+              <tr>
+                <td><strong><var>W</var><sub>1</sub></strong></td>
+                <td><code>d_model × d_ff</code></td>
+                <td>把单个 token 向量从 <code>d_model</code> 升到更宽的 <code>d_ff</code></td>
+              </tr>
+              <tr>
+                <td><strong>ReLU 后 hidden</strong></td>
+                <td><code>d_ff</code></td>
+                <td>这个 token 在更宽空间里的中间表示</td>
+              </tr>
+              <tr>
+                <td><strong><var>W</var><sub>2</sub></strong></td>
+                <td><code>d_ff × d_model</code></td>
+                <td>把中间表示再压回原宽度,方便继续残差相加</td>
+              </tr>
+              <tr>
+                <td><strong>整层输入 <var>X</var></strong></td>
+                <td><code>seq_len × d_model</code></td>
+                <td>整条序列当前的隐藏状态矩阵,由很多个 <var>x</var><sub>t</sub> 堆在一起</td>
+              </tr>
+              <tr>
+                <td><strong>整层输出 <var>X</var>'</strong></td>
+                <td><code>seq_len × d_model</code></td>
+                <td>每个 token 各自过完 FFN 后重新拼回整条序列</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">一句话: attention 负责“词和词之间互相看”;FFN 负责“每个词自己再加工一次”。</p>
+        </div>
+        <p>
+          所以如果一条句子有 128 个 token,FFN 不是把这 128 个词糊成一团一起做变换,而是把<strong>同一个两层小 MLP</strong>
+          对 128 个 token <strong>各跑一遍</strong>。它看的是“某个词已经融合过上下文后的表示”,再把这个表示加工得更适合下一层使用。
+        </p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/transformer/transformer_block.cpp · FFN(精简)</figcaption>
-          <pre class="code-walk__code"><code>hidden = ApplyLinear(norm_1, W1, b1);   // model_dim → ff_dim   <b class="cw-tag">1</b>
-for (double &amp;v : hidden) v = Relu(v);                          <b class="cw-tag">2</b>
-ff_output = ApplyLinear(hidden, W2, b2);  // ff_dim → model_dim <b class="cw-tag">3</b></code></pre>
+          <pre class="code-walk__code"><code>for (int token_idx = 0; token_idx &lt; norm_1.size(); token_idx++) {      <b class="cw-tag">1</b>
+  hidden = ApplyLinear(norm_1[token_idx], W1, b1);   // model_dim → ff_dim
+  for (double &amp;v : hidden) v = Relu(v);                                <b class="cw-tag">2</b>
+  ff_output[token_idx] = ApplyLinear(hidden, W2, b2); // ff_dim → model_dim <b class="cw-tag">3</b>
+}</code></pre>
           <ol class="code-walk__notes">
-            <li>第一层线性:把每个词向量从 <code>model_dim</code> 升到更大的 <code>ff_dim</code>。</li>
-            <li>过 ReLU 加入非线性(<a class="xref" href="chapter-02.html">第 2 章</a>的老朋友)。</li>
-            <li>第二层线性:再压回 <code>model_dim</code>,方便接下来继续残差相加。每个词都独立走这一遍。</li>
+            <li>外层这个循环就是关键:FFN 是对<strong>每个 token 向量逐个处理</strong>,不是把整条序列先混在一起再做变换。</li>
+            <li>第一层线性 + ReLU:把某个 token 的向量从 <code>model_dim</code> 升到更大的 <code>ff_dim</code>,并加入非线性(<a class="xref" href="chapter-02.html">第 2 章</a>的老朋友)。</li>
+            <li>第二层线性:再压回 <code>model_dim</code>,方便接下来继续残差相加。所有 token 共用同一套 W₁/W₂,但<strong>彼此互不通信</strong>。</li>
           </ol>
         </figure>
-        <div class="callout callout--analogy reveal">
-          <span class="callout__title">两句话记住 FFN 的定位</span>
-          <p>
-            <strong>· “逐词(position-wise)”是什么意思?</strong> 同一套 <var>W</var><sub>1</sub>/<var>W</var><sub>2</sub> 对每个词<strong>各算各的</strong>,词与词之间不交换任何信息。
-            所以分工很清楚:<strong>attention 负责“跨词混合”,FFN 负责“逐词深加工”</strong>,一横一纵。<br />
-            <strong>· 为什么先升维、再降维(常是 4 倍)?</strong> 把每个词摊到更宽的空间里,ReLU 才能切出更多“分段”、拟合更复杂的非线性变换;
-            加工完再压回原维度,好和残差相加、继续往下堆。像“摊到大桌上加工,再收回口袋”。
-          </p>
-        </div>
+        <p>
+          把这一节压成两句话就是:
+          <strong>attention 负责“跨词混合”,FFN 负责“逐词深加工”</strong>;
+          之所以要“先升维、再降维”,是因为把每个 token 摊到更宽的空间里,ReLU 才能切出更多“分段”、拟合更复杂的非线性变换,
+          加工完再压回原维度,好和残差相加、继续往下堆。
+        </p>
 
         <h2>4. 把它们拼成一块 Block</h2>
         <p>一块标准 Transformer Block,就是“注意力 + 残差 + 归一化”和“FFN + 残差 + 归一化”这两段串起来:</p>
@@ -410,7 +549,7 @@ encoding[pos][i + 1] = std::cos(angle);
               <text x="505" y="205" text-anchor="middle" fill="#8499bd" font-size="11">Output Probabilities 输出概率</text>
             </svg>
           </div>
-          <p class="figure__cap">经典 Transformer:左塔<strong>编码器</strong>读懂输入,右塔<strong>解码器</strong>一个词一个词生成输出,中间那条蓝线是<strong>交叉注意力</strong>(编码器输出当 K、V)。绿色虚线是各处的残差——Add &amp; Norm 里的“Add”,就是第 1 节讲的残差相加。</p>
+          <p class="figure__cap">经典 Transformer:左塔<strong>编码器</strong>读懂输入,右塔<strong>解码器</strong>一个词一个词生成输出,中间那条蓝线是<strong>交叉注意力</strong>(编码器输出当 K、V)。绿色虚线是各处的残差——Add &amp; Norm 里的 <strong>Add</strong>,就是<a class="xref" href="chapter-18.html#1-残差连接-给信息和梯度修一条高速公路">第 1 节</a>讲的残差相加;<strong>Norm</strong> 就是<a class="xref" href="chapter-18.html#2-layernorm-把每个词的特征拉回正常范围">第 2 节</a>的 LayerNorm(对每个词的特征做缩放平移,拉回稳定范围)。</p>
         </div>
 
         <h3>顺着数据流走一遍</h3>
@@ -471,6 +610,390 @@ encoding[pos][i + 1] = std::cos(angle);
           </p>
         </div>
 
+        <h2>8. GPT 这种模型:把右塔堆很多层,再接一个 LM Head</h2>
+        <p>
+          既然如今大模型大多是 <span class="term">decoder-only</span>,那把第 7 节那张“完整 Transformer 全图”裁开后,
+          <strong>GPT 这类模型到底还剩什么</strong>?答案很干脆:只留右塔,把<strong>掩码自注意力的 Block 反复堆叠</strong>,
+          最顶上再接一个把隐藏状态投影到词表大小的输出层(<span class="term">LM Head</span>)。训练目标始终不变:
+          <strong>预测下一个 token</strong>。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 720 620" role="img" aria-label="GPT decoder-only Transformer 架构图">
+              <defs>
+                <marker id="gpt-flow" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8499bd" /></marker>
+                <marker id="gpt-loop" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" /></marker>
+              </defs>
+
+              <g stroke="#8499bd" stroke-width="2" fill="none" marker-end="url(#gpt-flow)">
+                <line x1="220" y1="560" x2="220" y2="528" />
+                <line x1="220" y1="492" x2="220" y2="436" />
+                <line x1="220" y1="392" x2="220" y2="364" />
+                <line x1="220" y1="340" x2="220" y2="324" />
+                <line x1="220" y1="280" x2="220" y2="252" />
+                <line x1="220" y1="228" x2="220" y2="188" />
+                <line x1="220" y1="160" x2="220" y2="130" />
+              </g>
+
+              <rect x="90" y="560" width="260" height="40" rx="10" fill="rgba(142,240,209,0.16)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="220" y="584" text-anchor="middle" fill="#eef4ff" font-size="13">Prompt / 已生成前缀</text>
+
+              <rect x="90" y="492" width="260" height="36" rx="8" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.6" />
+              <text x="220" y="515" text-anchor="middle" fill="#eef4ff" font-size="12">Embedding + Position</text>
+
+              <rect x="66" y="212" width="308" height="244" rx="16" fill="none" stroke="rgba(149,176,227,0.35)" stroke-width="1.7" stroke-dasharray="6 4" />
+              <text x="42" y="316" text-anchor="middle" fill="#8499bd" font-size="14">N×</text>
+              <text x="42" y="336" text-anchor="middle" fill="#b6c5e1" font-size="11">Decoder</text>
+              <text x="42" y="352" text-anchor="middle" fill="#b6c5e1" font-size="11">Block</text>
+
+              <rect x="90" y="392" width="260" height="44" rx="10" fill="rgba(139,123,255,0.2)" stroke="#8b7bff" stroke-width="2" />
+              <text x="220" y="410" text-anchor="middle" fill="#eef4ff" font-size="12">Masked Self-Attention</text>
+              <text x="220" y="426" text-anchor="middle" fill="#b6c5e1" font-size="10">本层独立参数, 只看左边前文</text>
+
+              <rect x="90" y="340" width="260" height="24" rx="7" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="220" y="356" text-anchor="middle" fill="#eef4ff" font-size="11">Add &amp; Norm</text>
+
+              <rect x="90" y="280" width="260" height="44" rx="10" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="2" />
+              <text x="220" y="298" text-anchor="middle" fill="#eef4ff" font-size="12">Feed Forward (MLP)</text>
+              <text x="220" y="314" text-anchor="middle" fill="#b6c5e1" font-size="10">逐 token 再加工一次</text>
+
+              <rect x="90" y="228" width="260" height="24" rx="7" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="220" y="244" text-anchor="middle" fill="#eef4ff" font-size="11">Add &amp; Norm</text>
+
+              <rect x="90" y="160" width="260" height="28" rx="8" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.6" />
+              <text x="220" y="178" text-anchor="middle" fill="#eef4ff" font-size="12">Final LayerNorm</text>
+
+              <rect x="90" y="102" width="260" height="28" rx="8" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.6" />
+              <text x="220" y="120" text-anchor="middle" fill="#eef4ff" font-size="12">LM Head (Linear)</text>
+
+              <rect x="430" y="90" width="200" height="58" rx="12" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="1.8" />
+              <text x="530" y="112" text-anchor="middle" fill="#eef4ff" font-size="12">训练</text>
+              <text x="530" y="130" text-anchor="middle" fill="#b6c5e1" font-size="10">全部位置的 logits</text>
+              <text x="530" y="144" text-anchor="middle" fill="#b6c5e1" font-size="10">→ CrossEntropy</text>
+
+              <rect x="430" y="206" width="200" height="86" rx="12" fill="rgba(139,123,255,0.14)" stroke="#8b7bff" stroke-width="1.8" />
+              <text x="530" y="228" text-anchor="middle" fill="#eef4ff" font-size="12">生成</text>
+              <text x="530" y="246" text-anchor="middle" fill="#b6c5e1" font-size="10">最后位置的 logits</text>
+              <text x="530" y="262" text-anchor="middle" fill="#b6c5e1" font-size="10">→ Softmax → greedy / 采样</text>
+              <text x="530" y="278" text-anchor="middle" fill="#8499bd" font-size="10">→ 下一个 token id</text>
+
+              <path d="M350,116 L430,116" fill="none" stroke="#8499bd" stroke-width="2" marker-end="url(#gpt-flow)" />
+              <path d="M350,116 L390,116 L390,248 L430,248" fill="none" stroke="#8499bd" stroke-width="2" marker-end="url(#gpt-flow)" />
+
+              <path d="M530,292 L530,612 L350,612 L350,600" fill="none" stroke="#8ef0d1" stroke-width="2.4" stroke-dasharray="5 4" marker-end="url(#gpt-loop)" />
+            </svg>
+          </div>
+          <p class="figure__cap">GPT / ChatGPT 这类模型常用的 decoder-only 架构:主干只有“Embedding → N× Decoder Block → LM Head”。训练时,所有位置的 logits 都拿去算交叉熵;生成时,只取最后一个位置的 logits 做 softmax 和采样,再把新 token 接回输入继续自回归。</p>
+        </div>
+
+        <h3>顺着这张图走一遍</h3>
+        <ol>
+          <li><strong>Prompt tokens → Embedding + Position</strong>:先把输入提示切成 token,查表变向量,再加上位置信息。到这一步,模型拿到的是“一串带顺序的词向量”。</li>
+          <li><strong>N× Decoder Block</strong>:整座主干就是很多层一模一样的 decoder block。每一层都只有两段:带 <strong>causal mask</strong> 的自注意力,再加一个逐 token 的 FFN。它没有 encoder,也没有 cross-attention,因为它不需要“回头看原文”那条支路。更重要的是: <strong>每一层都有自己的一套 attention 参数</strong>,不是全网共用同一套 Q/K/V 投影矩阵。</li>
+          <li><strong>Final LayerNorm + LM Head</strong>:最顶上把最后一层隐藏状态做一次归一化,再投影到词表大小,得到的是<strong>每个位置</strong>的 logits,还不是最终选出来的 token。</li>
+          <li><strong>训练</strong>:拿所有位置的 logits 和“正确的下一个 token”去算交叉熵;这就是大模型预训练时那条最核心的 loss 链路。</li>
+          <li><strong>生成</strong>:只取最后一个位置的 logits,过 softmax 后 greedy 或采样选一个新 token,把它追加到序列末尾。这个循环就是<a class="xref" href="chapter-19.html#8-自回归-把刚写的字接回去再写下一个">自回归生成</a>。</li>
+        </ol>
+        <h3>层和层之间,到底传的是什么?</h3>
+        <p>
+          很多人第一次看 GPT 架构图会有个困惑:这些方块之间到底在传什么?其实从头到尾,主角几乎只有两类东西:
+          <strong>一串 token id</strong>,和它们对应的<strong>一串向量</strong>。从 embedding 往上到 Transformer 主干内部,
+          每一层传来传去的基本都是同一种对象:一张 <code>序列长度 × model_dim</code> 的矩阵——也就是
+          “<strong>这句话里每个位置,当前各自的一份隐藏表示</strong>”。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>阶段</th><th>传进去的是什么</th><th>这一层做什么</th><th>传出来的是什么</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>输入</strong></td>
+                <td>一串 token id<br /><code>[t₁, t₂, …, tₙ]</code></td>
+                <td>只是编号,还没有语义</td>
+                <td>仍是一串 id</td>
+              </tr>
+              <tr>
+                <td><strong>Embedding + Position</strong></td>
+                <td>token id 序列</td>
+                <td>查词向量表,再把位置编码加上去</td>
+                <td>一串向量<br /><code>X ∈ R^(n × d_model)</code></td>
+              </tr>
+              <tr>
+                <td><strong>Masked Self-Attention</strong></td>
+                <td>一串隐藏向量 <code>X</code></td>
+                <td>当前这一层用<strong>自己的一套</strong> <code>WQ/WK/WV</code> 把 <code>X</code> 投影成 Q/K/V,再只和左边前文做注意力加权</td>
+                <td>一串新的向量<br /><code>A ∈ R^(n × d_model)</code></td>
+              </tr>
+              <tr>
+                <td><strong>Add &amp; Norm</strong></td>
+                <td>旧表示 <code>X</code> 和注意力输出 <code>A</code></td>
+                <td>先做残差相加,再归一化</td>
+                <td>一串更新后的向量<br /><code>H₁ ∈ R^(n × d_model)</code></td>
+              </tr>
+              <tr>
+                <td><strong>FFN</strong></td>
+                <td>一串向量 <code>H₁</code></td>
+                <td>对每个位置各自做一次小 MLP(升维 → 激活 → 降维)</td>
+                <td>一串新的向量<br /><code>F ∈ R^(n × d_model)</code></td>
+              </tr>
+              <tr>
+                <td><strong>Add &amp; Norm</strong></td>
+                <td><code>H₁</code> 和 <code>F</code></td>
+                <td>再做一次残差相加 + 归一化</td>
+                <td>一串更高层的隐藏向量<br /><code>H₂ ∈ R^(n × d_model)</code></td>
+              </tr>
+              <tr>
+                <td><strong>N 层堆叠后</strong></td>
+                <td>上一层的一串隐藏向量</td>
+                <td>下一层拿这份新表示<strong>重新生成一套新的 Q/K/V</strong>;层与层之间不共享同一套 attention 投影矩阵</td>
+                <td>最后一层隐藏状态<br /><code>H_final ∈ R^(n × d_model)</code></td>
+              </tr>
+              <tr>
+                <td><strong>LM Head</strong></td>
+                <td>最后一层隐藏状态 <code>H_final</code></td>
+                <td>把每个位置的向量投影到词表大小</td>
+                <td>每个位置一份分数<br /><code>logits ∈ R^(n × vocab_size)</code></td>
+              </tr>
+              <tr>
+                <td><strong>Softmax + 取样</strong></td>
+                <td>最后一个位置的 logits<br /><code>logits[n]</code></td>
+                <td>变成概率,再 greedy 或采样选一个</td>
+                <td>下一个 token id</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">最关键的一点:从 embedding 往上,层和层之间传的几乎始终都是“整条序列当前的隐藏表示”。每一层都在<strong>改写同一份草稿</strong>,而不是把 token 变成别的奇怪对象。</p>
+        </div>
+
+        <h3>带着数字走完前向:每一步向量怎么变、怎么算</h3>
+        <p>
+          上表讲的是<strong>形状</strong>。下面用<a class="xref" href="chapter-16.html#5-先把整条流水线走一遍喂它一句诗">第 16 章</a>那句诗
+          <strong>「床前明月」</strong>当输入,假设词表 5 个字(床/前/明/月/光),<code>d_model = 4</code>,只堆 <strong>1 层</strong> Decoder Block,
+          把“数”也走通一遍。真实 GPT 会堆几十上百层、维度也大得多,但<strong>每一步的运算类型完全一样</strong>。
+        </p>
+
+        <h4>配置与目标</h4>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>符号</th><th>本例取值</th><th>含义</th></tr></thead>
+            <tbody>
+              <tr><td>输入文本</td><td>床前明月</td><td>4 个 token,要猜下一个字 <strong>光</strong></td></tr>
+              <tr><td><code>seq_len</code></td><td>4</td><td>序列长度 <var>n</var></td></tr>
+              <tr><td><code>d_model</code></td><td>4</td><td>每个 token 的向量宽度 <var>d</var></td></tr>
+              <tr><td><code>vocab_size</code></td><td>5</td><td>词表大小</td></tr>
+              <tr><td>Block 层数</td><td>1</td><td>只演示一层;真实模型是 N×</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <ol class="step-track reveal" aria-label="GPT 前向逐步手算">
+          <li class="step-track__item step-track__item--sample">
+            <span class="step-track__badge">1</span>
+            <div class="step-track__body">
+              <span class="step-track__phase">Tokenizer</span>
+              <span class="step-track__title">文本 → 一串 id</span>
+              <span class="step-track__detail">床前明月 → <code>[0, 1, 2, 3]</code> · 形状 <code>[4]</code> 的整数,还没有向量</span>
+            </div>
+          </li>
+          <li class="step-track__item step-track__item--forward">
+            <span class="step-track__badge">2</span>
+            <div class="step-track__body">
+              <span class="step-track__phase">Embedding 查表</span>
+              <span class="step-track__title">每个 id → 一条 <code>d_model</code> 维向量</span>
+              <span class="step-track__detail step-track__formula">E = EmbeddingTable[[0,1,2,3]] → 矩阵 <code>X₀ ∈ R^(4×4)</code></span>
+              <span class="step-track__detail">示意: 床→[0.2,−0.5,0.1,0.0] · 前→[0.9,0.1,−0.2,0.3] · 明→[−0.3,0.8,0.4,0.1] · 月→[0.4,0.4,0.1,0.0]</span>
+            </div>
+          </li>
+          <li class="step-track__item step-track__item--forward">
+            <span class="step-track__badge">3</span>
+            <div class="step-track__body">
+              <span class="step-track__phase">+ 位置编码</span>
+              <span class="step-track__title">逐行相加,标上“第几位”</span>
+              <span class="step-track__detail step-track__formula">X = X₀ + PE · 仍 <code>4×4</code>(<a class="xref" href="chapter-18.html#5-位置编码-告诉模型谁在前谁在后">第 5 节</a>)</span>
+              <span class="step-track__detail">例: 月(位置 3) 的行 = [0.4,0.4,0.1,0.0] + [0.14,−0.99,0.03,1.00] = <strong>[0.54,−0.59,0.13,1.00]</strong></span>
+            </div>
+          </li>
+          <li class="step-track__item step-track__item--forward">
+            <span class="step-track__badge">4</span>
+            <div class="step-track__body">
+              <span class="step-track__phase">Masked Self-Attention</span>
+              <span class="step-track__title">整表投影 Q/K/V,再按位置加权融合</span>
+              <span class="step-track__detail step-track__formula">Q = X·W<sub>Q</sub> · K = X·W<sub>K</sub> · V = X·W<sub>V</sub> · 各 <code>4×4</code></span>
+              <span class="step-track__detail">对位置 <var>i</var>: 分数<sub>ij</sub> = Q<sub>i</sub>·K<sub>j</sub>/√d (只看 j≤i) → softmax → 输出<sub>i</sub> = Σ<sub>j≤i</sub> 权重<sub>ij</sub>·V<sub>j</sub></span>
+              <span class="step-track__detail">“月”(i=3) 只能看 床/前/明/月;算完得新行 <code>A[3] = [0.31, 0.22, 0.55, 0.88]</code> · 全序列输出 <code>A ∈ R^(4×4)</code></span>
+            </div>
+          </li>
+          <li class="step-track__item step-track__item--forward">
+            <span class="step-track__badge">5</span>
+            <div class="step-track__body">
+              <span class="step-track__phase">Add &amp; Norm</span>
+              <span class="step-track__title">残差相加,再 LayerNorm</span>
+              <span class="step-track__detail step-track__formula">H₁ = LayerNorm(X + A) · 仍 <code>4×4</code></span>
+              <span class="step-track__detail">“月”行: 先 [0.54,−0.59,0.13,1.00]+[0.31,0.22,0.55,0.88],再对该行减均值除标准差 → <code>H₁[3] = [−0.12, 0.41, 0.28, 0.95]</code></span>
+            </div>
+          </li>
+          <li class="step-track__item step-track__item--forward">
+            <span class="step-track__badge">6</span>
+            <div class="step-track__body">
+              <span class="step-track__phase">FFN(逐 token)</span>
+              <span class="step-track__title">每个位置独立跑同一个小 MLP</span>
+              <span class="step-track__detail step-track__formula">F[t] = W₂·ReLU(W₁·H₁[t] + b₁) + b₂ · 输入输出都是 <code>d_model</code> 维</span>
+              <span class="step-track__detail">“月”行: <code>H₁[3]</code> 升维→ReLU→降维 → <code>F[3] = [0.08, −0.15, 0.62, 0.11]</code> · token 之间<strong>不通信</strong></span>
+            </div>
+          </li>
+          <li class="step-track__item step-track__item--forward">
+            <span class="step-track__badge">7</span>
+            <div class="step-track__body">
+              <span class="step-track__phase">Add &amp; Norm</span>
+              <span class="step-track__title">Block 出口</span>
+              <span class="step-track__detail step-track__formula">H₂ = LayerNorm(H₁ + F) → <code>H_final ∈ R^(4×4)</code></span>
+              <span class="step-track__detail">最后一行 <code>h = H_final[3] = [0.05, 0.18, 0.71, 0.92]</code> = “看完床前明月后,这个位置对下一字的判断”</span>
+            </div>
+          </li>
+          <li class="step-track__item step-track__item--forward">
+            <span class="step-track__badge">8</span>
+            <div class="step-track__body">
+              <span class="step-track__phase">LM Head</span>
+              <span class="step-track__title">最后一行 → 词表上每个字的分数</span>
+              <span class="step-track__detail step-track__formula">logit<sub>w</sub> = b<sub>w</sub> + h · W<sub>w</sub> · 得 <code>logits ∈ R^5</code></span>
+              <span class="step-track__detail">示意 logits: 床−0.3 · 前−0.1 · 明0.2 · 月0.4 · <strong>光 1.1</strong>(最高)</span>
+            </div>
+          </li>
+          <li class="step-track__item step-track__item--forward">
+            <span class="step-track__badge">9</span>
+            <div class="step-track__body">
+              <span class="step-track__phase">Softmax</span>
+              <span class="step-track__title">分数 → 概率</span>
+              <span class="step-track__detail step-track__formula">p = softmax(logits) · 生成时取 <code>argmax</code> 或采样 → 下一 token <strong>光</strong></span>
+              <span class="step-track__detail">示意概率: 光 ≈ 0.42(最高) · 月 0.21 · 明 0.18 · …</span>
+            </div>
+          </li>
+        </ol>
+
+        <p>
+          把注意力单独放大:第 4 步里,“月”这一行的新表示,本质上就是<a class="xref" href="chapter-17.html#4-跟着算一遍-一个能手算的小例子">第 17 章手算</a>那套
+          <strong>打分 → softmax → 对 Value 加权求和</strong>,只不过这里是对<strong>床/前/明/月 四个位置</strong>各算一组权重,再融合四个 Value 行。
+          训练时第 8 步会对<strong>四个位置都算 logits</strong>(每个位置都猜“自己的下一个字”),生成时只取<strong>最后一行</strong>
+          (<a class="xref" href="chapter-19.html#43-推理时为什么只取最后一行">第 19 章 4.3</a>)。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>步骤</th><th>输入形状</th><th>核心运算(一句话)</th><th>输出形状</th></tr></thead>
+            <tbody>
+              <tr><td>① id</td><td>4 个字</td><td>查词表编号</td><td><code>[4]</code></td></tr>
+              <tr><td>②③ 嵌入+位置</td><td><code>[4]</code></td><td>查表 + 加位置指纹</td><td><code>[4, 4]</code></td></tr>
+              <tr><td>④ 注意力</td><td><code>[4, 4]</code></td><td>Q·K 现算权重,再对 V 加权求和(跨词)</td><td><code>[4, 4]</code></td></tr>
+              <tr><td>⑤⑦ Add&amp;Norm</td><td><code>[4, 4]</code></td><td>残差 + 每行 LayerNorm</td><td><code>[4, 4]</code></td></tr>
+              <tr><td>⑥ FFN</td><td><code>[4, 4]</code></td><td>每行独立 <code>W₁→ReLU→W₂</code>(不跨词)</td><td><code>[4, 4]</code></td></tr>
+              <tr><td>⑧⑨ LM Head</td><td><code>[4, 4]</code></td><td>取最后一行点积词表模板 + softmax</td><td><code>[5]</code> 概率</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">从 ② 到 ⑦,形状始终是 <code>seq_len × d_model</code>;变的是<strong>每个位置向量里的数</strong>——草稿被一层层改写。</p>
+        </div>
+
+        <h3>和 MNIST 比一比:都在做加权求和,关联方式不同</h3>
+        <p>
+          如果你从<a class="xref" href="chapter-23.html">MNIST 手写数字</a>一路读过来,可能会问:
+          <strong>语言模型是不是也在用权重 W 做加权求和?和 MNIST 到底差在哪?</strong>
+          答案是:<strong>都在做加权求和</strong>,差别不在“用不用 W”,而在<strong>关联是固定的还是随输入现算的</strong>。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th></th><th>MNIST(MLP)</th><th>GPT(语言模型)</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>输入是什么</strong></td>
+                <td>一张图摊平成 <strong>一个</strong> 784 维向量</td>
+                <td>一句话变成 <strong>一串</strong> 向量 <code>[n, d_model]</code></td>
+              </tr>
+              <tr>
+                <td><strong>基本运算</strong></td>
+                <td><code>h = σ(W·x + b)</code> 矩阵乘 + 激活</td>
+                <td>同样是矩阵乘、点积、加权求和</td>
+              </tr>
+              <tr>
+                <td><strong>“关联”靠谁</strong></td>
+                <td><strong>固定的 W</strong>:像素 <var>i</var> 永远通过 <code>W[j,i]</code> 连到隐藏神经元 <var>j</var>,换一张图接线不变</td>
+                <td><strong>Attention</strong>:权重 = softmax(Q·K),<strong>每次前向、每个位置现算</strong>,换一句话就变</td>
+              </tr>
+              <tr>
+                <td><strong>有没有“谁看谁”</strong></td>
+                <td>没有 token 概念;整图一次性压进一层</td>
+                <td>有;“月”该多看“明”还是“床”,由内容决定</td>
+              </tr>
+              <tr>
+                <td><strong>FFN / 隐藏层</strong></td>
+                <td>每层都是全连接 MLP</td>
+                <td>FFN 也是固定 W 的小 MLP,但<strong>对每个 token 各跑一遍</strong>,token 之间不混</td>
+              </tr>
+              <tr>
+                <td><strong>输出层</strong></td>
+                <td>64 维 hidden → 10 类 logits → softmax</td>
+                <td><code>d_model</code> 维 hidden → <code>vocab_size</code> 个 logits → softmax(<a class="xref" href="chapter-19.html#4-lm-head-把表示投影成下一字概率">LM Head</a>)</td>
+              </tr>
+              <tr>
+                <td><strong>训练更新</strong></td>
+                <td><code>新值 = 旧值 − lr × 梯度</code></td>
+                <td><strong>完全一样</strong>;只是参数种类多了嵌入表、注意力矩阵等</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">一句话:<strong>MNIST = 静态全连接</strong>;语言模型 = <strong>Attention 动态关联</strong> + <strong>逐位置的固定 MLP(FFN)</strong>。</p>
+        </div>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">把两种网络想成两种“混合信息”的方式</span>
+          <p>
+            <strong>MNIST</strong> 像一张<strong>焊死的电路板</strong>:784 个输入脚到 128 个中间脚,每根线的电阻(W)训练好后就不动了,来什么图都走同一条路。<br />
+            <strong>语言模型</strong> 像一场<strong>圆桌讨论</strong>:每个词先发言(embedding),Attention 让每人按内容决定“多听谁的”(动态权重),FFN 再让每人独自消化一遍(固定 MLP,互不插嘴),最后由 LM Head 读出“下一个字该是谁”。
+          </p>
+        </div>
+        <p>
+          所以前面那句“MNIST 用 W 求和关联、LLM 用 attention 关联”<strong>方向对,但要补半句</strong>:
+          LLM 的 FFN、LM Head 仍然在用<strong>固定的 W</strong>做加权求和;真正和 MNIST <em>不一样</em>的,是<strong>跨词混合</strong>那一步——Attention 的权重不是写死在参数里的,而是读句子时<strong>当场算出来</strong>的。
+          注意力权重本身<strong>不是参数</strong>(不存盘、不训练),被训练的是生成 Q/K/V 的 <code>WQ/WK/WV</code>
+          (<a class="xref" href="chapter-17.html">第 17 章</a>)。
+        </p>
+
+        <h3>几个最容易混的点</h3>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>容易混的点</th><th>正确理解</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>每层是不是“有一套 Q/K/V”?</strong></td>
+                <td><strong>参数</strong>是每层自己的 <code>WQ/WK/WV/WO</code>; <strong>Q/K/V</strong> 是前向时用当前隐藏状态现算出来的中间结果。同层内所有位置共享这套参数,层与层之间不共享。</td>
+              </tr>
+              <tr>
+                <td><strong><code>context_size / model_dim / head_num</code> 各管什么?</strong></td>
+                <td><code>context_size</code> 管一次最多看多少个 token;<code>model_dim</code> 管每个 token 的隐藏向量有多宽;<code>head_num</code> 管把这份宽度切成几个头并行去看,所以 <code>head_dim = model_dim / head_num</code>。</td>
+              </tr>
+              <tr>
+                <td><strong>训练和生成时主干里传的东西一样吗?</strong></td>
+                <td>本质一样,传的都是“整条前缀当前的隐藏状态序列”。区别只是:训练通常对<strong>所有位置</strong>一起算 loss;生成只取<strong>最后一个位置</strong>的 logits,选一个新 token 再接回去。</td>
+              </tr>
+              <tr>
+                <td><strong>KV cache 缓存的是什么?</strong></td>
+                <td>缓存的是<strong>某一层</strong>里旧 token 已算好的 K/V 结果,目的是少做重复计算;不是整网只剩一套 K/V,也不是把上下文窗口凭空变大。</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">把这四条分清,就不容易再把“参数”“中间结果”“窗口长度”“隐藏宽度”这些概念拧在一起。</p>
+        </div>
+        <p>
+          你也可以把隐藏状态想成一份“整句草稿”。最开始,每个 token 只有一个比较粗糙的“词向量草稿”;过一层 attention 后,
+          每个位置都读了一遍左边上文,草稿里多了“它和前文是什么关系”;再过一层 FFN,这份草稿又被逐词加工一遍。
+          所以层和层之间真正传递的,不是“一个个单词轮流往上送”,而是<strong>整条序列在当前时刻的一整版草稿</strong>。
+        </p>
+        <p>
+          <strong>真正的 GPT 家族会换配件,但骨架不变。</strong> 上图画的是最稳定的共通骨架。真实模型会在细节上换代:
+          位置编码可能从论文里的 sin/cos 换成<strong>可学习位置向量</strong>或 <strong>RoPE</strong>;LayerNorm 可能换成
+          <strong>RMSNorm</strong>;FFN 里的激活可能从 ReLU / GELU 变成 <strong>SwiGLU</strong>。但它们都没改那件根本事实:
+          <strong>这是一个 decoder-only Transformer,目标仍是预测下一个 token</strong>。
+        </p>
+
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
@@ -479,8 +1002,12 @@ encoding[pos][i + 1] = std::cos(angle);
             <li><strong>FFN</strong>:对每个词独立做“升维 → ReLU → 降维”,补充非线性加工。</li>
             <li>一块 Block = 注意力+残差+Norm,再 FFN+残差+Norm;输入输出同形,可无限堆叠。</li>
             <li><strong>位置编码</strong>用 sin/cos 把词序加进向量;encoder 双向看全句,decoder 带 causal mask 只看前文。</li>
+            <li><strong>别混三条轴</strong>:context window 决定“看多长”,model_dim 决定“每个 token 多厚”,head_num 决定“把这份厚度切成几个头”。</li>
             <li><strong>完整架构</strong> = 编码器塔 + 解码器塔;图中三处注意力(自注意力 / 掩码自注意力 / 交叉注意力)是同一套机制,只是 Q/K/V 来源不同。</li>
             <li><strong>交叉注意力</strong>让解码器“查阅”编码器输出(Q 来自解码器,K/V 来自编码器);GPT=decoder-only,BERT=encoder-only,T5/翻译=encoder-decoder。</li>
+            <li><strong>GPT 架构</strong> = Prompt tokens → Embedding + Position → N× decoder block → Final Norm → LM Head → 下一个 token 概率,再把生成结果接回去做自回归。</li>
+            <li>前向时形状几乎始终是 <code>seq_len × d_model</code>;Attention 用 Q·K <strong>现算</strong>跨词权重,FFN 用<strong>固定 W</strong>逐 token 加工;LM Head 与 MNIST 输出层同构。</li>
+            <li>与 MNIST 的本质差别:<strong>关联是静态全连接,还是 Attention 的内容相关动态混合</strong>;训练更新规则相同。</li>
           </ul>
         </section>
 
@@ -508,6 +1035,12 @@ encoding[pos][i + 1] = std::cos(angle);
             <summary class="quiz__q">问题 4:经典 Transformer 图里有三个注意力模块,它们到底有什么不同?</summary>
             <div class="quiz__a">
               <p>是同一套注意力机制,区别只在 Q/K/V 的来源:①<strong>编码器自注意力</strong>(Q/K/V 都来自输入,双向,无 mask);②<strong>解码器掩码自注意力</strong>(Q/K/V 来自已生成序列,带 causal mask,只看前文);③<strong>交叉注意力</strong>(Q 来自解码器,K/V 来自编码器输出),让解码时能“查阅原文”。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 5:GPT 这种 decoder-only 模型,相对“完整 Transformer 全图”删掉了哪些部分?</summary>
+            <div class="quiz__a">
+              <p>删掉了<strong>整个编码器塔</strong>,也删掉了解码器中部那层<strong>交叉注意力</strong>。保留下来的主干,就是很多层“带 causal mask 的自注意力 + FFN”反复堆叠,最顶上再接一个 LM Head 去预测下一个 token。</p>
             </div>
           </details>
         </div>

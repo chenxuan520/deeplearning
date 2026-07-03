@@ -105,6 +105,173 @@
   font-weight: 800;
 }
 
+/* 训练步骤时间轴 (第 15 章等) */
+.step-track {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0 0.25rem 0.35rem;
+  position: relative;
+  max-width: 42rem;
+  margin-inline: auto;
+}
+
+.step-track::before {
+  content: "";
+  position: absolute;
+  left: 1.22rem;
+  top: 1.6rem;
+  bottom: 1.6rem;
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    rgba(106, 195, 255, 0.85) 0%,
+    rgba(139, 123, 255, 0.85) 45%,
+    rgba(255, 207, 114, 0.85) 75%,
+    rgba(142, 240, 209, 0.85) 100%
+  );
+  border-radius: 2px;
+}
+
+.step-track__item {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: 0.85rem 1rem;
+  padding: 0.55rem 0;
+  align-items: start;
+}
+
+.step-track__item + .step-track__item {
+  margin-top: 0.15rem;
+}
+
+.step-track__badge {
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #eef4ff;
+  border: 2px solid transparent;
+  background: rgba(255, 255, 255, 0.06);
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.step-track__item--sample .step-track__badge {
+  background: rgba(106, 195, 255, 0.18);
+  border-color: rgba(106, 195, 255, 0.55);
+}
+
+.step-track__item--forward .step-track__badge {
+  background: rgba(139, 123, 255, 0.18);
+  border-color: rgba(139, 123, 255, 0.55);
+}
+
+.step-track__item--loss .step-track__badge {
+  background: rgba(255, 207, 114, 0.16);
+  border-color: rgba(255, 207, 114, 0.55);
+}
+
+.step-track__item--backward .step-track__badge {
+  background: rgba(255, 120, 120, 0.14);
+  border-color: rgba(255, 120, 120, 0.45);
+}
+
+.step-track__item--repeat .step-track__badge {
+  background: rgba(142, 240, 209, 0.16);
+  border-color: rgba(142, 240, 209, 0.55);
+}
+
+.step-track__body {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 0.75rem 0.95rem;
+}
+
+.step-track__title {
+  display: block;
+  font-weight: 700;
+  color: var(--text);
+  font-size: 0.98rem;
+  margin-bottom: 0.3rem;
+}
+
+.step-track__detail {
+  display: block;
+  color: var(--text-dim);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.step-track__detail code,
+.step-track__formula {
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  color: var(--text-soft);
+}
+
+.step-track__phase {
+  display: inline-block;
+  margin-bottom: 0.55rem;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--primary);
+  border: 1px solid rgba(106, 195, 255, 0.35);
+  background: rgba(106, 195, 255, 0.08);
+}
+
+.step-track__mini-pipe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin-top: 0.45rem;
+}
+
+.step-track__mini-pipe span {
+  padding: 0.2rem 0.45rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.78rem;
+  color: var(--text-soft);
+}
+
+.step-track__mini-pipe em {
+  color: var(--primary);
+  font-style: normal;
+  font-weight: 700;
+}
+
+@media (max-width: 520px) {
+  .step-track {
+    padding-left: 0;
+  }
+
+  .step-track::before {
+    left: 1.05rem;
+  }
+
+  .step-track__badge {
+    width: 2.1rem;
+    height: 2.1rem;
+    font-size: 0.85rem;
+  }
+
+  .step-track__item {
+    grid-template-columns: 2.15rem minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+}
+
 /* ============================================================= */
 /* 数学排版 (零依赖)                                              */
 /* ============================================================= */

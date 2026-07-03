@@ -1,11 +1,28 @@
 # CHANGELOG
 
-## Unreleased — 优化器与训练设施扩展
+## Unreleased — 训练设施 + CNN/RNN 扩展
 
-本次主要补齐 "现代神经网络训练" 中常见的几个组件, 让库不仅能跑通 MLP /
-Transformer, 还能比较合理地工程化使用. 没有引入新的依赖, 全部为 C++17 实现.
+本次主要补齐 "现代神经网络训练" 中常见的几个组件, 并把书里提到的最小 CNN /
+RNN 代码链路也落到仓库里, 让库不仅能跑通 MLP / CNN / RNN / Transformer,
+还能比较合理地工程化使用. 没有引入新的依赖, 全部为 C++17 实现.
 
 ### 新增
+
+#### CNN / RNN
+- 新模块 `src/deeplearning/cnn/`:
+  - `Conv2D` — 最小二维卷积层, 支持 stride / padding / 手写 forward/backward.
+  - `MaxPool2D` — 最小最大池化层, forward 记录 argmax, backward 按路由回传.
+  - `MiniCNNClassifier` — `conv + ReLU + max-pool + linear` 教学级分类器.
+- 新模块 `src/deeplearning/rnn/`:
+  - `SimpleRNN` — tanh 循环单元, 显式缓存整条序列并做 BPTT.
+  - `MiniRNNLM` — 最小字符级 RNN 语言模型, 支持 next-token loss / perplexity /
+    greedy 生成 / 梯度裁剪 / scheduler.
+- 新 demo:
+  - `src/demo/cnn_mnist` — 用最小 CNN 在 MNIST 子集上训练和评估.
+  - `src/demo/rnn_char` — 用最小 RNN 在字符语料上做 next-token 训练与生成.
+- 新测试:
+  - `src/test/cnn/cnn_test.h` — 卷积、池化前反向与 toy 图像分类收敛.
+  - `src/test/rnn/rnn_test.h` — RNN 已知权重前向与 toy 字符语料收敛 / 生成.
 
 #### 优化器
 - `OPTIMIZER_ADAM` — Adam (Kingma & Ba 2014), 带 bias correction.
@@ -104,8 +121,9 @@ Momentum / Adam / RMSProp 走 `L2-in-gradient` (`g += wd*w`); AdamW 走解耦的
 
 ### 测试
 
-47/47 tests pass, 跨多次运行结果一致 (修了之前的 flaky benchmark).
-新增的 13 个 test 覆盖了上面所有新接口.
+52/52 tests pass, 且新增的 CNN / RNN 定向 smoke demo 可编译运行.
+新增测试覆盖 optimizer / scheduler / grad clip / 激活函数 / mini-batch /
+Transformer / CNN / RNN 等核心接口.
 
 ## 后续 roadmap (尚未实现, 仅记录方向)
 
@@ -114,5 +132,6 @@ Momentum / Adam / RMSProp 走 `L2-in-gradient` (`g += wd*w`); AdamW 走解耦的
 - DataLoader (多线程读 + 自动 shuffle)
 - Mixed precision (float vs double)
 - SIMD / OpenBLAS 后端加速矩阵乘
-- CNN 算子 (conv + pool)
+- 更完整的 CNN 栈 (多层 conv / 多层池化 / 参数保存加载)
+- LSTM / GRU
 - 自动微分图 (autograd) — 目前是手动反向

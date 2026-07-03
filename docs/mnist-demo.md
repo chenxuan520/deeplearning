@@ -141,7 +141,7 @@ net.Train(train_data, train_target, callback, total_steps, /*batch=*/64, 1e-3);
   缩小 train(98.99%) 和 test(97.82%) 之间的 ~1pp 过拟合差距。
 - **数据增强**: 随机平移 1~2 像素 / 小角度旋转, MLP 也能再涨 0.3~0.5pp。
 - **Dropout**: 当前 `NeuralNetwork` 库尚未实现 Dropout (见 CHANGELOG 的 roadmap)。
-- **换 CNN**: 当前库没有卷积层。要达到 99%+ 几乎必须上 conv。
+- **换 CNN**: 仓库现在已有最小 `conv + pool` 实现（见 `src/deeplearning/cnn/` 与 `src/demo/cnn_mnist/`），但要稳定到 99%+ 仍通常需要更深的 CNN、更多通道和更完整的数据增强。
 
 ## 5. 与 Baseline 的兼容性
 

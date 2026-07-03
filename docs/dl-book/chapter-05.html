@@ -144,7 +144,7 @@ if (weight_pos != -1 &amp;&amp; weight_decay_ != 0.0)
 return learning_rate * g;                          <b class="cw-tag">3</b></code></pre>
           <ol class="code-walk__notes">
             <li><code>delta</code> 就是这个参数的梯度(由反向传播算出)。</li>
-            <li>(可选)weight decay / L2 正则:把权重稍微往 0 拉一点,抑制过拟合;注意只对权重做,偏置不动(<code>weight_pos != -1</code> 才进来)。<a class="xref" href="chapter-10.html#3-l2-正则-权重衰减">第 10 章</a>细讲。</li>
+            <li>(可选)weight decay / L2 正则:把权重稍微往 0 拉一点,抑制过拟合;注意只对权重做,偏置不动(<code>weight_pos != -1</code> 才进来)。<a class="xref" href="chapter-10.html#3-l2-正则--weight-decay-别让权重太嚣张">第 10 章</a>细讲。</li>
             <li>返回“这一步要改变的量” = 学习率 × 梯度。这正是更新公式里的 <var>η</var>·梯度。</li>
           </ol>
         </figure>

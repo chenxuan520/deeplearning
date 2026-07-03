@@ -100,15 +100,77 @@ a:hover {
 }
 
 .book-header__home {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  max-width: min(12.5rem, 34vw);
+  padding: 0.38rem 0.72rem 0.38rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(106, 195, 255, 0.08) 100%
+  );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   font-weight: 800;
   letter-spacing: 0.01em;
   color: var(--text);
   white-space: nowrap;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.book-header__home-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  background: rgba(246, 248, 250, 0.1);
+  color: #f0f3f6;
+  flex: 0 0 auto;
+}
+
+.book-header__home-icon svg {
+  display: block;
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.book-header__home-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .book-header__home:hover {
   text-decoration: none;
-  color: var(--primary);
+  color: #f6f8fa;
+  border-color: rgba(246, 248, 250, 0.28);
+  background: linear-gradient(
+    135deg,
+    rgba(246, 248, 250, 0.12) 0%,
+    rgba(106, 195, 255, 0.16) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 0 1px rgba(106, 195, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.book-header__home:hover .book-header__home-icon {
+  background: rgba(246, 248, 250, 0.18);
+  color: #ffffff;
+}
+
+.book-header__home:focus-visible {
+  outline: 2px solid rgba(106, 195, 255, 0.65);
+  outline-offset: 2px;
 }
 
 .book-header__current {
@@ -339,6 +401,135 @@ a.xref:hover {
   color: var(--accent);
   font-weight: 700;
   border-bottom: 1px dotted rgba(142, 240, 209, 0.5);
+}
+
+/* 术语表悬浮卡:正文里可点击的 glossary 词(蓝色,与 .term 绿色区分) */
+.term--glossary {
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--primary);
+  font-weight: 600;
+  border-bottom: 1px dotted rgba(106, 195, 255, 0.55);
+  text-decoration: none;
+  border-radius: 2px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.term.term--glossary {
+  color: var(--primary);
+  border-bottom-color: rgba(106, 195, 255, 0.55);
+}
+
+.term--glossary:hover,
+.term--glossary:focus-visible {
+  color: #a8dcff;
+  background: rgba(106, 195, 255, 0.12);
+  outline: none;
+}
+
+.term--glossary.is-active {
+  color: #fff;
+  background: rgba(106, 195, 255, 0.22);
+  border-bottom-style: solid;
+}
+
+code .term--glossary,
+pre .term--glossary {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  font-weight: 600;
+}
+
+.glossary-popover {
+  position: fixed;
+  z-index: 1200;
+  width: min(22rem, calc(100vw - 2rem));
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--panel-strong);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  animation: glossary-pop-in 0.14s ease-out;
+}
+
+@keyframes glossary-pop-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.glossary-popover__inner {
+  padding: 0.85rem 1rem 0.75rem;
+}
+
+.glossary-popover__title {
+  margin: 0 0 0.45rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.4;
+}
+
+.glossary-popover__body {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: var(--text-soft);
+}
+
+.glossary-popover__foot {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.7rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.8rem;
+}
+
+.glossary-popover__link {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.glossary-popover__link:hover {
+  text-decoration: underline;
+}
+
+.glossary-popover__hint {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+
+.glossary-popover__arrow {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--panel-strong);
+  border-left: 1px solid var(--line-strong);
+  border-top: 1px solid var(--line-strong);
+  transform: rotate(45deg);
+}
+
+.glossary-popover.is-below .glossary-popover__arrow {
+  top: -6px;
+  left: var(--arrow-x, 1.5rem);
+}
+
+.glossary-popover.is-above .glossary-popover__arrow {
+  bottom: -6px;
+  left: var(--arrow-x, 1.5rem);
+  transform: rotate(225deg);
+}
+
+.glossary-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1199;
+  background: transparent;
 }
 
 /* 引用 / 旁白 */

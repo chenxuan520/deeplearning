@@ -15,19 +15,26 @@
         <h1>词嵌入与 word2vec</h1>
 
         <p class="lead">
-          不管是 RNN 还是后面的 Transformer,处理文字前都得先把<strong>词变成向量</strong>。可“词”本是一个个
-          <strong>离散符号</strong>,怎么变成<strong>有含义</strong>的数字?这一章讲<span class="term">词嵌入(embedding)</span>——
-          让每个词第一次拥有自己的“<strong>语义坐标</strong>”,意思相近的词,坐标也相近。
+          不管是 <a class="xref" href="chapter-14.html">RNN</a> 还是后面的 <a class="xref" href="chapter-18.html">Transformer</a>,处理文字前都得先把<strong>词变成向量</strong>。
+          可“词”本是<strong>离散符号</strong>,计算机只认数字——怎么变出来的向量还<strong>带语义</strong>?
+          这一章把<span class="term">词嵌入(embedding)</span>从 one-hot 的缺陷讲起,一直落到 <strong>word2vec 具体怎么训</strong>,
+          以及仓库里 <code>TokenEmbedding</code> 查表长什么样;读完后,<a class="xref" href="chapter-19.html">第 19 章</a>的 embedding 层、
+          <a class="xref" href="chapter-17.html">第 17 章</a>注意力里的点积,就都有根了。
         </p>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>为什么最朴素的 <strong>one-hot</strong> 表示又<strong>浪费</strong>又<strong>不懂语义</strong>;</li>
-            <li><strong>分布式表示</strong>:用一个稠密向量当词的“语义坐标”;</li>
-            <li>怎么用<strong><a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦</strong>衡量两个词有多相近(<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">回到第 1 章</a>);</li>
-            <li><strong>word2vec</strong> 怎么靠“看上下文”把词向量学出来(CBOW / skip-gram);</li>
-            <li>为什么会有 <em>国王−男人+女人≈女王</em> 这种神奇的向量算术,以及它和大模型 embedding 层的关系。</li>
+            <li>one-hot 为什么又浪费又<strong>正交无语义</strong>;</li>
+            <li>词嵌入表 <code>vocab_size × dim</code> 是什么、<strong>查表</strong>在数学上等价于什么;</li>
+            <li>余弦相似度 / 点积如何衡量“意思有多近”;</li>
+            <li><strong>分布假设</strong>:“看上下文”为何能学出语义;</li>
+            <li><strong>skip-gram / CBOW 的网络有几层、每层是什么</strong>(不是黑盒);</li>
+            <li><strong>CBOW / skip-gram</strong> 各怎么做完形填空、损失函数长什么样;</li>
+            <li><strong>负采样</strong> 为什么能让 word2vec 在百万词表上训得动;</li>
+            <li>走一遍从句子抽样本 → 前向 → 反传,<strong>embedding 向量怎么被拧</strong>;</li>
+            <li>国王−男人+女人≈女王 意味着什么、又有什么局限;</li>
+            <li>从 word2vec 到 <a class="xref" href="chapter-19.html">大模型 embedding 层</a> 的传承与差别。</li>
           </ul>
         </section>
 
@@ -35,117 +42,601 @@
         <p>
           词是符号,得先编码成数字。最直接的办法是<span class="term">one-hot</span>:词表里有 <var>V</var> 个词,
           就用一个长度 <var>V</var> 的向量,<strong>只有这个词对应的位置是 1,其余全是 0</strong>。
-          比如词表 [猫, 狗, 苹果],那“狗” = [0, 1, 0]。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead><tr><th>词</th><th>id</th><th>one-hot(词表 V=5)</th></tr></thead>
+            <tbody>
+              <tr><td>猫</td><td>0</td><td>[1, 0, 0, 0, 0]</td></tr>
+              <tr><td>狗</td><td>1</td><td>[0, 1, 0, 0, 0]</td></tr>
+              <tr><td>苹果</td><td>2</td><td>[0, 0, 1, 0, 0]</td></tr>
+              <tr><td>…</td><td>…</td><td>…</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">id 只是行号;one-hot 把“我是第几个词”展开成 <var>V</var> 维稀疏向量。</p>
+        </div>
+        <p>
+          <a class="xref" href="chapter-14.html">第 14 章</a> RNN 若直接吃 one-hot,通常还会乘一个矩阵 <var>W</var><sub>x</sub> 变成稠密向量——
+          其实那个 <var>W</var><sub>x</sub> 的<strong>每一行</strong>,就是一个词的嵌入向量(下面第 3 节)。
         </p>
 
         <h2>2. one-hot 的两个毛病</h2>
         <ul>
-          <li><strong>维度爆炸、极其稀疏</strong>:真实词表动辄几万几十万,每个词就是一个几万维、只有一个 1 的向量,又大又空。</li>
-          <li><strong>完全不懂语义</strong>:任意两个不同词的向量都<strong>互相垂直</strong>,点积恒为 0(<a class="xref" href="chapter-01.html">第 1 章</a>)。也就是说,在 one-hot 眼里,
-          “猫”和“狗”的相似度,跟“猫”和“苹果”的相似度<strong>一样都是 0</strong>——它把词与词之间的关系全丢了。</li>
+          <li><strong>维度爆炸、极其稀疏</strong>:真实词表动辄 3 万~50 万(子词 BPE 后见<a class="xref" href="chapter-20.html">第 20 章</a>),每个词一个 <var>V</var> 维向量,99.99% 都是 0,存储和计算都浪费。</li>
+          <li><strong>完全不懂语义</strong>:任意两个<strong>不同</strong>词的 one-hot 向量都<strong>互相垂直</strong>——
+            <a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>恒为 0。在 one-hot 眼里,“猫”和“狗”的相似度,与“猫”和“苹果”<strong>一样都是 0</strong>。</li>
         </ul>
+        <div class="mathblock reveal">
+          one-hot(猫) · one-hot(狗) = 0,　one-hot(猫) · one-hot(苹果) = 0
+          <span class="label">不同词永远正交,没有任何“远近”可言</span>
+        </div>
         <div class="callout callout--warn reveal">
           <span class="callout__title">我们真正想要的</span>
           <p>
-            一种<strong>又短又懂语义</strong>的表示:维度不大(几百维),而且<strong>意思相近的词,向量也相近</strong>
-            (“猫”和“狗”应该离得近,“猫”和“苹果”离得远)。这就是词嵌入。
+            <strong>短</strong>(几十~几百维)、<strong>稠密</strong>(每维是小数)、且<strong>语义相近 → 向量相近</strong>。
+            这就是<span class="term">词嵌入</span> / <span class="term">分布式表示(distributed representation)</span>。
           </p>
         </div>
 
-        <h2>3. 分布式表示:给词一个“语义坐标”</h2>
+        <h2>3. 词嵌入表:查表到底是什么</h2>
         <p>
-          <span class="term">词嵌入</span>把每个词表示成一个<strong>稠密的低维向量</strong>(比如 300 维,每一维都是有意义的小数)。
-          怎么用几个数字表示一个复杂事物?你其实早会了——屏幕上任何颜色都用 <strong>RGB 三个数</strong>表示,
-          相近的颜色三个数也相近。词嵌入一模一样,只是维度更高:<strong>用一串数字表示一个词的“意思”,意思越近,向量越近。</strong>
-        </p>
-
-        <h2>4. 语义相近 = 向量相近</h2>
-        <p>
-          有了向量,就能用<a class="xref" href="chapter-01.html">第 1 章</a>的<strong><a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a> / 余弦相似度</strong>衡量两个词有多像:<strong>方向越接近,越相似</strong>。
-          训练的目标,就是把语义相近的词“<strong>挤</strong>”到相近的方向上。画到二维平面上,大概是这样:
+          词嵌入的核心数据结构是一张<strong>表</strong>(矩阵)<var>E</var>,形状 <strong>词表大小 × 向量维度</strong>。
+          第 <var>i</var> 行就是 id 为 <var>i</var> 的那个词的向量。给定 token id,不做矩阵乘法,直接<strong>取第几行</strong>——这叫查表(lookup)。
         </p>
         <div class="figure reveal">
           <div class="diagram">
-            <svg viewBox="0 0 460 250" role="img" aria-label="词向量语义空间示意">
-              <defs><marker id="wm" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8ef0d1" /></marker></defs>
-              <line x1="30" y1="220" x2="440" y2="220" stroke="#2b3a58" stroke-width="1" />
-              <line x1="30" y1="30" x2="30" y2="220" stroke="#2b3a58" stroke-width="1" />
-              <!-- cat/dog cluster -->
-              <circle cx="90" cy="185" r="4" fill="#6ac3ff" /><text x="66" y="200" fill="#b6c5e1" font-size="12">猫</text>
-              <circle cx="120" cy="168" r="4" fill="#6ac3ff" /><text x="128" y="164" fill="#b6c5e1" font-size="12">狗</text>
-              <text x="60" y="225" fill="#8499bd" font-size="10">语义相近 → 挨得近</text>
-              <!-- analogy -->
-              <circle cx="250" cy="180" r="4" fill="#ffcf72" /><text x="222" y="196" fill="#b6c5e1" font-size="12">男人</text>
-              <circle cx="300" cy="100" r="4" fill="#ffcf72" /><text x="306" y="96" fill="#b6c5e1" font-size="12">国王</text>
-              <circle cx="340" cy="196" r="4" fill="#ffcf72" /><text x="346" y="210" fill="#b6c5e1" font-size="12">女人</text>
-              <circle cx="390" cy="116" r="4" fill="#ffcf72" /><text x="396" y="112" fill="#b6c5e1" font-size="12">女王</text>
-              <line x1="250" y1="180" x2="300" y2="100" stroke="#8ef0d1" stroke-width="2" marker-end="url(#wm)" />
-              <line x1="340" y1="196" x2="390" y2="116" stroke="#8ef0d1" stroke-width="2" marker-end="url(#wm)" />
-              <text x="300" y="150" fill="#8ef0d1" font-size="10">“变成王室”的方向</text>
-            </svg>
+            <div class="pipe">
+              <div class="pipe__box">token id<small>例如 1 =「狗」</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">embedding 表 E<small>vocab × dim, 每行一词</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">向量 h<small>dim 维, 喂给 RNN / Transformer</small></div>
+            </div>
           </div>
-          <p class="figure__cap">在训练好的词空间里,“猫/狗”聚成一堆;而“男人→国王”和“女人→女王”竟是<strong>平行</strong>的——语义关系变成了几何关系。</p>
+          <p class="figure__cap">id 是行号;<code>embedding_table_[id]</code> 直接取出该行。表里每一行都是<strong>可训练参数</strong>。</p>
+        </div>
+        <p>
+          若坚持用 one-hot 记号,查表等价于矩阵乘:<var>x</var> = <var>E</var><sup>T</sup> · one-hot —— 只有一个 1 的稀疏向量乘大矩阵,结果只是<strong>挑出对应行</strong>。
+          实现时当然不会真做这个大乘法,直接索引一行即可。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/token_embedding.cpp · Init + Encode(精简)</figcaption>
+          <pre class="code-walk__code"><code>embedding_table_.assign(vocab_size_, vector&lt;double&gt;(model_dim_, 0));
+// 随机初始化每行(类似 Xavier 缩放的均匀分布)              <b class="cw-tag">1</b>
+
+for (int token_id : token_ids)
+  output.push_back(embedding_table_[token_id]);           <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>一开始每行是随机小数,还没有语义;<strong>训练</strong>后才把相近词拧到相近方向。</li>
+            <li>Encode:一串 id → 一串向量,供<a class="xref" href="chapter-19.html">第 19 章</a> Transformer 吃。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">用 RGB 理解“向量”</span>
+          <p>
+            颜色用 (R,G,B) 三个数表示,相近颜色三个数也相近。词嵌入用 <strong>dim 维</strong>(如 300、768)表示“意思”,
+            训练目标就是让<strong>上下文相似的词,坐标也靠近</strong>。
+          </p>
         </div>
 
-        <h2>5. word2vec:靠“上下文”把词向量学出来</h2>
+        <h2>4. 语义相近 = 方向相近:点积与余弦</h2>
         <p>
-          这些向量不是人手工标的,而是<strong>训练学出来的</strong>。经典方法 <span class="term">word2vec</span> 基于一个朴素假设——
-          <strong>“看它跟谁在一起,就知道它是什么”</strong>(近朱者赤):经常出现在<strong>相似上下文</strong>里的词,意思也相近。
-          它把这变成一个“完形填空”式的预测任务,用海量文本自监督地训练:
+          有了向量,用<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>衡量相似度:<strong>方向越一致,点积越大</strong>。
+          但向量长度也会影响点积,所以常用<strong>余弦相似度</strong>——只看夹角、不看长短:
         </p>
-        <ul>
-          <li><span class="pill">CBOW</span>用<strong>上下文猜中心词</strong>:遮住中间的词,拿两边的词去预测它(“我 __ 了一杯咖啡” → “喝”)。</li>
-          <li><span class="pill">skip-gram</span>反过来,用<strong>中心词猜上下文</strong>:给“喝”,预测它周围可能出现“咖啡/水/酒”。</li>
-        </ul>
+        <div class="mathblock reveal">
+          cos(θ) = (<var>a</var> · <var>b</var>) / (|<var>a</var>| · |<var>b</var>|)
+          <span class="label">取值 −1~1;越接近 1 越相似。注意力里的 Q·K 也是同一套几何(<a class="xref" href="chapter-17.html">第 17 章</a>)</span>
+        </div>
+        <p>手算二维例子(已归一化长度):</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>词对</th><th>向量(示意)</th><th>余弦 ≈</th><th>直觉</th></tr></thead>
+            <tbody>
+              <tr><td>猫 / 狗</td><td>(0.9, 0.4) vs (0.85, 0.45)</td><td class="is-hot">0.98</td><td>方向很接近</td></tr>
+              <tr><td>猫 / 苹果</td><td>(0.9, 0.4) vs (−0.2, 0.95)</td><td>≈ 0.1</td><td>几乎无关</td></tr>
+            </tbody>
+          </table>
+        </div>
         <p>
-          训练中,为了把这些完形填空做对,模型被迫把<strong>常出现在相似语境</strong>的词,调整到<strong>相近的向量方向</strong>——
-          语义就这样“<strong>无中生有</strong>”地长了出来。这其实就是<a class="xref" href="chapter-11.html">第 11 章</a>说的<strong>自监督</strong>:答案(被遮的词)文本里现成就有,不用人标。
+          word2vec 的训练,本质上就是在海量句子里,把<strong>常一起出现的词</strong>的向量夹角<strong>拧小</strong>,
+          不常共现的<strong>拧开</strong>。
         </p>
 
-        <h2>6. 神奇的向量算术</h2>
+        <h2>5. 分布假设:凭什么“看上下文”能学语义?</h2>
         <p>
-          训练好的词向量有个令人惊艳的性质:<strong>语义关系变成了可以加减的几何关系</strong>。最著名的例子:
+          词向量不是人手工标注“猫和狗相似度 0.9”,而是靠一条语言学直觉,叫<span class="term">分布假设(distributional hypothesis)</span>:
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">“You shall know a word by the company it keeps”</span>
+          <p>
+            <strong>一个词的意思,由它经常出现的上下文决定。</strong>“猫”常跟“抓”“毛”“喵”一起出现;
+            “狗”常跟“吠”“忠诚”“骨头”一起——它们的上下文分布很像,所以向量该靠近。
+            反过来,很少跟“猫”共现的词(如“GDP”“编译”),向量应离得远。
+          </p>
+        </div>
+        <p>
+          这正好能变成<strong>自监督</strong>任务(<a class="xref" href="chapter-11.html">第 11 章</a>):文本里<strong>被遮住的词</strong>就是标签,
+          周围词是输入,不需要人工标注。word2vec 和<a class="xref" href="chapter-19.html">语言模型预测下一个 token</a>用的是<strong>同一哲学</strong>,
+          只是 word2vec 只管学一张静态词表,语言模型还要学上下文动态表示。
+        </p>
+
+        <h2>6. word2vec 的网络长什么样?</h2>
+        <p>
+          很多人卡在“word2vec 到底训了个什么网络”。答案可能出乎你意料:<strong>它几乎是最浅的<a class="xref" href="chapter-03.html">三层网络</a></strong>——
+          没有 ReLU、没有堆很多层,核心就是<strong>两张 embedding 表</strong> + <strong>点积打分</strong> + <strong>分类损失</strong>。
+          先看清结构,后面训练步骤才好跟。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">和 MNIST 对照:同一类“分类头”</span>
+          <p>
+            MNIST 是 784 → 隐藏层 → <strong>10 类 softmax</strong>。<br />
+            skip-gram 是 中心词 one-hot → <strong>dim 维词向量</strong> → <strong>词表 V 类 softmax</strong>(或负采样版二分类)。<br />
+            <strong>差别</strong>:输入、输出都是“词”,而且中间那层 dim 维向量正是我们最终要保存的<strong>词嵌入</strong>。
+          </p>
+        </div>
+
+        <h3>6.1 两张表:W<sub>in</sub> 与 W<sub>out</sub></h3>
+        <p>
+          word2vec 的可训练参数主要是两个矩阵,形状都是 <strong>V × dim</strong>(V = 词表大小,dim = 词向量维度,常取 100~300):
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>矩阵</th><th>形状</th><th>第 i 行是什么</th><th>什么时候用</th></tr></thead>
+            <tbody>
+              <tr><td><strong>W<sub>in</sub></strong> 输入嵌入</td><td>V × dim</td><td>词 i 当<strong>输入</strong>时的向量 <var>u</var><sub>i</sub></td><td>中心词(skip-gram)或上下文词(CBOW)查表</td></tr>
+              <tr><td><strong>W<sub>out</sub></strong> 输出嵌入</td><td>V × dim</td><td>词 i 当<strong>预测目标</strong>时的向量 <var>v</var><sub>i</sub></td><td>和 hidden 做点积,看“像不像这个词”</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">训完后通常<strong>丢掉 W<sub>out</sub></strong>,只留 W<sub>in</sub>(或两者平均)当最终词向量文件。训练过程中两张表都在变。</p>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/embedding/word2vec.cpp · InitEmbeddings(精简)</figcaption>
+          <pre class="code-walk__code"><code>input_embeddings_.assign(vocab_size_, vector&lt;double&gt;(embed_dim, 0));
+output_embeddings_.assign(vocab_size_, vector&lt;double&gt;(embed_dim, 0));
+// 对两张表每行做均匀随机初始化 …                    <b class="cw-tag">1</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>代码里叫 <code>input_embeddings_</code> / <code>output_embeddings_</code>,就是书里的 <strong>W<sub>in</sub></strong> 与 <strong>W<sub>out</sub></strong>。训之前全是随机小数,没有语义。</li>
+          </ol>
+        </figure>
+
+        <h3>6.2 skip-gram 结构图:中心词猜上下文</h3>
+        <p>
+          <span class="pill">skip-gram</span> 一次训练样本 = (中心词, 目标上下文词)。
+          网络数据流可以画成下面这样——请对照图从左往右读:
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <p style="text-align:center;color:var(--text-dim);font-size:0.85rem;margin:0 0 0.6rem">skip-gram 一次前向 · 样本 (中心 sat → 预测上下文 cat)</p>
+            <div class="pipe">
+              <div class="pipe__box">① 输入<small>中心词 sat<br/>one-hot(V 维)</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">W<sub>in</sub> 查表<small>取出第 sat 行</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">② 隐藏层 h<small>dim 维词向量<br/><strong>无 ReLU</strong></small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">③ 与 W<sub>out</sub> 点积<small>每个词 w: score = v<sub>w</sub>·h</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">④ softmax<small>V 个概率<br/>希望 <strong>cat</strong> 最高</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">
+            三层结构:<strong>输入 one-hot → 隐藏层词向量 h → 输出 logits → softmax</strong>。
+            和<a class="xref" href="chapter-03.html">第 3 章</a>小 MLP 同构,只是隐藏层没有激活函数,且 h 正是我们要保存的嵌入。
+          </p>
+        </div>
+        <p>
+          实现时<strong>不会真构造 V 维 one-hot</strong>,而是直接用中心词 id 去 W<sub>in</sub> <strong>查一行</strong>——和第 3 节 embedding 查表完全一样。
+          输出侧也不是真的乘满 V×dim 矩阵,而是只算<strong>目标词那一行</strong>与 <var>h</var> 的点积(负采样时连全 V 都不算)。
+        </p>
+
+        <h3>6.3 CBOW 结构图:上下文猜中心词</h3>
+        <p>
+          <span class="pill">CBOW</span> 把窗口里<strong>多个上下文词</strong>的嵌入向量<strong>平均</strong>,得到一个 hidden,再去预测中心词:
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <p style="text-align:center;color:var(--text-dim);font-size:0.85rem;margin:0 0 0.6rem">CBOW · 窗口 the, cat, <strong>sat</strong>, on, the → 猜中心词 sat</p>
+            <div class="pipe">
+              <div class="pipe__box">the</div>
+              <div class="pipe__box">cat</div>
+              <div class="pipe__box">on</div>
+              <div class="pipe__box">the</div>
+            </div>
+            <p style="text-align:center;color:var(--primary);margin:0.5rem 0">↓ 各自查 W<sub>in</sub>, 向量逐元素平均</p>
+            <div class="pipe">
+              <div class="pipe__box">隐藏层 h<small>mean(u<sub>the</sub>, u<sub>cat</sub>, u<sub>on</sub>, …)</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">与 W<sub>out</sub> 点积 + softmax<small>在词表 V 上分类</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">目标 sat<small>中心词概率 ↑</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">CBOW = 多输入平均成一个 h,再当分类问题猜中心词;后半段和 skip-gram 相同。</p>
+        </div>
+
+        <h2>7. 从语料造样本:滑窗扫一遍就有训练集</h2>
+        <p>
+          网络结构清楚了,接下来是<strong>数据从哪来</strong>。不需要人工标注:拿一篇语料,用小窗口在句子上<strong>滑动</strong>,
+          每个位置自动抠出训练对。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram" style="text-align:center;padding:1.2rem 1rem">
+            <div style="display:inline-flex;flex-wrap:wrap;gap:0.35rem 0.75rem;align-items:center;font-family:ui-monospace,monospace;font-size:1.05rem;margin-bottom:0.75rem">
+              <span>the</span><span>cat</span><span style="color:var(--accent);font-weight:700;padding:0.1rem 0.35rem;border:2px dashed var(--primary);border-radius:6px">sat</span><span>on</span><span>the</span><span>mat</span>
+            </div>
+            <p style="margin:0;color:var(--text-dim);font-size:0.88rem">虚线框 = 窗口(左右各 1 词), 加粗 = 中心词</p>
+            <p style="margin:0.75rem 0 0;color:var(--text-soft);font-size:0.88rem">
+              skip-gram:(sat→cat), (sat→on)　｜　CBOW:(the, cat, on, the → sat)
+            </p>
+          </div>
+          <p class="figure__cap">窗口右移一格,中心词换成 <em>on</em>,又得到新样本。整本语料扫完,可得到<strong>数亿条</strong>免费训练对。</p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>模型</th><th>输入</th><th>预测目标</th><th>直觉</th></tr></thead>
+            <tbody>
+              <tr><td><span class="pill">CBOW</span></td><td>上下文多个词</td><td><strong>中心词</strong></td><td>“我 __ 了一杯咖啡” → 猜“喝”</td></tr>
+              <tr><td><span class="pill">skip-gram</span></td><td><strong>中心词</strong></td><td>上下文每个词</td><td>给“喝” → 猜周围可能出现“咖啡/水”</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>句子 <em>“the cat sat on the mat”</em>,窗口 = 左右各 1 词,中心词 <strong>sat</strong> 时 skip-gram 得到:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>步骤</th><th>中心词(输入)</th><th>正样本(要预测)</th><th>网络在干什么</th></tr></thead>
+            <tbody>
+              <tr><td>样本 A</td><td>sat</td><td>cat</td><td>给 sat 的向量,让 cat 那一维 softmax 概率 ↑</td></tr>
+              <tr><td>样本 B</td><td>sat</td><td>on</td><td>给 sat 的向量,让 on 那一维 softmax 概率 ↑</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/embedding/word2vec.cpp · BuildSkipGramPairs(精简)</figcaption>
+          <pre class="code-walk__code"><code>for (int center_pos = 0; center_pos &lt; seq_len; center_pos++) {
+  for (int context_pos = left .. right) {
+    if (context_pos == center_pos) continue;
+    centers.push_back(token_ids[center_pos]);
+    contexts.push_back(token_ids[context_pos]);     <b class="cw-tag">1</b>
+  }
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>滑窗扫句子:每个中心词,对窗口内每个上下文位置各造一条训练对。整篇语料重复此过程,就得到海量免费样本。</li>
+          </ol>
+        </figure>
+
+        <h2>8. 完整训练七步走:以 skip-gram 为例</h2>
+        <p>
+          下面用<strong>极小词表</strong>把一次训练从头到尾走通。词表 V=4:<strong>cat(0), sat(1), on(2), mat(3)</strong>,向量维度 dim=2。
+          当前样本:<strong>中心词 sat, 目标上下文词 cat</strong>。参数刚随机初始化:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>词</th><th>W<sub>in</sub> 行 (输入向量 u)</th><th>W<sub>out</sub> 行 (输出向量 v)</th></tr></thead>
+            <tbody>
+              <tr><td>cat</td><td>[0.5, 0.1]</td><td>[0.2, 0.8]</td></tr>
+              <tr><td class="is-hot">sat</td><td class="is-hot">[0.1, 0.3]</td><td>[0.4, 0.1]</td></tr>
+              <tr><td>on</td><td>[0.6, −0.2]</td><td>[0.1, 0.5]</td></tr>
+              <tr><td>mat</td><td>[−0.1, 0.4]</td><td>[0.3, 0.2]</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <ol class="step-track" aria-label="skip-gram 一次训练更新">
+              <li class="step-track__item step-track__item--sample">
+                <span class="step-track__badge">1</span>
+                <div class="step-track__body">
+                  <span class="step-track__phase">造样本</span>
+                  <span class="step-track__title">从语料里取一对 (中心, 目标)</span>
+                  <span class="step-track__detail">本例:中心词 <strong>sat</strong>, 要预测的上下文词 <strong>cat</strong></span>
+                </div>
+              </li>
+              <li class="step-track__item step-track__item--forward">
+                <span class="step-track__badge">2</span>
+                <div class="step-track__body">
+                  <span class="step-track__phase">前向 · 查表</span>
+                  <span class="step-track__title">取出中心词嵌入</span>
+                  <span class="step-track__detail step-track__formula">h = u<sub>sat</sub> = [0.1, 0.3]</span>
+                </div>
+              </li>
+              <li class="step-track__item step-track__item--forward">
+                <span class="step-track__badge">3</span>
+                <div class="step-track__body">
+                  <span class="step-track__phase">前向 · 打分</span>
+                  <span class="step-track__title">对每个候选词算 logits</span>
+                  <span class="step-track__detail step-track__formula">score<sub>w</sub> = v<sub>w</sub> · h</span>
+                  <div class="step-track__mini-pipe" aria-hidden="true">
+                    <span>cat <strong>0.26</strong></span><em>→</em><span>on 0.16</span><em>→</em><span>mat 0.09</span><em>→</em><span>sat 0.07</span>
+                  </div>
+                </div>
+              </li>
+              <li class="step-track__item step-track__item--forward">
+                <span class="step-track__badge">4</span>
+                <div class="step-track__body">
+                  <span class="step-track__phase">前向 · 概率</span>
+                  <span class="step-track__title">softmax 变成概率分布</span>
+                  <span class="step-track__detail">P(cat) ≈ <strong>0.30</strong>, 其余更低 — 模型还不够自信</span>
+                </div>
+              </li>
+              <li class="step-track__item step-track__item--loss">
+                <span class="step-track__badge">5</span>
+                <div class="step-track__body">
+                  <span class="step-track__phase">算损失</span>
+                  <span class="step-track__title">交叉熵衡量猜得有多差</span>
+                  <span class="step-track__detail step-track__formula">loss = −log P(cat) ≈ 1.20</span>
+                </div>
+              </li>
+              <li class="step-track__item step-track__item--backward">
+                <span class="step-track__badge">6</span>
+                <div class="step-track__body">
+                  <span class="step-track__phase">反传</span>
+                  <span class="step-track__title">梯度回传,更新向量</span>
+                  <span class="step-track__detail step-track__formula">grad = probs − one-hot(cat) · 更新 u<sub>sat</sub>, v<sub>cat</sub> …</span>
+                </div>
+              </li>
+              <li class="step-track__item step-track__item--repeat">
+                <span class="step-track__badge">7</span>
+                <div class="step-track__body">
+                  <span class="step-track__phase">重复</span>
+                  <span class="step-track__title">下一条样本,再跑 2→6</span>
+                  <span class="step-track__detail">千万次后,常共现的 <strong>cat / sat</strong> 向量会越靠越近</span>
+                </div>
+              </li>
+            </ol>
+          </div>
+          <p class="figure__cap">③ 手算 cat 的分数:0.2×0.1 + 0.8×0.3 = <strong>0.26</strong>(最高,但 softmax 后仍只有 30%)。⑥ 梯度会把 cat 的概率往 1 推。</p>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/embedding/word2vec.cpp · TrainSkipGramPair + UpdatePositivePair(精简)</figcaption>
+          <pre class="code-walk__code"><code>auto&amp; input_vec = input_embeddings_[center_id];   // u
+auto&amp; output_vec = output_embeddings_[context_id]; // v
+const double score = Dot(input_vec, output_vec);
+loss = -log(sigmoid(score));                         <b class="cw-tag">1</b>
+
+const double grad_scale = 1.0 - sigmoid(score);
+input_vec[dim]  += grad_scale * lr * output_vec[dim];
+output_vec[dim] += grad_scale * lr * input_vec[dim]; <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>正样本:中心词向量 u 与上下文词向量 v 点积,希望 sigmoid(score)→1。损失是 −log σ(u·v)。</li>
+            <li>对 u、v 同步更新,把共现对<strong>拉近</strong>——对应书上第 8 节第 ⑥ 步“反传更新”。</li>
+          </ol>
+        </figure>
+
+        <p><strong>③ logits 怎么算</strong>——对每个词 w,score<sub>w</sub> = <var>v</var><sub>w</sub> · <var>h</var>(就是隐藏层和 W<sub>out</sub> 第 w 行做点积):</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead><tr><th>候选词 w</th><th>v<sub>w</sub> · h 计算</th><th>score</th></tr></thead>
+            <tbody>
+              <tr><td class="is-hot">cat ✓</td><td>0.2×0.1 + 0.8×0.3</td><td class="is-hot">0.26</td></tr>
+              <tr><td>sat</td><td>0.4×0.1 + 0.1×0.3</td><td>0.07</td></tr>
+              <tr><td>on</td><td>0.1×0.1 + 0.5×0.3</td><td>0.16</td></tr>
+              <tr><td>mat</td><td>0.3×0.1 + 0.2×0.3</td><td>0.09</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">softmax 归一化后 P(cat)≈0.30。训练目标:让正确答案的概率 → 1,loss → 0。</p>
+        </div>
+        <div class="mathblock reveal">
+          P(目标词 = w | 输入) = softmax(<var>v</var><sub>w</sub><sup>T</sup> · <var>h</var>)
+          <span class="label">和<a class="xref" href="chapter-19.html">第 19 章 LM Head</a>同一公式:向量点积出分数,再 softmax 成分类概率</span>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">整篇语料怎么训?</span>
+          <p>
+            外层再套两层循环:<strong>for 每个句子 → for 窗口每个位置 → for 每个上下文目标</strong>,每遇到一条样本就跑一遍上面的 ②~⑥。
+            现代实现用 mini-batch + 负采样(下一节),但<strong>单次更新的数学</strong>就是这张七步图。
+          </p>
+        </div>
+
+        <h2>9. 词表太大:负采样把输出层“瘦身”</h2>
+        <p>
+          第 8 节要对<strong>整个词表</strong>做 softmax——真实语料 V 可达 10 万,每一步都算 V 次点积 + 归一化,慢到没法训。
+          <span class="term">负采样(negative sampling)</span> 换了个思路:<strong>不再预测“词表里哪一个”,只问“这一对词像不像真的共现”</strong>——变成几个二分类。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">h = u<sub>sat</sub><small>中心词向量</small></div>
+            </div>
+            <p style="text-align:center;color:var(--primary);margin:0.6rem 0">分别与下面各词向量做点积 · sigmoid 二分类</p>
+            <div class="pipe">
+              <div class="pipe__box" style="border-color:var(--accent)">v<sub>cat</sub><small>正样本 · 希望 → 1</small></div>
+              <div class="pipe__box" style="opacity:0.85">v<sub>mat</sub><small>负样本 · 希望 → 0</small></div>
+              <div class="pipe__box" style="opacity:0.85">v<sub>…</sub><small>再随机抽 K 个</small></div>
+            </div>
+            <p style="text-align:center;color:var(--text-dim);font-size:0.85rem;margin:0.75rem 0 0">只更新 h 与这 K+1 个 v · 不再扫全词表 V</p>
+          </div>
+          <p class="figure__cap">网络骨架不变:还是中心词向量 h;输出侧从“V 维 softmax”换成“1 正 + K 负”的 sigmoid 二分类。</p>
+        </div>
+        <ul>
+          <li><strong>正样本</strong>:真实的 (sat, cat),算 σ(<var>u</var><sub>sat</sub>·<var>v</var><sub>cat</sub>),希望 → 1;</li>
+          <li><strong>负样本</strong>:随机抽 K 个词(如 mat、GDP),算 σ(<var>u</var>·<var>v</var><sub>neg</sub>),希望 → 0。</li>
+        </ul>
+        <p>
+          每个训练步只更新<strong>u<sub>sat</sub>、v<sub>cat</sub>、以及 K 个 v<sub>neg</sub></strong> 共 K+2 组向量,复杂度从 O(V) 降到 O(K)(K 常取 5~20)。
+          这就是 word2vec 能在普通电脑上吃下十亿词的原因。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/embedding/word2vec.cpp · 负采样(精简)</figcaption>
+          <pre class="code-walk__code"><code>for (int neg_idx = 0; neg_idx &lt; negative_num; neg_idx++) {
+  int negative_id = SampleNegative(center_id, context_id);
+  loss += -log(1 - sigmoid(u · v_neg));
+  UpdateNegativePair(u, v_neg, lr);                 <b class="cw-tag">1</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>随机抽 K 个“假上下文”词,希望 σ(u·v<sub>neg</sub>)→0,把噪声对<strong>推开</strong>。<code>SampleNegative</code> 按词频<sup>0.75</sup> 抽样,高频词更容易被抽到当负样本。</li>
+          </ol>
+        </figure>
+
+        <h3>9.1 负采样版训练四步(接在第 8 节后面)</h3>
+        <p>仍用样本 (sat → cat),但<strong>不算全词表 softmax</strong>:</p>
+        <ol>
+          <li><strong>查表</strong>:<var>u</var><sub>sat</sub> = W<sub>in</sub>[sat], <var>v</var><sub>cat</sub> = W<sub>out</sub>[cat]。</li>
+          <li><strong>正样本 loss</strong>:score = <var>u</var>·<var>v</var><sub>cat</sub>, loss<sub>+</sub> = −log σ(score),把共现对<strong>拉近</strong>。</li>
+          <li><strong>负样本 loss</strong>:随机抽到 mat, loss<sub>−</sub> = −log(1 − σ(<var>u</var>·<var>v</var><sub>mat</sub>)),把噪声对<strong>推开</strong>。</li>
+          <li><strong>反传</strong>:对 loss<sub>+</sub> + loss<sub>−</sub> 求导,更新涉及到的 u、v——重复亿万次后,常共现的 cat/sat 向量夹角变小,随机 mat 被拧远。</li>
+        </ol>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">语料滑窗<small>(sat, cat)</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">查 u, v<sub>cat</sub>, v<sub>neg</sub><small>只查 K+2 行</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">sigmoid 二分类<small>正样本↑ 负样本↓</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">更新向量<small>语义从共现中涌现</small></div>
+            </div>
+          </div>
+        </div>
+        <p>
+          训完后通常<strong>丢掉 W<sub>out</sub></strong>,只导出 W<sub>in</sub> 当最终词向量(<code>.vec</code> 文件)。
+          大模型则把 embedding 留在网络里端到端更新(<a class="xref" href="chapter-19.html">第 19 章</a>)。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">和语言模型的关系</span>
+          <p>
+            <a class="xref" href="chapter-19.html">第 19 章</a> LM Head 也要对词表 softmax,词表一大同样头疼——大模型用<strong>子词 BPE</strong>控词表、
+            用<strong>采样 softmax</strong> 等技巧减负。思想一脉相承:别每一步都对 10 万个词算全概率。
+          </p>
+        </div>
+
+        <h2>10. 向量算术:神奇从哪来,别神化</h2>
+        <p>
+          训练好的词向量有个著名现象:<strong>语义关系 ≈ 向量方向上的平移</strong>。
         </p>
         <div class="mathblock reveal">
           向量(国王) − 向量(男人) + 向量(女人) ≈ 向量(女王)
-          <span class="label">“去掉男性、加上女性”,国王就平移成了女王——正是上图那两条平行箭头</span>
+          <span class="label">“去掉男性、加上女性”的语义,变成空间里的一个固定方向</span>
         </div>
         <p>
-          类似地还有 <em>北京 − 中国 + 日本 ≈ 东京</em>。这说明词向量不只是“相近词靠近”,还<strong>编码了可组合的语义维度</strong>
-          (性别、首都关系……)。一个只是为了“完形填空”而训练出来的副产品,却学到了如此结构化的语义,这也是深度学习最迷人的地方之一。
+          类似还有 <em>巴黎 − 法国 + 日本 ≈ 东京</em>。直觉是:某些<strong>隐含维度</strong>(性别、首都关系)被网络编码成近似线性的方向,
+          加减相当于沿这些方向走。这是<strong>统计共现压出来的副产品</strong>,不是人工写进规则里的。
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">局限也要知道</span>
+          <p>
+            向量算术并非对所有词对都准;多义词(“银行”)在静态 embedding 里往往只有<strong>一个向量</strong>,无法区分“河岸”和“金融机构”。
+            这也是后来上下文相关表示(ELMo、BERT、GPT 各层 hidden state)要解决的问题——<a class="xref" href="chapter-16.html">第 16 章</a>注意力让每个位置动态融合上下文。
+          </p>
+        </div>
+
+        <h2>11. 不止 word2vec:GloVe 与静态 vs 动态</h2>
+        <p>
+          <span class="term">GloVe</span>(2014) 走另一条路:先统计全语料的<strong>词共现矩阵</strong>(哪些词一起出现多少次),
+          再分解矩阵,使两个词的向量点积 ≈ 共现次数的对数。和 word2vec 不同起点,但得到的也是静态词向量,常一起出现在“预训练 embedding”下载站里。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th></th><th>word2vec / GloVe</th><th>大模型 embedding 层</th></tr></thead>
+            <tbody>
+              <tr><td><strong>何时学语义</strong></td><td>单独在海量语料上预训练</td><td>与 Transformer 一起,被“预测下一个 token”损失顺带优化</td></tr>
+              <tr><td><strong>一词一向量?</strong></td><td>是(静态)</td><td>表上仍是一行,但上层 hidden 随上下文变(动态)</td></tr>
+              <tr><td><strong>典型 dim</strong></td><td>100~300</td><td>768、4096…</td></tr>
+              <tr><td><strong>用法</strong></td><td>下载复用,接 RNN/CNN</td><td>GPT / BERT 内置,<a class="xref" href="chapter-20.html">第 20 章</a>预训练</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>12. 一条线串起来:从 one-hot 到注意力</h2>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">整条 NLP 链路的起点</span>
+          <p>
+            <strong>one-hot</strong>(离散、无语义) → <strong>embedding 表</strong>(稠密、可训练) →
+            <strong>word2vec 式共现训练</strong>或<strong>LM 端到端训练</strong>长出语义 →
+            <strong>点积 / 余弦</strong>比远近(<a class="xref" href="chapter-01.html">第 1 章</a>) →
+            <strong>Q·K<sup>T</sup> 注意力打分</strong>(<a class="xref" href="chapter-17.html">第 17 章</a>) →
+            <strong>RAG 检索</strong>也用同一套向量相似度(<a class="xref" href="chapter-22.html">第 22 章</a>)。
+          </p>
+        </div>
+        <p>
+          <a class="xref" href="chapter-14.html">RNN</a> 每个时间步吃的 <var>x</var><sub>t</sub>,就是这张表的一行;
+          <a class="xref" href="chapter-19.html">mini LM</a> 在 <code>EncodeSequence</code> 里先查 embedding、再加位置编码,再进 Transformer。
+          你已在仓库里见过这行代码——现在你知道<strong>这些数最初是怎么被“拧”出有语义的</strong>了。
         </p>
 
-        <h2>7. 从 word2vec 到大模型的 embedding 层</h2>
+        <h2>13. 仓库实战:自己训一遍 word2vec</h2>
         <p>
-          今天的大模型里,词嵌入以<span class="term">embedding 层</span>的形式存在:它就是一张<strong>可学习的查找表</strong>——
-          每个 token 的 id 对应表里的一行向量(<a class="xref" href="chapter-19.html">第 19 章</a>会看到它的代码)。有两点值得记住:
+          本章概念在仓库里有一套可运行实现:<code>src/deeplearning/embedding/</code> 下的 <code>WordTokenizer</code> + <code>Word2Vec</code>,
+          演示程序 <code>src/demo/word2vec</code>。默认用内置小动物语料,跑 skip-gram + 负采样,最后打印<strong>最近邻词</strong>和<strong>余弦相似度</strong>。
         </p>
-        <ul>
-          <li><strong>可以“拿来就用”</strong>:别人在海量语料上训好的词向量(如经典的 GloVe)能<strong>直接下载复用</strong>,这叫<span class="term">迁移学习</span>——省掉从零训练的巨大成本。</li>
-          <li><strong>在大模型里是端到端一起训的</strong>:embedding 表不再单独训练,而是和整个网络一起,被“预测下一个词”的损失顺带优化(第 19、20 章)。原理没变,还是“靠上下文学语义”。</li>
-        </ul>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">一条线串起来</span>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">运行示例</figcaption>
+          <pre class="code-walk__code"><code>cd src
+./build.sh
+./bin/word2vec --show-pairs
+./bin/word2vec --query-word cat --compare-word dog --epochs 40</code></pre>
+          <ol class="code-walk__notes">
+            <li><code>--show-pairs</code> 打印滑窗样本,对应第 7 节。<code>cat</code> 最近邻里应出现 <code>dog</code>,<code>cos(cat, dog)</code> 明显高于 <code>cos(cat, apples)</code>。</li>
+            <li>也可用 <code>--mode cbow</code>、<code>--corpus-file your.txt</code>。详见仓库 <code>docs/word2vec-demo.md</code>。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">和大模型 embedding 的分工</span>
           <p>
-            <strong>one-hot</strong>(离散、无语义)→ <strong>词嵌入</strong>(稠密、有语义坐标)→ <strong>用点积比相似度</strong>(<a class="xref" href="chapter-01.html">第 1 章</a>)→
-            <strong><a class="xref" href="chapter-17.html#5-为什么点积能当相关性">注意力用 Q·K 打分</a></strong>(<a class="xref" href="chapter-17.html">第 17 章</a>)→ <strong>大模型的 embedding 层</strong>(<a class="xref" href="chapter-19.html">第 19 章</a>)。词向量,是整条 NLP 链路的起点。
-          </p>
+            这里训出的是<strong>静态词向量</strong>(word2vec 专用)。<a class="xref" href="chapter-19.html">第 19 章</a>的 <code>TokenEmbedding</code> 是字符级 LM 的输入表,结构类似,但语义由“预测下一个字”端到端学出来。
+            两者对照看,更容易分清“预训练词向量”和“LM 内置 embedding”。</p>
         </div>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li><strong>one-hot</strong> 又大又空,且任意两词都正交、毫无相似度——丢了语义。</li>
-            <li><strong>词嵌入</strong>用稠密低维向量当“语义坐标”,意思相近 → 向量相近(<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦衡量)。</li>
-            <li><strong>word2vec</strong> 基于“近朱者赤”,用 CBOW/skip-gram 的完形填空自监督地学出词向量。</li>
-            <li>词向量能做<strong>算术</strong>:国王−男人+女人≈女王,语义关系变成几何关系。</li>
-            <li>大模型的 <strong>embedding 层</strong>就是可学习查找表,可迁移复用,也可端到端一起训。</li>
+            <li><strong>one-hot</strong> 高维稀疏,任意异词正交,无语义;embedding 用 <code>vocab×dim</code> 表一行一词。</li>
+            <li><strong>查表</strong> = 用 id 取 <code>embedding_table_[id]</code>;等价于 one-hot 乘嵌入矩阵,实现时直接索引。</li>
+            <li><strong>分布假设</strong>:上下文相似的词,意思相近 → 可做成自监督完形填空。</li>
+            <li><strong>skip-gram 网络</strong>:one-hot → W<sub>in</sub> → dim 维词向量 h → 与 W<sub>out</sub> 各行点积 → softmax;CBOW 先平均上下文再猜中心。</li>
+            <li><strong>训练七步</strong>:滑窗造样本 → 查表 → logits → softmax → 交叉熵 → 反传 → 重复;负采样把输出从 V 维缩成 K+1 个二分类。</li>
+            <li><strong>CBOW</strong> 用上下文猜中心词;<strong>skip-gram</strong> 用中心词猜上下文;损失是词表分类或<strong>负采样</strong>二分类。</li>
+            <li>训练反复<strong>拉近共现词向量、推开随机负词</strong>,语义从统计中涌现;可迁移为 GloVe/word2vec 文件。</li>
+            <li><strong>向量算术</strong>是线性方向的副产品;多义词与动态语义需上下文模型补足。</li>
+            <li>仓库 <code>Word2Vec</code> 实现 skip-gram/CBOW + 负采样,可用 <code>./bin/word2vec</code> 复现第 8–9 节训练流程。</li>
           </ul>
         </section>
 
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:词嵌入查表和 one-hot 乘矩阵是什么关系?</summary>
+            <div class="quiz__a">
+              <p>数学上等价:one-hot 只有一个 1,乘嵌入矩阵 <var>E</var> 等于取出 <var>E</var> 的对应行。实现时用 id 直接索引 <code>embedding_table_[id]</code>,不做稀疏大乘法。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:CBOW 和 skip-gram 的输入输出分别是什么?</summary>
+            <div class="quiz__a">
+              <p>CBOW:输入上下文词的 embedding(常平均),预测中心词。skip-gram:输入中心词,预测窗口内各上下文词。两者都靠共现统计自监督训练。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:为什么要负采样?</summary>
+            <div class="quiz__a">
+              <p>全词表 softmax 每步 O(V) 太慢。负采样改成少量正/负词的二分类,每步只更新几个词的向量,使 word2vec 能在超大语料上实用化。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:静态 word2vec 向量和大模型 embedding 有何不同?</summary>
+            <div class="quiz__a">
+              <p>word2vec/GloVe 一词一向量,训完固定;大模型 embedding 表虽也是一行一词,但与 Transformer 一起被 LM 损失更新,且上层 hidden state 随上下文变化,能处理多义词。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 5:国王−男人+女人≈女王说明什么、不能说明什么?</summary>
+            <div class="quiz__a">
+              <p>说明某些语义关系被编码成近似线性方向,可做向量运算;不能保证对所有词对成立,也不能解决一词多义——后者需要上下文相关的表示(注意力、深层网络)。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 6:skip-gram 的“隐藏层”是什么、有几层非线性?</summary>
+            <div class="quiz__a">
+              <p>隐藏层就是中心词的 dim 维嵌入向量 h,由 W<sub>in</sub> 查表得到。<strong>没有 ReLU 等非线性</strong>,整网本质是线性投影 + softmax(或负采样 sigmoid),所以极浅、极快,专训词向量。</p>
+            </div>
+          </details>
+        </div>
+
         <p class="muted">
-          词有了语义坐标,序列有了 RNN——但 RNN 那两个硬伤(记不住远处、不能并行)还悬着。
-          下一部分,我们正式请出解决这一切的主角:<strong>注意力</strong>。先看它到底要解决什么问题。
+          词有了可训练的语义坐标,序列模型才能“读懂”每个 token。<a class="xref" href="chapter-14.html">第 14 章</a> RNN 用 embedding 当每步输入;
+          下一部分请出<strong>注意力</strong>——先看它到底要解决 RNN 的什么问题。
         </p>
       </div>
     </main>

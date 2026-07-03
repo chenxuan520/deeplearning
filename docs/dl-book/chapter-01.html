@@ -25,7 +25,7 @@
           <ul>
             <li>向量为什么<strong>既是“一串数”又是“一个方向”</strong>;</li>
             <li><strong>点积</strong>怎么衡量两个向量“合不合拍”(注意力、相似度全靠它);</li>
-            <li>矩阵 = 一次<strong>批量线性变换</strong>,矩阵乘向量其实就是<strong>一堆加权求和</strong>;</li>
+            <li>矩阵 = 一次<strong>批量线性变换</strong>:矩阵乘向量 = 一堆加权求和,矩阵乘矩阵 = 给一批向量同时变换;还有<strong>形状怎么对齐</strong>和<strong>转置 <var>QK</var><sup>T</sup></strong> 到底在干嘛;</li>
             <li><strong>导数</strong> = 斜率 = “往哪走会变大”,这是梯度下降的根;</li>
             <li><strong>链式法则</strong>:复合函数怎么一层层求导——反向传播的唯一秘密;</li>
             <li>softmax / 交叉熵会用到的一点点<strong>概率与对数</strong>。</li>
@@ -124,9 +124,12 @@
 
         <h2>4. 矩阵:一次“批量线性变换”</h2>
         <p>
-          <span class="term">矩阵(matrix)</span>就是把数字排成的<strong>方阵</strong>(几行几列)。你可以把它理解成一台
-          “<strong>把向量变成另一个向量</strong>”的机器。核心操作是<strong>矩阵 × 向量</strong>:
-        </p>
+          <span class="term">矩阵(matrix)</span>就是把数字排成的<strong>长方形表格</strong>(几行几列)。你可以把它理解成一台
+          “<strong>把向量变成另一个向量</strong>”的机器。这一节稍微多花点篇幅——因为<strong>后面注意力、Transformer 里满屏的
+          <var>X</var>·<var>W</var>、<var>QK</var><sup>T</sup> 全是矩阵乘法</strong>,这里一次讲透,后面就不会卡。
+
+        <h3>4.1 矩阵 × 向量 = 一堆点积</h3>
+        <p>核心操作是<strong>矩阵 × 向量</strong>:</p>
         <div class="mathblock reveal">
           <span class="frac"><span>[ 2&nbsp;&nbsp;1 ]</span><span>[ 0&nbsp;&nbsp;3 ]</span></span>
           × [1, 2] = [ 2×1 + 1×2 , 0×1 + 3×2 ] = [4, 6]
@@ -134,16 +137,85 @@
         </div>
         <p>
           看出来了吗?<strong>矩阵乘向量 = 一堆点积 = 一堆加权求和</strong>。矩阵有几行,输出就有几个数,
-          每个数都是“那一行的权重”和输入的点积。这正是神经网络<strong>一整层</strong>在做的事:
+          每个数都是“那一行的权重”和输入的<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>。这正是神经网络<strong>一整层</strong>在做的事:
           一层有很多神经元,每个神经元用自己那行权重和输入做点积——用一个矩阵就一次算完(<a class="xref" href="chapter-03.html">第 3 章</a>)。
         </p>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">形状很重要</span>
+
+        <h3>4.2 矩阵 × 矩阵:把“很多次点积”一次算完</h3>
+        <p>
+          真正让人犯怵的其实是<strong>矩阵 × 矩阵</strong>。但它一点都不神秘——就是把上面“矩阵 × 向量”<strong>重复很多遍</strong>。
+          规则只有一句话:<strong>结果的第 <var>i</var> 行第 <var>j</var> 列 = 左边矩阵的第 <var>i</var> 行 · 右边矩阵的第 <var>j</var> 列</strong>(还是点积!)。
+        </p>
+        <div class="mathblock reveal">
+          <span class="frac"><span>[ 1&nbsp;&nbsp;2 ]</span><span>[ 3&nbsp;&nbsp;4 ]</span></span>
+          ×
+          <span class="frac"><span>[ 5&nbsp;&nbsp;6 ]</span><span>[ 7&nbsp;&nbsp;8 ]</span></span>
+          =
+          <span class="frac"><span>[ 1·5+2·7&nbsp;&nbsp;1·6+2·8 ]</span><span>[ 3·5+4·7&nbsp;&nbsp;3·6+4·8 ]</span></span>
+          =
+          <span class="frac"><span>[ 19&nbsp;&nbsp;22 ]</span><span>[ 43&nbsp;&nbsp;50 ]</span></span>
+          <span class="label">左上角 19 = 左边第 1 行 [1,2] · 右边第 1 列 [5,7];其余三个格子同理,各是一次点积</span>
+        </div>
+        <p>
+          换个角度看更贴近深度学习:如果把左边矩阵看成<strong>一叠行向量</strong>(每行是一个样本 / 一个词),
+          那“左矩阵 × 右矩阵”就是<strong>让每一行都各自过一遍同一台变换机器</strong>。这正是后面的关键一步——
+          一句话有 <var>n</var> 个词、每个词一个向量,叠成矩阵 <var>X</var>;乘上权重矩阵 <var>W</var>,就<strong>一次性</strong>把 <var>n</var> 个词全部变换完,不必写循环。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">这就是你后面会反复看到的 <var>X</var>·<var>W</var></span>
           <p>
-            一个 <var>m</var>×<var>n</var> 的矩阵(<var>m</var> 行 <var>n</var> 列)把一个 <var>n</var> 维向量变成 <var>m</var> 维向量。
-            后面看到“<code>784→128</code>”这种写法,意思就是有个 128×784 的权重矩阵,把 784 维输入压成 128 维(<a class="xref" href="chapter-03.html">第 3 章</a>)。
+            <a class="xref" href="chapter-17.html">第 17 章</a>里 <var>Q</var> = <var>X</var>·<var>W</var><sub>Q</sub> 这种式子,就是本节这件事:
+            <var>X</var> 是“一整句词向量叠成的矩阵”,<var>W</var><sub>Q</sub> 是变换矩阵,一乘就把每个词都投影成了 Query。
+            <strong>矩阵乘法 = 对一批向量同时做同一种线性变换。</strong>
           </p>
         </div>
+
+        <h3>4.3 形状:能不能乘、乘出来多大,看一眼就知道</h3>
+        <p>
+          矩阵乘法能不能做、结果多大,完全由<strong>形状(几行几列)</strong>决定,这也是读代码时排查 bug 的第一招。规则:
+        </p>
+        <div class="mathblock reveal">
+          [ <var>m</var> × <var>n</var> ] × [ <var>n</var> × <var>k</var> ] = [ <var>m</var> × <var>k</var> ]
+          <span class="label">左边的“列数”必须等于右边的“行数”(中间的 n 要对上),否则乘不了;结果的形状 = 左边行数 × 右边列数</span>
+        </div>
+        <p>记住一句口诀:<strong>“中间对齐、两头留下”</strong>——中间的 <var>n</var> 必须相等并被“消掉”,剩下两头的 <var>m</var> 和 <var>k</var> 就是结果的形状。举几个后面天天见的例子:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>算式</th><th>形状</th><th>含义</th></tr></thead>
+            <tbody>
+              <tr><td>权重 × 输入</td><td>[128×784] × [784×1] = [128×1]</td><td>把 784 维图片压成 128 维(<a class="xref" href="chapter-03.html">第 3 章</a>一层)</td></tr>
+              <tr><td><var>X</var> · <var>W</var><sub>Q</sub></td><td>[<var>n</var>×<var>d</var>] × [<var>d</var>×<var>d</var>] = [<var>n</var>×<var>d</var>]</td><td><var>n</var> 个词各投影成 Query,形状不变(<a class="xref" href="chapter-17.html">第 17 章</a>)</td></tr>
+              <tr><td><var>Q</var> · <var>K</var><sup>T</sup></td><td>[<var>n</var>×<var>d</var>] × [<var>d</var>×<var>n</var>] = [<var>n</var>×<var>n</var>]</td><td>每个词和每个词的相关性打分表(<a class="xref" href="chapter-17.html">第 17 章</a>)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">“784→128”这种写法是什么意思</span>
+          <p>
+            后面看到“<code>784→128</code>”,意思就是有个 <strong>128×784</strong> 的权重矩阵,把 784 维输入变成 128 维输出(<a class="xref" href="chapter-03.html">第 3 章</a>)。
+            箭头左边是<strong>输入维度</strong>、右边是<strong>输出维度</strong>——和矩阵的“列数→行数”对应上了。
+          </p>
+        </div>
+
+        <h3>4.4 转置 <var>A</var><sup>T</sup>:把行和列对调一下</h3>
+        <p>
+          最后一个小记号,后面那个吓人的 <var>QK</var><sup>T</sup> 就靠它。<span class="term">转置(transpose)</span>写作
+          <var>A</var><sup>T</sup>,做的事只有一件:<strong>把矩阵沿对角线翻一下,行变成列、列变成行</strong>。
+        </p>
+        <div class="mathblock reveal">
+          <var>A</var> =
+          <span class="frac"><span>[ 1&nbsp;&nbsp;2&nbsp;&nbsp;3 ]</span><span>[ 4&nbsp;&nbsp;5&nbsp;&nbsp;6 ]</span></span>
+          (2×3) &nbsp;→&nbsp; <var>A</var><sup>T</sup> =
+          <span class="frac"><span>[ 1&nbsp;&nbsp;4 ]</span><span>[ 2&nbsp;&nbsp;5 ]<br />[ 3&nbsp;&nbsp;6 ]</span></span>
+          (3×2)
+          <span class="label">原来的第 1 行 [1,2,3] 变成了第 1 列;形状从 2×3 变成 3×2</span>
+        </div>
+        <p>
+          它最常见的用途,就是<strong>为了让形状对齐、好做矩阵乘法</strong>。比如注意力要拿“每个词的 Query”和“每个词的 Key”两两点积:
+          <var>Q</var> 是 <var>n</var>×<var>d</var>,<var>K</var> 也是 <var>n</var>×<var>d</var>,直接乘形状对不上(<var>d</var>≠<var>n</var>);
+          把 <var>K</var> 转置成 <var>d</var>×<var>n</var>,<var>Q</var>·<var>K</var><sup>T</sup> 就变成 [<var>n</var>×<var>d</var>]×[<var>d</var>×<var>n</var>]=[<var>n</var>×<var>n</var>]——
+          <strong>正好是一张“第 i 个词对第 j 个词”的打分表</strong>。到<a class="xref" href="chapter-17.html">第 17 章</a>你就会看到这个式子,现在知道 ᵀ 只是“翻转对齐”就够了。
+        </p>
 
         <h2>5. 导数:斜率,告诉你“往哪走会变大”</h2>
         <p>
@@ -216,7 +288,7 @@
           <ul>
             <li><strong>向量</strong> = 一串数,也是一个有方向、有长度的箭头;深度学习里的样本、词、权重都是向量。</li>
             <li><strong>点积</strong> = 对应相乘再加总,衡量两个向量“合不合拍”:同向大、垂直为 0、反向为负。</li>
-            <li><strong>矩阵 × 向量</strong> = 一堆点积 = 一堆加权求和,正是神经网络“一层”的计算。</li>
+            <li><strong>矩阵 × 向量</strong> = 一堆点积 = 一堆加权求和,正是神经网络“一层”的计算;<strong>矩阵 × 矩阵</strong>则是把一批向量同时变换(后面的 <var>X</var>·<var>W</var>)。形状看“中间对齐、两头留下”:[<var>m</var>×<var>n</var>]·[<var>n</var>×<var>k</var>]=[<var>m</var>×<var>k</var>];转置 <var>A</var><sup>T</sup> 把行列对调,用来凑形状(如 <var>QK</var><sup>T</sup>)。</li>
             <li><strong>导数</strong> = 斜率 = “往哪走会变大”;把每个参数的导数打包成<strong>梯度</strong>,反方向走就能降损失。</li>
             <li><strong>链式法则</strong>:复合函数求导 = 各层变化率相乘——这就是反向传播的全部数学。</li>
             <li><strong>softmax</strong> 把分数变概率,<strong>−log(正确概率)</strong> 就是交叉熵损失。</li>

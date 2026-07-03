@@ -45,11 +45,11 @@
           <h2>读完这一章,你会明白</h2>
           <ul>
             <li>一句话抓住注意力的本质:<strong>按“相关性”给每个词做一次加权平均</strong>;</li>
-            <li>Q(查询)、K(键)、V(值)到底是什么,以及<strong>为什么非得是三个</strong>;</li>
-            <li>跟着一个具体的数字例子,亲手把“打分 → 缩放 → softmax → 加权求和”算完;</li>
-            <li>causal mask 怎么让模型“不能偷看未来”,多头注意力又为什么有用;</li>
+            <li>Q(查询)、K(键)、V(值)到底是什么,<strong>三个投影矩阵 W<sub>Q</sub>/W<sub>K</sub>/W<sub>V</sub> 长什么样、怎么乘出来</strong>;</li>
+            <li>跟着一个具体的数字例子,亲手把“<strong>投影 → 打分 → 缩放 → softmax → 加权求和</strong>”算完;</li>
+            <li>causal mask 怎么让模型“不能偷看未来”:一张下三角表、为什么用 −∞ 而非填 0、以及它凭什么能让训练<strong>一次并行</strong>算完整句;多头注意力又为什么有用;</li>
             <li>逐行读懂真实的 self-attention C++ 实现,并解开新手最常见的几个困惑;</li>
-            <li><strong>那三个矩阵到底怎么“训练出来”</strong>——原来就是第 5、6 章的反向传播 + 梯度下降。</li>
+            <li><strong>那四个矩阵到底怎么“训练出来”</strong>——每层各有一套,但更新方式和 MNIST 完全一样。</li>
           </ul>
         </section>
 
@@ -110,15 +110,50 @@
         <div class="callout callout--analogy reveal">
           <span class="callout__title">Q、K、V 是同一个词的三副面孔</span>
           <p>
-            它们<strong>不是三个不同的词</strong>,而是同一个词向量 <var>x</var> 分别乘上三个矩阵得到的:
-            <var>q</var> = <var>x</var> <var>W</var><sub>Q</sub>、<var>k</var> = <var>x</var> <var>W</var><sub>K</sub>、<var>v</var> = <var>x</var> <var>W</var><sub>V</sub>。
-            这三个矩阵是<strong>训练出来的</strong>——模型自己慢慢学会“该拿什么去问、该挂什么标签、该交出什么内容”。
-            <strong>可它到底怎么“训练出来”的?先记着这个问题,第 10 节专门手把手拆给你看。</strong>
+            它们<strong>不是三个不同的词</strong>,而是<strong>同一条输入向量</strong> <var>x</var>(这个词当前的 embedding,已经带上位置等信息)
+            分别左乘三个<strong>可训练矩阵</strong>得到的:
+          </p>
+          <div class="mathblock">
+            <var>q</var> = <var>x</var> <var>W</var><sub>Q</sub> · <var>k</var> = <var>x</var> <var>W</var><sub>K</sub> · <var>v</var> = <var>x</var> <var>W</var><sub>V</sub>
+            <span class="label"><var>x</var> 是长度 <var>d</var> 的行向量;每个 <var>W</var> 是 <var>d</var>×<var>d</var> 的权重表——和 <a class="xref" href="chapter-02.html">第 2 章</a>矩阵乘同一回事</span>
+          </div>
+          <p>
+            点积、加权求和仍是老运算;<strong>新意在于</strong>用三套矩阵把“问什么 / 挂什么标签 / 交什么内容”拆开,
+            而且<strong>注意力权重</strong>(那排 0.93、0.01…)是后面拿 Q·K <strong>现算</strong>的,不是存在 <var>W</var> 里的常数。
+            <strong>可它到底怎么“训练出来”的?先记着,第 10 节专门拆;每层是不是同一套矩阵,也在那里讲清。</strong>
           </p>
         </div>
 
-        <h2>3. 完整流程:四步走</h2>
-        <p>锁定<strong>某一个</strong>词当 query(其余每个词也会各自轮一遍),注意力就做四件事:</p>
+        <h3>三个矩阵长什么样?</h3>
+        <p>
+          在本仓库 <code>SelfAttention</code> 里,它们就是三组名叫 <code>query_weight_</code>、<code>key_weight_</code>、
+          <code>value_weight_</code> 的二维表。若 <code>model_dim = d</code>,则每个矩阵形状都是 <strong><var>d</var>×<var>d</var></strong>——
+          和 MNIST 一层全连接权重同类型,只是这里要<strong>三套</strong>,再加一个多头拼回去用的 <var>W</var><sub>O</sub>(第 8 节)。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>矩阵(参数)</th><th>形状</th><th>作用</th><th>代码里</th></tr></thead>
+            <tbody>
+              <tr><td><var>W</var><sub>Q</sub></td><td><var>d</var>×<var>d</var></td><td>把输入变成 Query“我想找什么”</td><td><code>query_weight_</code></td></tr>
+              <tr><td><var>W</var><sub>K</sub></td><td><var>d</var>×<var>d</var></td><td>把输入变成 Key“我挂什么标签”</td><td><code>key_weight_</code></td></tr>
+              <tr><td><var>W</var><sub>V</sub></td><td><var>d</var>×<var>d</var></td><td>把输入变成 Value“我交出什么内容”</td><td><code>value_weight_</code></td></tr>
+              <tr><td><var>W</var><sub>O</sub></td><td><var>d</var>×<var>d</var></td><td>多头拼好后做最后一次线性融合</td><td><code>output_weight_</code></td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">四个都是<strong>要训练、要存盘</strong>的参数;Q/K/V 向量和注意力权重则是每次前向<strong>现算</strong>的中间结果。</p>
+        </div>
+        <p>
+          对序列里<strong>每一个词</strong>都重复同一件事:取出它的输入向量 <var>x</var>,分别乘三张表,得到三个小向量。
+          代码里一行 <code>ProjectSequence(input, query_weight_)</code> 就是在做“整句每个位置各乘一次 <var>W</var><sub>Q</sub>”
+          (<a class="xref" href="chapter-17.html#9-逐行读懂-self-attention-的前向">第 9 节</a>会对着源码再走一遍)。
+        </p>
+
+        <h2>3. 完整流程:先投影,再四步走</h2>
+        <p>
+          完整前向其实是<strong>“投影 + 四步”</strong>:先把每个词的输入向量 <var>x</var> 乘 <var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub>,
+          得到 Q、K、V(<a class="xref" href="chapter-17.html#4-跟着算一遍-一个能手算的小例子">第 4 节第 0 步</a>手算);
+          再锁定<strong>某一个</strong>词当 query(其余每个词也会各自轮一遍),做下面四件事:
+        </p>
         <ol>
           <li><strong>打分(比相关性)</strong>:拿我的 Query,和<em>每个</em>词的 Key 做<strong>点积</strong>。点积越大 = 越“对得上” = 越相关。</li>
           <li><strong>缩放(除以 √<var>d</var>)</strong>:把每个分数除以 √<var>d</var>(<var>d</var> 是向量维度)。维度一大,点积容易冲得很大,缩放让它别太极端。</li>
@@ -127,7 +162,7 @@
         </ol>
         <div class="mathblock reveal">
           Attention(<var>Q</var>, <var>K</var>, <var>V</var>) = softmax( <span class="frac"><span><var>Q</var><var>K</var><sup>T</sup></span><span>√<var>d</var><sub>k</sub></span></span> ) <var>V</var>
-          <span class="label">别被吓到:QKᵀ 是“打分”,÷√d 是“缩放”,softmax 是“变成权重”,最后乘 V 就是“加权平均”——正好四步</span>
+          <span class="label">别被吓到:QKᵀ 是“打分”,÷√d 是“缩放”,softmax 是“变成权重”,最后乘 V 就是“加权平均”——正好四步。对 <var>QK</var><sup>T</sup> 这种矩阵乘法 / 转置还发怵,回<a class="xref" href="chapter-01.html#42-矩阵--矩阵-把很多次点积一次算完">第 1 章矩阵一节</a>补一下</span>
         </div>
         <div class="figure reveal">
           <div class="diagram">
@@ -157,29 +192,78 @@
 
         <h2>4. 跟着算一遍:一个能手算的小例子</h2>
         <p>
-          光看流程还是抽象。我们把维度砍到只有 <strong>2 维</strong>、句子只留 <strong>3 个词</strong>,
-          用真实数字从头算到尾。相信我,算完这一节,注意力对你就“通”了。
+          光看流程还是抽象。我们把维度砍到 <strong>2 维</strong>、句子只留 <strong>3 个词</strong>,
+          用真实数字把<strong>整条链路</strong>从头算到尾:先由三个矩阵投影出 Q/K/V,再做打分与加权平均。
+          算完这一节,注意力对你就“通”了。
         </p>
+
+        <h3>第 0 步:输入向量 × 三个矩阵 → Q、K、V</h3>
         <p>
           设句子里有三个词:<strong>猫</strong>、<strong>睡</strong>、<strong>它</strong>。
-          我们聚焦“<strong>它</strong>”这个词,想看它能不能自动关注到自己指代的对象。
-          每个词都已经算好了自己的 Key 和 Value(就是词向量乘 <var>W</var><sub>K</sub>、<var>W</var><sub>V</sub> 的结果,这里直接给出方便手算):
+          它们进到这一层 attention 时,各自已经是一条 2 维向量 <var>x</var>(可以想成 embedding + 位置编码之后的结果;此处不展开来源,只关心形状):
         </p>
         <div class="table-wrap reveal">
           <table class="calc-table">
-            <thead>
-              <tr><th>词</th><th>Key(标签)</th><th>Value(内容)</th></tr>
-            </thead>
+            <thead><tr><th>词</th><th>输入向量 <var>x</var></th></tr></thead>
             <tbody>
-              <tr><td>猫</td><td>[3, 0]</td><td>[1, 0]</td></tr>
-              <tr><td>睡</td><td>[0, 3]</td><td>[0, 1]</td></tr>
-              <tr><td>它</td><td>[1, 1]</td><td>[0.5, 0.5]</td></tr>
+              <tr><td>猫</td><td>[1, 0]</td></tr>
+              <tr><td>睡</td><td>[0, 1]</td></tr>
+              <tr><td>它</td><td>[⅓, ⅓] ≈ [0.33, 0.33]</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>这一层 attention 自带三张<strong>可训练</strong>的 2×2 矩阵(为手算方便,下面直接写出具体数字):</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>矩阵</th><th>具体数值(2×2)</th><th>直觉(不必死记)</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><var>W</var><sub>Q</sub></td>
+                <td><code>[[6, 0], [0, 0]]</code></td>
+                <td>主要把向量<strong>第 1 维</strong>放大成 Query</td>
+              </tr>
+              <tr>
+                <td><var>W</var><sub>K</sub></td>
+                <td><code>[[3, 0], [0, 3]]</code></td>
+                <td>两维各自放大成 Key,方便用点积比“方向”</td>
+              </tr>
+              <tr>
+                <td><var>W</var><sub>V</sub></td>
+                <td><code>[[1.5, 0], [0, 1.5]]</code></td>
+                <td>把内容向量整体缩放成 Value</td>
+              </tr>
             </tbody>
           </table>
         </div>
         <p>
-          而“它”这个 query 词,算好的 Query 是 <strong><var>q</var> = [2, 0]</strong>。
-          好了,材料齐了,开算。
+          投影规则就是<a class="xref" href="chapter-02.html">第 2 章</a>的矩阵乘:<strong>行向量左乘矩阵</strong>。
+          以“猫”为例,<var>x</var> = [1, 0]:
+        </p>
+        <div class="mathblock reveal">
+          <var>q</var><sub>猫</sub> = [1,0]·[[6,0],[0,0]] = [6, 0] ·
+          <var>k</var><sub>猫</sub> = [1,0]·[[3,0],[0,3]] = [3, 0] ·
+          <var>v</var><sub>猫</sub> = [1,0]·[[1.5,0],[0,1.5]] = [1.5, 0]
+          <span class="label">第 1 维是 1×6、1×3、1×1.5;第 2 维是 0,所以结果第二格都是 0</span>
+        </div>
+        <p>三个词各算一遍,得到整张 Q/K/V 表——<strong>后面打分用的就是这里的结果</strong>:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>词</th><th>Query</th><th>Key(标签)</th><th>Value(内容)</th></tr></thead>
+            <tbody>
+              <tr><td>猫</td><td>[6, 0]</td><td>[3, 0]</td><td>[1.5, 0]</td></tr>
+              <tr><td>睡</td><td>[0, 0]</td><td>[0, 3]</td><td>[0, 1.5]</td></tr>
+              <tr><td>它</td><td class="is-hot">[2, 0]</td><td>[1, 1]</td><td>[0.5, 0.5]</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">
+            “它”的 Query: [⅓,⅓]·[[6,0],[0,0]] = [2,0]。
+            Key: [⅓,⅓]·[[3,0],[0,3]] = [1,1]。
+            Value: [⅓,⅓]·[[1.5,0],[0,1.5]] = [0.5,0.5]。
+            <strong>没有跳步</strong>——先前版本若直接给出这张表,却不说矩阵从哪来,正是读起来最别扭的地方。
+          </p>
+        </div>
+        <p>
+          下面聚焦“<strong>它</strong>”当 query(其余词也会各当一次 query,流程相同),用 <var>q</var> = [2, 0] 和全表的 Key、Value 继续走第 3 节的四步。
         </p>
 
         <h3>第①②步:打分,再缩放</h3>
@@ -223,16 +307,16 @@
         </p>
 
         <h3>第④步:加权求和,得到“它”的新向量</h3>
-        <p>用这排权重,对三个词的 <strong>Value</strong> 做加权平均:</p>
+        <p>用这排权重,对三个词的 <strong>Value</strong> 做加权平均(数值来自上表第 0 步):</p>
         <div class="mathblock reveal">
-          新“它” = 0.93 × [1, 0] + 0.01 × [0, 1] + 0.06 × [0.5, 0.5]
-          <span class="label">= [0.93, 0] + [0, 0.01] + [0.03, 0.03] = <strong>[0.96, 0.04]</strong></span>
+          新“它” = 0.93 × [1.5, 0] + 0.01 × [0, 1.5] + 0.06 × [0.5, 0.5]
+          <span class="label">= [1.40, 0] + [0, 0.015] + [0.03, 0.03] ≈ <strong>[1.43, 0.05]</strong></span>
         </div>
         <div class="callout callout--tip reveal">
           <span class="callout__title">见证奇迹的一步</span>
           <p>
-            “它”原本只是个空洞的代词,经过注意力后,它的新向量变成了 <strong>[0.96, 0.04]</strong>,
-            几乎和“猫”的 Value <strong>[1, 0]</strong> 一模一样!换句话说,
+            “它”原本只是个空洞的代词,经过注意力后,它的新向量变成了 <strong>[1.43, 0.05]</strong>,
+            几乎和“猫”的 Value <strong>[1.5, 0]</strong> 同方向!换句话说,
             <strong>注意力让“它”这个词吸收了“猫”的内容——代词指代关系,就这样被解开了。</strong>
             这正是<a class="xref" href="chapter-16.html">第 16 章</a>开头那个“它到底指谁”难题的答案,而它只用了一次加权平均。
           </p>
@@ -270,20 +354,127 @@
         <p>
           语言模型要做的事是“根据前文预测下一个词”。训练和生成时有一条铁律:
           预测第 <var>t</var> 个词时,<strong>只能看第 1 到 <var>t</var> 个词,绝不能看到它后面的词</strong>
-          ——否则就是“偷看答案”,学不到真本事。
+          ——否则就是“偷看答案”,学不到真本事。这条铁律有个正式名字,叫
+          <span class="term">causal mask(因果掩码)</span>,也叫“自回归掩码”。
         </p>
-        <p>
-          实现办法很巧妙:在打分之后,把所有“未来位置”的分数直接改成<strong>负无穷</strong>。
-          回忆第③步——softmax 里要算 e^分数,而 e^(负无穷) ≈ 0,所以这些位置的权重就变成了 ≈ 0,
-          相当于被彻底屏蔽,一点都参与不进加权平均。这就是
-          <span class="term">causal mask(因果掩码)</span>。
-        </p>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">用刚才的例子看</span>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">为什么“偷看”会把训练毁掉</span>
           <p>
-            假设现在轮到“睡”当 query,而“它”排在它<strong>后面</strong>。打分时就把“它”那一格设成 −∞,
-            于是那一排分数只剩 [猫, 睡, <strong>−∞</strong>],softmax 后“它”的权重 ≈ 0——
-            “睡”就只能靠“猫”和它自己来更新,永远看不到未来的“它”。(在上面实验台勾选 causal 就能看到后面的词被标成 masked。)
+            想象一场<strong>闭卷考试</strong>:题目是“猫累了,所以___睡了”,要你填空。
+            如果这时有人把<strong>标准答案连同后文一起</strong>塞到你眼前,你当然“答”得又快又准——
+            但你根本没在学“怎么根据前文推断”,只是在<strong>抄</strong>。模型也一样:
+            注意力默认是“<a class="xref" href="#3-完整流程-先投影再四步走">谁都能看谁</a>”的,如果预测某个词时允许它看到自己<strong>后面</strong>的词,
+            它会轻松学到一条<strong>作弊捷径</strong>——直接把答案抄过来。
+            这样训练时损失掉得飞快,可一旦真正生成时后文<strong>还不存在</strong>,模型立刻露馅。
+            causal mask 就是那位<strong>严格的监考老师</strong>:把每个词后面的内容全部遮住,逼模型只靠前文思考。
+          </p>
+        </div>
+        <p>
+          具体怎么“遮”?办法很巧妙:<strong>不真的去删词,而是在打分之后,把所有“未来位置”的分数改成负无穷(−∞)</strong>。
+          回忆<a class="xref" href="#第步-softmax把分数变成权重">第③步</a>——softmax 要先算 e<sup>分数</sup>,
+          而 e<sup>−∞</sup> ≈ 0,所以这些未来位置的权重就变成了 ≈ 0,一点都参与不进加权求和,相当于被彻底屏蔽。
+        </p>
+
+        <h3>① 一张下三角表:到底谁能看谁</h3>
+        <p>
+          把“谁能看谁”画成一张方格表最清楚:<strong>行</strong>是“正在当 query 的词”,<strong>列</strong>是“被它看的词”,
+          <strong>从左到右、从上到下</strong>就是词在句子里的先后顺序。亮起来的格子表示“<strong>这一对允许打分</strong>”。
+          causal mask 允许的,恰好是一个<strong>下三角</strong>(含对角线)——每个词只能看到自己和它<strong>左边(更早)</strong>的词:
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pattern-mats">
+              <div class="pattern-mat">
+                <p class="pattern-mat__title">不加 mask(双向全看)</p>
+                <div class="pattern-mat__grid">
+                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span>
+                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span>
+                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span>
+                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span>
+                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span>
+                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span>
+                </div>
+                <p class="pattern-mat__cap">每个词都能看全句(像 BERT 这类<strong>理解</strong>任务)</p>
+              </div>
+              <div class="pattern-mat">
+                <p class="pattern-mat__title">causal mask(只看左边)</p>
+                <div class="pattern-mat__grid">
+                  <span class="on"></span><span></span><span></span><span></span><span></span><span></span>
+                  <span class="on"></span><span class="on"></span><span></span><span></span><span></span><span></span>
+                  <span class="on"></span><span class="on"></span><span class="on"></span><span></span><span></span><span></span>
+                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span><span></span>
+                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span>
+                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span>
+                </div>
+                <p class="pattern-mat__cap">下三角:第 <var>t</var> 行只有前 <var>t</var> 格亮(像 GPT 这类<strong>生成</strong>任务)</p>
+              </div>
+            </div>
+            <div class="diagram__legend">
+              <span><i style="background: var(--primary)"></i>允许打分(能看见)</span>
+              <span><i style="background: rgba(149, 176, 227, 0.28)"></i>被 mask 成 −∞(看不见)</span>
+            </div>
+          </div>
+          <p class="figure__cap">
+            左边不加 mask,人人互看;右边加了 causal mask,只剩下三角——这正是“<strong>双向理解</strong>模型 vs <strong>单向生成</strong>模型”最本质的一处区别。
+          </p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">用刚才的例子看一行</span>
+          <p>
+            还是“猫 → 睡 → 它”这个顺序,但现在轮到<strong>“睡”</strong>当 query。它排在第 2 位,“它”排在它<strong>后面</strong>(第 3 位)。
+            于是打分时把“它”那一格设成 −∞,这一排分数只剩
+            <code>[猫, 睡, <strong>−∞</strong>]</code>,softmax 后“它”的权重 ≈ 0——
+            “睡”就只能靠“猫”和它自己来更新,<strong>永远看不到未来的“它”</strong>。
+            (在<a class="xref" href="#6-自己上手玩一玩">上面那个实验台</a>勾选 causal,就能看到后面的词被标成 masked。)
+          </p>
+        </div>
+
+        <h3>② 为什么是改成 −∞,而不是直接删掉或填 0</h3>
+        <p>
+          初学最容易冒出的疑问:既然不让看,<strong>把那一格分数直接设成 0 不就行了?</strong>为什么非要 −∞?
+          关键在于 mask 这一步发生在 <strong>softmax 之前</strong>,而 softmax 是“<strong>相对</strong>”的——它把每个分数变成 e<sup>分数</sup> 再归一化:
+        </p>
+        <ul>
+          <li>若把未来位置的分数<strong>填 0</strong>:e<sup>0</sup> = 1,它照样贡献了一份不小的权重,等于“<strong>还是偷看了一点</strong>”,没屏蔽干净。</li>
+          <li>若填 <strong>−∞</strong>:e<sup>−∞</sup> ≈ 0,这一份权重被彻底压没,softmax 归一化时其余位置自动补齐到 1,干净利落。</li>
+        </ul>
+        <p>
+          代码里当然写不了真正的“负无穷”,通常用一个<strong>极小的数</strong>(如浮点最小值)代替,效果一样。这就是
+          <a class="xref" href="#9-逐行读懂-self-attention-的前向">第 9 节代码</a>里那句
+          <code>score[col] = lowest()</code> 的由来。
+        </p>
+
+        <h3>③ 训练时:一次并行,靠 mask 让每个位置“各看各的前文”</h3>
+        <p>
+          这一点最容易困惑,却也是 causal mask 真正威力所在。你可能以为:要让第 1、2、3…个位置各自“只看前文”,
+          得<strong>一个位置一个位置地跑很多遍</strong>?其实不用——训练时<strong>整句一次性喂进去</strong>,
+          一次前向就同时算出<strong>所有位置</strong>的预测,靠的正是这张下三角 mask 让它们互不串味:
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">位置 1<small>只看【猫】→ 预测“睡”</small></div>
+              <div class="pipe__arrow">·</div>
+              <div class="pipe__box">位置 2<small>看【猫 睡】→ 预测“它”</small></div>
+              <div class="pipe__arrow">·</div>
+              <div class="pipe__box">位置 3<small>看【猫 睡 它】→ 预测下一个</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">
+            同一次前向里,第 <var>t</var> 个位置因为被 mask 限制,天然只吸收了前 <var>t</var> 个词的信息,它的预测就相当于“看前 <var>t</var> 个词猜第 <var>t</var>+1 个”。一句 <var>T</var> 个词,一次就造出 <var>T</var> 条训练样本。
+          </p>
+        </div>
+        <p>
+          这就是<a class="xref" href="chapter-19.html#5-训练数据-答案就藏在下一个字里">第 19 章</a>会讲的
+          <span class="term">teacher forcing</span> 能<strong>高效并行</strong>的根基:把标准答案的前半段整段喂进去,
+          mask 保证每个位置都“看不到自己的答案”,于是 <var>T</var> 个位置的损失可以一次算完、一起反向传播,而不必逐字循环——训练因此快了很多。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">埋个伏笔:下三角 = 后面的词动不了前面</span>
+          <p>
+            仔细看那张下三角:第 <var>t</var> 个词的注意力<strong>永远只依赖它和它左边</strong>,后来新增的词落在它右边,
+            对它<strong>毫无影响</strong>。这个性质极其重要——它意味着生成时“前面那些词算出来的东西不会再变”,
+            正是<a class="xref" href="chapter-21.html">第 21 章</a> <span class="term">KV cache</span> 能把历史缓存下来、只算新词的根本原因。我们到<a class="xref" href="chapter-19.html">第 19 章</a>再细说。
           </p>
         </div>
 
@@ -392,12 +583,44 @@ for (int col = 0; col &lt; n; col++)
           </p>
         </div>
 
-        <h2>10. 这三个矩阵到底是怎么训练出来的?</h2>
+        <h2>10. 这四个矩阵到底是怎么训练出来的?</h2>
         <p>
-          到这儿你八成憋着一个问题:我们反复说 <var>W</var><sub>Q</sub>、<var>W</var><sub>K</sub>、<var>W</var><sub>V</sub>
+          到这儿你八成憋着一个问题:我们反复说 <var>W</var><sub>Q</sub>、<var>W</var><sub>K</sub>、<var>W</var><sub>V</sub>、<var>W</var><sub>O</sub>
           是“训练出来的”,可<strong>到底怎么训</strong>?是不是又有一套没学过的新算法?
-          好消息:<strong>完全没有</strong>。训练这三个矩阵,用的就是你第 4–6 章早就学过的那一套,一个新东西都不需要。
+          是不是每一层还各有一套、各训各的?好消息:<strong>完全没有新算法</strong>——
+          更新方式和 <a class="xref" href="chapter-23.html">MNIST</a>、和 FFN 的权重,<strong>一字不差</strong>。
         </p>
+
+        <h3>每一层各有一套矩阵,彼此不共享</h3>
+        <p>
+          这是第二个常见误会:<strong>不是</strong>全模型只有一套 <var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub> 给所有层共用。
+          每堆一层 <a class="xref" href="chapter-18.html#4-把它们拼成一块-block">Transformer Block</a>,里面就嵌一个独立的 <code>SelfAttention</code>,
+          带着<strong>自己那一套</strong>四个矩阵。GPT 堆 N 层,就有 <strong>N 套</strong> attention 参数。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th></th><th>第 1 层 Block</th><th>第 2 层 Block</th><th>第 N 层 Block</th></tr></thead>
+            <tbody>
+              <tr><td><var>W</var><sub>Q</sub> / <var>W</var><sub>K</sub> / <var>W</var><sub>V</sub> / <var>W</var><sub>O</sub></td><td>一套 <var>d</var>×<var>d</var></td><td><strong>另一套</strong> <var>d</var>×<var>d</var></td><td>再一套…</td></tr>
+              <tr><td>初始化</td><td>各自随机小数</td><td>各自随机小数</td><td>各自随机小数</td></tr>
+              <tr><td>前向</td><td>用本层矩阵投影 → 打分 → 加权</td><td>拿上一层输出再投影一遍</td><td>同上</td></tr>
+              <tr><td><strong>更新公式</strong></td><td colspan="3" class="is-hot"><code>新值 = 旧值 − 学习率 × 梯度</code> —— <strong>每一层、每一个矩阵,规则完全相同</strong></td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">
+            层与层之间传的是隐藏向量序列(<a class="xref" href="chapter-18.html#8-gpt-这种模型-把右塔堆很多层再接一个-lm-head">第 18 章第 8 节</a>);
+            <strong>参数不共享</strong>,但<strong>怎么学</strong>完全同一套套路。
+          </p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">和 MNIST、FFN 放在一张表里看</span>
+          <p>
+            <strong>MNIST</strong> 隐藏层权重:<code>θ ← θ − lr·∇θ</code> ·
+            <strong>FFN</strong> 的 <code>W₁/W₂</code>:同一公式 ·
+            <strong>每一层 Attention</strong> 的 <code>query_weight_/key_weight_/value_weight_/output_weight_</code>:还是同一公式。
+            差别只在<strong>前向怎么算梯度</strong>(链式法则路径不同),不在<strong>参数怎么挪</strong>。
+          </p>
+        </div>
 
         <h3>先把两样东西彻底分清</h3>
         <p>注意力里有两种“数”,新手最容易把它们搅成一团:</p>
@@ -482,6 +705,7 @@ for (int col = 0; col &lt; n; col++)
             <strong>· 只有 query 那个词在动吗?</strong> 不是。句子里<strong>每个词都会轮流当一次 query</strong>,各走一遍四步,得到自己的新向量,上面只演示了“它”。<br />
             <strong>· 注意力会改变词的个数吗?</strong> 不会。进去 <var>n</var> 个词,出来还是 <var>n</var> 个词,只是每个词的向量被“上下文增强”了。<br />
             <strong>· 权重是训练出来的参数吗?</strong> 不是。权重是每次<strong>当场用 Q·K 算</strong>的;被训练的是 <var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub>/<var>W</var><sub>O</sub> 这几个矩阵。<br />
+            <strong>· 每层共用同一套 W 吗?</strong> <strong>不共用</strong>。堆 N 层 Block 就有 N 套矩阵;但每一套的更新公式都是 <code>θ ← θ − lr·∇θ</code>。<br />
             <strong>· self / cross 有啥区别?</strong> Q、K、V 都来自同一句话叫 <strong>self-attention</strong>;若 Q 来自一句、K/V 来自另一句(如翻译时解码器看编码器),就叫 <strong>cross-attention</strong>。
           </p>
         </div>
@@ -491,8 +715,9 @@ for (int col = 0; col &lt; n; col++)
           <ul>
             <li>一句话:注意力 = <strong>按相关性给每个词做一次加权平均</strong>;全章都在回答“权重怎么算”。</li>
             <li>每个词从输入算出三副面孔:Query(我找什么)、Key(我的标签)、Value(我的内容),来自三个可训练矩阵。</li>
-            <li>四步:Q 和每个 K 点积打分 → 除以 √d 缩放 → softmax 成权重 → 对 V 加权求和。</li>
-            <li>手算例子:“它”把 0.93 的注意力给了“猫”,新向量 ≈ 猫的 Value,代词指代被自动解开。</li>
+            <li>四步:先 <var>x</var> 乘 <var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub> 得 Q/K/V → 点积打分 → ÷√d → softmax → 对 V 加权求和。</li>
+            <li>手算例子:先投影出 Q/K/V,再让“它”把 0.93 的注意力给“猫”,新向量 ≈ 猫的 Value 方向。</li>
+            <li><var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub>/<var>W</var><sub>O</sub>:<strong>每层各一套</strong> <var>d</var>×<var>d</var> 参数;更新公式与 MNIST/FFN 相同,注意力权重本身不训练。</li>
             <li>点积衡量“方向合不合拍”;causal mask 把未来位置分数设为 −∞;多头 = 几位专家各看一遍再拼接。</li>
           </ul>
         </section>
@@ -518,15 +743,27 @@ for (int col = 0; col &lt; n; col++)
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 4:causal mask 是怎么实现“看不到未来”的?</summary>
+            <summary class="quiz__q">问题 4:causal mask 是怎么实现“看不到未来”的?为什么是设成 −∞,而不是把那格填 0?</summary>
             <div class="quiz__a">
-              <p>在打分阶段,把所有“未来位置”的分数设成负无穷;经过 softmax(要算 e^分数,而 e^(−∞)≈0)后它们的权重≈0,等于完全不参与加权求和,于是模型只能依赖当前位置及之前的词。</p>
+              <p>在打分阶段(softmax <strong>之前</strong>),把所有“未来位置”的分数设成负无穷。因为 softmax 要算 e<sup>分数</sup>,而 e<sup>−∞</sup>≈0,这些位置权重≈0,完全不参与加权求和,于是模型只能依赖当前位置及之前的词。<strong>不能填 0</strong>:e<sup>0</sup>=1 仍会贡献一份不小的权重,等于“还偷看了一点”,没屏蔽干净。代码里用一个极小的数(浮点最小值)代替真正的 −∞。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 5:W<sub>Q</sub>/W<sub>K</sub>/W<sub>V</sub> 是怎么“训练出来”的?它和那排注意力权重是一回事吗?</summary>
+            <summary class="quiz__q">问题 5:训练一句 T 个词的话,是要一个位置一个位置跑 T 遍前向吗?causal mask 在这里起了什么作用?</summary>
+            <div class="quiz__a">
+              <p><strong>不用跑 T 遍。</strong>整句一次性喂进去,一次前向就同时算出所有位置的预测。causal mask(那张下三角)保证第 <var>t</var> 个位置只吸收了前 <var>t</var> 个词的信息,它的预测天然等价于“看前 <var>t</var> 个词猜第 <var>t</var>+1 个”。于是一句话一次就造出 T 条互不串味的训练样本、T 份损失一起反传——这正是 teacher forcing 能高效并行的原因。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 6:W<sub>Q</sub>/W<sub>K</sub>/W<sub>V</sub> 是怎么“训练出来”的?它和那排注意力权重是一回事吗?</summary>
             <div class="quiz__a">
               <p>不是一回事。那排注意力权重([0.93, 0.01, …])是每次前向<strong>当场用 Q·K 算</strong>的,不是参数。真正被训练的是 W<sub>Q</sub>/W<sub>K</sub>/W<sub>V</sub>/W<sub>O</sub> 这几个矩阵——它们和普通权重一样,靠第 5、6 章的<strong>反向传播 + 梯度下降</strong>调:前向算损失,反传求梯度,再让每个矩阵元素“减去 学习率 × 梯度”。驱动力是模型最终任务的损失,模型为了降低它,自己学会了让“该相关的词”Q、K 方向凑近。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 7:第 1 层和第 2 层的 W<sub>Q</sub> 是同一套矩阵吗?更新方式一样吗?</summary>
+            <div class="quiz__a">
+              <p><strong>不是同一套</strong>——每多堆一层 Block,就多一套独立的 <code>query_weight_/key_weight_/value_weight_/output_weight_</code>,初始化各自随机,训练中各自积累梯度。<strong>但更新方式完全一样</strong>:反向传播算出本层矩阵每个元素的梯度,再 <code>新值 = 旧值 − 学习率 × 梯度</code>,与 MNIST、FFN 无差别。</p>
             </div>
           </details>
         </div>

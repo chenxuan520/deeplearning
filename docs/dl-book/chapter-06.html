@@ -144,14 +144,26 @@
           <span class="label">权重梯度 = 本神经元的 δ × 上一层对应的输入;偏置梯度就是 δ 本身</span>
         </div>
         <div class="callout callout--note reveal">
-          <span class="callout__title">框架到手,下一节现场验一遍</span>
+          <span class="callout__title">框架到手:先看它动起来,再逐字推一遍</span>
           <p>
             这三步就是反向传播的<strong>全部骨架</strong>。但光看通用公式容易“懂了又没懂”。
-            所以下一节,我们拿一张真实的速查图、带具体下标,把每个 <var>δ</var>、每根 <var>w</var>、每个 <var>b</var> 的梯度<strong>按真实计算顺序现场推一遍</strong>——你会看到,推来推去都没跳出这三步。
+            所以下面<strong>先用动画</strong>把这三步“看”一遍(误差怎么从末层反着流回来),再拿一张真实的速查图、带具体下标,
+            把每个 <var>δ</var>、每根 <var>w</var>、每个 <var>b</var> 的梯度<strong>按真实计算顺序现场推一遍</strong>——你会看到,推来推去都没跳出这三步。
           </p>
         </div>
 
-        <h2>3. 跟着速查图,按真实计算顺序推一遍</h2>
+        <h2>3. 边看动画边走一遍</h2>
+        <p>
+          三步框架到手,先别急着抠公式——<strong>先看它动起来</strong>。还是那个动画(和<a class="xref" href="chapter-03.html#3-边看动画边理解">第 3 章前向</a>同一个),这次请点 <strong>“切到反向传播”</strong>,再一步步点 <strong>“下一步”</strong>。
+          注意暖色信号是怎么从输出层<strong>反着</strong>流回输入层的——它传的不是数据,而是“误差/责任”。
+          你还可以 hover 公式里的彩色项,看它对应网络里的哪个节点或哪条边。
+        </p>
+        <div class="figure reveal">
+          <div data-lab="propagation"></div>
+          <p class="figure__cap">前向(蓝绿)把数据往前算;反向(暖色)把误差往回传。两趟合起来,就是一次完整的训练步。</p>
+        </div>
+
+        <h2>4. 跟着速查图,按真实计算顺序推一遍</h2>
         <p>
           链式法则(第 1 节)和三步框架(第 2 节)都到手了,现在拿它们去啃一张<strong>真实的速查图</strong>:把抽象公式落到<strong>具体下标</strong>上。
           这张图乍看是一堵“公式墙”,分成 <code>struct / base / neuron / formula / example</code> 五块。
@@ -312,17 +324,6 @@
           </p>
         </div>
 
-        <h2>4. 边看动画边走一遍</h2>
-        <p>
-          下面还是那个动画,这次请点 <strong>“切到反向传播”</strong>,再一步步点 <strong>“下一步”</strong>。
-          注意暖色信号是怎么从输出层<strong>反着</strong>流回输入层的——它传的不是数据,而是“误差/责任”。
-          你还可以 hover 公式里的彩色项,看它对应网络里的哪个节点或哪条边。
-        </p>
-        <div class="figure reveal">
-          <div data-lab="propagation"></div>
-          <p class="figure__cap">前向(蓝绿)把数据往前算;反向(暖色)把误差往回传。两趟合起来,就是一次完整的训练步。</p>
-        </div>
-
         <h2>5. 逐行读懂反向传播</h2>
         <p>真实代码就是上面三步的忠实翻译。<strong>第一步:末层的 δ。</strong></p>
         <figure class="code-walk reveal">
@@ -377,7 +378,7 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
   }
 }</code></pre>
           <ol class="code-walk__notes">
-            <li>偏置的梯度,就是这个神经元的 <var>δ</var> 本身(对应公式 ∂<var>L</var>/∂<var>b</var> = <var>δ</var>)——和第 3 节、第 3~4 步推的完全一致,代码里就一句 <code>grad_bias_[l][o] += d</code>。</li>
+            <li>偏置的梯度,就是这个神经元的 <var>δ</var> 本身(对应公式 ∂<var>L</var>/∂<var>b</var> = <var>δ</var>)——和第 4 节、第 3~4 步推的完全一致,代码里就一句 <code>grad_bias_[l][o] += d</code>。</li>
             <li>权重的梯度,是 <var>δ</var> 乘以“上一层对应的输入”(对应 ∂<var>L</var>/∂<var>w</var> = <var>δ</var>·<var>a</var>)。注意是 <code>+=</code>:一批里每个样本都累加进来,最后在 <code>ApplyGradient</code> 里除以 <code>B</code> 取平均(<a class="xref" href="chapter-05.html">第 5 章</a>)。</li>
           </ol>
         </figure>

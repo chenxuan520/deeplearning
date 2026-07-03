@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 25 章 · 井字棋 Q-learning 实战:把强化学习跑起来 | 深度学习入门</title>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body data-chapter="25">
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">第 25 章 · 代码实战</p>
+        <h1>井字棋 Q-learning 实战:把强化学习跑起来</h1>
+
+        <p class="lead">
+          <a class="xref" href="chapter-23.html">第 23 章</a>把监督学习跑通了,<a class="xref" href="chapter-24.html">第 24 章</a>把语言模型跑通了;
+          这一章补上<a class="xref" href="chapter-12.html">第 12 章</a>的<strong>强化学习</strong>——没有标签,只有赢/输/和的奖励,靠试错学策略。
+          程序是仓库里的 <code>src/demo/rl_tictactoe/main.cpp</code>,配上 <code>src/deeplearning/rl/</code> 下的环境与 Q-learning 模块。
+          智能体执 <strong>X</strong>,用一张 <strong>Q 表</strong>(不是神经网络) 学会下棋;默认训 3 万局后,对随机对手 greedy 胜率约 <strong>99%</strong>。
+        </p>
+
+        <section class="objectives reveal">
+          <h2>读完这一章,你会明白</h2>
+          <ul>
+            <li>一个 RL 程序的完整链路:<strong>环境 → Q 表 → 多回合训练 → 评估 → (可选)人机对战</strong>;</li>
+            <li><code>TicTacToeEnv</code> 如何把<a class="xref" href="chapter-12.html">第 12 章</a>的 状态 / 动作 / 奖励 落成代码;</li>
+            <li><code>TabularQLearning</code> 如何实现 ε-greedy、TD 更新与 <code>RunEpisode</code> 训练循环;</li>
+            <li>为什么井字棋适合<strong>表格式 Q-learning</strong>,而 MNIST / 语言模型走的是监督学习;</li>
+            <li>怎么编译运行,并亲手看到胜率随训练爬升。</li>
+          </ul>
+        </section>
+
+        <h2>1. 任务与全景:没有标签,只有奖惩</h2>
+        <p>
+          监督学习(<a class="xref" href="chapter-23.html">第 23 章</a>)每道题旁贴着标准答案;强化学习(<a class="xref" href="chapter-12.html">第 12 章</a>)只有环境在终局告诉你“赢了吗”。
+          井字棋里:<strong>状态</strong> = 当前棋盘,<strong>动作</strong> = 在 0–8 某一格落子,<strong>奖励</strong> = 赢 +1 / 输 −1 / 和 0(中间步全是 0,典型<strong>稀疏奖励</strong>)。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">空棋盘<small>回合开始 reset</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">X 落子<small>ε-greedy 选动作</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">O 回应<small>随机或最优对手</small></div>
+              <div class="pipe__arrow">↺</div>
+              <div class="pipe__box">TD 更新 Q<small>r + γ·max Q(s′,·)</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">对应<a class="xref" href="chapter-12.html#3-智能体与环境-一个不停转的循环">第 12 章 agent–env 循环</a> + <a class="xref" href="chapter-12.html#7-q-learning-用一张表把价值从终点倒灌回起点">Q-learning 更新</a>。外层再重复很多<strong>回合</strong>。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">和 MNIST / mini-LM 的本质区别</span>
+          <p>
+            MNIST 的“标签”是人工给的数字;语言模型的“标签”是语料里自带的下一个字。
+            井字棋<strong>没有任何一步的标准落法</strong>,只有走完才知道输赢——训练信号来自 <code>ApplyMove</code> 里的 <code>reward</code>,
+            学习目标是一张 <code>Q(s,a)</code> 表,而不是<a class="xref" href="chapter-06.html">反向传播</a>里的梯度(本章<strong>没有</strong>神经网络)。
+          </p>
+        </div>
+
+        <h2>2. 第一步 · 环境:棋盘、状态编码与奖励</h2>
+        <p>
+          <code>TicTacToeEnv</code> 就是<a class="xref" href="chapter-12.html">第 12 章</a>的“环境”。它维护 9 格棋盘、判断输赢、在轮到智能体时返回 <code>state_key</code>。
+          状态用<strong>三进制整数</strong>编码:每格 空/X/O → 0/1/2,压成一个 <code>int</code> 当作 Q 表的键。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rl/tic_tac_toe_env.cpp · 状态编码(精简)</figcaption>
+          <pre class="code-walk__code"><code>int TicTacToeEnv::EncodeBoardKey(const std::array&lt;Cell, 9&gt; &amp;board) {
+  int key = 0, base = 1;
+  for (int i = 0; i &lt; 9; i++) {
+    key += static_cast&lt;int&gt;(board[i]) * base;   // 空=0, X=1, O=2   <b class="cw-tag">1</b>
+    base *= 3;
+  }
+  return key;
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>只在<strong>轮到 X(智能体)</strong>时调用 <code>AgentStateKey()</code>——Q 表存的是“轮到我下时,这盘棋值多少”。</li>
+          </ol>
+        </figure>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rl/tic_tac_toe_env.cpp · 落子与奖励(精简)</figcaption>
+          <pre class="code-walk__code"><code>board_[action] = player;
+result_ = CheckResult();
+out.done = IsTerminal();
+
+if (result_ == GameResult::X_WIN)      out.reward = 1.0;              <b class="cw-tag">1</b>
+else if (result_ == GameResult::O_WIN)   out.reward = -1.0;
+else if (result_ == GameResult::DRAW)    out.reward = 0.0;
+
+if (!out.done) {
+  agent_turn_ = !agent_turn_;
+  out.agent_state_key = agent_turn_ ? AgentStateKey() : -1;           <b class="cw-tag">2</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>奖励只在<strong>终局</strong>给出,对应<a class="xref" href="chapter-12.html#稀疏奖励-为什么-rl-常常很难训">第 12 章稀疏奖励</a>;中间步 <code>reward=0</code>,靠 TD 目标里的 <code>max Q(s′,·)</code> 把价值从终局往回传。</li>
+            <li>若未结束,交换行棋方,并准备好<strong>下一轮智能体行动时</strong>的状态键,供 <code>Update</code> 使用。</li>
+          </ol>
+        </figure>
+        <p>对手有两种:<code>StepOpponentRandom</code>(训练常用)和 <code>StepOpponentOptimal</code>(minimax 最优,用于评估“会不会输”)。</p>
+
+        <h2>3. 第二步 · Q 表与超参:α、γ、ε</h2>
+        <p>
+          <code>TabularQLearning</code> 维护 <code>unordered_map&lt;state_key, vector&lt;double&gt;&gt;</code>——每个状态 9 个动作的 Q 值,初始全 0。
+          超参与<a class="xref" href="chapter-12.html#7-q-learning-用一张表把价值从终点倒灌回起点">第 12 章手算</a>一致:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/rl_tictactoe/main.cpp · 初始化智能体(精简)</figcaption>
+          <pre class="code-walk__code"><code>TabularQLearning::Config config;
+config.alpha = 0.5;           // 学习率 α                         <b class="cw-tag">1</b>
+config.gamma = 0.99;          // 折扣 γ
+config.epsilon = 1.0;         // 探索率, 训练初期几乎全随机          <b class="cw-tag">2</b>
+config.epsilon_min = 0.05;
+config.epsilon_decay = 0.9995;
+config.rand_seed = option.rand_seed;
+agent.Init(config);</code></pre>
+          <ol class="code-walk__notes">
+            <li>α 控制每次 TD 更新挪多大幅度;γ 让智能体更看长远(接近 1 时更重视终局赢棋)。</li>
+            <li>ε 从 1.0 指数衰减到 0.05——<a class="xref" href="chapter-12.html#6-探索与利用-走老路还是试新路">第 12 章 ε-greedy</a>:先广探索,后多利用已学到的 Q。</li>
+          </ol>
+        </figure>
+
+        <h2>4. 第三步 · 选动作:ε-greedy 与 TD 更新</h2>
+        <p>每一步训练都要做两件事:按当前 Q 表<strong>选落子</strong>,再用环境反馈<strong>改 Q 表</strong>。</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rl/tabular_q_learning.cpp · SelectAction(精简)</figcaption>
+          <pre class="code-walk__code"><code>if (explore &amp;&amp; config_.epsilon &gt; 0.0) {
+  double sample = random.CreateRandom() / 1000000.0;
+  if (sample &lt; config_.epsilon)
+    return TicTacToeEnv::ChooseRandomAction(legal_actions, ...);   <b class="cw-tag">1</b>
+}
+return ArgmaxQ(state_key, legal_actions);                          <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>探索:在<strong>合法空位</strong>里随机挑一格。</li>
+            <li>利用:挑 Q 最大的合法落子;<code>Evaluate</code> 时 <code>explore=false</code>,纯 greedy 下棋。</li>
+          </ol>
+        </figure>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rl/tabular_q_learning.cpp · Update(精简)</figcaption>
+          <pre class="code-walk__code"><code>double old_q = QRow(state_key)[action];
+double target = reward;
+if (!terminal)
+  target += config_.gamma * MaxQ(next_state_key, legal_actions_next);  <b class="cw-tag">1</b>
+QRow(state_key)[action] = old_q + config_.alpha * (target - old_q);    <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>贝尔曼目标 <code>r + γ·max Q(s′,·)</code>(<a class="xref" href="chapter-12.html#贝尔曼方程-把长远拆成眼前一步--下一步">第 12 章</a>);终局时不再加未来项。</li>
+            <li>TD 误差 <code>target − old_q</code>,乘以 α 写回——和<a class="xref" href="chapter-06.html">第 6 章</a>“误差驱动更新”同构,但没有反向传播。</li>
+          </ol>
+        </figure>
+
+        <h2>5. 第四步 · 训练:RunEpisode 与外层循环</h2>
+        <p>
+          一个<strong>回合</strong> = 从空盘下到终局。<code>RunEpisode</code> 封装了<a class="xref" href="chapter-12.html#10-一条典型的-rl-训练循环">第 12 章内层循环</a>:
+          X 走 → O 走 → 更新 Q,直到 <code>done</code>。<code>main.cpp</code> 外层只是重复很多回合并衰减 ε。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/rl/tabular_q_learning.cpp · RunEpisode(精简)</figcaption>
+          <pre class="code-walk__code"><code>env.Reset();
+while (!env.IsTerminal()) {
+  int state_key = env.AgentStateKey();
+  int action = SelectAction(state_key, env.LegalActions(), true);     <b class="cw-tag">1</b>
+  env.StepAgent(action, agent_step);
+  if (agent_step.done) {
+    Update(state_key, action, agent_step.reward, -1, {}, true);
+    break;
+  }
+  env.StepOpponentRandom(opponent_action, opponent_step);            <b class="cw-tag">2</b>
+  if (opponent_step.done) {
+    Update(state_key, action, opponent_step.reward, -1, {}, true);
+    break;
+  }
+  Update(state_key, action, 0.0, opponent_step.agent_state_key,
+         env.LegalActions(), false);                                  <b class="cw-tag">3</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>每步用 ε-greedy 选合法落子;非法位置会被环境拒绝(测试里专门测过)。</li>
+            <li>训练对手默认随机;也可 <code>--opponent optimal</code> 对抗 minimax(更难学、收敛慢)。</li>
+            <li>非终局步 reward=0,用对手走完后的新局面作 <var>s</var>′ 做 bootstrap——价值就这样从赢棋局面<strong>倒灌</strong>回开局。</li>
+          </ol>
+        </figure>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/rl_tictactoe/main.cpp · 外层训练循环(精简)</figcaption>
+          <pre class="code-walk__code"><code>for (int episode = 0; episode &lt; option.episodes; episode++) {
+  agent.RunEpisode(env, train_opponent, stats);
+  agent.DecayEpsilon();                                              <b class="cw-tag">1</b>
+  // 每 5000 局打印: 累计胜/和/负、Q 表状态数、当前 ε
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>与<a class="xref" href="chapter-23.html">第 23 章</a> <code>Train</code> 的外层 epoch 类似,但数据不是固定数据集,而是<strong>自己下棋现生成</strong>的轨迹。</li>
+          </ol>
+        </figure>
+        <div class="figure figure--reading reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">reset<small>新回合</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">ε-greedy 落子<small>第 12 章 §6</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">环境 step<small>r, done, s′</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">Update Q<small>TD 目标</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">监督学习的 <code>Train</code> 是“前向→损失→反向”;这里是“行动→奖励→改 Q 表”,<strong>没有标签、没有梯度</strong>。</p>
+        </div>
+
+        <h2>6. 第五步 · 评估与人机对战</h2>
+        <p>
+          训练完用 <code>Evaluate</code> 关掉探索,纯 greedy 连下很多局,统计胜/和/负。
+          默认 3 万局后对<strong>随机对手</strong>约 99% 胜率,对<strong>最优对手</strong>可稳守和棋(不输)。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/rl_tictactoe/main.cpp · 评估与可选对战(精简)</figcaption>
+          <pre class="code-walk__code"><code>auto random_eval = agent.Evaluate(env, OpponentType::RANDOM, eval_games);
+auto optimal_eval = agent.Evaluate(env, OpponentType::OPTIMAL, eval_games);
+PrintEval("Eval vs random (greedy)", random_eval, eval_games);       <b class="cw-tag">1</b>
+
+if (option.play)
+  PlayInteractive(env, agent);   // stdin 输入 0–8, 你是 O            <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li><code>Evaluate</code> 内部 <code>SelectAction(..., false)</code>,不再随机探索,测的是“学成之后有多强”。</li>
+            <li><code>--play</code> 让你亲自和训练好的 X 下一盘;棋盘位置编号 0|1|2 / 3|4|5 / 6|7|8。</li>
+          </ol>
+        </figure>
+
+        <h2>7. 从这张 Q 表,到 DQN 与 RLHF</h2>
+        <p>
+          井字棋合法局面有限,Q 表只有一两千行,<strong>查表 + TD 更新</strong>就够。
+          若状态变成游戏画面或围棋盘面,表存不下,就要上<a class="xref" href="chapter-12.html#8-状态太多怎么办-用神经网络近似dqn">DQN</a>用网络近似 Q;
+          若动作变成词表里几万个 token,就要上<a class="xref" href="chapter-12.html#9-动作太多怎么办-直接学策略策略梯度--actor-critic--ppo">策略梯度 / PPO</a>——
+          <a class="xref" href="chapter-20.html">第 20 章 RLHF</a> 正是后者:大模型当策略,奖励模型当裁判。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">自己跑一遍(强烈建议)</span>
+          <p>
+            在仓库 <code>src/</code> 目录下:<br />
+            <code>./build.sh</code> &nbsp;→&nbsp; 编译<br />
+            <code>./bin/rl_tictactoe --episodes 30000 --eval-games 500 --show-sample</code><br />
+            观察每 5000 局的胜/和/负与 <code>q_states</code> 增长;再试 <code>--play</code> 和你训的 X 下一盘。
+            更全参数见仓库 <code>docs/rl-tictactoe-demo.md</code>。
+          </p>
+        </div>
+
+        <section class="summary reveal">
+          <h2>小结</h2>
+          <ul>
+            <li>RL 程序 = <strong>环境 → Q 表 → 多回合 RunEpisode → 评估</strong>;没有固定数据集,轨迹是智能体自己下的棋。</li>
+            <li><code>TicTacToeEnv</code>:三进制 <code>state_key</code>、终局奖励、合法动作过滤,对应<a class="xref" href="chapter-12.html">第 12 章</a> MDP 五件套。</li>
+            <li><code>TabularQLearning</code>:ε-greedy 选子、TD 更新 Q、<code>DecayEpsilon</code> 减探索。</li>
+            <li><code>RunEpisode</code> = agent 走 → opponent 走 → <code>Update</code>;价值从赢棋终局倒灌回开局空盘。</li>
+            <li>状态/动作再变大 → DQN / PPO / RLHF(<a class="xref" href="chapter-12.html">第 12 章</a>、<a class="xref" href="chapter-20.html">第 20 章</a>)。</li>
+          </ul>
+        </section>
+
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:井字棋 demo 为什么没有用到反向传播?</summary>
+            <div class="quiz__a">
+              <p>状态空间小,用 Q <strong>表</strong>存得下;学习信号是 TD 目标 <code>r+γ·max Q(s′,·)</code>,直接改表里的数,不需要神经网络,也就不需要<a class="xref" href="chapter-06.html">第 6 章</a>的梯度。DQN 才会把 Q 换成网络并反传。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:<code>RunEpisode</code> 里为什么中间步 reward 是 0 仍要 Update?</summary>
+            <div class="quiz__a">
+              <p>因为 TD 更新不只看眼前 r,还看 <code>γ·max Q(s′,·)</code>。对手走完后的新盘面若更接近赢棋,会把更高的 Q 传回上一步——这就是<a class="xref" href="chapter-12.html">第 12 章</a>说的价值倒灌,即使中间步没给分。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:训练和评估时 SelectAction 的 explore 参数为什么不同?</summary>
+            <div class="quiz__a">
+              <p>训练要 ε-greedy 探索新走法;评估要测“学成之后有多强”,应关掉随机探索、纯 greedy 下——否则胜率会被探索的烂棋拉低,测不准真实水平。</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="summary reveal" style="text-align:center">
+          <h2>全书完 · 谢谢你读到这里</h2>
+          <p>
+            你从<strong>一个神经元</strong>出发,搭起网络、学会反向传播、认识强化学习、拼出 Transformer、
+            做成语言模型,又看懂大模型的原理与用法——最后,在<strong>三份真实的 C++ 代码</strong>里
+            (MNIST、字符级 LM、井字棋 Q-learning) 逐行对上了号。监督学习、生成式模型、强化学习,你都握在手里了。
+          </p>
+          <p class="muted">
+            接下来最好的学习,是<strong>动手改</strong>:换优化器、改 Config、调 ε 和 γ、换对手强度,看曲线怎么变。
+            好奇心带你入门,动手让你真正拥有它。
+          </p>
+          <p style="margin-top:1.4rem"><a class="button button--primary" href="index.html">返回目录 / 重读某章</a></p>
+        </div>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>
