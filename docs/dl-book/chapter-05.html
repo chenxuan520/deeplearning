@@ -26,7 +26,8 @@
             <li>“梯度”到底是什么,为什么它指向“下降最快的方向”;</li>
             <li>参数更新那条核心公式 <var>w</var> ← <var>w</var> − <var>η</var>·梯度;</li>
             <li>学习率 <var>η</var> 是什么、太大太小分别会怎样;</li>
-            <li>什么是 mini-batch SGD,并逐行读懂参数更新的真实代码。</li>
+            <li>什么是 mini-batch SGD,以及 <strong>batch / epoch / step</strong> 三个词到底谁管谁;</li>
+            <li>batch size 该取多大——“稳”和“快”之间的权衡,并逐行读懂参数更新的真实代码。</li>
           </ul>
         </section>
 
@@ -134,7 +135,64 @@ ApplyGradient(B);                      <b class="cw-tag">4</b></code></pre>
           </ol>
         </figure>
 
-        <h2>5. 逐行读懂“参数更新”</h2>
+        <h2>5. batch、epoch、step:三个最容易搞混的词</h2>
+        <p>
+          一上手训练,你就会被这三个词轰炸,它们其实各管一件事,分清楚就不慌了:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>词</th><th>是什么</th><th>一句话记住</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>batch size</strong></td>
+                <td>一次拿多少个样本来估梯度、更新一次参数</td>
+                <td>“一口吃多少”</td>
+              </tr>
+              <tr>
+                <td><strong>step / iteration</strong></td>
+                <td>参数被更新了一次,就是一步</td>
+                <td>“更新了几次”</td>
+              </tr>
+              <tr>
+                <td><strong>epoch</strong></td>
+                <td>把<strong>整个训练集</strong>完整过一遍</td>
+                <td>“全套题刷了几遍”</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          三者的关系可以用一个除法串起来。假设有 10000 个训练样本、batch size 取 100:
+        </p>
+        <div class="mathblock reveal">
+          每个 epoch 的步数 = 样本总数 ÷ batch size = 10000 ÷ 100 = 100 步
+          <span class="label">跑 5 个 epoch,就一共更新了 5 × 100 = 500 步</span>
+        </div>
+        <p>
+          所以“训练 5 个 epoch”和“训练 500 步”在这个设定下是同一件事,只是一个按“刷了几遍数据”数、一个按“更新了几次”数。
+          <a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">学习率调度</a>通常就是按 <strong>step</strong> 来推进的。
+        </p>
+
+        <h2>6. batch size 该取多大:一个现实的权衡</h2>
+        <p>
+          既然一次可以吃 1 个,也可以吃几千个,那到底取多大?这又是一个<strong>没有免费午餐</strong>的权衡:
+        </p>
+        <ul>
+          <li><strong>太小(如 1,纯 SGD)</strong>:每步只看一个样本,梯度估计<strong>噪声很大</strong>,更新方向抖来抖去;但更新非常频繁,而且这种噪声<strong>有时反而有益</strong>——能帮忙跳出差的局部谷底。</li>
+          <li><strong>太大(如几千)</strong>:梯度估得<strong>很准、很稳</strong>,还能喂饱 GPU 的并行算力、跑得快;但每步都要算很多样本,更新次数变少,而且太稳有时反而<strong>更容易卡在平坦的次优区</strong>,泛化还可能变差。</li>
+          <li><strong>常用区间</strong>:实践中常取 <strong>32 / 64 / 128 / 256</strong> 这类 2 的幂(对硬件友好),在“稳”和“快”之间找平衡。本仓库的 MNIST 例子默认 batch=64。</li>
+        </ul>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">batch size 变了,学习率通常也要跟着变</span>
+          <p>
+            batch 越大,梯度越稳,就<strong>扛得住更大的学习率</strong>。一条常见的经验法则是“<strong>线性缩放</strong>”:
+            batch 翻倍,学习率也大致翻倍。所以调参时别把这两个旋钮完全分开看——它们是一对的。
+          </p>
+        </div>
+
+        <h2>7. 逐行读懂“参数更新”</h2>
         <p>真正执行 <var>w</var> ← <var>w</var> − <var>η</var>·梯度 的,是优化器。最朴素的 SGD 优化器只有几行:</p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/optimizer/sgd_optimizer.cpp · CalcChangeValue</figcaption>
@@ -144,7 +202,7 @@ if (weight_pos != -1 &amp;&amp; weight_decay_ != 0.0)
 return learning_rate * g;                          <b class="cw-tag">3</b></code></pre>
           <ol class="code-walk__notes">
             <li><code>delta</code> 就是这个参数的梯度(由反向传播算出)。</li>
-            <li>(可选)weight decay / L2 正则:把权重稍微往 0 拉一点,抑制过拟合;注意只对权重做,偏置不动(<code>weight_pos != -1</code> 才进来)。<a class="xref" href="chapter-10.html#3-l2-正则--weight-decay-别让权重太嚣张">第 10 章</a>细讲。</li>
+            <li>(可选)weight decay / L2 正则:把权重稍微往 0 拉一点,抑制过拟合;注意只对权重做,偏置不动(<code>weight_pos != -1</code> 才进来)。<a class="xref" href="chapter-10.html#4-l2-正则--weight-decay-别让权重太嚣张">第 10 章</a>细讲。</li>
             <li>返回“这一步要改变的量” = 学习率 × 梯度。这正是更新公式里的 <var>η</var>·梯度。</li>
           </ol>
         </figure>
@@ -186,6 +244,8 @@ w_row[i] -= w_change;                               <b class="cw-tag">3</b></cod
             <li>核心更新规则:<var>w</var> ← <var>w</var> − <var>η</var>·梯度,对每个参数都做一遍。</li>
             <li>学习率 <var>η</var> 是步长:太小慢、太大震荡发散、刚好又快又稳。</li>
             <li>实践用 mini-batch SGD:每次随机抓一小批样本估算梯度并更新一次。</li>
+            <li><strong>batch</strong> 是一口吃多少、<strong>step</strong> 是更新几次、<strong>epoch</strong> 是全套数据刷几遍;三者用“样本数 ÷ batch”串起来。</li>
+            <li>batch size 是“稳(大)vs 快而抖(小)”的权衡,常取 32/64/128;它一变,学习率通常要跟着线性缩放。</li>
           </ul>
         </section>
 

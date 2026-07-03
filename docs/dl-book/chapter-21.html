@@ -49,8 +49,9 @@
             <li>数据并行、张量并行、流水线并行分别把什么“切开”了;</li>
             <li>AllReduce、NCCL、NVLink 这些通信黑话在干嘛;</li>
             <li>推理提速的关键:KV cache、批处理、量化,以及量化与“降智”体感的关系;</li>
-            <li><strong>MoE(混合专家)</strong>到底把什么换成了“专家”、路由器怎么选、为什么最难的是负载均衡,以及<strong>压 k/缩专家会不会降智</strong>;</li>
+            <li><strong>MoE(混合专家)</strong>把什么换成并列专家、<code>N</code>/<code>k</code> 怎么定、Attention 是否共用、<strong>路由器和专家怎么一起训</strong>、负载均衡,以及<strong>压 k/缩专家会不会降智</strong>;</li>
             <li><strong>稀疏注意力</strong>的几种套路(滑动窗口 / 全局 / 动态 top-k),以及它和 FlashAttention 的区别;</li>
+            <li><strong>1M 上下文到底怎么做到</strong>:RoPE 外推 + 位置插值/NTK/YaRN,再叠加少算 / 缓存 / 分块 / 并行 / 长训练的组合拳;</li>
             <li><strong>推理服务怎么扛住海量用户</strong>:prefill/decode 两阶段、连续批处理、PagedAttention 分页复用 KV cache、多副本负载均衡,以及吞吐与延迟的取舍。</li>
           </ul>
         </section>
@@ -241,8 +242,169 @@
             于是“医院很大、科室很全”(总参数多),但“你这一次只看一两个科”(每次算得少)。
           </p>
         </div>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 720 200" role="img" aria-label="稠密 FFN 与 MoE 替换关系">
+              <defs>
+                <marker id="moe-rep-a" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8499bd" /></marker>
+                <marker id="moe-rep-b" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ffcf72" /></marker>
+              </defs>
+              <text x="170" y="22" text-anchor="middle" fill="#8499bd" font-size="12">稠密 Block(第 18 章)</text>
+              <rect x="70" y="34" width="200" height="32" rx="8" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="1.8" />
+              <text x="170" y="54" text-anchor="middle" fill="#eef4ff" font-size="12">Self-Attention · 共用 1 套</text>
+              <line x1="170" y1="66" x2="170" y2="78" stroke="#8499bd" stroke-width="1.8" marker-end="url(#moe-rep-a)" />
+              <rect x="70" y="80" width="200" height="32" rx="8" fill="rgba(255,207,114,0.2)" stroke="#ffcf72" stroke-width="2" />
+              <text x="170" y="100" text-anchor="middle" fill="#eef4ff" font-size="12">1 个 FFN</text>
+              <text x="170" y="132" text-anchor="middle" fill="#b6c5e1" font-size="11">每个 token 都过同一套 W₁/W₂</text>
+              <text x="430" y="22" text-anchor="middle" fill="#8499bd" font-size="12">MoE Block(只换 FFN 段)</text>
+              <rect x="330" y="34" width="200" height="32" rx="8" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="1.8" />
+              <text x="430" y="54" text-anchor="middle" fill="#eef4ff" font-size="12">Self-Attention · 仍是 1 套</text>
+              <line x1="430" y1="66" x2="430" y2="78" stroke="#8499bd" stroke-width="1.8" marker-end="url(#moe-rep-a)" />
+              <rect x="300" y="80" width="90" height="32" rx="8" fill="rgba(139,123,255,0.22)" stroke="#8b7bff" stroke-width="1.8" />
+              <text x="345" y="100" text-anchor="middle" fill="#eef4ff" font-size="11">Router</text>
+              <rect x="400" y="80" width="46" height="32" rx="6" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="1.4" />
+              <text x="423" y="100" text-anchor="middle" fill="#eef4ff" font-size="10">FFN①</text>
+              <rect x="452" y="80" width="46" height="32" rx="6" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.8" />
+              <text x="475" y="100" text-anchor="middle" fill="#eef4ff" font-size="10">FFN②</text>
+              <rect x="504" y="80" width="46" height="32" rx="6" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="1.4" stroke-dasharray="3 2" />
+              <text x="527" y="100" text-anchor="middle" fill="#8499bd" font-size="10">…</text>
+              <text x="430" y="132" text-anchor="middle" fill="#b6c5e1" font-size="11">N 个并列 FFN,每次只算 top-k 个</text>
+              <line x1="280" y1="96" x2="296" y2="96" stroke="#ffcf72" stroke-width="2.2" marker-end="url(#moe-rep-b)" />
+              <text x="288" y="88" text-anchor="middle" fill="#ffcf72" font-size="10">换这里</text>
+            </svg>
+          </div>
+          <p class="figure__cap">MoE 只替换 Block 里的 FFN 段;Attention 不动。左边「一个 FFN」→ 右边「Router + N 个并列专家」。</p>
+        </div>
 
-        <h3>② 路由器:每个 token 该找哪几个专家?</h3>
+        <h3>② 结构怎么定:并列专家、共享 Attention,<code>N</code> 和 <code>k</code> 从哪来?</h3>
+        <p>
+          很多人接着会问:<strong>专家个数 <code>N</code> 是训出来的吗?FFN 前面要不要也复制 N 套 Attention?</strong>
+          答案很干脆:<code>N</code> 和 <code>k</code>(每次点亮几个)都是<strong>设计模型时写死的超参数</strong>,和
+          <code>d_model</code>、层数、<code>head_num</code> 一样——定好结构再开训,中途不能随便改(改 <code>N</code> 等于换网络,权重对不上)。
+          也不是每一层都必须是 MoE:常见做法是<strong>若干层用 MoE FFN,其余层仍是普通的一个 FFN</strong>。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>模块</th><th>几个?</th><th>和别的模块关系</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Masked Self-Attention</strong></td>
+                <td><strong>1 套</strong> W<sub>Q</sub>/W<sub>K</sub>/W<sub>V</sub>/W<sub>O</sub></td>
+                <td>整层<strong>共用</strong>;所有 token 先在这里混上下文(<a class="xref" href="chapter-18.html">第 18 章</a>)</td>
+              </tr>
+              <tr>
+                <td><strong>Router</strong></td>
+                <td><strong>1 个小线性层</strong> W<sub>gate</sub> (<code>d×N</code>)</td>
+                <td>每个 token <strong>各自</strong>打分、各自选 top-k</td>
+              </tr>
+              <tr>
+                <td><strong>FFN 专家</strong></td>
+                <td><strong>N 套并列</strong>,各含 W<sub>1</sub>/W<sub>2</sub></td>
+                <td>同一输入 h,每次只算其中 <strong>k 套</strong>,输出加权相加</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">MoE 只把 Block 里的「一个 FFN」换成「N 个并列 FFN + 路由器」;<strong>Attention 不会变成 N 份</strong>——否则参数量和算力会再乘 N,和「省算力」目标相反。</p>
+        </div>
+        <pre class="code-walk__code reveal" style="margin:0.8rem 0" aria-label="MoE Block 数据流"><code>输入 X [n × d]
+  → Masked Self-Attention + Add&amp;Norm     ← 共用 1 套, token 之间互相看
+  → 对每个 token 的向量 h:
+        Router(h) → top-k 专家 FFN → 加权求和
+  → Add&amp;Norm
+  → 输出 [n × d]  → 进下一层 Block</code></pre>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 480 520" role="img" aria-label="MoE Transformer Block 结构图">
+              <defs>
+                <marker id="moe-blk-a" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#46587a" /></marker>
+                <marker id="moe-blk-b" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" /></marker>
+              </defs>
+              <text x="240" y="24" text-anchor="middle" fill="#8499bd" font-size="12">输入 [n×d] · 每层 token 一行</text>
+              <g stroke="#46587a" stroke-width="2" fill="none" marker-end="url(#moe-blk-a)">
+                <line x1="240" y1="32" x2="240" y2="48" />
+                <line x1="240" y1="88" x2="240" y2="118" />
+                <line x1="240" y1="152" x2="240" y2="178" />
+                <line x1="240" y1="210" x2="240" y2="232" />
+                <line x1="240" y1="378" x2="240" y2="400" />
+                <line x1="240" y1="432" x2="240" y2="448" />
+              </g>
+              <rect x="120" y="52" width="240" height="36" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" />
+              <text x="240" y="68" text-anchor="middle" fill="#eef4ff" font-size="13">Masked Self-Attention</text>
+              <text x="240" y="82" text-anchor="middle" fill="#8ef0d1" font-size="10">共用 1 套 · 全句 token 互相看</text>
+              <circle cx="240" cy="134" r="14" fill="rgba(142,240,209,0.2)" stroke="#8ef0d1" stroke-width="2" /><text x="240" y="139" text-anchor="middle" fill="#eef4ff" font-size="14">＋</text>
+              <rect x="120" y="178" width="240" height="28" rx="8" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="1.8" />
+              <text x="240" y="196" text-anchor="middle" fill="#eef4ff" font-size="12">LayerNorm</text>
+              <rect x="48" y="232" width="384" height="146" rx="14" fill="none" stroke="rgba(255,207,114,0.45)" stroke-width="1.8" stroke-dasharray="6 4" />
+              <text x="60" y="252" fill="#ffcf72" font-size="11">MoE 层 · N 个并列专家(示意 N=4, k=2)</text>
+              <rect x="168" y="264" width="104" height="40" rx="8" fill="rgba(139,123,255,0.22)" stroke="#8b7bff" stroke-width="2" />
+              <text x="220" y="282" text-anchor="middle" fill="#eef4ff" font-size="12">Router</text>
+              <text x="220" y="296" text-anchor="middle" fill="#b6c5e1" font-size="9">W_gate · d×N</text>
+              <rect x="72" y="318" width="72" height="28" rx="6" fill="rgba(149,176,227,0.08)" stroke="rgba(149,176,227,0.35)" stroke-width="1.4" stroke-dasharray="3 2" />
+              <text x="108" y="336" text-anchor="middle" fill="#8499bd" font-size="10">FFN①</text>
+              <rect x="156" y="318" width="72" height="28" rx="6" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.8" />
+              <text x="192" y="336" text-anchor="middle" fill="#eef4ff" font-size="10">FFN②✓</text>
+              <rect x="240" y="318" width="72" height="28" rx="6" fill="rgba(149,176,227,0.08)" stroke="rgba(149,176,227,0.35)" stroke-width="1.4" stroke-dasharray="3 2" />
+              <text x="276" y="336" text-anchor="middle" fill="#8499bd" font-size="10">FFN③</text>
+              <rect x="324" y="318" width="72" height="28" rx="6" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.8" />
+              <text x="360" y="336" text-anchor="middle" fill="#eef4ff" font-size="10">FFN④✓</text>
+              <line x1="220" y1="304" x2="192" y2="316" stroke="#ffcf72" stroke-width="1.6" />
+              <line x1="220" y1="304" x2="360" y2="316" stroke="#ffcf72" stroke-width="1.6" />
+              <rect x="156" y="356" width="168" height="26" rx="7" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="1.6" />
+              <text x="240" y="374" text-anchor="middle" fill="#eef4ff" font-size="11">加权求和 → 每个 token 一个输出向量</text>
+              <circle cx="240" cy="414" r="14" fill="rgba(142,240,209,0.2)" stroke="#8ef0d1" stroke-width="2" /><text x="240" y="419" text-anchor="middle" fill="#eef4ff" font-size="14">＋</text>
+              <rect x="120" y="448" width="240" height="28" rx="8" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="1.8" />
+              <text x="240" y="466" text-anchor="middle" fill="#eef4ff" font-size="12">LayerNorm → 输出 [n×d]</text>
+              <path d="M 240 40 L 72 40 L 72 134 L 224 134" fill="none" stroke="#8ef0d1" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#moe-blk-b)" />
+              <path d="M 240 206 L 400 206 L 400 414 L 254 414" fill="none" stroke="#8ef0d1" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#moe-blk-b)" />
+              <text x="82" y="88" fill="#8ef0d1" font-size="10">残差</text>
+            </svg>
+          </div>
+          <p class="figure__cap">一块 MoE Block:Attention 仍共用 1 套;FFN 段换成 Router + N 个<strong>并列</strong>专家(✓=本 token 被点亮的 top-k)。进出形状仍是 <code>[n×d]</code>。</p>
+        </div>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 720 160" role="img" aria-label="并列专家与堆层对比">
+              <text x="180" y="20" text-anchor="middle" fill="#8499bd" font-size="12">❌ 不是「串行过 N 个专家」</text>
+              <rect x="40" y="36" width="80" height="36" rx="8" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="1.6" />
+              <text x="80" y="58" text-anchor="middle" fill="#eef4ff" font-size="11">token</text>
+              <line x1="120" y1="54" x2="138" y2="54" stroke="#8499bd" stroke-width="1.6" />
+              <rect x="140" y="36" width="64" height="36" rx="7" fill="rgba(255,207,114,0.2)" stroke="#ffcf72" stroke-width="1.6" />
+              <text x="172" y="58" text-anchor="middle" fill="#eef4ff" font-size="10">FFN①</text>
+              <line x1="204" y1="54" x2="222" y2="54" stroke="#8499bd" stroke-width="1.6" />
+              <rect x="224" y="36" width="64" height="36" rx="7" fill="rgba(255,207,114,0.2)" stroke="#ffcf72" stroke-width="1.6" />
+              <text x="256" y="58" text-anchor="middle" fill="#eef4ff" font-size="10">FFN②</text>
+              <text x="180" y="96" text-anchor="middle" fill="#b6c5e1" font-size="10">输出① 再喂给 ② … 深度串联 · MoE 不是这样</text>
+              <text x="540" y="20" text-anchor="middle" fill="#8ef0d1" font-size="12">✓ MoE:同一层里并列, Router 选 k 个</text>
+              <rect x="400" y="44" width="72" height="32" rx="7" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="1.6" />
+              <text x="436" y="64" text-anchor="middle" fill="#eef4ff" font-size="11">token h</text>
+              <line x1="472" y1="60" x2="490" y2="60" stroke="#8499bd" stroke-width="1.6" />
+              <rect x="492" y="48" width="56" height="24" rx="6" fill="rgba(139,123,255,0.22)" stroke="#8b7bff" stroke-width="1.6" />
+              <text x="520" y="64" text-anchor="middle" fill="#eef4ff" font-size="10">Router</text>
+              <line x1="548" y1="52" x2="566" y2="40" stroke="#ffcf72" stroke-width="1.4" />
+              <line x1="548" y1="68" x2="566" y2="80" stroke="#ffcf72" stroke-width="1.4" />
+              <rect x="568" y="28" width="52" height="22" rx="5" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.6" />
+              <text x="594" y="42" text-anchor="middle" fill="#eef4ff" font-size="9">FFN②</text>
+              <rect x="568" y="70" width="52" height="22" rx="5" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.6" />
+              <text x="594" y="84" text-anchor="middle" fill="#eef4ff" font-size="9">FFN④</text>
+              <rect x="628" y="28" width="52" height="22" rx="5" fill="rgba(149,176,227,0.06)" stroke="rgba(149,176,227,0.3)" stroke-width="1.2" stroke-dasharray="3 2" />
+              <text x="654" y="42" text-anchor="middle" fill="#8499bd" font-size="9">①③</text>
+              <text x="540" y="118" text-anchor="middle" fill="#b6c5e1" font-size="10">同一输入 h · 只算被点亮的 k 条支路 · 再加权合并</text>
+              <text x="360" y="148" text-anchor="middle" fill="#8499bd" font-size="11">对比:堆 N 层 Block = 流水线一站接一站 · MoE = 一站里多个科室并排</text>
+            </svg>
+          </div>
+          <p class="figure__cap">左:专家若串行叠在一起,算力随 N 线性涨——不是 MoE。右:并列 + top-k,算力只跟 k 走。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">「并列」不是「串层」</span>
+          <p>
+            N 个专家是<strong>同一层里并排摆着</strong>的多条 FFN 支路,不是「先过专家 1 再过专家 2」那种深度串联。
+            和「Transformer 堆 N 层 Block」不同:堆层是<strong>流水线一站接一站</strong>;MoE 是<strong>一个站里多个科室,分诊只去其中 k 个</strong>。
+          </p>
+        </div>
+
+        <h3>③ 路由器:每个 token 该找哪几个专家?</h3>
         <p>
           决定“分诊”的是一个<span class="term">路由器 / 门控网络(router / gating)</span>——其实就是一个<strong>很小的线性层</strong>。
           它给每个 token 对 N 个专家各打一个分,softmax 之后挑出分最高的 <strong>top-k</strong> 个(常见 k=2),
@@ -292,6 +454,33 @@
           </div>
           <p class="figure__cap">同一个 token 进来,路由器只点亮 top-2 个专家(紫色实线),其余专家(灰色虚线)这次一次都不跑。</p>
         </div>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 680 130" role="img" aria-label="Router 三步:打分 选k 加权">
+              <defs>
+                <marker id="moe-rte" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8499bd" /></marker>
+              </defs>
+              <rect x="16" y="44" width="72" height="40" rx="8" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="1.6" />
+              <text x="52" y="68" text-anchor="middle" fill="#eef4ff" font-size="11">h</text>
+              <line x1="88" y1="64" x2="108" y2="64" stroke="#8499bd" stroke-width="1.6" marker-end="url(#moe-rte)" />
+              <rect x="110" y="36" width="100" height="56" rx="8" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="1.8" />
+              <text x="160" y="58" text-anchor="middle" fill="#eef4ff" font-size="11">① softmax</text>
+              <text x="160" y="74" text-anchor="middle" fill="#b6c5e1" font-size="9">h·W_gate → N 分</text>
+              <line x1="210" y1="64" x2="230" y2="64" stroke="#8499bd" stroke-width="1.6" marker-end="url(#moe-rte)" />
+              <rect x="232" y="36" width="100" height="56" rx="8" fill="rgba(139,123,255,0.22)" stroke="#8b7bff" stroke-width="1.8" />
+              <text x="282" y="58" text-anchor="middle" fill="#eef4ff" font-size="11">② top-k</text>
+              <text x="282" y="74" text-anchor="middle" fill="#b6c5e1" font-size="9">只留最高 k 个</text>
+              <line x1="332" y1="64" x2="352" y2="64" stroke="#8499bd" stroke-width="1.6" marker-end="url(#moe-rte)" />
+              <rect x="354" y="36" width="120" height="56" rx="8" fill="rgba(255,207,114,0.2)" stroke="#ffcf72" stroke-width="1.8" />
+              <text x="414" y="58" text-anchor="middle" fill="#eef4ff" font-size="11">③ 加权 FFN</text>
+              <text x="414" y="74" text-anchor="middle" fill="#b6c5e1" font-size="9">Σ score·FFN(h)</text>
+              <line x1="474" y1="64" x2="494" y2="64" stroke="#8ef0d1" stroke-width="1.8" />
+              <text x="520" y="68" fill="#8ef0d1" font-size="12">out</text>
+              <text x="160" y="108" text-anchor="middle" fill="#8499bd" font-size="10">例: [0.05, 0.41, 0.08, 0.32, …] → 选 ②④ → 0.41·FFN₂ + 0.32·FFN₄</text>
+            </svg>
+          </div>
+          <p class="figure__cap">Router 不是只吐「专家编号」:先<strong>可微打分</strong>,再稀疏选 k 个,最后用<strong>门控分加权</strong>专家输出——训练时梯度从加权这一步回传。</p>
+        </div>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">MoE 路由 · 示意伪代码(帮助理解,非本仓库代码)</figcaption>
           <pre class="code-walk__code"><code>// 每个 token 各走一遍:
@@ -316,7 +505,160 @@ for (e : top)                          // 只计算被选中的专家
           每个 token 激活其中 8 个 + 那个共享专家,于是 6710 亿总参数里,每步只算了约 370 亿。
         </p>
 
-        <h3>③ 最难的一环:负载均衡</h3>
+        <h3>④ 路由器和专家怎么一起训出来?</h3>
+        <p>
+          听到「top-k 选专家」,很容易以为路由器输出的是<strong>硬开关</strong>——像 if-else 直接指定「激活 FFN ② 和 ④」,
+          那梯度似乎传不回去,路由层会很难训。实际工程里并不是这样裸奔的:
+          <strong>先 softmax 打分,再对选中的 k 个专家做门控加权求和</strong>,和主任务<strong>端到端</strong>一起反传。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>要训的参数</th><th>是什么</th><th>和稠密 Transformer 比</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>W_gate</code></td>
+                <td>路由器,把 h 映射成对 N 个专家的偏好分</td>
+                <td><strong>多出来的</strong></td>
+              </tr>
+              <tr>
+                <td><code>Expert_1 … Expert_N</code> 各自的 W<sub>1</sub>/W<sub>2</sub></td>
+                <td>N 套完整 FFN</td>
+                <td>原来 1 套 FFN → N 套</td>
+              </tr>
+              <tr>
+                <td>Attention、Embedding 等</td>
+                <td>与稠密模型相同</td>
+                <td>不变</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">没有单独的「路由训练算法」——仍是预测下一个 token 的交叉熵 + 优化器(<a class="xref" href="chapter-05.html">第 5 章</a>),和 <a class="xref" href="chapter-23.html">MNIST</a> 同一套更新公式。</p>
+        </div>
+        <p><strong>Router 到底输出什么?</strong> 分两步,不要和「只吐专家编号」混在一起:</p>
+        <pre class="code-walk__code reveal" style="margin:0.6rem 0"><code>scores = softmax(h · W_gate)     // ① 可微: N 个门控分, 和为 1
+top    = top_k(scores, k)         // ② 稀疏: 只计算分最高的 k 个专家
+out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是硬选一个</code></pre>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 700 200" role="img" aria-label="硬开关 vs 门控加权">
+              <text x="175" y="22" text-anchor="middle" fill="#8499bd" font-size="12">❌ 误以为:硬开关(难训)</text>
+              <rect x="60" y="40" width="80" height="36" rx="8" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="1.4" />
+              <text x="100" y="62" text-anchor="middle" fill="#eef4ff" font-size="11">h</text>
+              <text x="160" y="62" fill="#8499bd" font-size="14">→</text>
+              <rect x="172" y="40" width="100" height="36" rx="8" fill="rgba(149,176,227,0.1)" stroke="rgba(149,176,227,0.4)" stroke-width="1.4" />
+              <text x="222" y="58" text-anchor="middle" fill="#8499bd" font-size="10">if 选 ②④</text>
+              <text x="222" y="70" text-anchor="middle" fill="#8499bd" font-size="9">else 不算</text>
+              <text x="175" y="100" text-anchor="middle" fill="#b6c5e1" font-size="10">离散开关 · 梯度难回 Router</text>
+              <text x="525" y="22" text-anchor="middle" fill="#8ef0d1" font-size="12">✓ 实际:软权重 × 稀疏计算</text>
+              <rect x="380" y="40" width="80" height="36" rx="8" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="1.4" />
+              <text x="420" y="62" text-anchor="middle" fill="#eef4ff" font-size="11">h</text>
+              <text x="468" y="62" fill="#8499bd" font-size="14">→</text>
+              <rect x="480" y="34" width="88" height="48" rx="8" fill="rgba(139,123,255,0.2)" stroke="#8b7bff" stroke-width="1.6" />
+              <text x="524" y="54" text-anchor="middle" fill="#eef4ff" font-size="10">softmax</text>
+              <text x="524" y="68" text-anchor="middle" fill="#b6c5e1" font-size="9">+ top-k</text>
+              <text x="576" y="62" fill="#8499bd" font-size="14">→</text>
+              <rect x="588" y="40" width="100" height="36" rx="8" fill="rgba(255,207,114,0.22)" stroke="#ffcf72" stroke-width="1.6" />
+              <text x="638" y="58" text-anchor="middle" fill="#eef4ff" font-size="9">0.41·FFN₂</text>
+              <text x="638" y="70" text-anchor="middle" fill="#eef4ff" font-size="9">+0.32·FFN₄</text>
+              <text x="525" y="100" text-anchor="middle" fill="#b6c5e1" font-size="10">门控分可导 · loss 能改 W_gate 和 FFN</text>
+              <text x="350" y="130" text-anchor="middle" fill="#8499bd" font-size="11">离散的是「谁进 top-k」· 进了之后仍用 softmax 权重参与加权求和</text>
+            </svg>
+          </div>
+          <p class="figure__cap">工程实现靠<strong>门控加权</strong>让 Router 和专家走同一条反传链,不是裸 if-else 硬选。</p>
+        </div>
+        <p>
+          <strong>离散的是「谁进 top-k」</strong>,但进了之后,<code>scores[e]</code> 仍是 softmax 的软权重,会乘在专家输出上——
+          loss 对 <code>out</code> 求导时,<strong>梯度既能改被选中的 FFN,也能改 W_gate</strong>(「这类 token 该不该多分点给专家 ②」)。
+          所以路由层虽小,却和 MNIST 里一层全连接 W 一样,走同一条反传链,并不是不可训的黑箱。
+        </p>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">反传分两路(直觉版)</span>
+          <p>
+            某个 token 过完 MoE 后 loss 偏大,梯度大致兵分两路:<br />
+            <strong>→ 专家 ②、④ 的 W<sub>1</sub>/W<sub>2</sub></strong>:「你接到这类活,输出得改。」<br />
+            <strong>→ W_gate</strong>:「下次遇到类似的 h,门控分要不要调整?该不该少宠 ②、多给 ⑦ 一点?」<br />
+            这一步<strong>只有被选中的 k 个专家有梯度</strong>;没点名的专家本轮不更新,别的 token 可能会点到它们。
+          </p>
+        </div>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 700 220" role="img" aria-label="MoE 训练反传示意图">
+              <defs>
+                <marker id="moe-gr-f" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ff6b8a" /></marker>
+                <marker id="moe-gr-b" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ffcf72" /></marker>
+              </defs>
+              <rect x="280" y="12" width="140" height="36" rx="9" fill="rgba(255,107,138,0.16)" stroke="#ff6b8a" stroke-width="1.8" />
+              <text x="350" y="34" text-anchor="middle" fill="#eef4ff" font-size="12">loss ↑ (预测错)</text>
+              <line x1="350" y1="48" x2="350" y2="68" stroke="#ff6b8a" stroke-width="2" marker-end="url(#moe-gr-f)" />
+              <rect x="300" y="70" width="100" height="32" rx="8" fill="rgba(142,240,209,0.16)" stroke="#8ef0d1" stroke-width="1.6" />
+              <text x="350" y="90" text-anchor="middle" fill="#eef4ff" font-size="11">MoE 输出 out</text>
+              <line x1="300" y1="86" x2="180" y2="120" stroke="#ffcf72" stroke-width="1.8" marker-end="url(#moe-gr-b)" />
+              <line x1="400" y1="86" x2="520" y2="120" stroke="#ffcf72" stroke-width="1.8" marker-end="url(#moe-gr-b)" />
+              <rect x="80" y="120" width="200" height="56" rx="10" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="1.8" />
+              <text x="180" y="142" text-anchor="middle" fill="#eef4ff" font-size="11">专家 ② · W₁/W₂</text>
+              <text x="180" y="158" text-anchor="middle" fill="#b6c5e1" font-size="10">本轮有梯度 · 更新</text>
+              <rect x="420" y="120" width="200" height="56" rx="10" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="1.8" />
+              <text x="520" y="142" text-anchor="middle" fill="#eef4ff" font-size="11">专家 ④ · W₁/W₂</text>
+              <text x="520" y="158" text-anchor="middle" fill="#b6c5e1" font-size="10">本轮有梯度 · 更新</text>
+              <line x1="350" y1="102" x2="350" y2="128" stroke="#8b7bff" stroke-width="1.8" marker-end="url(#moe-gr-b)" />
+              <rect x="280" y="128" width="140" height="44" rx="9" fill="rgba(139,123,255,0.2)" stroke="#8b7bff" stroke-width="1.8" />
+              <text x="350" y="148" text-anchor="middle" fill="#eef4ff" font-size="11">W_gate 路由器</text>
+              <text x="350" y="164" text-anchor="middle" fill="#b6c5e1" font-size="10">调门控分 · 下次分给谁</text>
+              <rect x="80" y="188" width="120" height="24" rx="6" fill="rgba(149,176,227,0.08)" stroke="rgba(149,176,227,0.35)" stroke-width="1.2" stroke-dasharray="3 2" />
+              <text x="140" y="204" text-anchor="middle" fill="#8499bd" font-size="10">专家 ①③ 本轮无梯度</text>
+              <text x="350" y="204" text-anchor="middle" fill="#8499bd" font-size="10">+ 主 loss: CrossEntropy(下一 token) · 同 MNIST 更新公式</text>
+            </svg>
+          </div>
+          <p class="figure__cap">loss 反传:被选中的 k 个专家各收一份梯度;Router 的 <code>W_gate</code> 通过<strong>门控权重</strong>同时更新;未点亮专家本轮不动。</p>
+        </div>
+        <p><strong>专家怎么「训成不同」?</strong> 并不是事先贴标签「专家 1=语法、专家 2=数学」:</p>
+        <ul>
+          <li><strong>随机初始化</strong>:N 套 FFN 起点本就不同;</li>
+          <li><strong>稀疏更新</strong>:每个 token 只更新 top-k 个专家,长期下来相似样本会反复走同一小撮专家;</li>
+          <li><strong>路由共进化</strong>:哪条「专家组合」能让 loss 降,路由就更爱往那儿送;</li>
+          <li><strong>分工是涌现的</strong>:数据 + 路由 + 稀疏梯度自然分出来的,不是人工指定专科。</li>
+        </ul>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 700 180" role="img" aria-label="专家分工涌现:不同 token 走不同专家">
+              <text x="350" y="20" text-anchor="middle" fill="#8499bd" font-size="12">同一批句子里的 token · 路由逐渐「分专科」(示意)</text>
+              <rect x="24" y="36" width="88" height="32" rx="7" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="1.4" />
+              <text x="68" y="56" text-anchor="middle" fill="#eef4ff" font-size="11">token「床」</text>
+              <line x1="112" y1="52" x2="140" y2="52" stroke="#8499bd" stroke-width="1.2" />
+              <rect x="142" y="44" width="48" height="18" rx="4" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.4" />
+              <text x="166" y="56" text-anchor="middle" fill="#eef4ff" font-size="9">②</text>
+              <rect x="24" y="80" width="88" height="32" rx="7" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="1.4" />
+              <text x="68" y="100" text-anchor="middle" fill="#eef4ff" font-size="11">token「明」</text>
+              <line x1="112" y1="96" x2="140" y2="96" stroke="#8499bd" stroke-width="1.2" />
+              <rect x="142" y="88" width="48" height="18" rx="4" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.4" />
+              <text x="166" y="100" text-anchor="middle" fill="#eef4ff" font-size="9">②</text>
+              <rect x="198" y="88" width="48" height="18" rx="4" fill="rgba(255,207,114,0.2)" stroke="#ffcf72" stroke-width="1.4" />
+              <text x="222" y="100" text-anchor="middle" fill="#eef4ff" font-size="9">⑤</text>
+              <rect x="24" y="124" width="88" height="32" rx="7" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="1.4" />
+              <text x="68" y="144" text-anchor="middle" fill="#eef4ff" font-size="11">token「3」</text>
+              <line x1="112" y1="140" x2="140" y2="140" stroke="#8499bd" stroke-width="1.2" />
+              <rect x="142" y="132" width="48" height="18" rx="4" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.4" />
+              <text x="166" y="144" text-anchor="middle" fill="#eef4ff" font-size="9">⑦</text>
+              <rect x="280" y="60" width="400" height="100" rx="12" fill="rgba(139,123,255,0.06)" stroke="rgba(139,123,255,0.25)" stroke-width="1.4" />
+              <text x="480" y="88" text-anchor="middle" fill="#eef4ff" font-size="11">专家 ② 反复接到「诗词类」token → 越训越专</text>
+              <text x="480" y="108" text-anchor="middle" fill="#eef4ff" font-size="11">专家 ⑦ 反复接到「数字类」token → 另一条路</text>
+              <text x="480" y="132" text-anchor="middle" fill="#b6c5e1" font-size="10">随机 init 不同 · 稀疏更新 · 路由共进化 · 无人工贴标签</text>
+              <rect x="300" y="44" width="56" height="100" rx="6" fill="rgba(255,207,114,0.12)" stroke="#ffcf72" stroke-width="1.2" />
+              <text x="328" y="98" text-anchor="middle" fill="#ffcf72" font-size="10" transform="rotate(-90 328 98)">FFN②</text>
+              <rect x="560" y="44" width="56" height="100" rx="6" fill="rgba(255,207,114,0.12)" stroke="#ffcf72" stroke-width="1.2" />
+              <text x="588" y="98" text-anchor="middle" fill="#ffcf72" font-size="10" transform="rotate(-90 588 98)">FFN⑦</text>
+            </svg>
+          </div>
+          <p class="figure__cap">不同 token 被 Router 送到不同专家;相似 token 长期走同一路 → 专家<strong>涌现</strong>分工(示意,真模型里专科未必人类可读)。</p>
+        </div>
+        <p>
+          也不是「先训专家、再 frozen 训路由」——常见做法是<strong>从头联合预训练</strong>,路由和专家同步更新。
+          真正多出来的训练难点在下一节:<strong>怎么防止路由只宠少数专家</strong>,让冷门专家也收到足够样本。
+        </p>
+
+        <h3>⑤ 最难的一环:负载均衡</h3>
         <p>
           MoE 有个“不训不知道”的坑:路由器会<strong>“偏心”</strong>。它一旦尝到某几个专家好用的甜头,就老往那儿送 token,
           结果<strong>热门专家被挤爆、冷门专家饿死</strong>(收不到数据就永远练不好)——这叫<span class="term">专家坍缩(routing collapse)</span>,
@@ -327,6 +669,35 @@ for (e : top)                          // 只计算被选中的专家
           <li><strong>专家容量</strong>:给每个专家设一个“每批最多接多少 token”的上限,超出的“溢出”给别人或跳过,防止个别专家过载。</li>
           <li><strong>DeepSeek 的改进</strong>:提出<strong>“无辅助损失”的均衡</strong>——给每个专家加一个会自动调整的偏置分来纠偏,既均衡,又不让惩罚项来干扰主目标。</li>
         </ul>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 700 200" role="img" aria-label="专家坍缩与负载均衡对比">
+              <text x="175" y="22" text-anchor="middle" fill="#ff6b8a" font-size="12">❌ 专家坍缩 · 路由偏心</text>
+              <rect x="40" y="40" width="270" height="100" rx="10" fill="rgba(255,107,138,0.06)" stroke="rgba(255,107,138,0.35)" stroke-width="1.4" />
+              <text x="175" y="62" text-anchor="middle" fill="#b6c5e1" font-size="10">一批 token 全挤向 专家①②</text>
+              <rect x="60" y="76" width="200" height="22" rx="5" fill="rgba(255,207,114,0.35)" stroke="#ffcf72" stroke-width="1.4" />
+              <text x="160" y="91" text-anchor="middle" fill="#eef4ff" font-size="9">①② 爆满 · 梯度爆炸式更新</text>
+              <rect x="60" y="106" width="200" height="22" rx="5" fill="rgba(149,176,227,0.06)" stroke="rgba(149,176,227,0.3)" stroke-width="1.2" stroke-dasharray="3 2" />
+              <text x="160" y="121" text-anchor="middle" fill="#8499bd" font-size="9">③④⑤… 饿死 · 几乎不更新</text>
+              <text x="525" y="22" text-anchor="middle" fill="#8ef0d1" font-size="12">✓ 负载均衡 · token 摊开</text>
+              <rect x="390" y="40" width="270" height="100" rx="10" fill="rgba(142,240,209,0.06)" stroke="rgba(142,240,209,0.35)" stroke-width="1.4" />
+              <text x="525" y="62" text-anchor="middle" fill="#b6c5e1" font-size="10">辅助 loss / 容量上限 / 偏置纠偏</text>
+              <rect x="410" y="76" width="46" height="22" rx="5" fill="rgba(255,207,114,0.22)" stroke="#ffcf72" stroke-width="1.2" />
+              <text x="433" y="91" text-anchor="middle" fill="#eef4ff" font-size="8">①</text>
+              <rect x="462" y="76" width="46" height="22" rx="5" fill="rgba(255,207,114,0.22)" stroke="#ffcf72" stroke-width="1.2" />
+              <text x="485" y="91" text-anchor="middle" fill="#eef4ff" font-size="8">②</text>
+              <rect x="514" y="76" width="46" height="22" rx="5" fill="rgba(255,207,114,0.22)" stroke="#ffcf72" stroke-width="1.2" />
+              <text x="537" y="91" text-anchor="middle" fill="#eef4ff" font-size="8">③</text>
+              <rect x="566" y="76" width="46" height="22" rx="5" fill="rgba(255,207,114,0.22)" stroke="#ffcf72" stroke-width="1.2" />
+              <text x="589" y="91" text-anchor="middle" fill="#eef4ff" font-size="8">④</text>
+              <text x="525" y="121" text-anchor="middle" fill="#b6c5e1" font-size="9">各专家都收到足够样本 · 参数不白堆</text>
+              <rect x="120" y="152" width="460" height="36" rx="8" fill="rgba(139,123,255,0.1)" stroke="#8b7bff" stroke-width="1.4" />
+              <text x="350" y="168" text-anchor="middle" fill="#eef4ff" font-size="11">总 loss = CrossEntropy(主任务) + λ · LoadBalance(摊匀惩罚)</text>
+              <text x="350" y="182" text-anchor="middle" fill="#b6c5e1" font-size="10">主 loss 训专家和路由 · 均衡项专管「别偏心」</text>
+            </svg>
+          </div>
+          <p class="figure__cap">左:路由坍缩 → 大半专家名存实亡。右:负载均衡逼 Router 把 token<strong>摊开</strong>,各专家都能练到。</p>
+        </div>
         <div class="callout callout--warn reveal">
           <span class="callout__title">MoE 省的是算力,不是显存</span>
           <p>
@@ -337,7 +708,7 @@ for (e : top)                          // 只计算被选中的专家
           </p>
         </div>
 
-        <h3>④ 为省算力压 k、缩专家:会不会“降智”?</h3>
+        <h3>⑥ 为省算力压 k、缩专家:会不会“降智”?</h3>
         <p>
           这是很多人问 MoE 时真正纠结的点:<strong>宣传的是几百 B 总参数,但推理时每个 token 只点亮少数几个专家</strong>——
           如果产品侧为了再省一点算力,把 <strong>top-k 从 8 降到 1</strong>、把<strong>专家做得更小</strong>、或<strong>可路由的专家池变少</strong>,
@@ -407,6 +778,40 @@ for (e : top)                          // 只计算被选中的专家
           <var>n</var>=1000 时是百万对还好,可长上下文动辄 <var>n</var>=十万,那就是<strong>百亿量级</strong>的两两打分
           (还得每层、每个头都来一遍),这正是<a class="xref" href="chapter-20.html">第 20 章</a>“长上下文难”的根子。
         </p>
+
+        <h4>先算笔账:这个矩阵到底有多大?</h4>
+        <p>
+          很多人第一次意识到问题的严重,是在脑子里把 <var>n</var>=1M 代进去的那一刻。注意力打分矩阵
+          <var>Q</var>·<var>K</var><sup>T</sup> 的形状是 <var>n</var>×<var>n</var>:
+        </p>
+        <div class="mathblock reveal">
+          <var>n</var> = 1,000,000 → 矩阵元素数 = 10<sup>6</sup> × 10<sup>6</sup> = <strong>10<sup>12</sup>(一万亿个数)</strong>
+          <span class="label">按半精度每个数 2 字节 ≈ 2 TB —— 而这还只是「一个头、一层」的一个中间矩阵</span>
+        </div>
+        <p>
+          一张顶级 GPU 的显存也就 80 GB 上下,而这一个矩阵就要<strong>约 2 TB</strong>,再乘上几十层、几十个头,更是天文数字。
+          <strong>结论很硬:<var>n</var>=1M 的稠密注意力矩阵,根本不可能被整个存下来、更别说一次算出来。</strong>
+          这就是长上下文一切麻烦的总根源。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">关键转念:这个大矩阵<strong>从不被“整个造出来”</strong></span>
+          <p>
+            这里最容易误解的一点是:虽然它在数学上“存在”,但真实系统<strong>从不把完整的 <var>n</var>×<var>n</var> 矩阵物化(materialize)到显存里</strong>。
+            对付它有两条互补的路:
+          </p>
+          <p>
+            <strong>· 不一次算、也不整个存(<a class="xref" href="chapter-19.html#9-kv-cache-别让自回归每步都重算前文">分块</a> + FlashAttention)</strong>:
+            把序列切块,注意力一次只出现一小条,算完 softmax 就丢,只留最终输出。FlashAttention 就是这么干的——
+            它<strong>一个都不少算(精确)</strong>,但<strong>全程不写出完整大矩阵</strong>,所以省下海量显存。<br />
+            <strong>· 干脆不全算(稀疏注意力)</strong>:那一万亿个格子里绝大多数其实不相关,只保留窗口 / 全局 / top-k 的连接,
+            把 <var>n</var>² 降到接近线性——这是<strong>近似</strong>,下文细讲。
+          </p>
+          <p>
+            所以要分清两件事:<strong>显存</strong>可以靠“不物化”省掉;但稠密注意力的<strong>计算量</strong>本身仍是 O(<var>n</var>²),
+            只有稀疏近似才能把复杂度真正降下来。
+          </p>
+        </div>
+
         <p>
           <span class="term">稀疏注意力(sparse attention)</span>的想法很朴素:<strong>没必要人人都聊</strong>。
           大多数 token 只跟少数几个真正相关的 token 有关系,那就<strong>只算这部分连接,其余干脆不算</strong>。
@@ -423,6 +828,75 @@ for (e : top)                          // 只计算被选中的专家
           所以今天很多“1M context”更准确的含义是:<strong>系统能处理百万级输入</strong>,但背后依赖的是
           “少算 + 缓存 + 分块 + 并行 + 长上下文训练”这一整套工程,而不是朴素的全量稠密注意力。
         </p>
+
+        <h4>还有一环:位置编码怎么“编”得到第 100 万个 token?</h4>
+        <p>
+          上面都在说“怎么少算、怎么存得下”,但有个更底层的问题:注意力本身<a class="xref" href="chapter-18.html#5-位置编码-告诉模型谁在前谁在后">对位置无感</a>,
+          全靠位置编码告诉它谁在前谁在后。要支持 1M,就得让位置编码<strong>一路编到第 100 万位还不乱</strong>。今天主流靠的是 <span class="term">RoPE(旋转位置编码)</span>:
+        </p>
+        <ul>
+          <li><strong>RoPE 为什么天生能外推一点</strong>:它不给每个位置发“绝对号码牌”(那种一旦超出训练长度就没牌可发),而是<strong>按位置把 Q/K 向量旋转一个角度</strong>,角度和位置成正比。注意力打分只依赖两个 token 的<strong>相对角度差</strong>——换个绝对位置,只要相对距离没变,规律仍成立,所以它比可学习绝对位置更容易“往后多编一点”。</li>
+          <li><strong>但硬外推会崩</strong>:训练时只见过 4K 以内的旋转角度,直接拿去编到 128K,那些转得最快的维度会转出“没见过的角度”,注意力就乱套。于是需要下面这些“拉伸”手段,再配<strong>少量长文本微调</strong>。</li>
+        </ul>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>拉长手段</th><th>到底在拉什么</th><th>一句话直觉</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>位置插值(PI)</strong></td>
+                <td>把要处理的位置整体<strong>等比压缩</strong>回训练见过的范围(如把 0–32K 缩放到 0–4K 再喂进去)</td>
+                <td>“把尺子刻度整体缩小”,位置再远也落回熟悉区间</td>
+              </tr>
+              <tr>
+                <td><strong>NTK-aware</strong></td>
+                <td>不均匀地缩放 RoPE 各频率:<strong>高频少动、低频多拉</strong>,兼顾近处精度和远处覆盖</td>
+                <td>“该细的地方保持细,该拉远的地方才拉”</td>
+              </tr>
+              <tr>
+                <td><strong>YaRN</strong></td>
+                <td>在 NTK 思路上进一步分频段调整,是目前把上下文<strong>拉到几十上百 K</strong> 的常用配方</td>
+                <td>NTK 的加强版,少量微调即可撑很远</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">这几招都在 RoPE 的“旋转角度”上做文章:让训练时只见过短序列的模型,推理时也能把位置编到远处而不乱——这就是模型能“事后加长”的关键(<a class="xref" href="chapter-20.html">第 20 章</a>提过它们的名字)。</p>
+        </div>
+
+        <h4>把“1M 怎么做到”一次串起来</h4>
+        <p>综合前面所有内容,一个百万级上下文的模型,其实是这五层<strong>同时</strong>做到位的结果——缺哪一层都撑不到 1M:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>层面</th><th>要解决的问题</th><th>典型手段</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>① 位置编码</strong></td>
+                <td>位置能不能“编”到第 100 万位还不乱</td>
+                <td>RoPE + 位置插值 / NTK / YaRN 拉伸(本节上文)</td>
+              </tr>
+              <tr>
+                <td><strong>② 少算(算法)</strong></td>
+                <td>稠密注意力 O(n²),1M 时是天文数字</td>
+                <td>滑动窗口 / 全局 token / 分块稀疏 / 动态 top-k(本节下文)</td>
+              </tr>
+              <tr>
+                <td><strong>③ 存得下(系统)</strong></td>
+                <td>百万长前缀的 KV cache 会先把显存吃爆</td>
+                <td><a class="xref" href="chapter-21.html#4-省显存两招-混合精度与量化">量化</a>、PagedAttention 分页复用(第 10 节)</td>
+              </tr>
+              <tr>
+                <td><strong>④ 算得动(工程)</strong></td>
+                <td>一次性吃 1M 输入,单卡扛不住</td>
+                <td>分块 prefill、多卡并行(第 5、6、10 节)</td>
+              </tr>
+              <tr>
+                <td><strong>⑤ 真学过(训练)</strong></td>
+                <td>没在长序列上训过,远处信息用不起来</td>
+                <td>长上下文续训 + 上面的位置拉伸再微调(<a class="xref" href="chapter-20.html">第 20 章</a>)</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">所以“1M 上下文”是一套组合拳:<strong>位置编得到 + 少算 + 存得下 + 算得动 + 真训过</strong>,而不是把 full attention 的窗口数字改成 1000000。</p>
+        </div>
 
         <h3>① 固定套路:按位置预先规定谁跟谁算</h3>
         <ul>
@@ -607,9 +1081,10 @@ for (e : top)                          // 只计算被选中的专家
             <li>显存是第一堵墙(要放参数+梯度+优化器状态+激活);混合精度、量化能大幅省显存。</li>
             <li>三种并行:数据并行(人手一份模型,AllReduce 同步梯度)、张量并行(切开单层矩阵,AllGather 拼接)、流水线并行(不同层放不同卡)。</li>
             <li>NCCL 管通信,NVLink/NVSwitch 是卡间高速公路;推理靠 KV cache、批处理、量化提速。</li>
-            <li>MoE:把每层 FFN 换成多个专家,路由器给每个 token 只点 top-k 个 → 参数多但算得少;代价是全部专家要常驻显存(省算力不省显存),还得靠负载均衡防“专家坍缩”。<strong>压 k/缩专家会掉能力</strong>,是另一类“降智”来源。</li>
+            <li>MoE:FFN 换成 <strong>N 个并列专家</strong>(<code>N</code>/<code>k</code> 设计时定死),Attention <strong>共用 1 套</strong>;路由器 softmax 打分 + top-k 门控加权,与专家<strong>端到端</strong>同训;还得靠负载均衡防专家坍缩。参数多但算得少;全部专家仍要常驻显存。<strong>压 k/缩专家会掉能力</strong>,是另一类「降智」来源。</li>
             <li>稀疏注意力:只算部分 token 对——固定套路(滑动窗口 + 全局)或动态挑 top-k,把 O(n²) 压下来;它是“少算”(近似),区别于 FlashAttention 的“精确加速”。</li>
-            <li>百万级长上下文靠的是“少算 + 缓存 + 分块 + 并行 + 长上下文训练”的组合拳,不是把普通 full attention 生拉硬拽到 1M。</li>
+            <li><var>n</var>×<var>n</var> 注意力矩阵在 <var>n</var>=1M 时高达一万亿个数(单头单层就 ~2TB),但它<strong>从不被整个物化</strong>:FlashAttention 分块流式算(精确、不写出大矩阵、省显存),稀疏注意力干脆少算(近似、降复杂度)。</li>
+            <li>百万级长上下文是<strong>五层组合拳</strong>:位置编码(RoPE + PI/NTK/YaRN 拉伸)编得到远处、稀疏注意力少算、量化/分页缓存存得下、分块 prefill+多卡算得动、长上下文续训真学过——不是把 full attention 的窗口数字改成 1M。</li>
             <li>推理服务扛海量用户:分 prefill(并行、算得饱)/ decode(逐字、喂不饱)两阶段;用连续批处理把多请求拼一起、PagedAttention 分页复用 KV cache、多副本 + 负载均衡横向扩展;吞吐与延迟(TTFT/TPOT)之间要按场景取舍。</li>
           </ul>
         </section>
@@ -653,13 +1128,25 @@ for (e : top)                          // 只计算被选中的专家
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 7:稀疏注意力和 FlashAttention 都能让注意力更快,区别在哪?</summary>
+            <summary class="quiz__q">问题 7:MoE 的路由器像硬开关,梯度怎么训?Attention 也要复制 N 份吗?</summary>
+            <div class="quiz__a">
+              <p>路由器先 <code>softmax</code> 得到门控分,再 top-k 选出专家,用<strong>门控分加权</strong> k 个 FFN 输出——软权重让梯度能回传到 <code>W_gate</code> 和被选中的专家,和主 loss 端到端同训,没有单独的路由算法。Attention <strong>仍是 1 套共用</strong>,不会随专家变成 N 份;并列的是 FFN。<code>N</code> 和 <code>k</code> 是设计时定死的超参数。难点在负载均衡,防止只宠少数专家。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 8:稀疏注意力和 FlashAttention 都能让注意力更快,区别在哪?</summary>
             <div class="quiz__a">
               <p>稀疏注意力是<strong>近似</strong>:干脆<strong>少算</strong>一些 token 对(只保留窗口/全局/top-k 的连接),用极小精度损失换速度。FlashAttention 是<strong>精确</strong>:一个都不少算,只是把计算重排、减少显存读写,让同样的稠密注意力更快更省显存。前者“少做题”,后者“做题更利索”,可叠加。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 8:一个用户逐字生成时明明用不满 GPU,为什么服务上亿用户反而扛得住?</summary>
+            <summary class="quiz__q">问题 9:一个模型号称支持 1M 上下文,靠的是把 RoPE 的位置直接编到 100 万吗?</summary>
+            <div class="quiz__a">
+              <p>不是,是<strong>五层同时到位</strong>的组合拳:①<strong>位置编码</strong>——RoPE 只依赖相对角度差、天生能外推一点,但硬编到百万会崩,得靠<strong>位置插值/NTK/YaRN</strong>把旋转角度“拉伸”回可用范围,再少量长文本微调;②<strong>少算</strong>——稀疏注意力(窗口/全局/top-k)把 O(n²) 压下来;③<strong>存得下</strong>——量化 + PagedAttention 分页复用 KV cache;④<strong>算得动</strong>——分块 prefill + 多卡并行;⑤<strong>真训过</strong>——在长序列上续训。缺哪层都撑不到 1M。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 10:一个用户逐字生成时明明用不满 GPU,为什么服务上亿用户反而扛得住?</summary>
             <div class="quiz__a">
               <p>正因为单个请求(尤其 decode 阶段)喂不饱 GPU,才有空间<strong>把很多请求拼一起算</strong>。<strong>连续批处理</strong>让不同用户的“下一个字”凑成一次大计算、谁完成谁下车、新请求随时插入,把 GPU 榨满;<strong>PagedAttention</strong> 把 KV cache 分页管理、消除碎片还能复用公共前缀,让一批塞下更多并发;真到亿级再用<strong>多副本 + 负载均衡</strong>横向扩展。代价是攒批会增加单人延迟,所以要在吞吐(TPOT)和首字延迟(TTFT)之间按场景权衡。</p>
             </div>

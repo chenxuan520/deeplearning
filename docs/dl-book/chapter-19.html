@@ -45,6 +45,7 @@
           <ul>
             <li>从文本到预测,数据要经过 tokenizer → embedding → Transformer → 输出层这一条完整链路;</li>
             <li><strong>LM Head</strong> 如何把 Transformer 向量变成词表上的 logits / 概率,和 <a class="xref" href="chapter-23.html">MNIST 输出层</a> 有何同异;</li>
+            <li><strong>每一步矩阵有多大</strong>:逐步写出谁×谁、乘完多大(含 n=2 完整手算,见 §4.4);</li>
             <li><strong>模型到底怎么“学”</strong>:训练数据怎么造、损失怎么算、反向传播怎么一路更新到<a class="xref" href="chapter-17.html">第 17 章</a>那三个矩阵;</li>
             <li>“预测下一个字”怎么变成“写出一整段”(自回归生成),以及 <strong>KV cache</strong> 为什么能让每一步不必重算前文;</li>
             <li>greedy、temperature、top-k、top-p 这些采样策略各自的脾气;</li>
@@ -244,7 +245,130 @@ logits = all_logits.back();                              <b class="cw-tag">1</b>
           若上下文超过 <code>max_context_size</code>,代码会<strong>只保留最近一段</strong>再前向,避免位置编码越界。
         </p>
 
-        <h3>4.4 反向:LM Head 的梯度往哪流</h3>
+        <h3>4.4 每一步矩阵有多大:n=2 走一遍</h3>
+        <p>
+          下面<strong>不用表格</strong>,就按你前向真实发生的顺序:每一步写出<strong>谁乘谁、乘完多大</strong>。
+          例子:输入 <strong>2 个 token</strong>(「床」「前」),每个 token <strong>4 个数</strong>(<code>d=4</code>),词表 <strong>5 个字</strong>(<code>V=5</code>),FFN 中间 <strong>8 维</strong>(<code>f=8</code>),只算 <strong>1 层</strong> Block。
+          <code>context_size=1024</code> 只是上限;只喂 2 个 token,矩阵就是 <strong>2 行</strong>,不会撑满 1024 行。
+          <a class="xref" href="chapter-18.html#8-gpt-这种模型-把右塔堆很多层再接一个-lm-head">第 18 章 §8</a>用另一组维度(<code>n=3, d=2</code> 的「床前明」)把<strong>同一条流水线</strong>再走了一遍——两处维度特意取得不一样,对着看能帮你把“哪个数字是 n、哪个是 d”彻底分清。
+        </p>
+
+        <p class="muted reveal" style="margin:0.6rem 0">记号: <code>n</code>=行数(几个 token) · <code>d</code>=列数(每个 token 多宽) · <code>V</code>=词表大小 · <code>f</code>=FFN 中间多宽</p>
+
+        <h4>第 0 步:输入还不是矩阵</h4>
+        <pre class="code-walk__code reveal"><code>ids = [id_床, id_前]     长度 2, 两个整数</code></pre>
+
+        <h4>第 1 步:Embedding 查表</h4>
+        <pre class="code-walk__code reveal"><code>Embedding 表:  [5 × 4]        5 个字, 每个字 4 个数
+查 2 个 id  →   X₀:  [2 × 4]    2 行, 每行 4 个数
+
+(没有矩阵乘, 是查表取出 2 行)</code></pre>
+
+        <h4>第 2 步:加位置编码</h4>
+        <pre class="code-walk__code reveal"><code>PE:  [2 × 4]
+
+X = X₀ + PE
+    [2×4] + [2×4] = [2×4]
+
+形状不变, 每个数加上「第几位」的信息</code></pre>
+
+        <h4>第 3 步:Attention — 投影 Q、K、V</h4>
+        <p>三个权重表, 每个都是 <code>[4 × 4]</code>:</p>
+        <pre class="code-walk__code reveal"><code>Q = X · W_Q     [2×4] × [4×4] = [2×4]
+K = X · W_K     [2×4] × [4×4] = [2×4]
+V = X · W_V     [2×4] × [4×4] = [2×4]</code></pre>
+
+        <h4>第 4 步:Attention — 打分(词和词多相关)</h4>
+        <pre class="code-walk__code reveal"><code>S = Q · K转置 / √4
+
+    [2×4] × [4×2] = [2×2]
+
+变成 2×2: 第 i 行第 j 列 = 第 i 个词看第 j 个词的分数
+
+        床    前
+床  [ s00, s01 ]
+前  [ s10, s11 ]</code></pre>
+
+        <h4>第 5 步:因果 mask + softmax</h4>
+        <pre class="code-walk__code reveal"><code>上三角抹掉(不能偷看未来) → 每行 softmax → M
+
+M:  [2×2]     每行加起来 = 1</code></pre>
+
+        <h4>第 6 步:Attention — 用权重混 Value, 再乘 W_O</h4>
+        <pre class="code-walk__code reveal"><code>Ã = M · V           [2×2] × [2×4] = [2×4]
+A = Ã · W_O         [2×4] × [4×4] = [2×4]
+
+Attention 输出 A 和输入 X 一样大: [2×4]</code></pre>
+
+        <h4>第 7 步:残差 + LayerNorm</h4>
+        <pre class="code-walk__code reveal"><code>X + A               [2×4] + [2×4] = [2×4]
+LayerNorm 逐行      →  H₁:  [2×4]
+
+(没有大矩阵乘, 每行自己减均值除标准差)</code></pre>
+
+        <h4>第 8 步:FFN — 升维</h4>
+        <pre class="code-walk__code reveal"><code>W₁:  [4 × 8]
+b₁:  长度 8
+
+Z = H₁ · W₁ + b₁    [2×4] × [4×8] = [2×8]
+
+从 2×4 变成 2×8  ← 这一步变宽</code></pre>
+
+        <h4>第 9 步:ReLU</h4>
+        <pre class="code-walk__code reveal"><code>H_ff = ReLU(Z)      [2×8]     形状不变, 负数变 0</code></pre>
+
+        <h4>第 10 步:FFN — 压回 d 维</h4>
+        <pre class="code-walk__code reveal"><code>W₂:  [8 × 4]
+b₂:  长度 4
+
+F = H_ff · W₂ + b₂  [2×8] × [8×4] = [2×4]
+
+FFN 输出 F: [2×4]</code></pre>
+
+        <h4>第 11 步:残差 + LayerNorm(Block 结束)</h4>
+        <pre class="code-walk__code reveal"><code>H₁ + F              [2×4] + [2×4] = [2×4]
+LayerNorm           →  H_final:  [2×4]
+
+若堆 N 层 Block, 从第 3 步到第 11 步重复 N 遍, 每次进出都是 [2×4]</code></pre>
+
+        <h4>第 12 步:LM Head</h4>
+        <pre class="code-walk__code reveal"><code>W_lm:  [4 × 5]
+b_lm:  长度 5
+
+logits = H_final · W_lm + b_lm    [2×4] × [4×5] = [2×5]
+
+变成 2×5: 每一行是「这个位置, 词表里 5 个字各多少分」</code></pre>
+
+        <h4>第 13 步:生成 — 只取最后一行</h4>
+        <pre class="code-walk__code reveal"><code>logits[0]  →  只看第 1 个字时, 下一个字是谁?  (训练用)
+logits[1]  →  看完 2 个字时, 下一个字是谁?    (生成用这个)
+
+取 logits[1]  或  all_logits.back()  →  长度 5
+softmax       →  5 个概率, 挑最大的当下一个字
+
+注意: 是从 [2×5] 里取最后一行, 不是从 [2×4] 里取</code></pre>
+
+        <h4>整张乘法链(一眼扫)</h4>
+        <pre class="code-walk__code reveal" aria-label="n=2 完整形状链"><code>[2×4]  查表+加位置
+  ↓ ×[4×4] ×3              Q,K,V      [2×4]
+  ↓ [2×4]×[4×2]            S,M        [2×2]
+  ↓ [2×2]×[2×4]  ×[4×4]    A          [2×4]
+  ↓ +残差Norm               H₁         [2×4]
+  ↓ ×[4×8]                  Z          [2×8]   ← 变宽
+  ↓ ×[8×4]                  F          [2×4]   ← 压回
+  ↓ +残差Norm               H_final    [2×4]
+  ↓ ×[4×5]                  logits     [2×5]   ← 变到词表
+  ↓ 取第 2 行               下一个字    [5]</code></pre>
+
+        <h4>换输入长度:只改行数 n</h4>
+        <p><code>d</code>、<code>V</code>、<code>f</code> 不变, 只有 n 跟着你喂了几个 token 变:</p>
+        <pre class="code-walk__code reveal"><code>输入 2 个 token   主矩阵 [2×4]    注意力 [2×2]      logits [2×5]   生成取第 2 行
+输入 4 个 token   主矩阵 [4×4]    注意力 [4×4]      logits [4×5]   生成取第 4 行
+输入 100 个       主矩阵 [100×4]  注意力 [100×100]  logits [100×5] 生成取第 100 行
+
+注意力是 n×n, 句子一长按 n² 涨 → 长上下文吃算力(第 21 章)</code></pre>
+
+        <h3>4.5 反向:LM Head 的梯度往哪流</h3>
         <p>
           训练时,softmax + 交叉熵对 logits 的梯度仍是 <code>probs − one-hot(答案)</code>(<a class="xref" href="chapter-06.html">第 6 章</a>)。
           这条梯度会<strong>同时更新 LM Head 和前面的 Transformer</strong>:
@@ -597,7 +721,7 @@ perplexity = std::exp(average_loss);                     <b class="cw-tag">2</b>
           <h2>小结</h2>
           <ul>
             <li>语言模型的任务:看前文,预测下一个字。链路 = Tokenizer → Embedding(+位置)→ Transformer → LM Head → 概率。</li>
-            <li><strong>LM Head</strong> = 线性层 <code>output_weight_[vocab×dim] + bias</code>,hidden 与每行模板点积得 logits;推理取 <code>all_logits.back()</code>。</li>
+            <li><strong>LM Head</strong> = 线性层 <code>output_weight_[vocab×dim] + bias</code>,hidden 与每行模板点积得 logits;<code>[n×d]→[n×V]</code>;推理取 <code>all_logits.back()</code>(<a class="xref" href="chapter-19.html#44-每一步矩阵有多大-n2-走一遍">§4.4</a>)。</li>
             <li>Tokenizer 把字符 ↔ id;Embedding 把 id 查表成可学习向量。</li>
             <li>训练:滑动窗口造“输入 → 下一字”样本(自监督);交叉熵损失反向传播,一路更新到<a class="xref" href="chapter-17.html">第 17 章</a>的 Q/K/V 矩阵和词嵌入。</li>
             <li>挑字:greedy(取最高)死板;采样(temperature / top-k / top-p)更自然有创意。</li>

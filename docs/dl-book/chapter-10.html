@@ -25,8 +25,9 @@
           <ul>
             <li><strong>泛化</strong>才是目标:训练集好不算好,<strong>没见过的数据上好</strong>才算好;</li>
             <li>怎么从<strong>训练/验证曲线</strong>一眼看出过拟合、欠拟合;</li>
-            <li><strong>L2 / weight decay</strong> 为什么能让模型“更平滑、别太自信”;</li>
-            <li><strong>Dropout</strong> 怎么靠“随机罢工”逼网络别依赖个别神经元;</li>
+            <li><strong>偏差与方差</strong>为什么此消彼长,泛化的“甜区”在哪;</li>
+            <li><strong>L2 / L1 / weight decay</strong> 为什么能让模型“更平滑、别太自信”;</li>
+            <li><strong>Dropout</strong> 怎么靠“随机罢工”逼网络别依赖个别神经元,以及测试时为什么要关掉它;</li>
             <li><strong>early stopping</strong> 和<strong>数据增强</strong>这两招,以及“更多数据”为什么是最强正则。</li>
           </ul>
         </section>
@@ -71,10 +72,70 @@
         </div>
         <p>
           <strong>正则化(regularization)</strong>就是一类专治过拟合的手段。它们的共同思路只有一句话:
-          <strong>给模型加点“约束”或“干扰”,逼它别把训练集硬背下来,而去学更通用的规律。</strong>下面逐个看。
+          <strong>给模型加点“约束”或“干扰”,逼它别把训练集硬背下来,而去学更通用的规律。</strong>
+          在动手之前,先看一眼过拟合和欠拟合背后那对更本质的概念。
         </p>
 
-        <h2>3. L2 正则 / weight decay:别让权重太“嚣张”</h2>
+        <h2>3. 偏差与方差:欠拟合和过拟合的“根”</h2>
+        <p>
+          欠拟合和过拟合,其实是同一枚硬币的两面,背后是一对此消彼长的量:
+          <span class="term">偏差(bias)</span>和<span class="term">方差(variance)</span>。
+        </p>
+        <ul>
+          <li><strong>偏差</strong>:模型<strong>假设太死板</strong>,连训练数据的真实规律都抓不住,产生<strong>系统性的偏</strong>。高偏差 → <strong>欠拟合</strong>。</li>
+          <li><strong>方差</strong>:模型<strong>太敏感</strong>,把训练集里的噪声也当成规律学了进去,<strong>换一批数据结果就大变</strong>。高方差 → <strong>过拟合</strong>。</li>
+        </ul>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">打靶比喻</span>
+          <p>
+            把预测想成打靶:<strong>高偏差</strong>是每一箭都稳稳地偏向同一边(准星歪了,再稳也脱靶);
+            <strong>高方差</strong>是箭散得到处都是(准星没歪,但手一直在抖)。
+            我们真正想要的,是又准又稳——但现实里,<strong>压低一个往往会抬高另一个</strong>。
+          </p>
+        </div>
+        <p>
+          模型在新数据上的总误差,可以粗略拆成三块:
+        </p>
+        <div class="mathblock reveal">
+          总误差 ≈ 偏差<sup>2</sup> + 方差 + 不可约噪声
+          <span class="label">前两项是我们能调的;第三项是数据本身的噪声,再强的模型也消不掉</span>
+        </div>
+        <p>
+          关键在于:模型<strong>越复杂</strong>(层更深、参数更多、训练更久),偏差越小,但方差越大;
+          越简单则反过来。所以总误差通常是一条 <strong>U 形曲线</strong>——两头都差,最优点在中间那个“<strong>不太死板、也不太敏感</strong>”的甜区。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 480 260" role="img" aria-label="偏差-方差随模型复杂度变化的权衡曲线">
+              <line x1="55" y1="215" x2="455" y2="215" stroke="#46587a" stroke-width="1.5" />
+              <line x1="55" y1="35" x2="55" y2="215" stroke="#46587a" stroke-width="1.5" />
+              <text x="30" y="46" fill="#8499bd" font-size="12">误差</text>
+              <text x="65" y="233" fill="#8499bd" font-size="11">简单</text>
+              <text x="455" y="233" text-anchor="end" fill="#8499bd" font-size="11">复杂</text>
+              <text x="255" y="252" text-anchor="middle" fill="#8499bd" font-size="11">模型复杂度 →</text>
+              <!-- 偏差²: 递减 -->
+              <polyline points="65,65 130,100 195,135 260,165 325,185 390,197 445,203" fill="none" stroke="#6ac3ff" stroke-width="2.5" />
+              <!-- 方差: 递增 -->
+              <polyline points="65,203 130,197 195,183 260,160 325,125 390,80 445,55" fill="none" stroke="#ffcf72" stroke-width="2.5" />
+              <!-- 总误差: U形 -->
+              <polyline points="65,72 130,108 195,138 260,158 325,140 390,110 445,78" fill="none" stroke="#8ef0d1" stroke-width="2.5" />
+              <!-- 最佳复杂度虚线 -->
+              <line x1="260" y1="45" x2="260" y2="215" stroke="#8ef0d1" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.7" />
+              <text x="265" y="55" fill="#8ef0d1" font-size="11">甜区</text>
+              <text x="150" y="118" fill="#6ac3ff" font-size="11">偏差²(欠拟合)</text>
+              <text x="322" y="108" fill="#ffcf72" font-size="11">方差(过拟合)</text>
+              <text x="92" y="66" fill="#8ef0d1" font-size="11">总误差</text>
+            </svg>
+          </div>
+          <p class="figure__cap">复杂度越高,偏差(蓝)越小、方差(黄)越大;总误差(绿)是 U 形,谷底就是泛化最好的“甜区”。</p>
+        </div>
+        <p>
+          想明白这一点,正则化的本质就清楚了:<strong>它是主动往模型上加约束,牺牲一点点偏差,换来方差的大幅下降</strong>,
+          从而把总误差推到更靠近谷底的位置。下面第 4–7 节的四招——weight decay、Dropout、early stopping、数据增强——
+          全都在做这同一件事,只是切入点不同。
+        </p>
+
+        <h2>4. L2 正则 / weight decay:别让权重太“嚣张”</h2>
         <p>
           过拟合的模型常有一个特征:某些<strong>权重变得非常大</strong>,对个别特征反应过激(“一朝被蛇咬”式的死记)。
           <span class="term">L2 正则</span>的办法是:在损失里加一项“<strong>所有权重的平方和</strong>”,让“权重太大”本身也成为一种“错”:
@@ -94,8 +155,17 @@
             <li>给优化器设一个 <code>weight_decay</code>,训练时每步就会顺带把权重往 0 收一点。注意<strong>只惩罚权重、不惩罚 bias</strong>;Adam 与 AdamW 对它的耦合方式不同(<a class="xref" href="chapter-08.html">第 8 章</a>)。</li>
           </ol>
         </figure>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">还有个近亲:L1 正则</span>
+          <p>
+            如果把惩罚项从“权重平方和”换成“<strong>权重绝对值之和</strong>”(<var>λ</var>·Σ|权重|),就是 <span class="term">L1 正则</span>。
+            两者都压小权重,但性格不同:<strong>L2 把权重均匀地往 0 挤</strong>,得到一堆“都挺小但都不为 0”的权重,更平滑;
+            <strong>L1 则倾向于把一部分权重直接压成 0</strong>,相当于自动做“特征筛选”,得到<strong>稀疏</strong>的模型。
+            想让模型自己挑出少数关键特征,用 L1;只想让它整体收敛、别走极端,用 L2(也是深度学习里的默认选择)。
+          </p>
+        </div>
 
-        <h2>4. Dropout:让神经元“随机罢工”</h2>
+        <h2>5. Dropout:让神经元“随机罢工”</h2>
         <p>
           <span class="term">Dropout</span>是个又简单又神奇的招:<strong>训练时,每一步随机“关掉”一部分神经元</strong>
           (比如随机让 20% 的神经元输出 0),每步关掉的还不一样。测试时再把它们全打开。
@@ -108,15 +178,21 @@
             于是更不容易过拟合。相当于同时训练了无数个“缺人版”的小网络,再取平均。
           </p>
         </div>
+        <p>
+          这里有个容易被忽略的细节:<strong>训练时关掉了一部分神经元,测试时又全开,两边的输出规模就对不上了</strong>。
+          比如训练时随机丢掉一半,那一层的输出总量平均只有平时的一半;测试时全开,总量却翻倍,后面的层就“懵”了。
+          解法是做一次<strong>缩放</strong>:常见做法叫 <em>inverted dropout</em>——训练时把没被丢掉的神经元输出<strong>除以保留比例</strong>
+          (丢一半就乘 2),把总量补回来;这样测试时啥都不用改,直接全开即可。记住一句话:<strong>Dropout 只在训练时开,测试/推理时关。</strong>
+        </p>
 
-        <h2>5. Early stopping:见好就收</h2>
+        <h2>6. Early stopping:见好就收</h2>
         <p>
           回看上面那张曲线图:验证损失<strong>降到最低点后开始回升</strong>,那个拐点就是“学得刚刚好、还没开始背书”的时刻。
           <span class="term">early stopping(早停)</span>的做法直白得可爱:<strong>一边训一边盯验证集,一旦它连续几轮不再改善,就停</strong>,
           并回退到验证表现最好的那个存档。既省算力,又正好卡在过拟合之前。
         </p>
 
-        <h2>6. 数据增强,以及“更多数据”这剂猛药</h2>
+        <h2>7. 数据增强,以及“更多数据”这剂猛药</h2>
         <p>
           还有一类正则化是<strong>在数据上做文章</strong>:</p>
         <ul>
@@ -136,8 +212,9 @@
           <ul>
             <li><strong>泛化</strong>才是目标:要的是没见过的数据上也好,而不是把训练集背下来。</li>
             <li><strong>过拟合</strong> = 训练好、测试差(背题);<strong>欠拟合</strong> = 都差(没学会)。看训练/验证曲线的“裂口”即可判断。</li>
-            <li><strong>weight decay(L2)</strong>:惩罚大权重,让模型更平滑克制。</li>
-            <li><strong>Dropout</strong>:训练时随机关神经元,逼网络别依赖个别单元。</li>
+            <li><strong>偏差 vs 方差</strong>:欠拟合是高偏差、过拟合是高方差;总误差是 U 形,正则化用一点偏差换方差,逼近谷底“甜区”。</li>
+            <li><strong>weight decay(L2)</strong>:惩罚大权重,让模型更平滑克制;<strong>L1</strong> 则会把部分权重压成 0,得到稀疏模型。</li>
+            <li><strong>Dropout</strong>:训练时随机关神经元(并做缩放),测试时全开;逼网络别依赖个别单元。</li>
             <li><strong>early stopping</strong>:验证损失回升前收手;<strong>数据增强/更多数据</strong>是最本质的正则。</li>
           </ul>
         </section>

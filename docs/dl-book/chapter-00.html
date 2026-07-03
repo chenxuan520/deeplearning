@@ -205,9 +205,16 @@
 │  │  ├─ loss/  softmax/        损失函数 与 softmax
 │  │  ├─ optimizer/             SGD / Momentum / Adam / AdamW
 │  │  ├─ lr_scheduler/          <a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">学习率调度</a>
+│  │  ├─ cnn/                   卷积 / 池化 (<a class="xref" href="chapter-13.html">第 13 章</a>)
+│  │  ├─ rnn/                   循环网络 / BPTT (<a class="xref" href="chapter-14.html">第 14 章</a>)
+│  │  ├─ embedding/             word2vec 词向量 (<a class="xref" href="chapter-15.html">第 15 章</a>)
+│  │  ├─ rl/                    Q-learning 强化学习 (<a class="xref" href="chapter-12.html">第 12 章</a>)
 │  │  └─ transformer/           注意力 / Block / mini 语言模型
 │  ├─ demo/                  <b class="cw-tag">2</b>  可运行的示例程序
 │  │  ├─ mnist/                 手写数字识别   (<a class="xref" href="chapter-23.html">第 23 章</a>精读)
+│  │  ├─ cnn_mnist/             卷积版 MNIST
+│  │  ├─ rnn_char/              字符级 RNN
+│  │  ├─ word2vec/              词向量训练
 │  │  ├─ transformer_char/      字符级语言模型 (<a class="xref" href="chapter-24.html">第 24 章</a>精读)
 │  │  ├─ rl_tictactoe/          井字棋 Q-learning (<a class="xref" href="chapter-25.html">第 25 章</a>精读)
 │  │  └─ optimizer_bench/       优化器对比
@@ -215,7 +222,7 @@
 └─ docs/dl-book/             <b class="cw-tag">3</b>  你正在读的这本书</code></pre>
           <ol class="code-walk__notes">
             <li><code>src/deeplearning/</code> 是<strong>库</strong>:所有原理的实现都在这里,一个概念对应一个子目录或文件。</li>
-            <li><code>src/demo/</code> 是<strong>把库用起来</strong>的完整程序。本书第 23、24 章就是逐行精读这里的 <code>mnist</code> 和 <code>transformer_char</code>。</li>
+            <li><code>src/demo/</code> 是<strong>把库用起来</strong>的完整程序。本书第 23、24、25 章就是逐行精读这里的 <code>mnist</code>、<code>transformer_char</code> 和 <code>rl_tictactoe</code>。</li>
             <li><code>docs/dl-book/</code> 就是这本电子书本身(纯静态 HTML,零依赖)。</li>
           </ol>
         </figure>
@@ -232,12 +239,16 @@
               <tr><td>梯度下降 · 反向传播</td><td><code>neural_network</code>(BackPropagation)</td><td>第 5–6 章</td></tr>
               <tr><td>优化器</td><td><code>optimizer/</code></td><td><a class="xref" href="chapter-08.html">第 8 章</a></td></tr>
               <tr><td>初始化 · <a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">学习率调度</a> · 梯度裁剪</td><td><code>param_init/</code> + <code>lr_scheduler/</code></td><td><a class="xref" href="chapter-09.html">第 9 章</a></td></tr>
+              <tr><td>强化学习 · Q-learning</td><td><code>rl/</code>(井字棋环境 + 表格 Q)</td><td><a class="xref" href="chapter-12.html">第 12 章</a></td></tr>
+              <tr><td>卷积 · 池化</td><td><code>cnn/</code>(Conv2D + MaxPool2D)</td><td><a class="xref" href="chapter-13.html">第 13 章</a></td></tr>
+              <tr><td>循环网络 · BPTT</td><td><code>rnn/</code>(SimpleRNN + mini LM)</td><td><a class="xref" href="chapter-14.html">第 14 章</a></td></tr>
+              <tr><td>词嵌入 · word2vec</td><td><code>embedding/</code>(skip-gram / CBOW)</td><td><a class="xref" href="chapter-15.html">第 15 章</a></td></tr>
               <tr><td>注意力 · 多头</td><td><code>transformer/self_attention</code></td><td>第 16–17 章</td></tr>
               <tr><td>Transformer Block</td><td><code>transformer/transformer_block</code>、<code>layer_norm</code></td><td><a class="xref" href="chapter-18.html">第 18 章</a></td></tr>
               <tr><td>分词 · 词嵌入 · 生成</td><td><code>transformer/</code>(tokenizer / embedding / LM)</td><td><a class="xref" href="chapter-19.html">第 19 章</a></td></tr>
             </tbody>
           </table>
-          <p class="calc-table__cap">每一章末尾都有对应的“逐行代码”讲解;想跑起来,照第 23、24 章的运行提示即可。</p>
+          <p class="calc-table__cap">每一章末尾都有对应的“逐行代码”讲解;想跑起来,照第 23–25 章的运行提示即可。</p>
         </div>
 
         <div class="callout callout--warn reveal">
@@ -245,7 +256,8 @@
           <p>
             1)<strong>先抓直觉,再抠细节</strong>:看不懂公式很正常,先把“这一步在干嘛”读懂,公式回头再看。<br />
             2)<strong>一定要动手玩实验</strong>:书里每个可拖动的小实验,玩 30 秒胜过读三段文字。<br />
-            3)<strong>代码看不懂可以先跳过</strong>:每段代码都配了逐行讲解,但它是“加深理解”,不是“看懂前提”。
+            3)<strong>代码看不懂可以先跳过</strong>:每段代码都配了逐行讲解,但它是“加深理解”,不是“看懂前提”。<br />
+            4)<strong>三章实战放最后</strong>:监督学习(MNIST)、生成式(字符级语言模型)、强化学习(井字棋)各一章,读到再跑不迟。
           </p>
         </div>
 
@@ -257,7 +269,7 @@
             <li>训练 = 不断“预测 → 对答案 → 算损失 → 微调旋钮”的循环。</li>
             <li>损失是“错得多离谱”的一个数字;让损失变小,是后面所有数学的共同目标。</li>
             <li>“深度”= 很多层叠在一起,从而能自动学出有用的特征。</li>
-            <li>本书对照一份从零手写的 C++ 仓库,每个概念都有代码“真身”,第 23、24 章会带你逐行精读。</li>
+            <li>本书对照一份从零手写的 C++ 仓库,每个概念都有代码“真身”,第 23–25 章会带你逐行精读(监督学习 / 生成式 / 强化学习各一章)。</li>
           </ul>
         </section>
 

@@ -371,7 +371,7 @@
         </div>
         <p>
           具体怎么“遮”?办法很巧妙:<strong>不真的去删词,而是在打分之后,把所有“未来位置”的分数改成负无穷(−∞)</strong>。
-          回忆<a class="xref" href="#第步-softmax把分数变成权重">第③步</a>——softmax 要先算 e<sup>分数</sup>,
+          回忆<a class="xref" href="#第③步-softmax把分数变成权重">第③步</a>——softmax 要先算 e<sup>分数</sup>,
           而 e<sup>−∞</sup> ≈ 0,所以这些未来位置的权重就变成了 ≈ 0,一点都参与不进加权求和,相当于被彻底屏蔽。
         </p>
 

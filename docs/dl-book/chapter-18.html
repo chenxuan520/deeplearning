@@ -50,7 +50,7 @@
             <li>位置编码怎么把“词的顺序”告诉模型,以及 encoder 和 decoder 的区别;</li>
             <li>读懂那张<strong>最经典的 Transformer 全架构图</strong>:编码器、解码器,以及它们之间的 cross-attention;</li>
             <li>self / masked / cross <strong>三种注意力</strong>的区别,以及 GPT / BERT / T5 三种家族的由来;</li>
-            <li>用一句诗走完 GPT 前向:<strong>每一步向量长什么样、具体怎么算</strong>,以及它和 <a class="xref" href="chapter-23.html">MNIST</a> 在“关联方式”上的同异。</li>
+            <li>用一句诗走完 GPT 前向:<strong>整矩阵形状链(含多头 h=2)</strong> + 逐步手算,以及它和 <a class="xref" href="chapter-23.html">MNIST</a> 在“关联方式”上的同异。</li>
           </ul>
         </section>
 
@@ -766,11 +766,11 @@ encoding[pos][i + 1] = std::cos(angle);
           <p class="calc-table__cap">最关键的一点:从 embedding 往上,层和层之间传的几乎始终都是“整条序列当前的隐藏表示”。每一层都在<strong>改写同一份草稿</strong>,而不是把 token 变成别的奇怪对象。</p>
         </div>
 
-        <h3>带着数字走完前向:每一步向量怎么变、怎么算</h3>
+        <h3>带着数字走完前向:整矩阵 + 逐步手算</h3>
         <p>
-          上表讲的是<strong>形状</strong>。下面用<a class="xref" href="chapter-16.html#5-先把整条流水线走一遍喂它一句诗">第 16 章</a>那句诗
-          <strong>「床前明月」</strong>当输入,假设词表 5 个字(床/前/明/月/光),<code>d_model = 4</code>,只堆 <strong>1 层</strong> Decoder Block,
-          把“数”也走通一遍。真实 GPT 会堆几十上百层、维度也大得多,但<strong>每一步的运算类型完全一样</strong>。
+          上表讲的是<strong>阶段语义</strong>。下面先给<strong>整矩阵形状链</strong>(每一步的矩阵乘与形状),
+          再用<a class="xref" href="chapter-16.html#5-先把整条流水线走一遍喂它一句诗">第 16 章</a>那句诗的开头
+          <strong>「床前明」</strong>把具体数字也走通,看它怎么猜出下一个字 <strong>月</strong>。真实 GPT 会堆几十上百层、维度也大得多,但<strong>运算类型完全一样</strong>。
         </p>
 
         <h4>配置与目标</h4>
@@ -778,14 +778,313 @@ encoding[pos][i + 1] = std::cos(angle);
           <table class="calc-table calc-table--wrap">
             <thead><tr><th>符号</th><th>本例取值</th><th>含义</th></tr></thead>
             <tbody>
-              <tr><td>输入文本</td><td>床前明月</td><td>4 个 token,要猜下一个字 <strong>光</strong></td></tr>
-              <tr><td><code>seq_len</code></td><td>4</td><td>序列长度 <var>n</var></td></tr>
-              <tr><td><code>d_model</code></td><td>4</td><td>每个 token 的向量宽度 <var>d</var></td></tr>
-              <tr><td><code>vocab_size</code></td><td>5</td><td>词表大小</td></tr>
+              <tr><td>输入文本</td><td>床前明</td><td>3 个 token,要猜下一个字 <strong>月</strong></td></tr>
+              <tr><td><code>seq_len</code></td><td>3</td><td>序列长度 <var>n</var></td></tr>
+              <tr><td><code>d_model</code></td><td>2</td><td>每个 token 的向量宽度 <var>d</var></td></tr>
+              <tr><td><code>d_ff</code></td><td>4</td><td>FFN 中间层宽度 <var>f</var>(本例取 2<var>d</var>;真模型常 4<var>d</var>)</td></tr>
+              <tr><td><code>vocab_size</code></td><td>5</td><td>词表大小 <var>V</var>(床/前/明/月/山)</td></tr>
               <tr><td>Block 层数</td><td>1</td><td>只演示一层;真实模型是 N×</td></tr>
+              <tr><td>注意力头数</td><td>1(下文先单头) / <strong>2</strong>(多头见「多头矩阵版」)</td><td><code>d_h = d / h</code></td></tr>
             </tbody>
           </table>
+          <p class="calc-table__cap">特意让 <var>n</var>=3、<var>d</var>=2、<var>f</var>=4、<var>V</var>=5 <strong>四个数字互不相等</strong>,这样每一步矩阵形状都独一无二,一眼就能看出“谁在变”。</p>
         </div>
+
+        <h4>整矩阵流水线:从输入到输出的形状链</h4>
+        <p>
+          下面把<strong>同一句「床前明」</strong>从头到尾写成<strong>矩阵版</strong>。
+          约定:<strong>每一行是一个 token</strong>,列是向量各维;矩阵乘法和<a class="xref" href="chapter-01.html#42-矩阵--矩阵-把很多次点积一次算完">第 1 章</a>、
+          <a class="xref" href="chapter-17.html#三个矩阵长什么样">第 17 章</a>一致——行向量左乘权重表。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">符号一览(本例 n=3, d=2, f=4, V=5)</span>
+          <p>
+            <code>ids</code> · 长度 <var>n</var> 的整数 ·
+            <code>X</code>、<code>H</code>、<code>A</code> · <code>n×d</code> 隐藏矩阵 ·
+            <code>W_Q,W_K,W_V,W_O</code> · 各 <code>d×d</code> ·
+            <code>W1</code> · <code>d×f</code> · <code>W2</code> · <code>f×d</code> ·
+            <code>W_lm</code> · <code>V×d</code> ·
+            <code>S</code>、<code>M</code> · <code>n×n</code> 注意力分数 / 权重
+          </p>
+        </div>
+
+        <pre class="code-walk__code reveal" style="margin:0.8rem 0" aria-label="GPT 前向矩阵形状链"><code>ids [n]                                          [3]
+  →  EmbeddingTable[ids]           X₀  [n × d]     [3 × 2]
+  →  X₀ + PE                       X   [n × d]     [3 × 2]   ← 进 Block 的输入
+  →  Masked Self-Attention         A   [n × d]     [3 × 2]   (中间 S/M 是 [3 × 3])
+  →  LayerNorm(X + A)              H₁  [n × d]     [3 × 2]
+  →  FFN(每行独立,共用 W1/W2)      F   [n × d]     [3 × 2]   (中间升到 [3 × 4])
+  →  LayerNorm(H₁ + F)             H₂  [n × d]     [3 × 2]   ← 1 层时即 H_final
+  →  H₂ · W_lm + b_lm              L   [n × V]     [3 × 5]   ← 每个位置一份 logits
+  →  softmax(最后一行)             p   [V]         [5]       ← 生成时只取最后一个位置</code></pre>
+
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>步</th><th>公式(矩阵版)</th><th>输入形状</th><th>输出形状</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>① 查表</td>
+                <td><code>X₀ = Embed(ids)</code></td>
+                <td><code>[n]</code> = [3]</td>
+                <td><code>[n, d]</code> = [3, 2]</td>
+              </tr>
+              <tr>
+                <td>② 加位置</td>
+                <td><code>X = X₀ + PE</code> (逐元素加)</td>
+                <td><code>[3, 2]</code></td>
+                <td><code>[3, 2]</code></td>
+              </tr>
+              <tr>
+                <td>③ 投影 Q/K/V</td>
+                <td><code>Q = X·W_Q</code> · <code>K = X·W_K</code> · <code>V = X·W_V</code></td>
+                <td><code>[3, 2]·[2, 2]</code></td>
+                <td>各 <code>[3, 2]</code></td>
+              </tr>
+              <tr>
+                <td>④～⑦ 注意力</td>
+                <td>单头:<code>S=QKᵀ/√d</code>→mask→<code>M</code>→<code>M·V·W_O</code> · 多头:按列切 h 段,各算一遍再 Concat→<code>W_O</code></td>
+                <td><code>[3, 2]</code></td>
+                <td><code>[3, 2]</code> (中间 <code>S/M</code> 是 <code>[3, 3]</code>)</td>
+              </tr>
+              <tr>
+                <td>⑧ 残差+Norm</td>
+                <td><code>H₁ = LayerNorm(X + A)</code> (逐行)</td>
+                <td><code>[3, 2]</code></td>
+                <td><code>[3, 2]</code></td>
+              </tr>
+              <tr>
+                <td>⑨ FFN</td>
+                <td><code>Z = ReLU(H₁·W₁ + b₁)</code> · <code>F = Z·W₂ + b₂</code></td>
+                <td><code>[3, 2]·[2, 4]</code></td>
+                <td><code>[3, 2]</code> (中间 <code>Z</code> 是 <code>[3, 4]</code>)</td>
+              </tr>
+              <tr>
+                <td>⑩ 残差+Norm</td>
+                <td><code>H₂ = LayerNorm(H₁ + F)</code></td>
+                <td><code>[3, 2]</code></td>
+                <td><code>[3, 2]</code></td>
+              </tr>
+              <tr>
+                <td>⑪ LM Head</td>
+                <td><code>L = H₂·W_lm + b_lm</code></td>
+                <td><code>[3, 2]·[2, 5]</code></td>
+                <td><code>[3, 5]</code></td>
+              </tr>
+              <tr>
+                <td>⑫ 生成</td>
+                <td><code>p = softmax(L[n-1])</code></td>
+                <td><code>[5]</code></td>
+                <td><code>[5]</code> 概率</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">从 ② 到 ⑩,主矩阵形状始终是 <code>n×d = 3×2</code>。④～⑦ 单头时中间出现一张 <code>3×3</code>(<code>S/M</code>),⑨ FFN 中间升到 <code>3×4</code>,⑪ 输出 <code>3×5</code>;多头时 ④～⑦ 出现 <strong>h 张</strong> <code>3×3</code>,拼回后仍 <code>3×2</code>。详见「多头矩阵版」。</p>
+        </div>
+
+        <h4>各步展开:矩阵怎么乘</h4>
+
+        <p><strong>①② Embedding + 位置</strong> — 先把 3 个 id 查成 3 行向量,再逐行加上位置指纹:</p>
+        <div class="mathblock reveal">
+          <code>X₀</code> = <code>Embed([0,1,2])</code> → 3 行 × 2 列
+          <span class="label">第 0 行=床 · 第 1 行=前 · 第 2 行=明</span>
+        </div>
+        <div class="mathblock reveal">
+          <code>X = X₀ + PE</code> · <code>PE</code> 也是 <code>3×2</code>,按行相加
+          <span class="label">形状不变;只是每行多了一层“第几位”的信息</span>
+        </div>
+        <p>示意(数字仅作形状演示,不是真训练权重):</p>
+        <pre class="code-walk__code reveal" style="margin:0.6rem 0"><code>       维0    维1
+床  [  0.2,  -0.5 ]   ← X₀ 第 0 行
+前  [  0.9,   0.1 ]
+明  [ -0.3,   0.8 ]   ← +PE 后第 2 行变成 [0.61, 0.38]
+
+形状: X₀ 是 3×2 → +PE(3×2) → X 仍是 3×2</code></pre>
+
+        <p><strong>③～⑦ Masked Self-Attention(单头示范, h=1)</strong> — 整表一次算完,不必逐 token 循环。真模型几乎总是 <strong>h &gt; 1</strong>,见下节「多头矩阵版」:</p>
+        <div class="mathblock reveal">
+          <code>Q = X·W_Q</code> · <code>K = X·W_K</code> · <code>V = X·W_V</code>
+          <span class="label">三个都是 <code>[3×2]·[2×2] = [3×2]</code> — 每行仍是 2 维,但已是 Q/K/V 空间</span>
+        </div>
+        <div class="mathblock reveal">
+          <code>S = Q·Kᵀ / √d</code>
+          <span class="label"><code>[3×2]·[2×3] = [3×3]</code> · S[i,j]=第 i 个词对第 j 个词的“相关分数” · <strong>形状从 3×2 变成了 3×3!</strong></span>
+        </div>
+        <p>因果 mask 后,<code>S</code> 的上三角(未来列)作废;对<strong>每一行</strong>做 softmax 得权重矩阵 <code>M</code>(<code>3×3</code> 下三角,每行和为 1):</p>
+        <pre class="code-walk__code reveal" style="margin:0.6rem 0"><code>        床    前    明          ← 被看的列 j
+床  [ 1.00,  0.0,  0.0 ]      ← 第 0 行只能看自己
+前  [ 0.32, 0.68,  0.0 ]      ← 第 1 行看床/前
+明  [ 0.21, 0.34, 0.45 ]      ← 第 2 行可看床/前/明三列
+
+形状: Q·Kᵀ = [3×2]·[2×3] = 3×3(注意力矩阵是「词×词」,和 d 无关)</code></pre>
+        <div class="mathblock reveal">
+          <code>Ã = M·V</code> · <code>A = Ã·W_O</code>
+          <span class="label"><code>[3×3]·[3×2]=[3×2]</code> 再右乘 <code>W_O</code>(<code>2×2</code>) · 输出 <code>A</code> 又回到 <code>3×2</code></span>
+        </div>
+        <p>
+          直觉:<code>M</code> 的<strong>第 i 行</strong>是“第 i 个词该听谁的”;乘 <code>V</code> 就是把各词的 Value 行按这排权重混成<strong>新第 i 行</strong>。
+          注意这里形状先从 <code>3×2</code> 撑成 <code>3×3</code>(打分),又被 <code>M·V</code> 收回 <code>3×2</code>——这就是<a class="xref" href="chapter-17.html#4-跟着算一遍-一个能手算的小例子">第 17 章手算</a>的矩阵批量版。
+        </p>
+
+        <h4>多头矩阵版:把 ③～⑦ 拆成 h 条并行路(h=2)</h4>
+        <p>
+          上一段为了形状最简,设 <code>h=1</code>(单头)。真实 GPT 会用多个头——
+          <a class="xref" href="chapter-17.html#8-多头注意力-请几位专家各看一遍">第 17 章第 8 节</a>讲过:
+          把每个词的 <code>d</code> 维向量<strong>切成 h 段</strong>,每段各算一套注意力,最后再拼回去。
+          仍用本例 <code>d=2, n=3</code>,取 <strong><code>h=2</code></strong>,则每头宽度
+          <code>d_h = d / h = 1</code>(每头只分到 1 维,虽然极端,但正好看清“切分—各算—拼回”的形状流转)。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">和单头比,什么变、什么不变</span>
+          <p>
+            <strong>不变</strong>:投影仍是一次 <code>Q=X·W_Q</code> 等,三个表仍是 <code>d×d</code>;Block 进出仍是 <code>[n×d]=[3×2]</code>;参数仍是 <code>W_Q,W_K,W_V,W_O</code> 四张表。<br />
+            <strong>变</strong>:打分 / softmax / 加权求和要在 <strong>h 个子空间里各做一遍</strong>,缩放除数从 <code>√d</code> 变成 <code>√d_h</code>;中间短暂出现 <strong>h 张</strong> <code>n×n</code> 的权重表 <code>M^(1), M^(2)</code>。
+          </p>
+        </div>
+
+        <pre class="code-walk__code reveal" style="margin:0.8rem 0" aria-label="多头注意力矩阵形状链"><code>Q, K, V  =  X·W_Q , X·W_K , X·W_V          各 [n × d] = [3 × 2]
+
+头 1 取各行的前 d_h=1 列 →  Q₁,K₁,V₁  各 [n × d_h] = [3 × 1]
+  S₁ = Q₁·K₁ᵀ / √d_h                              [3 × 3]
+  M₁ = softmax(S₁, 按行) + causal mask
+  O₁ = M₁·V₁                                      [3 × 1]
+
+头 2 取各行的后 d_h=1 列 →  Q₂,K₂,V₂  各 [3 × 1]
+  S₂ = Q₂·K₂ᵀ / √d_h                              [3 × 3]
+  M₂ = softmax(S₂, 按行) + causal mask
+  O₂ = M₂·V₂                                      [3 × 1]
+
+拼回  O_cat = [ O₁ | O₂ ]   按列拼接              [3 × 2]
+输出  A = O_cat·W_O                                 [3 × 2]</code></pre>
+
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>步(多头)</th><th>公式</th><th>形状</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>③ 投影</td>
+                <td><code>Q=X·W_Q</code> · <code>K=X·W_K</code> · <code>V=X·W_V</code></td>
+                <td>各 <code>[3, 2]</code></td>
+                <td>与单头完全相同,先整表投影</td>
+              </tr>
+              <tr>
+                <td>③′ 按头切片</td>
+                <td><code>Q_t = Q[:, t·d_h : (t+1)·d_h]</code> (K/V 同理)</td>
+                <td>各 <code>[3, 1]</code></td>
+                <td>头 1 用列 0 · 头 2 用列 1</td>
+              </tr>
+              <tr>
+                <td>④ 打分</td>
+                <td><code>S_t = Q_t·K_tᵀ / √d_h</code></td>
+                <td><code>[3, 3]</code></td>
+                <td>每个头一张「词对词」分数表(<code>[3×1]·[1×3]</code>)</td>
+              </tr>
+              <tr>
+                <td>⑤ mask</td>
+                <td>上三角置极小,与单头相同</td>
+                <td><code>[3, 3]</code></td>
+                <td>每个头各自 mask,规则一样</td>
+              </tr>
+              <tr>
+                <td>⑥ 权重</td>
+                <td><code>M_t = softmax(S_t, 按行)</code></td>
+                <td><code>[3, 3]</code></td>
+                <td>两头可学到<strong>不同的</strong>关注模式</td>
+              </tr>
+              <tr>
+                <td>⑦ 混 Value</td>
+                <td><code>O_t = M_t·V_t</code></td>
+                <td><code>[3, 1]</code></td>
+                <td>只在当前头的子空间里加权(<code>[3×3]·[3×1]</code>)</td>
+              </tr>
+              <tr>
+                <td>⑦′ 拼接</td>
+                <td><code>O_cat = Concat(O₁,…,O_h)</code></td>
+                <td><code>[3, 2]</code></td>
+                <td>把 h 段 <code>d_h</code> 维拼回整行 <code>d</code> 维</td>
+              </tr>
+              <tr>
+                <td>⑦″ 输出投影</td>
+                <td><code>A = O_cat·W_O</code></td>
+                <td><code>[3, 2]</code></td>
+                <td><code>W_O</code> 仍是 <code>d×d = 2×2</code>,融合各头结论</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">拼完 + 乘 <code>W_O</code> 之后,Attention 输出仍是 <code>[n×d]=[3×2]</code>,后面 ⑧ FFN 不用改形状。</p>
+        </div>
+
+        <p><strong>切片长什么样?</strong> — 以「明」那一行(第 2 行)为例,投影后 <code>Q[2]</code> 是 2 个数,切成两段(每段 1 个数):</p>
+        <pre class="code-walk__code reveal" style="margin:0.6rem 0"><code>Q[2] = [ q0 | q1 ]     ← 整行 2 维
+          头1  头2
+Q₁[2] = [ q0 ]          ← 只在维 0 上打分、做注意力
+Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code></pre>
+        <p>
+          代码里对应 <code>head_start = head * head_dim_</code>,内层循环只在
+          <code>[head_start … head_start+head_dim_)</code> 那段维上做内积
+          (<a class="xref" href="chapter-17.html#9-逐行读懂-self-attention-的前向">第 17 章第 9 节</a>源码)。
+        </p>
+
+        <p><strong>两个头,两张不同的 M</strong> — 单头只有一张 <code>3×3</code> 权重表;多头各有自己的表(数字仅示意):</p>
+        <pre class="code-walk__code reveal" style="margin:0.6rem 0"><code>头 1  M₁ (可能更盯相邻词)          头 2  M₂ (可能更盯语义相关)
+     床   前   明                       床   前   明
+明 [ .15 .30 .55 ]                  明 [ .40 .12 .48 ]
+     ↑ 头1 对「明」行的分配                 ↑ 头2 对同一行,另一套分配</code></pre>
+        <p>同一行「明」,两个头可以分给「前」「明」不同的比重;拼回 <code>O_cat[2]</code> 后,再经 <code>W_O</code> 合成最终第 2 行输出。</p>
+
+        <div class="mathblock reveal">
+          多头一句话:<code>Split(Q,K,V) → h 次 (mask+softmax+混V) → Concat → ·W_O</code>
+          <span class="label">进去 <code>[n×d]=[3×2]</code> · 出来还是 <code>[3×2]</code> · 参数量仍约 <code>4d²</code>(四张 <code>d×d</code> 表)</span>
+        </div>
+        <p>
+          本仓库默认 demo 常设 <code>head_num=2</code>、<code>model_dim=64</code> → <code>head_dim=32</code>。
+          上面 <code>d=2, h=2</code> 只为手算形状(每头 <code>d_h=1</code>);换成 <code>d=64, h=8</code> 时,每头 <code>d_h=8</code>,流程完全相同,只是数字更大。
+        </p>
+
+        <p><strong>⑧ Add &amp; Norm</strong> — 矩阵逐元素加,再<strong>每一行单独</strong>做 LayerNorm(不是整表一个大矩阵乘):</p>
+        <div class="mathblock reveal">
+          <code>H₁ = LayerNorm(X + A)</code>
+          <span class="label"><code>[3×2]+[3×2]=[3×2]</code> · 对每行:减均值、除标准差、再乘 γ 加 β</span>
+        </div>
+
+        <p><strong>⑨ FFN</strong> — 整句写成矩阵,但<strong>token 之间仍不通信</strong>(每行只和自己的列做乘加):</p>
+        <div class="mathblock reveal">
+          <code>Z = ReLU(H₁·W₁ + b₁)</code> · <code>F = Z·W₂ + b₂</code>
+          <span class="label"><code>[3×2]·[2×4]=[3×4]</code> → ReLU → <code>[3×4]·[4×2]=[3×2]</code> · <strong>先撑到 3×4 再收回 3×2</strong></span>
+        </div>
+        <p>形状链:</p>
+        <pre class="code-walk__code reveal" style="margin:0.6rem 0"><code>H₁  [n × d ]  =  [3 × 2]
+         · W₁ [d × f]  =  [2 × 4]  →  Z  [3 × 4]   ← 每行从 2 维升到 4 维
+    ReLU(逐元素,形状不变)          [3 × 4]
+         · W₂ [f × d]  =  [4 × 2]  →  F  [3 × 2]   ← 再压回 2 维</code></pre>
+        <p>
+          和<a class="xref" href="chapter-18.html#3-前馈网络-ffn-逐个词再加工一次">第 3 节 FFN</a>一致:同一套 <code>W₁/W₂</code> 对 3 行各算一遍,等价于代码里 <code>for (token_idx…)</code> 循环。
+        </p>
+
+        <p><strong>⑩ Block 出口</strong>:</p>
+        <div class="mathblock reveal">
+          <code>H₂ = LayerNorm(H₁ + F)</code> → <code>H_final = H₂</code> (本例只有 1 层)
+          <span class="label">仍是 <code>3×2</code> · 第 2 行 <code>H_final[2]</code> 是“看完床前明”的表示</span>
+        </div>
+
+        <p><strong>⑪⑫ LM Head + Softmax</strong> — 把每个位置的 2 维向量投影到 5 个字的分数:</p>
+        <div class="mathblock reveal">
+          <code>L = H₂·W_lm + b_lm</code> · <code>L</code> 是 <code>[3×5]</code>
+          <span class="label"><code>[3×2]·[2×5]=[3×5]</code> · 训练时 3 行都算 loss · 生成时只取最后一行 <code>L[2]</code> → softmax → 选「月」</span>
+        </div>
+        <pre class="code-walk__code reveal" style="margin:0.6rem 0"><code>H₂[2]  (1×2)  ·  W_lm (2×5)  +  b_lm  →  logits (1×5)
+                                              →  softmax  →  p(月) 最高</code></pre>
+
+        <p>
+          若堆 <strong>N 层</strong> Block,把上面 ③～⑩ 原样重复 N 次:每层输入输出都是 <code>[n×d]=[3×2]</code>,
+          但每层有<strong>自己的一套</strong> <code>W_Q/W_K/W_V/W_O/W₁/W₂</code>(<a class="xref" href="chapter-17.html#10-这四个矩阵到底是怎么训练出来的">第 17 章第 10 节</a>)。
+          下面「逐步手算」把<strong>同一流水线</strong>拆成 9 步,并补上具体数字。<a class="xref" href="chapter-19.html#44-每一步矩阵有多大-n2-走一遍">第 19 章 §4.4</a> 用另一组维度(<code>n=2, d=4</code> 的「床前」)把同一条流水线再走一遍——两处维度特意不同,对照着看最能分清“哪个数是 n(几个词)、哪个是 d(每个词多宽)”。
+        </p>
+
+        <h4>逐步手算(同一流水线的数字版)</h4>
 
         <ol class="step-track reveal" aria-label="GPT 前向逐步手算">
           <li class="step-track__item step-track__item--sample">
@@ -793,7 +1092,7 @@ encoding[pos][i + 1] = std::cos(angle);
             <div class="step-track__body">
               <span class="step-track__phase">Tokenizer</span>
               <span class="step-track__title">文本 → 一串 id</span>
-              <span class="step-track__detail">床前明月 → <code>[0, 1, 2, 3]</code> · 形状 <code>[4]</code> 的整数,还没有向量</span>
+              <span class="step-track__detail">床前明 → <code>[0, 1, 2]</code> · 形状 <code>[3]</code> 的整数,还没有向量</span>
             </div>
           </li>
           <li class="step-track__item step-track__item--forward">
@@ -801,8 +1100,8 @@ encoding[pos][i + 1] = std::cos(angle);
             <div class="step-track__body">
               <span class="step-track__phase">Embedding 查表</span>
               <span class="step-track__title">每个 id → 一条 <code>d_model</code> 维向量</span>
-              <span class="step-track__detail step-track__formula">E = EmbeddingTable[[0,1,2,3]] → 矩阵 <code>X₀ ∈ R^(4×4)</code></span>
-              <span class="step-track__detail">示意: 床→[0.2,−0.5,0.1,0.0] · 前→[0.9,0.1,−0.2,0.3] · 明→[−0.3,0.8,0.4,0.1] · 月→[0.4,0.4,0.1,0.0]</span>
+              <span class="step-track__detail step-track__formula">E = EmbeddingTable[[0,1,2]] → 矩阵 <code>X₀ ∈ R^(3×2)</code></span>
+              <span class="step-track__detail">示意: 床→[0.2,−0.5] · 前→[0.9,0.1] · 明→[−0.3,0.8] · 形状 <code>3×2</code></span>
             </div>
           </li>
           <li class="step-track__item step-track__item--forward">
@@ -810,8 +1109,8 @@ encoding[pos][i + 1] = std::cos(angle);
             <div class="step-track__body">
               <span class="step-track__phase">+ 位置编码</span>
               <span class="step-track__title">逐行相加,标上“第几位”</span>
-              <span class="step-track__detail step-track__formula">X = X₀ + PE · 仍 <code>4×4</code>(<a class="xref" href="chapter-18.html#5-位置编码-告诉模型谁在前谁在后">第 5 节</a>)</span>
-              <span class="step-track__detail">例: 月(位置 3) 的行 = [0.4,0.4,0.1,0.0] + [0.14,−0.99,0.03,1.00] = <strong>[0.54,−0.59,0.13,1.00]</strong></span>
+              <span class="step-track__detail step-track__formula">X = X₀ + PE · 仍 <code>3×2</code>(<a class="xref" href="chapter-18.html#5-位置编码-告诉模型谁在前谁在后">第 5 节</a>)</span>
+              <span class="step-track__detail">例: 明(位置 2) 的行 = [−0.3,0.8] + [0.91,−0.42] = <strong>[0.61,0.38]</strong> · 形状不变 <code>3×2</code></span>
             </div>
           </li>
           <li class="step-track__item step-track__item--forward">
@@ -819,9 +1118,9 @@ encoding[pos][i + 1] = std::cos(angle);
             <div class="step-track__body">
               <span class="step-track__phase">Masked Self-Attention</span>
               <span class="step-track__title">整表投影 Q/K/V,再按位置加权融合</span>
-              <span class="step-track__detail step-track__formula">Q = X·W<sub>Q</sub> · K = X·W<sub>K</sub> · V = X·W<sub>V</sub> · 各 <code>4×4</code></span>
-              <span class="step-track__detail">对位置 <var>i</var>: 分数<sub>ij</sub> = Q<sub>i</sub>·K<sub>j</sub>/√d (只看 j≤i) → softmax → 输出<sub>i</sub> = Σ<sub>j≤i</sub> 权重<sub>ij</sub>·V<sub>j</sub></span>
-              <span class="step-track__detail">“月”(i=3) 只能看 床/前/明/月;算完得新行 <code>A[3] = [0.31, 0.22, 0.55, 0.88]</code> · 全序列输出 <code>A ∈ R^(4×4)</code></span>
+              <span class="step-track__detail step-track__formula">Q = X·W<sub>Q</sub> · K = X·W<sub>K</sub> · V = X·W<sub>V</sub> · 各 <code>[3×2]·[2×2]=3×2</code></span>
+              <span class="step-track__detail">打分 <code>S = Q·Kᵀ</code> 形状 <code>[3×2]·[2×3]=3×3</code>;对位置 <var>i</var>: 分数<sub>ij</sub> = Q<sub>i</sub>·K<sub>j</sub>/√d (只看 j≤i) → softmax → 输出<sub>i</sub> = Σ<sub>j≤i</sub> 权重<sub>ij</sub>·V<sub>j</sub></span>
+              <span class="step-track__detail">“明”(i=2) 只能看 床/前/明;算完得新行 <code>A[2] = [0.31, 0.55]</code> · 全序列输出 <code>A ∈ R^(3×2)</code>(中间 <code>S/M</code> 是 <code>3×3</code>)</span>
             </div>
           </li>
           <li class="step-track__item step-track__item--forward">
@@ -829,8 +1128,8 @@ encoding[pos][i + 1] = std::cos(angle);
             <div class="step-track__body">
               <span class="step-track__phase">Add &amp; Norm</span>
               <span class="step-track__title">残差相加,再 LayerNorm</span>
-              <span class="step-track__detail step-track__formula">H₁ = LayerNorm(X + A) · 仍 <code>4×4</code></span>
-              <span class="step-track__detail">“月”行: 先 [0.54,−0.59,0.13,1.00]+[0.31,0.22,0.55,0.88],再对该行减均值除标准差 → <code>H₁[3] = [−0.12, 0.41, 0.28, 0.95]</code></span>
+              <span class="step-track__detail step-track__formula">H₁ = LayerNorm(X + A) · 仍 <code>3×2</code></span>
+              <span class="step-track__detail">“明”行: 先 [0.61,0.38]+[0.31,0.55]=[0.92,0.93],再对该行减均值除标准差 → <code>H₁[2] ≈ [−1.0, 1.0]</code>(2 维标准化后必是一正一负)</span>
             </div>
           </li>
           <li class="step-track__item step-track__item--forward">
@@ -838,8 +1137,8 @@ encoding[pos][i + 1] = std::cos(angle);
             <div class="step-track__body">
               <span class="step-track__phase">FFN(逐 token)</span>
               <span class="step-track__title">每个位置独立跑同一个小 MLP</span>
-              <span class="step-track__detail step-track__formula">F[t] = W₂·ReLU(W₁·H₁[t] + b₁) + b₂ · 输入输出都是 <code>d_model</code> 维</span>
-              <span class="step-track__detail">“月”行: <code>H₁[3]</code> 升维→ReLU→降维 → <code>F[3] = [0.08, −0.15, 0.62, 0.11]</code> · token 之间<strong>不通信</strong></span>
+              <span class="step-track__detail step-track__formula">F[t] = W₂·ReLU(W₁·H₁[t] + b₁) + b₂ · <code>2→4→2</code> 维(中间升到 <code>d_ff=4</code>)</span>
+              <span class="step-track__detail">“明”行: <code>H₁[2]</code>(2 维)→ 升到 4 维 → ReLU → 降回 2 维 → <code>F[2] = [0.08, 0.62]</code> · token 之间<strong>不通信</strong></span>
             </div>
           </li>
           <li class="step-track__item step-track__item--forward">
@@ -847,8 +1146,8 @@ encoding[pos][i + 1] = std::cos(angle);
             <div class="step-track__body">
               <span class="step-track__phase">Add &amp; Norm</span>
               <span class="step-track__title">Block 出口</span>
-              <span class="step-track__detail step-track__formula">H₂ = LayerNorm(H₁ + F) → <code>H_final ∈ R^(4×4)</code></span>
-              <span class="step-track__detail">最后一行 <code>h = H_final[3] = [0.05, 0.18, 0.71, 0.92]</code> = “看完床前明月后,这个位置对下一字的判断”</span>
+              <span class="step-track__detail step-track__formula">H₂ = LayerNorm(H₁ + F) → <code>H_final ∈ R^(3×2)</code></span>
+              <span class="step-track__detail">最后一行 <code>h = H_final[2] = [0.18, 0.92]</code> = “看完床前明后,这个位置对下一字的判断”</span>
             </div>
           </li>
           <li class="step-track__item step-track__item--forward">
@@ -856,8 +1155,8 @@ encoding[pos][i + 1] = std::cos(angle);
             <div class="step-track__body">
               <span class="step-track__phase">LM Head</span>
               <span class="step-track__title">最后一行 → 词表上每个字的分数</span>
-              <span class="step-track__detail step-track__formula">logit<sub>w</sub> = b<sub>w</sub> + h · W<sub>w</sub> · 得 <code>logits ∈ R^5</code></span>
-              <span class="step-track__detail">示意 logits: 床−0.3 · 前−0.1 · 明0.2 · 月0.4 · <strong>光 1.1</strong>(最高)</span>
+              <span class="step-track__detail step-track__formula">logits = h · W_lmᵀ + b · <code>[1×2]·[2×5]=1×5</code> → <code>logits ∈ R^5</code></span>
+              <span class="step-track__detail">示意 logits: 床−0.3 · 前−0.1 · 明0.2 · <strong>月 1.1</strong>(最高) · 山0.0</span>
             </div>
           </li>
           <li class="step-track__item step-track__item--forward">
@@ -865,31 +1164,31 @@ encoding[pos][i + 1] = std::cos(angle);
             <div class="step-track__body">
               <span class="step-track__phase">Softmax</span>
               <span class="step-track__title">分数 → 概率</span>
-              <span class="step-track__detail step-track__formula">p = softmax(logits) · 生成时取 <code>argmax</code> 或采样 → 下一 token <strong>光</strong></span>
-              <span class="step-track__detail">示意概率: 光 ≈ 0.42(最高) · 月 0.21 · 明 0.18 · …</span>
+              <span class="step-track__detail step-track__formula">p = softmax(logits) · 生成时取 <code>argmax</code> 或采样 → 下一 token <strong>月</strong></span>
+              <span class="step-track__detail">示意概率: 月 ≈ 0.42(最高) · 明 0.21 · 前 0.18 · …</span>
             </div>
           </li>
         </ol>
 
         <p>
-          把注意力单独放大:第 4 步里,“月”这一行的新表示,本质上就是<a class="xref" href="chapter-17.html#4-跟着算一遍-一个能手算的小例子">第 17 章手算</a>那套
-          <strong>打分 → softmax → 对 Value 加权求和</strong>,只不过这里是对<strong>床/前/明/月 四个位置</strong>各算一组权重,再融合四个 Value 行。
-          训练时第 8 步会对<strong>四个位置都算 logits</strong>(每个位置都猜“自己的下一个字”),生成时只取<strong>最后一行</strong>
+          把注意力单独放大:第 4 步里,“明”这一行的新表示,本质上就是<a class="xref" href="chapter-17.html#4-跟着算一遍-一个能手算的小例子">第 17 章手算</a>那套
+          <strong>打分 → softmax → 对 Value 加权求和</strong>,只不过这里是对<strong>床/前/明 三个位置</strong>各算一组权重,再融合三个 Value 行。
+          训练时第 8 步会对<strong>三个位置都算 logits</strong>(每个位置都猜“自己的下一个字”),生成时只取<strong>最后一行</strong>
           (<a class="xref" href="chapter-19.html#43-推理时为什么只取最后一行">第 19 章 4.3</a>)。
         </p>
         <div class="table-wrap reveal">
           <table class="calc-table calc-table--wrap">
-            <thead><tr><th>步骤</th><th>输入形状</th><th>核心运算(一句话)</th><th>输出形状</th></tr></thead>
+            <thead><tr><th>步骤</th><th>输入形状</th><th>核心运算(矩阵一句话)</th><th>输出形状</th></tr></thead>
             <tbody>
-              <tr><td>① id</td><td>4 个字</td><td>查词表编号</td><td><code>[4]</code></td></tr>
-              <tr><td>②③ 嵌入+位置</td><td><code>[4]</code></td><td>查表 + 加位置指纹</td><td><code>[4, 4]</code></td></tr>
-              <tr><td>④ 注意力</td><td><code>[4, 4]</code></td><td>Q·K 现算权重,再对 V 加权求和(跨词)</td><td><code>[4, 4]</code></td></tr>
-              <tr><td>⑤⑦ Add&amp;Norm</td><td><code>[4, 4]</code></td><td>残差 + 每行 LayerNorm</td><td><code>[4, 4]</code></td></tr>
-              <tr><td>⑥ FFN</td><td><code>[4, 4]</code></td><td>每行独立 <code>W₁→ReLU→W₂</code>(不跨词)</td><td><code>[4, 4]</code></td></tr>
-              <tr><td>⑧⑨ LM Head</td><td><code>[4, 4]</code></td><td>取最后一行点积词表模板 + softmax</td><td><code>[5]</code> 概率</td></tr>
+              <tr><td>① id</td><td>3 个字</td><td>查词表编号</td><td><code>[3]</code></td></tr>
+              <tr><td>②③ 嵌入+位置</td><td><code>[3]</code></td><td><code>X₀=Embed</code> · <code>X=X₀+PE</code></td><td><code>[3, 2]</code></td></tr>
+              <tr><td>④ 注意力</td><td><code>[3, 2]</code></td><td>单头:<code>Q,K,V=X·W</code> · <code>S→M→M·V·W_O</code> · 多头:按列切 h 段各算再 Concat</td><td><code>[3, 2]</code>(中间 <code>S/M</code> 是 <code>[3, 3]</code>)</td></tr>
+              <tr><td>⑤⑦ Add&amp;Norm</td><td><code>[3, 2]</code></td><td><code>LayerNorm(残差相加)</code> 逐行</td><td><code>[3, 2]</code></td></tr>
+              <tr><td>⑥ FFN</td><td><code>[3, 2]</code></td><td><code>ReLU(H₁·W₁+b₁)·W₂+b₂</code> 每行独立</td><td><code>[3, 2]</code>(中间 <code>[3, 4]</code>)</td></tr>
+              <tr><td>⑧⑨ LM Head</td><td><code>[3, 2]</code></td><td><code>H₂·W_lm+b_lm</code> · 取最后一行 softmax</td><td><code>[3, 5]</code> → 末行 <code>[5]</code> 概率</td></tr>
             </tbody>
           </table>
-          <p class="calc-table__cap">从 ② 到 ⑦,形状始终是 <code>seq_len × d_model</code>;变的是<strong>每个位置向量里的数</strong>——草稿被一层层改写。</p>
+          <p class="calc-table__cap">与上文「整矩阵流水线」表一致:从 ② 到 ⑩ 主形状始终是 <code>seq_len × d_model = 3×2</code>;变的是<strong>矩阵里每个位置的数值</strong>,以及中间几步短暂撑出的 <code>3×3</code>(注意力)、<code>3×4</code>(FFN)、<code>3×5</code>(LM Head)。</p>
         </div>
 
         <h3>和 MNIST 比一比:都在做加权求和,关联方式不同</h3>

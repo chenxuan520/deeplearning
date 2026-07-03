@@ -27,7 +27,8 @@
             <li>反向传播的三步:从输出误差出发 → 逐层往回传 → 算出每个权重<strong>和偏置</strong>的梯度;</li>
             <li>怎么<strong>按真实计算顺序</strong>,把配套速查图里的公式(含 <var>w</var> 和 <var>b</var>)一条条现场推出来(而不是死记);</li>
             <li>为什么前向时要存下每层的 <var>z</var>(<a class="xref" href="chapter-03.html#5-逐行读懂前向传播">第 3 章那个伏笔</a>);</li>
-            <li>逐行读懂真实的反向传播实现。</li>
+            <li>逐行读懂真实的反向传播实现;</li>
+            <li><strong>矩阵怎么求导</strong>:为什么 <code>∂L/∂W = Xᵀ·G</code>,以及它凭什么等于“一堆 MNIST 式标量求导打包成一次矩阵乘”——这是大模型梯度不爆炸的关键。</li>
           </ul>
         </section>
 
@@ -144,26 +145,15 @@
           <span class="label">权重梯度 = 本神经元的 δ × 上一层对应的输入;偏置梯度就是 δ 本身</span>
         </div>
         <div class="callout callout--note reveal">
-          <span class="callout__title">框架到手:先看它动起来,再逐字推一遍</span>
+          <span class="callout__title">框架到手:先带下标推一遍,再看动画回放</span>
           <p>
             这三步就是反向传播的<strong>全部骨架</strong>。但光看通用公式容易“懂了又没懂”。
-            所以下面<strong>先用动画</strong>把这三步“看”一遍(误差怎么从末层反着流回来),再拿一张真实的速查图、带具体下标,
-            把每个 <var>δ</var>、每根 <var>w</var>、每个 <var>b</var> 的梯度<strong>按真实计算顺序现场推一遍</strong>——你会看到,推来推去都没跳出这三步。
+            所以下面<strong>先拿一张真实的速查图、带具体下标</strong>,把每个 <var>δ</var>、每根 <var>w</var>、每个 <var>b</var> 的梯度<strong>按真实计算顺序现场推一遍</strong>;
+            推完再<strong>用动画把整个流动回放一遍</strong>(误差怎么从末层反着流回来)——你会看到,推来推去都没跳出这三步。
           </p>
         </div>
 
-        <h2>3. 边看动画边走一遍</h2>
-        <p>
-          三步框架到手,先别急着抠公式——<strong>先看它动起来</strong>。还是那个动画(和<a class="xref" href="chapter-03.html#3-边看动画边理解">第 3 章前向</a>同一个),这次请点 <strong>“切到反向传播”</strong>,再一步步点 <strong>“下一步”</strong>。
-          注意暖色信号是怎么从输出层<strong>反着</strong>流回输入层的——它传的不是数据,而是“误差/责任”。
-          你还可以 hover 公式里的彩色项,看它对应网络里的哪个节点或哪条边。
-        </p>
-        <div class="figure reveal">
-          <div data-lab="propagation"></div>
-          <p class="figure__cap">前向(蓝绿)把数据往前算;反向(暖色)把误差往回传。两趟合起来,就是一次完整的训练步。</p>
-        </div>
-
-        <h2>4. 跟着速查图,按真实计算顺序推一遍</h2>
+        <h2>3. 跟着速查图,按真实计算顺序推一遍</h2>
         <p>
           链式法则(第 1 节)和三步框架(第 2 节)都到手了,现在拿它们去啃一张<strong>真实的速查图</strong>:把抽象公式落到<strong>具体下标</strong>上。
           这张图乍看是一堵“公式墙”,分成 <code>struct / base / neuron / formula / example</code> 五块。
@@ -324,6 +314,17 @@
           </p>
         </div>
 
+        <h2>4. 边看动画边回放一遍</h2>
+        <p>
+          公式一条条推完了,难免还是有点“只见树木”。<strong>再回过头看它整体动起来</strong>:还是那个动画(和<a class="xref" href="chapter-03.html#3-边看动画边理解">第 3 章前向</a>同一个),这次请点 <strong>“切到反向传播”</strong>,再一步步点 <strong>“下一步”</strong>。
+          刚才第 3 节逐个下标推的 <var>δ</var>,在这里就是那束<strong>从输出层反着流回输入层的暖色信号</strong>——它传的不是数据,而是“误差/责任”。
+          你还可以 hover 公式里的彩色项,看它对应网络里的哪个节点或哪条边,把“推导”和“流动”对上号。
+        </p>
+        <div class="figure reveal">
+          <div data-lab="propagation"></div>
+          <p class="figure__cap">前向(蓝绿)把数据往前算;反向(暖色)把误差往回传。两趟合起来,就是一次完整的训练步。</p>
+        </div>
+
         <h2>5. 逐行读懂反向传播</h2>
         <p>真实代码就是上面三步的忠实翻译。<strong>第一步:末层的 δ。</strong></p>
         <figure class="code-walk reveal">
@@ -378,7 +379,7 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
   }
 }</code></pre>
           <ol class="code-walk__notes">
-            <li>偏置的梯度,就是这个神经元的 <var>δ</var> 本身(对应公式 ∂<var>L</var>/∂<var>b</var> = <var>δ</var>)——和第 4 节、第 3~4 步推的完全一致,代码里就一句 <code>grad_bias_[l][o] += d</code>。</li>
+            <li>偏置的梯度,就是这个神经元的 <var>δ</var> 本身(对应公式 ∂<var>L</var>/∂<var>b</var> = <var>δ</var>)——和第 3 节、第 3~4 步推的完全一致,代码里就一句 <code>grad_bias_[l][o] += d</code>。</li>
             <li>权重的梯度,是 <var>δ</var> 乘以“上一层对应的输入”(对应 ∂<var>L</var>/∂<var>w</var> = <var>δ</var>·<var>a</var>)。注意是 <code>+=</code>:一批里每个样本都累加进来,最后在 <code>ApplyGradient</code> 里除以 <code>B</code> 取平均(<a class="xref" href="chapter-05.html">第 5 章</a>)。</li>
           </ol>
         </figure>
@@ -402,6 +403,112 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
           </p>
         </div>
 
+        <h2>6. 从一个数到一整块:矩阵是怎么求导的</h2>
+        <p>
+          到这里你可能有个很实在的困惑:上面推的 <var>δ</var>·<var>a</var> 全是<strong>一个数对一个数</strong>求导(和 MNIST 里那个 <code>double</code> 一样)。
+          可到了<a class="xref" href="chapter-18.html">第 18 章</a>的 Transformer,一层就是 <code>Y = X·W</code>——<strong>X 是矩阵、W 是矩阵、输出还是矩阵</strong>。
+          那“矩阵对矩阵求导”是个什么怪物?导数难道是个四维的东西?这一节把它讲穿。(其中“梯度和参数同形状、<code>Xᵀ·G</code> 怎么来的”这套数学基础,<a class="xref" href="chapter-01.html#7-矩阵与向量求导-其实就是一堆标量求导打包">第 1 章 §7</a> 已经先垫过,这里落到反向传播上。)
+        </p>
+
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">先破除误解:根本没有“矩阵对矩阵”这种恐怖东西</span>
+          <p>
+            记住一条铁律:<strong>梯度永远和参数本身同形状</strong>。<code>W</code> 是 <code>[d×d]</code> 的矩阵,那 <code>∂L/∂W</code> 也就是个 <code>[d×d]</code> 的矩阵——
+            里面<strong>每一个 <code>∂L/∂W[i][j]</code> 都只是一个普通的数</strong>,就是“loss 对这<strong>一个</strong>权重的偏导”,和 MNIST 那个 <code>double</code> 一模一样。
+            所以“对矩阵求导”不是新东西,它只是<strong>把 <code>d×d</code> 个“MNIST 式的标量求导”打包放进一张同样大小的表</strong>。
+            你不是在对“矩阵”求导,你是在<strong>同时对矩阵里每个格子求导</strong>,结果自然排成同样形状的一张表。
+          </p>
+        </div>
+
+        <h3>从单个权重推起:还是那条链式法则</h3>
+        <p>
+          拿一层 <code>Y = X·W</code>。先只盯<strong>一个</strong>权重 <var>W</var><sub>kj</sub>(纯 MNIST 式,一个 <code>double</code>)。前向时,输出矩阵的某个元素是一次点积:
+        </p>
+        <div class="mathblock reveal">
+          <var>Y</var><sub>ij</sub> = Σ<sub>k</sub> <var>X</var><sub>ik</sub> · <var>W</var><sub>kj</sub>
+          <span class="label">输出第 i 行第 j 列 = 输入第 i 行 与 W 第 j 列 的点积(<a class="xref" href="chapter-01.html#42-矩阵--矩阵-把很多次点积一次算完">第 1 章</a>)</span>
+        </div>
+        <p>
+          现在问:<var>W</var><sub>kj</sub> 这<strong>一个数</strong>动一点,loss 变多少?套链式法则(和 MNIST 一字不差),
+          只是要把它影响到的所有输出位置 <var>Y</var><sub>ij</sub> 的责任都加起来:
+        </p>
+        <div class="mathblock reveal">
+          <span class="frac"><span>∂<var>L</var></span><span>∂<var>W</var><sub>kj</sub></span></span>
+          = Σ<sub>i</sub>
+          <span class="frac"><span>∂<var>L</var></span><span>∂<var>Y</var><sub>ij</sub></span></span>
+          ·
+          <span class="frac"><span>∂<var>Y</var><sub>ij</sub></span><span>∂<var>W</var><sub>kj</sub></span></span>
+          = Σ<sub>i</sub> <var>G</var><sub>ij</sub> · <var>X</var><sub>ik</sub>
+          <span class="label"><var>G</var> = ∂<var>L</var>/∂<var>Y</var> 是上游传下来的梯度(和 Y 同形状);∂<var>Y</var><sub>ij</sub>/∂<var>W</var><sub>kj</sub> = <var>X</var><sub>ik</sub></span>
+        </div>
+        <p>
+          关键在最右边那个 <strong>Σ<sub>i</sub> <var>X</var><sub>ik</sub>·<var>G</var><sub>ij</sub></strong>——它<strong>正好就是矩阵乘法 <code>Xᵀ·G</code> 的第 <code>[k][j]</code> 个元素</strong>!
+          于是把所有 <var>k</var>、<var>j</var> 一起写,一整块 <code>W</code> 的梯度就是:
+        </p>
+        <div class="mathblock reveal">
+          <span class="frac"><span>∂<var>L</var></span><span>∂<var>W</var></span></span>
+          = <var>X</var><sup>T</sup> · <var>G</var>
+          <span class="label">一次矩阵乘,就把 W 里<strong>几百万个参数的梯度全部同时</strong>算出来了</span>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">这就是全部魔法</span>
+          <p>
+            你本来要对 <code>d×d</code> 个权重<strong>逐个</strong>做 MNIST 式求导,但因为每个格子的公式长得<strong>一模一样、只是下标不同</strong>,
+            它们天然拼成了<strong>一次矩阵乘法</strong>。矩阵求导不是一套新规则,而是<strong>把一大堆相同的标量求导“批发”成一次矩阵运算</strong>。
+            这也顺带回答了一个常见担心:更新 <code>W</code> 里几百万个参数,<strong>不是循环几百万次,而是一次矩阵乘</strong>——GPU 一步就刷完。
+          </p>
+        </div>
+
+        <h3>线性层的“反向三件套”与形状对齐</h3>
+        <p>
+          于是 <code>Y = X·W</code> 这一层,反向时收到上游 <code>G = ∂L/∂Y</code>,本地只需算两样(偏置略):
+        </p>
+        <div class="mathblock reveal">
+          ∂<var>L</var>/∂<var>W</var> = <var>X</var><sup>T</sup> · <var>G</var> &nbsp;·&nbsp; ∂<var>L</var>/∂<var>X</var> = <var>G</var> · <var>W</var><sup>T</sup>
+          <span class="label">左边:参数梯度(拿去更新 W,形状 = W);右边:输入梯度(往下游继续传,形状 = X)</span>
+        </div>
+        <p>
+          怎么记住谁转置、谁乘谁?一个特别好用的窍门:<strong>梯度必须和它对应的东西同形状,反过来用形状凑就行</strong>。
+          设 <code>X</code> 是 <code>[n×d]</code>、<code>W</code> 是 <code>[d×d]</code>,那 <code>G</code> 和 <code>Y</code> 同形状也是 <code>[n×d]</code>:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>要算的梯度</th><th>必须的形状</th><th>只有这么乘才对</th></tr></thead>
+            <tbody>
+              <tr><td><code>∂L/∂W</code></td><td><code>[d×d]</code>(同 W)</td><td><code>Xᵀ·G</code> = <code>[d×n]·[n×d]</code> = <code>[d×d]</code> ✓</td></tr>
+              <tr><td><code>∂L/∂X</code></td><td><code>[n×d]</code>(同 X)</td><td><code>G·Wᵀ</code> = <code>[n×d]·[d×d]</code> = <code>[n×d]</code> ✓</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">形状对齐几乎<strong>唯一地</strong>决定了公式长什么样——这也是工程上很少把反向公式推错的原因:凑不出正确形状的写法,一定是错的。</p>
+        </div>
+
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th></th><th>MNIST(标量)</th><th>Transformer(矩阵)</th></tr></thead>
+            <tbody>
+              <tr><td><strong>参数</strong></td><td>一个数 <code>w</code></td><td>一块 <code>W [d×d]</code></td></tr>
+              <tr><td><strong>它的梯度</strong></td><td>一个数 <code>∂L/∂w</code></td><td>一块 <code>∂L/∂W</code>,同样 <code>[d×d]</code>,<strong>每格是个标量偏导</strong></td></tr>
+              <tr><td><strong>怎么算</strong></td><td><code>δ·x</code>(一次乘)</td><td><code>Xᵀ·G</code>(一次矩阵乘 = 把所有 <code>δ·x</code> 批量做完)</td></tr>
+              <tr><td><strong>本质</strong></td><td>链式法则</td><td><strong>同一个</strong>链式法则,只是打包成矩阵</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">所以“大模型的梯度”听着玄,拆开就是这张表:<strong>MNIST 的标量求导 × 打包成矩阵乘</strong>。</p>
+        </div>
+        <p>
+          整个几十层的大模型,反向传播就是把这套“<strong>收到上游 <code>G</code> → 本地算 <code>Xᵀ·G</code> 和 <code>G·Wᵀ</code> → 把 <code>G·Wᵀ</code> 往前传</strong>”在每一层<strong>接力</strong>一遍。
+          从 loss 出发<strong>倒着扫一遍</strong>,所有层、所有参数的梯度就都齐了——代价大约只等于 <strong>2 次前向传播,和参数量几乎无关</strong>。
+          真实框架里这套“记住前向每一步、反向自动套用局部公式”的机制叫 <span class="term">自动微分(autograd)</span>,所以工程师<strong>只写前向,从不手推</strong>几十亿参数的梯度。
+          (<a class="xref" href="chapter-20.html">第 20 章</a>那个 <code>FLOPs ≈ 6 × 参数 × token</code> 的“6”,拆开就是前向 2 + 反向 4——反向按算力算比前向再贵一点,但仍是<strong>常数倍</strong>,不随参数量膨胀。)
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">那大模型训练到底“爆”在哪?</span>
+          <p>
+            既然算梯度只要约 2 倍前向,大模型训练难在别处:<strong>① 显存</strong>——反向要用到前向存下的<strong>中间激活值</strong>,层多序列长时能吃光显存(解法是 <em>gradient checkpointing</em>:反向时<strong>重算</strong>一部分激活,拿算力换显存);
+            <strong>② 数值稳定</strong>——梯度穿过很多层连乘,可能<strong>爆炸或消失</strong>,这正是<a class="xref" href="chapter-18.html#1-残差连接-给信息和梯度修一条高速公路">残差连接</a>、<a class="xref" href="chapter-18.html#2-layernorm-把每个词的特征拉回正常范围">LayerNorm</a> 和<a class="xref" href="chapter-09.html">第 9 章</a>梯度裁剪要解决的;
+            <strong>③ 多卡同步</strong>——梯度要在上千张卡间 AllReduce 求平均(<a class="xref" href="chapter-21.html">第 21 章</a>)。计算量从不是瓶颈,这三样才是。
+          </p>
+        </div>
+
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
@@ -410,6 +517,8 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
             <li>权重梯度 = <var>δ</var> × 上一层输入;<strong>偏置梯度 = <var>δ</var> 本身</strong>(因为 ∂<var>net</var>/∂<var>b</var> = 1)。</li>
             <li>配套速查图五块:struct 看结构,base/neuron 看前向,formula/example 看反向,最后 <var>w</var>⁺ 才是更新;按“前向→损失→反向→更新”的真实顺序读,而不是按区块。</li>
             <li>反向时要用前向存下的 <var>z</var>(<code>neuron_preact_</code>)来算激活导数。</li>
+            <li><strong>矩阵求导 = 标量求导批发</strong>:<code>∂L/∂W</code> 和 <code>W</code> 同形状,每格是个标量偏导;线性层 <code>Y=X·W</code> 的梯度是 <code>∂L/∂W=Xᵀ·G</code>、<code>∂L/∂X=G·Wᵀ</code>,靠形状对齐就能记住。</li>
+            <li>大模型算全部梯度只需约 <strong>2 倍前向</strong>(autograd 自动完成),真正的瓶颈是<strong>显存(激活)、数值稳定、多卡同步</strong>,不是计算量。</li>
             <li>前向 → 损失 → 反向 → 更新,四步一循环,反复多次即为训练。</li>
           </ul>
         </section>

@@ -510,6 +510,22 @@ var,
   color: var(--text-soft);
 }
 
+/* checkbox 类 label 例外: 勾选框与文字横向排成一行, 不走上面的 grid 竖排
+   (选择器特异性需高于上面的 .attention-lab__toolbar label 才能覆盖) */
+.lab__controls label.checkbox,
+.attention-lab__toolbar label.checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.attention-lab__toolbar label.checkbox input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  flex: none;
+}
+
 input[type="range"],
 select {
   width: 100%;

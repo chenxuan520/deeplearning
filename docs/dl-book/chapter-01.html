@@ -16,7 +16,7 @@
 
         <p class="lead">
           这本书尽量不堆数学,但有<strong>六样小工具</strong>后面会反复用到:向量、点积、矩阵、导数、链式法则,
-          还有一点点概率。这一章用大白话加图把它们过一遍——<strong>都是初中/高一水平,不难</strong>。
+          还有一点点概率。这一章用大白话加图把它们过一遍(顺带说清“对矩阵求导”这种唬人写法其实不难)——<strong>都是初中/高一水平</strong>。
           已经熟的同学可以直接跳到<a href="chapter-02.html">第 2 章</a>;后面卡在某个公式时,随时翻回来查。
         </p>
 
@@ -28,6 +28,7 @@
             <li>矩阵 = 一次<strong>批量线性变换</strong>:矩阵乘向量 = 一堆加权求和,矩阵乘矩阵 = 给一批向量同时变换;还有<strong>形状怎么对齐</strong>和<strong>转置 <var>QK</var><sup>T</sup></strong> 到底在干嘛;</li>
             <li><strong>导数</strong> = 斜率 = “往哪走会变大”,这是梯度下降的根;</li>
             <li><strong>链式法则</strong>:复合函数怎么一层层求导——反向传播的唯一秘密;</li>
+            <li><strong>矩阵/向量求导</strong>其实不吓人:梯度和参数<strong>同形状</strong>,不过是一堆标量求导打包(大模型梯度的底层直觉);</li>
             <li>softmax / 交叉熵会用到的一点点<strong>概率与对数</strong>。</li>
           </ul>
         </section>
@@ -127,13 +128,28 @@
           <span class="term">矩阵(matrix)</span>就是把数字排成的<strong>长方形表格</strong>(几行几列)。你可以把它理解成一台
           “<strong>把向量变成另一个向量</strong>”的机器。这一节稍微多花点篇幅——因为<strong>后面注意力、Transformer 里满屏的
           <var>X</var>·<var>W</var>、<var>QK</var><sup>T</sup> 全是矩阵乘法</strong>,这里一次讲透,后面就不会卡。
+        </p>
 
         <h3>4.1 矩阵 × 向量 = 一堆点积</h3>
         <p>核心操作是<strong>矩阵 × 向量</strong>:</p>
         <div class="mathblock reveal">
           <span class="frac"><span>[ 2&nbsp;&nbsp;1 ]</span><span>[ 0&nbsp;&nbsp;3 ]</span></span>
-          × [1, 2] = [ 2×1 + 1×2 , 0×1 + 3×2 ] = [4, 6]
-          <span class="label">输出的每个数 = 矩阵“对应那一行”和输入向量做一次点积</span>
+          ×
+          <span class="frac"><span>[ 1 ]</span><span>[ 2 ]</span></span>
+          =
+          <span class="frac"><span>[ 2×1 + 1×2 ]</span><span>[ 0×1 + 3×2 ]</span></span>
+          =
+          <span class="frac"><span>[ 4 ]</span><span>[ 6 ]</span></span>
+          <span class="label">关键:输入 [1, 2] 其实是<strong>竖着的一列</strong>(形状 2×1),为省地方才横着写。所以是 [2×2]·[2×1]=[2×1],输出 [4, 6] 也是一列</span>
+        </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">别被“横着写的向量”骗了:2×2 乘的其实是 2×1</span>
+          <p>
+            你可能会按形状算:2×2 的矩阵,后面跟着看起来像 1×2 的 <code>[1, 2]</code>,那不就对不上了吗?
+            <strong>坑就在“横着写”这三个字。</strong>单独一个向量,书里(以及几乎所有教材)为了省版面常横着印,
+            但在 <var>W</var>·<var>x</var> 里它是<strong>竖着的一列</strong>:<code>[1, 2]</code> 实为 <code>[1; 2]</code>,形状 <strong>2×1</strong>。
+            于是 <strong>[2×2]·[2×1]=[2×1]</strong>——正好符合后面 <a class="xref" href="chapter-01.html#43-形状-能不能乘乘出来多大看一眼就知道">4.3 的形状规则</a>“中间对齐、两头留下”,输出 <code>[4, 6]</code> 也是一列(2×1)。
+          </p>
         </div>
         <p>
           看出来了吗?<strong>矩阵乘向量 = 一堆点积 = 一堆加权求和</strong>。矩阵有几行,输出就有几个数,
@@ -143,7 +159,7 @@
 
         <h3>4.2 矩阵 × 矩阵:把“很多次点积”一次算完</h3>
         <p>
-          真正让人犯怵的其实是<strong>矩阵 × 矩阵</strong>。但它一点都不神秘——就是把上面“矩阵 × 向量”<strong>重复很多遍</strong>。
+          真正让人犯怵的其实是<strong>矩阵 × 矩阵</strong>。但它一点都不神秘——无非是把上面那种“一行 · 一列”的点积,<strong>在每一对(行, 列)上都做一遍</strong>。
           规则只有一句话:<strong>结果的第 <var>i</var> 行第 <var>j</var> 列 = 左边矩阵的第 <var>i</var> 行 · 右边矩阵的第 <var>j</var> 列</strong>(还是点积!)。
         </p>
         <div class="mathblock reveal">
@@ -161,6 +177,22 @@
           那“左矩阵 × 右矩阵”就是<strong>让每一行都各自过一遍同一台变换机器</strong>。这正是后面的关键一步——
           一句话有 <var>n</var> 个词、每个词一个向量,叠成矩阵 <var>X</var>;乘上权重矩阵 <var>W</var>,就<strong>一次性</strong>把 <var>n</var> 个词全部变换完,不必写循环。
         </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">等一下——4.1 明明把输入放右边,这里怎么放左边了?</span>
+          <p>
+            好眼力,这不是笔误。<strong>“数据在左、权重在右”和“权重在左、数据在右”两种写法都对</strong>,它们只是<strong>互为转置</strong>:
+          </p>
+          <p>
+            · <strong>4.1 的写法 <var>W</var>·<var>x</var></strong>:输入是<strong>一列</strong>,权重矩阵<strong>每行一个神经元</strong>,一次只算<strong>一个</strong>样本。<br />
+            · <strong>4.2 的写法 <var>X</var>·<var>W</var></strong>:每个样本是<strong>一行</strong>,一叠行就是一批样本,一次算<strong>一整批</strong>。
+          </p>
+          <p>
+            换句话说,把 4.1 的式子整体转置(行列对调)就得到 4.2:(<var>W</var>·<var>x</var>)<sup>T</sup> = <var>x</var><sup>T</sup>·<var>W</var><sup>T</sup>。
+            本书里 <strong>MLP 那几章(如<a class="xref" href="chapter-03.html">第 3 章</a>)常写成 <var>W</var>·<var>x</var></strong>(方便盯住单个神经元),
+            <strong>注意力 / Transformer(<a class="xref" href="chapter-17.html">第 17 章</a>起)几乎都写成 <var>X</var>·<var>W</var></strong>(方便一次处理一整句)。
+            看到哪种都别慌:<strong>认准“谁是数据、谁是权重”,点积规则完全一样。</strong>
+          </p>
+        </div>
         <div class="callout callout--tip reveal">
           <span class="callout__title">这就是你后面会反复看到的 <var>X</var>·<var>W</var></span>
           <p>
@@ -266,7 +298,53 @@
           就能算出每个参数“该往哪调”。现在记不住细节没关系,知道“反传 = 链式法则”这个等式就够了。
         </p>
 
-        <h2>7. 概率、softmax 与对数</h2>
+        <h2>7. 矩阵与向量求导:其实就是一堆标量求导打包</h2>
+        <p>
+          上一节的导数是“<strong>一个数对一个数</strong>”求导。但后面网络里的参数动辄是<strong>一整块矩阵</strong> <var>W</var>
+          (<a class="xref" href="chapter-17.html">第 17 章</a>的 <var>W</var><sub>Q</sub>、<a class="xref" href="chapter-03.html">第 3 章</a>一层的权重都是),
+          于是你会看到 <code>∂L/∂W</code> 这种“对矩阵求导”的写法。第一次见容易慌:这是不是要学一套全新的、很吓人的数学?
+          <strong>不是。</strong>这一节把这颗定心丸先吃下,后面第 6 章、第 18 章再用它就不会怵。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">一条铁律:梯度和它对应的东西<strong>同形状</strong></span>
+          <p>
+            对<strong>向量</strong> <var>w</var>(比如一个神经元的一排权重)求导,<code>∂L/∂w</code> 还是<strong>一个同样长的向量</strong>;
+            对<strong>矩阵</strong> <var>W</var>(<code>[m×n]</code>)求导,<code>∂L/∂W</code> 还是<strong>一个同样 <code>[m×n]</code> 的矩阵</strong>。
+            而且里面<strong>每一个元素 <code>∂L/∂W[i][j]</code> 都只是一个普普通通的“一个数对一个数”的偏导</strong>——就是上一节那种,
+            只不过“对第 <var>i</var> 行第 <var>j</var> 列这一个权重”单独求了一次。
+          </p>
+        </div>
+        <p>
+          所以“对矩阵求导”根本不是新运算,它只是<strong>把 <code>m×n</code> 个“上一节那样的标量求导”整整齐齐码进一张同样大小的表</strong>。
+          你不是在对“一个矩阵”求导,你是在<strong>同时对矩阵里每个格子各求一次导</strong>,结果自然排成和原矩阵一样的形状。一张表看清:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>参数是什么</th><th>它的梯度 <code>∂L/∂(它)</code></th><th>每个元素是</th></tr></thead>
+            <tbody>
+              <tr><td>一个数 <var>w</var>(标量)</td><td>一个数</td><td>就是它自己那一个偏导</td></tr>
+              <tr><td>一排数 <var>w</var>(向量,长 <var>n</var>)</td><td>同样长 <var>n</var> 的向量</td><td>第 <var>i</var> 个 = <code>∂L/∂w[i]</code></td></tr>
+              <tr><td>一整块 <var>W</var>(矩阵,<code>m×n</code>)</td><td>同样 <code>m×n</code> 的矩阵</td><td>第 <var>i,j</var> 个 = <code>∂L/∂W[i][j]</code></td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">规律一句话:<strong>求导不改变形状</strong>。参数多大,它的梯度就多大,里面装的全是普通标量偏导。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">为什么它们能“一次矩阵乘”算完(直觉)</span>
+          <p>
+            既然梯度是“每个格子各求一次导”,那岂不是要算 <code>m×n</code> 次、很慢?妙就妙在:这些格子的求导公式
+            <strong>长得一模一样,只是下标不同</strong>。数学上可以证明,它们正好能拼成<strong>一次矩阵乘法</strong>——
+            比如一层 <code>Y = X·W</code>,整块 <code>W</code> 的梯度就是简洁的 <code>∂L/∂W = Xᵀ·G</code>(<var>G</var> 是从后面传来的梯度)。
+            这也是为什么“上万亿参数求梯度”不会慢到天荒地老:<strong>不是逐个格子循环,而是几次矩阵乘</strong>。
+            这里先建立直觉即可,<a class="xref" href="chapter-06.html">第 6 章</a>会把 <code>Xᵀ·G</code> 是怎么来的一步步推给你看。
+          </p>
+        </div>
+        <p>
+          记住这一节一句话就够:<strong>看到 <code>∂L/∂W</code> 别慌,它和 <var>W</var> 一样大,每格是个普通偏导,整体能用矩阵乘一次算出。</strong>
+          矩阵求导不是新数学,是上一节的标量求导“批量打包”。
+        </p>
+
+        <h2>8. 概率、softmax 与对数</h2>
         <p>做分类时,我们希望模型输出“<strong>每个类别的概率</strong>”。这里只需三个小概念:</p>
         <ul>
           <li><strong>概率</strong>:0 到 1 之间的数,所有类别的概率<strong>加起来等于 1</strong>。</li>
@@ -291,6 +369,7 @@
             <li><strong>矩阵 × 向量</strong> = 一堆点积 = 一堆加权求和,正是神经网络“一层”的计算;<strong>矩阵 × 矩阵</strong>则是把一批向量同时变换(后面的 <var>X</var>·<var>W</var>)。形状看“中间对齐、两头留下”:[<var>m</var>×<var>n</var>]·[<var>n</var>×<var>k</var>]=[<var>m</var>×<var>k</var>];转置 <var>A</var><sup>T</sup> 把行列对调,用来凑形状(如 <var>QK</var><sup>T</sup>)。</li>
             <li><strong>导数</strong> = 斜率 = “往哪走会变大”;把每个参数的导数打包成<strong>梯度</strong>,反方向走就能降损失。</li>
             <li><strong>链式法则</strong>:复合函数求导 = 各层变化率相乘——这就是反向传播的全部数学。</li>
+            <li><strong>矩阵/向量求导</strong>:梯度和参数<strong>同形状</strong>,每个格子只是普通标量偏导,整体能用一次矩阵乘算出(如 <code>∂L/∂W = Xᵀ·G</code>)——不是新数学,是标量求导打包。</li>
             <li><strong>softmax</strong> 把分数变概率,<strong>−log(正确概率)</strong> 就是交叉熵损失。</li>
           </ul>
         </section>

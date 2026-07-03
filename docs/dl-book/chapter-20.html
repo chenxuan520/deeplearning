@@ -45,10 +45,11 @@
           <h2>读完这一章,你会明白</h2>
           <ul>
             <li>真实大模型怎么分词(BPE / 子词),词表大小意味着什么;</li>
+            <li><strong>1750 亿参数</strong>装在哪些层、每层约多少权重(GPT-3 举例);</li>
             <li>“词嵌入”把词变成<strong>语义坐标</strong>,为什么向量夹角能表示“意思相近”;</li>
             <li>规模定律(Scaling Law)和涌现能力,到底在说什么;</li>
             <li><strong>预训练</strong>与<strong>后训练</strong>(SFT、RLHF、蒸馏)的分工,以及“底座模型”和“对话模型”的区别;</li>
-            <li>推理模型、多模态(图像/语音怎么进 Transformer)、长上下文等最近的新方向,大致是怎么回事;</li>
+            <li>推理模型、多模态(图像/语音怎么进 Transformer)、长上下文(窗口大小由什么决定、为何标称≠有效)等最近的新方向,大致是怎么回事;</li>
             <li>常见“体感”问题:<strong>模型降智</strong>、<strong>对齐税</strong>、<strong>灾难性遗忘</strong>各自发生在训练链路的哪一环;</li>
             <li>一串训练“黑话”:自监督、泛化、过拟合、epoch/batch/step、超参数;</li>
             <li>大模型的本质与局限——它为什么会“一本正经地胡说八道”。</li>
@@ -81,7 +82,122 @@
           </p>
         </div>
 
-        <h2>2. 第一步:把文字切成 token(分词与 BPE)</h2>
+        <h2>2. 参数地图:1750 亿个“旋钮”装在哪儿(GPT 举例)</h2>
+        <p>
+          上一节说 GPT-3 有 <strong>1750 亿参数</strong>。参数就是训练后要<strong>存进模型文件</strong>、推理时要<strong>加载进内存/显存</strong>的那些可学习权重
+          (以及少量偏置、LayerNorm 的缩放/平移系数)。它们和“层数、头数”这类<strong>结构超参</strong>不是一回事:
+          超参决定网络长什么样;参数是这张网里每一根“连线”上的具体数字。
+        </p>
+        <p>
+          以最常见的 <strong>GPT 系 decoder-only</strong> 为例——结构和你在
+          <a class="xref" href="chapter-19.html">第 19 章</a>搭的 mini LM、
+          <a class="xref" href="chapter-18.html">第 18 章</a>的 Transformer Block 是同一套,只是更深更宽。
+          从外到内,可训练的参数大致分这几块:
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">词嵌入 Embedding<small>V × d</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">× L 层 Block<small>每层 ≈ 12d²</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">LM Head<small>V × d(常与嵌入共享)</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">GPT 类模型的参数主体 = 嵌入 + 很多层 Transformer Block + 输出头。下面用几个字母记形状——<strong>先别慌,含义见紧挨着的说明框</strong>。</p>
+        </div>
+
+        <div class="callout callout--note reveal">
+          <span class="callout__title">这几个字母分别是什么</span>
+          <ul>
+            <li><strong><var>d</var></strong> — <strong>模型宽度</strong>:每个 token 在模型里用多宽的一条向量表示(一串有多少个数)。从嵌入层出来是 <var>d</var> 维,进每一层 Block、层与层之间传递,宽度始终是 <var>d</var>。GPT-3 的 <var>d</var>=12 288;本书 mini LM 常见 <var>d</var>=64。</li>
+            <li><strong><var>L</var></strong> — <strong>层数</strong>:Transformer Block 纵向堆了几层。每层各自有一套 attention + FFN 权重,参数量大致随 <var>L</var> 线性涨。GPT-3 的 <var>L</var>=96。</li>
+            <li><strong><var>V</var></strong> — <strong>词表大小</strong>:分词后模型认识多少个不同的 token(每个 token 一个 id)。嵌入表有 <var>V</var> 行,LM Head 要给词表里每个 token 打一个分,所以这两块都是 <code>[V×d]</code> 的矩阵。GPT-3 的 <var>V</var>≈50 257。</li>
+            <li><strong><var>f</var></strong> — <strong>FFN 中间层有多宽</strong>:每个 Block 里的前馈网络先把 <var>d</var> 维向量临时扩到 <var>f</var> 维,再压回 <var>d</var> 维。GPT 系惯例 <var>f</var>≈4<var>d</var>。对应两个矩阵 <code>[d×f]</code> 和 <code>[f×d]</code>。GPT-3 的 <var>f</var>=49 152。</li>
+            <li><strong><var>h</var></strong> — <strong>注意力头数</strong>:把 <var>d</var> 维切成 <var>h</var> 份并行算注意力,每头 <var>d</var>/<var>h</var> 维。只改变怎么切分计算,<strong>不改变</strong>四个投影矩阵的总参数量(仍是 4<var>d</var>²)。GPT-3 的 <var>h</var>=96,每头 128 维。</li>
+          </ul>
+        </div>
+
+        <h3>2.1 先分清:结构数字 vs 要存的权重</h3>
+        <p>读模型卡时你会同时看到两类数字,别混:</p>
+        <ul>
+          <li><strong>结构超参</strong>(决定形状,本身不占多少存储):层数 <var>L</var>、宽度 <var>d</var>、注意力头数 <var>h</var>(每头维度 <var>d</var>/<var>h</var>)、FFN 宽度 <var>f</var>、词表 <var>V</var>、上下文长度上限等;</li>
+          <li><strong>参数量</strong>(要落盘的权重个数):上面每一块矩阵/向量里所有元素的总和。</li>
+        </ul>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">别把“注意力权重”当成参数</span>
+          <p>
+            前向时算出来的<strong>注意力分数 / 注意力矩阵</strong>(谁该多看谁)是<strong>临时中间结果</strong>,随输入变、算完就丢,不算进 1750 亿。
+            参数量只统计 <code>W_Q, W_K, W_V, W_O</code> 这类<strong>固定矩阵</strong>。
+          </p>
+        </div>
+
+        <h3>2.2 每一层 Block 里有哪些矩阵</h3>
+        <p>一层 <a class="xref" href="chapter-18.html">Transformer Block</a> 里,和参数量相关的主要权重如下(偏置、LayerNorm 的 γ/β 也有,但相对很小,先略):</p>
+        <pre class="reveal">【自注意力】四个投影矩阵,每个都是 [d × d]
+  W_Q, W_K, W_V, W_O
+  → 小计 4d²
+
+【前馈 FFN】两层全连接(中间维 f, GPT 系通常 f ≈ 4d)
+  W1: [d × f]    W2: [f × d]
+  → 小计约 2df ≈ 8d²(当 f=4d)
+
+【一层合计(主项)】≈ 4d² + 8d² = 12d²</pre>
+        <p>
+          头数 <var>h</var> 改变的是<strong>怎么切分计算</strong>(多头并行),那四个 <code>[d×d]</code> 矩阵的总元素数不变。
+          堆 <var>L</var> 层,Block 部分就是 <strong><var>L</var> × 12<var>d</var>²</strong> 量级。
+        </p>
+
+        <h3>2.3 嵌入层与 LM Head</h3>
+        <pre class="reveal">【词嵌入】把 token id 变成 d 维向量
+  Embedding 权重: [V × d]  →  Vd 个参数
+
+【LM Head】把最后一层 d 维向量投影回词表,得到每个 token 的 logit
+  权重: [V × d]  →  又是 Vd 个参数
+
+【权重绑定(weight tying)】很多 GPT 实现让嵌入和 LM Head <strong>共用同一张 [V×d] 表</strong>
+  → 只算一份 Vd,不重复存</pre>
+        <p>
+          词表 <var>V</var> 越大,嵌入和输出头就越大——这也是 BPE 词表不能无限膨胀的原因之一(见下一节)。
+        </p>
+
+        <h3>2.4 用 GPT-3(175B) 对一下账</h3>
+        <p>OpenAI 公布的 GPT-3 规模(以 1750 亿参数那一档为例)大致是:</p>
+        <ul>
+          <li><var>L</var> = 96 层, <var>d</var> = 12 288, <var>h</var> = 96 头(每头 128 维), <var>f</var> = 49 152 ≈ 4<var>d</var>, <var>V</var> ≈ 50 257</li>
+        </ul>
+        <pre class="reveal">单层 Block(主项):
+  注意力 4d² = 4 × 12288² ≈ 6.0 × 10⁸
+  FFN    2df = 2 × 12288 × 49152 ≈ 1.2 × 10⁹
+  单层合计 ≈ 1.8 × 10⁹(约 18 亿)
+
+96 层 Block:
+  96 × 1.8×10⁹ ≈ 1.7 × 10¹¹(约 1700 亿)
+
+嵌入(+ LM Head 若绑定则只算一份):
+  Vd = 50257 × 12288 ≈ 6.2 × 10⁸(约 6 亿)
+
+总计 ≈ 1.75 × 10¹¹  →  常说的 175B(1750 亿参数)</pre>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">和本书 mini LM 比一比</span>
+          <p>
+            若 <var>L</var>=2、<var>d</var>=64、<var>V</var>=几十(字符级词表),Block 部分只有 <var>L</var>×12<var>d</var>² ≈ 几万到十万量级,再加嵌入/LM Head 也就<strong>十万级参数</strong>——和 GPT-3 差将近<strong>九</strong>个数量级,但矩阵名字、乘法形状完全一样。
+            想逐步看 <code>[n×d]×[d×d]</code> 怎么乘,可回
+            <a class="xref" href="chapter-19.html#44-每一步矩阵有多大-n2-走一遍">第 19 章 §4.4</a>。
+          </p>
+        </div>
+
+        <h3>2.5 一眼估算总参数量</h3>
+        <p>工程上常背一个近似式(FFN 取 <var>f</var>≈4<var>d</var>,嵌入与 LM Head 绑定):</p>
+        <pre class="reveal">参数量 ≈ L × 12d²  +  Vd
+         ≈ 12Ld²      +  Vd        (主导项是 L 和 d²)</pre>
+        <p>
+          所以 Scaling Law 里“把参数量做大”,本质上就是<strong>加层</strong>(增大 <var>L</var>)或<strong>加宽</strong>(增大 <var>d</var>,且每层按 <var>d</var>² 涨)。
+          只加词表 <var>V</var> 也会涨,但通常不如加层/加宽猛。
+          若换成 <a class="xref" href="chapter-21.html">MoE</a> 架构,FFN 部分会变成“多份专家权重 + 路由器”,总参数量可再上一个台阶(但每步只激活其中少数专家)。
+        </p>
+
+        <h2>3. 第一步:把文字切成 token(分词与 BPE)</h2>
         <p>
           <a class="xref" href="chapter-19.html">第 19 章</a>我们用的是最简单的<strong>字符级</strong>分词——一个字一个 token。真实大模型嫌它太浪费:
           英文一个单词能拆成好几个字符,序列变得很长,而注意力的计算量随长度<strong>平方</strong>增长(<a class="xref" href="chapter-17.html">第 17 章</a>),很不划算。
@@ -113,7 +229,7 @@
           </p>
         </div>
 
-        <h2>3. 词嵌入:给每个词一个“语义坐标”</h2>
+        <h2>4. 词嵌入:给每个词一个“语义坐标”</h2>
         <p>
           token 的 id 只是个编号(2 不比 1 “大”)。<a class="xref" href="chapter-19.html">第 19 章</a>讲过,<span class="term">词嵌入(embedding)</span>
           给每个 id 配一个可学习的<strong>多维向量</strong>。这里我们把这件事的“妙处”讲透,因为它是大模型能“懂语义”的地基。
@@ -148,7 +264,7 @@
           </p>
         </div>
 
-        <h2>4. 规模化(Scaling Law):大力真的出奇迹</h2>
+        <h2>5. 规模化(Scaling Law):大力真的出奇迹</h2>
         <p>
           研究者发现一个惊人规律——<span class="term">Scaling Law(规模定律)</span>:当你<strong>同时</strong>放大三样东西——
           <strong>参数量、数据量、算力</strong>——模型的损失会沿着一条<strong>平滑、可预测</strong>的曲线持续下降。
@@ -163,7 +279,8 @@
           </p>
         </div>
         <p>
-          顺便建立一个数量级直觉:<strong>参数量 ≈ 网络里连线(权重)的总数</strong>。1750 亿参数,就是 1750 亿个
+          顺便建立一个数量级直觉:<strong>参数量 ≈ 网络里连线(权重)的总数</strong>(<a class="xref" href="#2-参数地图-1750-亿个旋钮装在哪儿gpt-举例">§2</a>已按层拆开)。
+          1750 亿参数,就是 1750 亿个
           <a class="xref" href="chapter-02.html">第 2 章</a>那样的“权重旋钮”。它们全部存成小数,这也是为什么模型文件动辄几十上百 GB。
         </p>
 
@@ -186,7 +303,7 @@
           </p>
         </div>
 
-        <h2>5. 涌现能力:量变到质变</h2>
+        <h2>6. 涌现能力:量变到质变</h2>
         <p>
           <span class="term">涌现能力(emergent abilities)</span>指的是:某些能力在小模型上<strong>几乎为零</strong>,
           但当规模越过某个门槛后会<strong>突然出现</strong>。比如:
@@ -198,7 +315,7 @@
         </ul>
         <p>这些能力没有被任何人“显式编程”进去,而是在“预测下一个 token”这个朴素目标 + 巨大规模下,自己长出来的。</p>
 
-        <h2>6. 大模型是怎么炼成的:预训练 + 后训练</h2>
+        <h2>7. 大模型是怎么炼成的:预训练 + 后训练</h2>
         <div class="figure reveal">
           <div class="diagram">
             <div class="pipe">
@@ -433,7 +550,7 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           </p>
         </div>
 
-        <h2>7. 最近的一些新方向(建立个印象就好)</h2>
+        <h2>8. 最近的一些新方向(建立个印象就好)</h2>
         <p>
           大模型领域跑得飞快,新词层出不穷。但你会发现一个规律:<strong>再新的花样,也都长在前面这套地基上</strong>。
           下面几个最常被提到的方向,不求精通,先混个脸熟。
@@ -494,6 +611,42 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           早期模型一次只能读几千 token,如今动辄支持几十万甚至上百万——你能把一整本书、一个代码仓库丢进去让它一起看。
           难点在<a class="xref" href="chapter-17.html">第 17 章</a>那句话:注意力计算量随长度<strong>平方</strong>增长,所以需要稀疏注意力等优化(<a class="xref" href="chapter-21.html">第 21 章</a>)才扛得住。
         </p>
+        <h4>上下文窗口大小是怎么定出来的?</h4>
+        <p>
+          常有人问“为什么这个模型是 8K,那个是 128K”。答案是:窗口大小<strong>不是某一个因素拍板的,而是三道关卡里最紧的那个</strong>——
+          任何一关卡住,窗口就到头了。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>关卡</th><th>决定什么</th><th>卡住会怎样</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>① 位置编码<br />(硬上限)</strong></td>
+                <td>注意力本身对位置无感,全靠<a class="xref" href="chapter-18.html#5-位置编码-告诉模型谁在前谁在后">位置编码</a>标记先后。方案决定了“最远能编到多远”</td>
+                <td>早期<strong>可学习绝对位置</strong>(如 GPT-2 的 1024)定死一张位置表,超出就没有对应向量,是一堵硬墙;现代 <strong>RoPE / ALiBi</strong> 等相对位置有一定<strong>外推</strong>能力,才谈得上做到 128K、1M</td>
+              </tr>
+              <tr>
+                <td><strong>② 训练长度<br />(软上限)</strong></td>
+                <td>位置编码“支持”到某长度,不等于模型“用得好”;得在长序列上真正训练/微调过,它才会用远处的信息</td>
+                <td>没在长序列上训过,远处信息就用不起来。常见做法:先用短序列(如 4K)便宜地预训练,再用长序列续训;或事后用<strong>位置插值 / NTK / YaRN</strong> 把 RoPE “拉伸”后再少量微调——这就是模型能“事后加长”的原因</td>
+              </tr>
+              <tr>
+                <td><strong>③ 算力 / 显存<br />(现实约束)</strong></td>
+                <td>注意力的计算与显存随长度<strong>平方</strong>增长,推理时 <a class="xref" href="chapter-19.html">KV cache</a> 又随长度<strong>线性</strong>膨胀吃显存</td>
+                <td>最卡脖子的一关:长度翻倍,注意力开销约 4 倍。<strong>FlashAttention、稀疏/滑窗注意力、PagedAttention</strong>(<a class="xref" href="chapter-21.html">第 21 章</a>)决定了厂商“愿意开多长”、你“用得起多长”</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">一句话:<strong>位置编码能编多远 × 训练时真喂过多长 × 推理时扛得住多长</strong>,取最紧的那个,就是窗口上限。</p>
+        </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">标称 ≠ 有效:128K 不等于 128K 都好用</span>
+          <p>
+            模型标称支持 128K,不代表这 128K 里的信息都能被可靠利用。存在著名的
+            “<strong>迷失在中间(lost in the middle)</strong>”现象:开头和结尾的内容记得牢,<strong>正中间</strong>的容易被忽略。
+            所以<strong>有效上下文常明显短于标称值</strong>——把最关键的材料放在开头或结尾,往往比一股脑塞满窗口更靠谱。
+          </p>
+        </div>
         <div class="callout callout--warn reveal">
           <span class="callout__title">上下文不够长,也会像“降智”</span>
           <p>
@@ -516,7 +669,7 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           </p>
         </div>
 
-        <h2>8. 它的本质与局限:清醒地看待它</h2>
+        <h2>9. 它的本质与局限:清醒地看待它</h2>
         <p>
           把上面串起来,你会得到对大模型最准确的一句话概括:
           <strong>它是一个被海量文本喂大的、极其强大的“下一个 token 概率预测器”。</strong>
@@ -538,7 +691,7 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           <strong>强大但会犯错的概率文本生成器</strong>,而不是全知神谕,你就能用得又稳又好。
         </p>
 
-        <h2>9. 你已经走通了主干</h2>
+        <h2>10. 你已经走通了主干</h2>
         <p>回头看看这一路搭起来的东西:</p>
         <ul>
           <li>从<strong>一个神经元</strong>的加权求和 + 激活(<a class="xref" href="chapter-02.html">第 2 章</a>),</li>
@@ -557,12 +710,12 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>大模型内核 = <a class="xref" href="chapter-19.html">第 19 章</a>的“预测下一个 token + 自回归”,只是规模大上亿倍。</li>
+            <li>大模型内核 = <a class="xref" href="chapter-19.html">第 19 章</a>的“预测下一个 token + 自回归”,只是规模大上亿倍;参数主体是嵌入 + <var>L</var> 层 Block(每层约 12<var>d</var>²) + LM Head,GPT-3 约 175B。</li>
             <li>真实分词用 BPE/子词:高频组合合并成一个 token,存进词表;词表大小是权衡。</li>
             <li>词嵌入把词变成“语义坐标”,<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦相似度衡量语义远近;词向量可迁移复用。</li>
             <li>Scaling Law:参数、数据、算力一起放大,性能可预测提升;超过门槛会“涌现”新能力。</li>
             <li>预训练(自监督)练出底座能力;后训练(SFT → RLHF/DPO → 蒸馏)把它调成好用的助手。SFT 常常仍是交叉熵训练,但通常<strong>只对 assistant/completion 部分计 loss</strong>,prompt 更多是作为条件输入。</li>
-            <li>最近方向:推理模型、多模态(patch→ViT→投影→拼序列)、长上下文、MoE——内核仍是 token + Transformer。</li>
+            <li>最近方向:推理模型、多模态(patch→ViT→投影→拼序列)、长上下文、MoE——内核仍是 token + Transformer。上下文窗口由<strong>位置编码 × 训练长度 × 算力显存</strong>三关中最紧的一关决定,且标称长度≠有效长度。</li>
             <li>降智/对齐税/遗忘等多半发生在<strong>后训练、蒸馏、量化、MoE 压 k、截断、产品护栏</strong>等环节,先定位链路再判断能力。</li>
             <li>它本质是概率预测器,所以会幻觉、有知识截止和偏见——要理性使用,并靠 RAG/工具补救。</li>
           </ul>
@@ -571,39 +724,51 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
         <h2>动手与思考</h2>
         <div class="quiz reveal">
           <details class="quiz__item">
-            <summary class="quiz__q">问题 1:为什么真实大模型用 BPE/子词,而不是像本书那样按字符分词?</summary>
+            <summary class="quiz__q">问题 1:GPT-3 的 1750 亿参数主要装在哪儿?单层 Block 量级怎么估?</summary>
+            <div class="quiz__a">
+              <p>主体在 <var>L</var> 层 Transformer Block(每层四套 <code>[d×d]</code> 注意力矩阵 + 两层 FFN),加上词嵌入和 LM Head(常为 <code>[V×d]</code>,可与嵌入绑定)。单层主项约 <strong>12<var>d</var>²</strong>;GPT-3 用 <var>L</var>=96、<var>d</var>=12288 时,96 层合计约 1700 亿,再加嵌入约 6 亿,总数约 175B。详见 <a class="xref" href="#2-参数地图-1750-亿个旋钮装在哪儿gpt-举例">§2</a>。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:为什么真实大模型用 BPE/子词,而不是像本书那样按字符分词?</summary>
             <div class="quiz__a">
               <p>字符级会让序列变得很长,而注意力计算量随长度平方增长,代价高。BPE 把高频组合合并成一个 token,序列更短、更高效,同时又比“整词”更灵活(能拼出没见过的词)。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 2:为什么用“向量夹角/点积”而不是“距离”来衡量词的语义相似度?</summary>
+            <summary class="quiz__q">问题 3:为什么用“向量夹角/点积”而不是“距离”来衡量词的语义相似度?</summary>
             <div class="quiz__a">
               <p>因为训练中向量会被整体拉伸或缩放,距离会“强烈波动”,不稳定;而方向(夹角)更能反映本质的语义关系。<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦相似度只看方向,点积越大夹角越小、语义越近。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 3:预训练用的是“自监督”,它和“监督学习”的区别到底在哪?</summary>
+            <summary class="quiz__q">问题 4:预训练用的是“自监督”,它和“监督学习”的区别到底在哪?</summary>
             <div class="quiz__a">
               <p>两者都要有目标值(答案)。监督学习的目标靠人工标注;自监督的目标从数据本身自动产生,比如遮住一个词让模型预测,被遮的词就是答案。海量数据无法人工标注,所以预训练靠自监督。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 4:大模型为什么会“一本正经地胡说八道”?怎么缓解?</summary>
+            <summary class="quiz__q">问题 5:大模型为什么会“一本正经地胡说八道”?怎么缓解?</summary>
             <div class="quiz__a">
               <p>因为它的目标是预测“最像样、最连贯的下一个词”,而不是“说真话”;缺乏依据时也会编出通顺但错误的内容(幻觉)。缓解办法包括给它接实时检索(RAG)、外部工具/计算器(function calling),以及对关键事实自己核对。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 5:“预训练”和“后训练”分工是什么?为什么 <code>-base</code> 模型不好直接聊天?</summary>
+            <summary class="quiz__q">问题 6:“预训练”和“后训练”分工是什么?为什么 <code>-base</code> 模型不好直接聊天?</summary>
             <div class="quiz__a">
               <p>预训练在海量文本上自监督地学到通用语言能力和世界知识,给出一个“博学但只会接话”的底座模型(base)。后训练(SFT → RLHF/DPO → 蒸馏)在底座之上加工,教它听指令、按人类偏好回答。<code>-base</code> 没做后训练,所以往往只会顺着你的话往下写,而不是好好回答——要 <code>-chat</code>/<code>-instruct</code> 那样做过后训练的版本才好用。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 6:SFT 为什么常常“只对 assistant 部分算 loss”,而把 prompt mask 掉?</summary>
+            <summary class="quiz__q">问题 7:SFT 为什么常常“只对 assistant 部分算 loss”,而把 prompt mask 掉?</summary>
             <div class="quiz__a">
               <p>因为 SFT 真正想教模型学的是“给定这道题,标准答案该怎么写”。prompt/system/user 主要负责提供条件上下文,assistant/completion 才是想让模型模仿的输出。所以训练时通常整段都喂给模型看,但只在回答区计分。注意: <strong>mask prompt 不等于没看 prompt</strong>——回答的 loss 仍会通过计算图逼模型学会理解题目。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 8:一个模型的上下文窗口(比如 128K)到底是由什么决定的?</summary>
+            <div class="quiz__a">
+              <p>由三道关卡里<strong>最紧的那个</strong>决定:①<strong>位置编码</strong>能表示多远(可学习绝对位置是硬墙,RoPE/ALiBi 才能外推);②训练时<strong>真的在多长的序列上练过</strong>(没练过就用不好远处信息,可用位置插值/YaRN 事后拉长);③推理时的<strong>算力与显存</strong>(注意力随长度平方增长,KV cache 随长度线性膨胀)。此外<strong>标称长度 ≠ 有效长度</strong>,存在“迷失在中间”,关键材料放开头或结尾更可靠。</p>
             </div>
           </details>
         </div>

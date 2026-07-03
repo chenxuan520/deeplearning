@@ -155,10 +155,14 @@
     return { aside: aside, links: links };
   }
 
-  // 把某个元素滚到视口垂直正中 (smooth 可选)
-  function scrollElementToCenter(target, smooth) {
+  // 小标题跳转后停靠位置: 视口高度的这个比例处 (偏上一点, 标题上方留少量空白,
+  // 而不是停在正正中间——读者视线不用往上找标题)
+  var HEADING_ANCHOR_RATIO = 0.28;
+
+  // 把某个元素滚到视口偏上位置 (smooth 可选)
+  function scrollHeadingIntoView(target, smooth) {
     var rect = target.getBoundingClientRect();
-    var y = rect.top + window.pageYOffset - (window.innerHeight / 2) + (rect.height / 2);
+    var y = rect.top + window.pageYOffset - (window.innerHeight * HEADING_ANCHOR_RATIO);
     y = Math.max(0, y);
     if (smooth) window.scrollTo({ top: y, behavior: "smooth" });
     else window.scrollTo(0, y);
@@ -174,21 +178,22 @@
       current = link;
       if (current) current.classList.add("is-current");
     }
-    // 点击右侧目录: 把该小标题滚到视口正中, 并立即高亮它。
+    // 点击右侧目录: 把该小标题滚到视口偏上位置, 并立即高亮它。
     // 这样即使小节内容很少, 也不会误定位/误高亮到它下面的标题。
     links.forEach(function (item) {
       item.link.addEventListener("click", function (e) {
         e.preventDefault();
         lockUntil = Date.now() + 900; // 平滑滚动期间, 先别让 spy 抢高亮
         setCurrent(item.link);
-        scrollElementToCenter(item.heading, true);
+        scrollHeadingIntoView(item.heading, true);
         if (window.history && window.history.replaceState) {
           window.history.replaceState(null, "", "#" + item.heading.id);
         }
       });
     });
     if ("IntersectionObserver" in window) {
-      // 以"视口正中线"为判定线: 谁跨过中线就高亮谁, 与"点击居中"的行为对齐。
+      // 判定线设在视口偏上处 (约 28% 高度), 与"点击后标题停靠的位置"对齐:
+      // 谁跨过这条线就高亮谁, 避免定位点和高亮项对不上。
       var obs = new IntersectionObserver(function (entries) {
         if (Date.now() < lockUntil) return;
         entries.forEach(function (entry) {
@@ -197,7 +202,7 @@
             if (item.heading === entry.target) setCurrent(item.link);
           });
         });
-      }, { rootMargin: "-50% 0px -50% 0px", threshold: 0 });
+      }, { rootMargin: "-28% 0px -72% 0px", threshold: 0 });
       links.forEach(function (item) { obs.observe(item.heading); });
     }
     setCurrent(links[0].link);
@@ -942,7 +947,7 @@
     var target = document.getElementById(id);
     if (!target) return;
     requestAnimationFrame(function () {
-      requestAnimationFrame(function () { scrollElementToCenter(target, false); });
+      requestAnimationFrame(function () { scrollHeadingIntoView(target, false); });
     });
   }
 
