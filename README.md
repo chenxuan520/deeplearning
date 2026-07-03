@@ -21,7 +21,6 @@
 
 1. 打开 **[交互电子书](https://chenxuan520.github.io/deeplearning/)** — 从「一个神经元」讲到 Transformer 与大模型，带图解、可动手实验和逐行代码导读。
 2. 跟着第三部分 / 书末 demo 跑 `cnn_mnist`、`rnn_char`、`mnist`、`transformer_char`、`rl_tictactoe`，把概念和源码对上号。
-3. 需要查 attention 细节时，可看静态讲解页 [`docs/attention-guide/index.html`](./docs/attention-guide/index.html)（支持导入真实 attention 权重 JSON）。
 
 ---
 
@@ -31,7 +30,6 @@
 deeplearning/
 ├── docs/
 │   ├── dl-book/              # 交互电子书（GitHub Pages 部署源）
-│   ├── attention-guide/      # Attention 分步讲解静态页
 │   └── mnist-demo.md         # MNIST 配置与升级记录
 ├── src/
 │   ├── deeplearning/         # 核心库（头文件 + .cpp）
