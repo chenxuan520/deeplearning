@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 12 章 · CNN 卷积神经网络 | 深度学习入门</title>
+    <title>第 12 章 · 强化学习:试错里学策略 | 深度学习入门</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -11,161 +11,322 @@
   <body data-chapter="12">
     <main class="chapter">
       <div class="chapter__inner">
-        <p class="chapter__eyebrow">第 12 章 · 经典网络结构</p>
-        <h1>CNN 卷积神经网络</h1>
+        <p class="chapter__eyebrow">第 12 章 · 学习是怎么发生的</p>
+        <h1>强化学习:试错里学策略</h1>
 
         <p class="lead">
-          前面两部分搭的都是<strong>全连接网络(MLP)</strong>——每个输入都连到每个神经元。它处理“一行特征”很好,
-          可一旦面对<strong>图像</strong>就水土不服。这一章认识第一位“专才”:<span class="term">CNN(卷积神经网络)</span>,
-          它靠<strong>卷积</strong>这一招,又省参数又懂空间,是计算机视觉几十年的主力。
+          第二部分一路走到这里,我们讲的几乎都是<strong>监督学习</strong>:每道题旁边都贴着<strong>标准答案</strong>,
+          模型照着把损失降下来就行(<a class="xref" href="chapter-04.html">第 4 章</a>损失、<a class="xref" href="chapter-06.html">第 6 章</a>反传)。
+          但“学习”不止这一种。下棋、打游戏、机器人走路、甚至日后<strong>对齐大模型(RLHF)</strong>——这些任务
+          <em>没有逐条的标准答案</em>,只有“这一步做得好不好”的<strong>反馈(奖励)</strong>。
+          这一章用大白话搭起<span class="term">强化学习(Reinforcement Learning, RL)</span>的骨架,
+          让你日后读到 <a class="xref" href="chapter-20.html">RLHF、PPO(第 20 章)</a>时,不再觉得它们是凭空冒出来的黑魔法。
         </p>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>用全连接网络处理图像的<strong>三个硬伤</strong>;</li>
-            <li><strong>卷积</strong>到底在算什么:局部感受野 + 一个小滤波器在图上滑动;</li>
-            <li><strong>权重共享</strong>为什么能让参数暴减,还自带<strong>平移不变</strong>;</li>
-            <li><strong>池化</strong>、<strong>通道</strong>、以及“浅层看边缘、深层看物体”的层级特征;</li>
-            <li>LeNet / AlexNet / ResNet 这些名字大概是怎么回事。</li>
+            <li>监督学习与强化学习<strong>差在哪</strong>,为什么有些任务没法靠“标注答案”解决;</li>
+            <li>跟着一只<strong>走迷宫的小老鼠</strong>,建立起 状态 / 动作 / 奖励 / 策略 / 价值 的直觉;</li>
+            <li><strong>回报</strong>为什么要给未来“打折”(折扣 γ);</li>
+            <li><strong>探索与利用</strong>为什么永远是一对矛盾;</li>
+            <li><strong>Q-learning</strong> 怎么用一张表,一步步把“价值”从终点<strong>倒灌</strong>回起点(含一次手算更新);</li>
+            <li>状态太多 → <strong>DQN</strong> 用神经网络近似;动作太多 → <strong>策略梯度 / PPO</strong> 直接学策略;</li>
+            <li><a class="xref" href="chapter-20.html">第 20 章</a> 的 <strong>RLHF</strong> 其实就是一次强化学习:大模型当“策略”、奖励模型当“裁判”。</li>
           </ul>
         </section>
 
-        <h2>1. 全连接处理图像,卡在哪?</h2>
-        <p>把一张图片摊平成一个长向量、直接喂给 MLP,会撞上三个问题:</p>
-        <ul>
-          <li><strong>参数爆炸</strong>:一张 <strong>1000×1000</strong> 的彩图摊平就是 300 万个输入。第一层哪怕只有 1000 个神经元,权重就有 <strong>30 亿</strong>个——根本训不动。</li>
-          <li><strong>丢了空间结构</strong>:摊平后,原本<strong>相邻的像素</strong>被拆散到向量各处,“这两个点挨在一起”这种关键信息没了。</li>
-          <li><strong>没有平移不变</strong>:猫出现在<strong>左上角</strong>和出现在<strong>右下角</strong>,对 MLP 是完全不同的输入,得<strong>各学一遍</strong>,极其浪费。</li>
-        </ul>
-        <p>CNN 的所有设计,都是冲着这三点来的。</p>
-
-        <h2>2. 卷积:一个小滤波器,在图上滑一遍</h2>
+        <h2>1. 监督学习之外:只有“好不好”,没有“标准答案”</h2>
         <p>
-          卷积的核心是一个很小的权重方块,叫<span class="term">卷积核 / 滤波器(kernel)</span>,比如 3×3。
-          它<strong>不看全图</strong>,只盖住图上的一小块(<strong>局部感受野</strong>),把这一小块和核<strong>做<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a></strong>(<a class="xref" href="chapter-01.html">第 1 章</a>),
-          得到一个数;然后<strong>滑到下一个位置</strong>再算一个数……滑遍全图,就得到一张新的图,叫<span class="term">特征图(feature map)</span>。
+          回忆<a class="xref" href="chapter-00.html">第 0 章</a>:监督学习像有老师批改作业——输入一封邮件,标签告诉你“垃圾/正常”;
+          MNIST 给你一张图,标签告诉你“这是数字 7”。每一步都有<strong>明确的正确答案</strong>,
+          损失函数就是在量“离正确答案有多远”。
         </p>
-        <div class="figure reveal">
-          <div class="diagram">
-            <svg viewBox="0 0 480 220" role="img" aria-label="卷积滑窗示意">
-              <text x="40" y="28" fill="#b6c5e1" font-size="12">输入图(5×5)</text>
-              <g stroke="#46587a" stroke-width="1" fill="rgba(106,195,255,0.06)">
-                <rect x="40" y="40" width="24" height="24" /><rect x="66" y="40" width="24" height="24" /><rect x="92" y="40" width="24" height="24" /><rect x="118" y="40" width="24" height="24" /><rect x="144" y="40" width="24" height="24" />
-                <rect x="40" y="66" width="24" height="24" /><rect x="66" y="66" width="24" height="24" /><rect x="92" y="66" width="24" height="24" /><rect x="118" y="66" width="24" height="24" /><rect x="144" y="66" width="24" height="24" />
-                <rect x="40" y="92" width="24" height="24" /><rect x="66" y="92" width="24" height="24" /><rect x="92" y="92" width="24" height="24" /><rect x="118" y="92" width="24" height="24" /><rect x="144" y="92" width="24" height="24" />
-                <rect x="40" y="118" width="24" height="24" /><rect x="66" y="118" width="24" height="24" /><rect x="92" y="118" width="24" height="24" /><rect x="118" y="118" width="24" height="24" /><rect x="144" y="118" width="24" height="24" />
-                <rect x="40" y="144" width="24" height="24" /><rect x="66" y="144" width="24" height="24" /><rect x="92" y="144" width="24" height="24" /><rect x="118" y="144" width="24" height="24" /><rect x="144" y="144" width="24" height="24" />
-              </g>
-              <rect x="40" y="40" width="76" height="76" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" stroke-width="2.5" />
-              <text x="52" y="185" fill="#8ef0d1" font-size="11">3×3 核盖住的一小块</text>
-              <text x="210" y="96" fill="#8b7bff" font-size="13">⊛ 核</text>
-              <text x="196" y="114" fill="#8499bd" font-size="10">点积求和</text>
-              <line x1="180" y1="78" x2="300" y2="78" stroke="#8499bd" stroke-width="1.5" marker-end="url(#cvm)" />
-              <defs><marker id="cvm" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8499bd" /></marker></defs>
-              <text x="320" y="28" fill="#b6c5e1" font-size="12">特征图(3×3)</text>
-              <g stroke="#46587a" stroke-width="1" fill="rgba(139,123,255,0.06)">
-                <rect x="320" y="52" width="26" height="26" /><rect x="348" y="52" width="26" height="26" /><rect x="376" y="52" width="26" height="26" />
-                <rect x="320" y="80" width="26" height="26" /><rect x="348" y="80" width="26" height="26" /><rect x="376" y="80" width="26" height="26" />
-                <rect x="320" y="108" width="26" height="26" /><rect x="348" y="108" width="26" height="26" /><rect x="376" y="108" width="26" height="26" />
-              </g>
-              <rect x="320" y="52" width="26" height="26" fill="rgba(142,240,209,0.3)" stroke="#8ef0d1" stroke-width="2" />
-              <text x="322" y="150" fill="#8499bd" font-size="10">这一格 = 那一小块与核的点积</text>
-            </svg>
-          </div>
-          <p class="figure__cap">卷积:核盖住左上 3×3,做一次点积得到特征图的第一格;核向右/向下滑动,算出整张特征图。第 3 期会给它配一个能一步步滑动的动画。</p>
+        <p>
+          可很多事情<strong>压根没有逐步的标准答案</strong>。教小孩骑车,你没法在每一瞬间告诉他“车把该左转 3.7 度”;
+          你能做的,是让他自己蹬、自己试,摔了(负反馈)就少来点、稳住往前(正反馈)就多来点。
+          <strong>强化学习就是把这种“试错 + 奖惩”写成算法。</strong>
+        </p>
+        <p>
+          它的设定是:一个<span class="term">智能体(agent)</span>在<strong>环境</strong>里不断做选择,
+          环境不告诉你“唯一正确答案”,只在你做完之后给一个<strong>奖励(reward)</strong>——可能是 +1(吃到金币)、−1(撞墙)、
+          或者拖到最后才揭晓的终局分(棋赢了 +1、输了 −1)。你的目标不是拟合某个标签,而是学一套<strong>出招习惯</strong>,
+          让<strong>长期累积的奖励</strong>尽量大。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th></th><th>监督学习(本部分主线)</th><th>强化学习(本章)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>训练信号</strong></td><td>每条样本都有标签 / 目标值</td><td>环境给的奖励(可能延迟、可能稀疏)</td></tr>
+              <tr><td><strong>学什么</strong></td><td>输入 → 输出的映射</td><td>在什么状态下该采取什么动作(策略)</td></tr>
+              <tr><td><strong>数据从哪来</strong></td><td>事先收集好的固定数据集</td><td>智能体和环境<strong>互动</strong>时<strong>在线</strong>产生</td></tr>
+              <tr><td><strong>反馈时机</strong></td><td>每一步立刻知道对错</td><td>可能走了很多步,最后才给一个分</td></tr>
+              <tr><td><strong>典型例子</strong></td><td>MNIST、语言模型预测下一个 token(<a class="xref" href="chapter-19.html">第 19 章</a>)</td><td>AlphaGo、机器人控制、RLHF 对齐(<a class="xref" href="chapter-20.html">第 20 章</a>)</td></tr>
+            </tbody>
+          </table>
         </div>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">卷积一层 · 示意伪代码(帮助理解)</figcaption>
-          <pre class="code-walk__code"><code>for (r : 输出的每一行)
-  for (c : 输出的每一列) {
-    sum = 0;
-    for (i : 0..K) for (j : 0..K)                 // 核的每个位置  <b class="cw-tag">1</b>
-      sum += image[r+i][c+j] * kernel[i][j];      // 小块 · 核 (点积)
-    feature_map[r][c] = activate(sum + bias);      // 一个输出像素   <b class="cw-tag">2</b>
-  }</code></pre>
-          <ol class="code-walk__notes">
-            <li>核在图上滑动,每到一个位置,就把覆盖的小块和核做<strong>点积</strong>——和一个神经元干的事一模一样,只是<strong>只看局部</strong>。</li>
-            <li>加偏置、过激活(<a class="xref" href="chapter-07.html">第 7 章</a>),得到特征图上的一个像素。<strong>同一个核扫遍全图</strong>——这就是下一节的“权重共享”。</li>
-          </ol>
-        </figure>
-
-        <h2>3. 权重共享:参数暴减,还自带平移不变</h2>
-        <p>这看似普通的“滑动”,一举解决了第 1 节的三个硬伤:</p>
-        <ul>
-          <li><strong>参数暴减</strong>:一个 3×3 的核只有 <strong>9 个权重</strong>,却要负责整张图。相比全连接动辄上亿,参数少了好几个数量级。</li>
-          <li><strong>保留空间结构</strong>:核只看<strong>连在一起</strong>的一小块,天然尊重“相邻像素有关系”。</li>
-          <li><strong>平移不变</strong>:同一个核扫全图,所以<strong>猫在哪个角落都能被同一个“猫特征核”检测到</strong>——不用各学一遍。</li>
-        </ul>
-        <div class="callout callout--analogy reveal">
-          <span class="callout__title">像拿一个“找边缘的印章”盖满全图</span>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">为什么它也算“学习是怎么发生的”</span>
           <p>
-            你可以把卷积核想成一个<strong>专门检测某种花纹的印章</strong>(比如“竖边缘”)。拿它在整张图上<strong>一处处盖</strong>,
-            哪里有竖边缘,那里就盖出一个高亮。一个核 = 一种花纹检测器,而且<strong>全图通用</strong>。这就是权重共享的威力。
+            监督学习和强化学习,是机器学习的<strong>两大学习范式</strong>(还有个“无监督”管发现结构,本书不展开)。
+            它们的底层<strong>还是这一部分那套</strong>:用一个网络算输出、定义一个“越大越好/越小越好”的目标、
+            再用<a class="xref" href="chapter-06.html">反向传播</a>去调参数。区别只在于:<strong>目标从“贴好的标签”换成了“环境给的奖励”。</strong>
           </p>
         </div>
 
-        <h2>4. 池化:把特征图“缩一缩”</h2>
+        <h2>2. 一个贯穿全章的例子:老鼠走迷宫</h2>
         <p>
-          <span class="term">池化(pooling)</span>是紧跟卷积的“下采样”:把特征图切成小块(如 2×2),每块只留一个代表值——
-          <strong>最大池化</strong>取最大值,<strong>平均池化</strong>取平均。好处:
-        </p>
-        <ul>
-          <li><strong>缩小尺寸</strong>、减少后续计算;</li>
-          <li><strong>增强鲁棒性</strong>:物体轻微移动几个像素,最大值往往不变,识别更稳。</li>
-        </ul>
-
-        <h2>5. 通道与堆叠:从边缘到物体</h2>
-        <p>
-          一个核只能检测一种花纹,所以每层会用<strong>很多个核</strong>,产出<strong>很多张特征图</strong>——这些就是
-          <span class="term">通道(channel)</span>(彩图输入本身就有 R/G/B 三通道)。把“卷积 + 激活 + 池化”<strong>一层层堆起来</strong>,
-          就出现了神奇的<strong>层级特征</strong>:
+          抽象的词先放一放。我们用一个<strong>最小的例子</strong>把所有概念串起来:一只小老鼠在一条<strong>四格走廊</strong>里找奶酪。
         </p>
         <div class="figure reveal">
           <div class="diagram">
             <div class="pipe">
-              <div class="pipe__box">浅层<small>边缘、颜色、角点</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">中层<small>纹理、局部部件(眼睛、轮子)</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">深层<small>完整物体(猫脸、汽车)</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">全连接<small>汇总特征 → 分类</small></div>
+              <div class="pipe__box">格子0<small>起点</small></div>
+              <div class="pipe__arrow">·</div>
+              <div class="pipe__box">格子1<small></small></div>
+              <div class="pipe__arrow">·</div>
+              <div class="pipe__box">格子2<small></small></div>
+              <div class="pipe__arrow">·</div>
+              <div class="pipe__box">格子3<small>奶酪 +10</small></div>
             </div>
           </div>
-          <p class="figure__cap">越往深层,特征越抽象——从边缘,到部件,到整个物体。这正是<a class="xref" href="chapter-00.html">第 0 章</a>说的“网络自己逐层提炼特征”。</p>
+          <p class="figure__cap">老鼠从格子 0 出发,每步可以往<strong>左</strong>或<strong>右</strong>。走到格子 3(奶酪)得 +10 分,回合结束;其余每步得 0 分。</p>
         </div>
+        <p>
+          老鼠一开始<strong>什么都不懂</strong>,只会乱走。但每次它偶然摸到奶酪、拿到那 +10,就会<strong>稍微记住</strong>“刚才那条路好像不错”。
+          反复试很多回合,它就慢慢学会了:<em>不管在哪个格子,一直往右走准没错。</em> 这套“在每个格子该往哪走”的习惯,就是我们要学的东西。
+        </p>
 
-        <h2>6. 一眼看过经典结构</h2>
-        <p>套路都是“<strong>卷积/池化叠很多层做特征,最后接几层全连接做分类</strong>”,只是越做越深、越做越巧:</p>
+        <h2>3. 智能体与环境:一个不停转的循环</h2>
+        <p>强化学习的一切,都发生在<strong>智能体</strong>和<strong>环境</strong>之间这个循环里:</p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">智能体 agent<small>老鼠:看格子、挑方向</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">动作 a<small>往左 / 往右</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">环境<small>走廊:决定下一格</small></div>
+              <div class="pipe__arrow">↺</div>
+              <div class="pipe__box">新状态 s′ + 奖励 r<small>到了哪、得几分</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">智能体做<strong>动作</strong> → 环境返回<strong>新状态</strong>和<strong>奖励</strong> → 智能体再做下一个动作……循环往复,直到回合结束。</p>
+        </div>
+        <p>
+          数学家把这类“状态—动作—奖励”的循环形式化成<span class="term">马尔可夫决策过程(MDP)</span>。别被名字唬住,拆开就是<strong>五个直觉概念</strong>,
+          全能在迷宫里找到对应:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>概念</th><th>一句话</th><th>在迷宫里是</th></tr></thead>
+            <tbody>
+              <tr><td><span class="pill">状态 s</span></td><td>当前局面</td><td>老鼠现在在第几格(0/1/2/3)</td></tr>
+              <tr><td><span class="pill">动作 a</span></td><td>你能做的选择</td><td>往左、往右</td></tr>
+              <tr><td><span class="pill">奖励 r</span></td><td>环境即时打的分</td><td>到奶酪 +10,其余 0</td></tr>
+              <tr><td><span class="pill">转移</span></td><td>做了动作,下一步去哪</td><td>在格子1往右 → 到格子2</td></tr>
+              <tr><td><span class="pill">折扣 γ</span></td><td>未来的奖励打几折(0~1)</td><td>下一节细讲</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="chain-map__note">“马尔可夫”只是说:<strong>下一步去哪,只取决于“现在这一格”,和你之前怎么绕过来的没关系</strong>。迷宫正好满足。</p>
+
+        <h2>4. 回报:为什么要给未来“打折”</h2>
+        <p>
+          强化学习优化的从来不是“眼前这一步的奖励”,而是<strong>从现在起、一路加下去的总奖励</strong>,叫<span class="term">回报(return)</span>。
+          但直接把未来所有奖励原样相加有两个毛病:游戏可能无限长(和会发散),而且“<strong>眼前的 10 分</strong>”通常比“<strong>十步之后的 10 分</strong>”更值钱。
+          解决办法是给未来的奖励<strong>逐步打折</strong>:
+        </p>
+        <div class="mathblock reveal">
+          回报 <var>G</var><sub>t</sub> = <var>r</var><sub>t</sub> + γ·<var>r</var><sub>t+1</sub> + γ²·<var>r</var><sub>t+2</sub> + γ³·<var>r</var><sub>t+3</sub> + …
+          <span class="label">γ(0~1)是折扣因子:越远的奖励,乘的 γ 次方越多、缩得越小</span>
+        </div>
+        <p>
+          γ 就像“利率的反面”。取 <strong>γ = 0.9</strong>:下一步的奖励只算 0.9 倍,两步后算 0.81 倍……
+          于是老鼠会倾向<strong>尽快</strong>拿到奶酪,而不是绕远路——因为绕得越久,那 +10 被折得越狠。
+          γ 越接近 1 越“有耐心、看长远”;越接近 0 越“只顾眼前”。
+        </p>
+
+        <h2>5. 策略与价值:到底在学什么</h2>
+        <p>RL 里有两个核心量,别混淆:</p>
         <ul>
-          <li><strong>LeNet(1998)</strong>:CNN 的鼻祖,就是用来识别手写数字(和本书的 MNIST 同一个任务)。</li>
-          <li><strong>AlexNet(2012)</strong>:在 ImageNet 大赛上一鸣惊人,点燃了这一轮深度学习浪潮。</li>
-          <li><strong>ResNet(2015)</strong>:靠<strong>残差连接</strong>(还记得吗?<a class="xref" href="chapter-17.html#4-把它们拼成一块-block">第 17 章 Transformer</a> 也用它)把网络堆到上百层还训得动。</li>
+          <li><span class="term">策略 π</span>:在状态 <var>s</var> 下<strong>该怎么出招</strong>,记作 π(<var>a</var>|<var>s</var>)。这是我们最终想要的“习惯手册”——比如“在任何格子都往右”。</li>
+          <li><span class="term">价值 V / Q</span>:一个状态(或“状态+动作”)<strong>到底值多少</strong>,也就是从这里出发、按当前策略走下去,预期能拿到多少<strong>回报</strong>。
+            <br /><var>V</var>(<var>s</var>) 问“待在 <var>s</var> 有多好”;<var>Q</var>(<var>s</var>,<var>a</var>) 更细,问“在 <var>s</var> <strong>先做动作 <var>a</var></strong> 有多好”。</li>
         </ul>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">CNN、MLP、Transformer 什么关系?</span>
+        <p>
+          直觉上,<strong>离奶酪越近的格子越“值钱”</strong>。设 γ=0.9,一个学好的老鼠对“往右”这个动作的价值大概是这样(离终点越近,价值越高):
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead><tr><th>状态(格子)</th><th>Q(格子, 往右)</th><th>为什么</th></tr></thead>
+            <tbody>
+              <tr><td>格子2</td><td class="is-hot">10</td><td>再走一步就到奶酪,直接拿 +10</td></tr>
+              <tr><td>格子1</td><td>9</td><td>要两步,+10 被折一次:0.9 × 10 = 9</td></tr>
+              <tr><td>格子0</td><td>8.1</td><td>要三步,再折一次:0.9 × 9 = 8.1</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">价值像“奶酪的香味”:在终点最浓,越往回越淡(每退一格乘一次 γ)。有了这张表,策略就现成了——<strong>每步挑价值最高的动作</strong>即可。</p>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">价值和策略,一体两面</span>
           <p>
-            它们是<strong>三种不同的“积木搭法”</strong>,共享同一套地基(第 1–11 章的前向、损失、反传、优化)。
-            MLP 适合一行特征、CNN 专攻图像的<strong>局部+平移不变</strong>、Transformer(第四部分)靠注意力专攻序列。
-            如今图像领域也越来越多用 Transformer(ViT),但 CNN 的“局部感受野 + 权重共享”思想依然影响深远。
+            只要你知道了每个“状态+动作”的<strong>价值 Q</strong>,策略就<strong>白送</strong>:在每个状态,挑 Q 最大的那个动作走就行。
+            所以很多算法(如下面的 Q-learning)干脆<strong>只学 Q</strong>,策略是顺带得到的。
           </p>
         </div>
+
+        <h2>6. 探索与利用:走老路,还是试新路?</h2>
+        <p>
+          这里有个绕不开的两难。老鼠已经发现“往右能吃到奶酪”,那它是该<strong>一直走这条已知的路(利用 exploitation)</strong>,
+          还是偶尔<strong>试试没走过的方向(探索 exploration)</strong>,万一有更近的近道?
+        </p>
+        <ul>
+          <li>只<strong>利用</strong>:稳,但可能永远发现不了更好的路(也许左边有个传送门直达奶酪);</li>
+          <li>只<strong>探索</strong>:一直乱试,永远不安分,拿不到稳定的高分。</li>
+        </ul>
+        <p>
+          最常用的平衡办法叫 <span class="term">ε-greedy</span>:<strong>大部分时候(概率 1−ε)走当前最优,偶尔(概率 ε)随机试一个</strong>。
+          就像去餐厅:多数时候点你爱吃的招牌菜(利用),偶尔手一抖点个没吃过的(探索)——万一发现新宠呢。
+          训练前期把 ε 调大(多探索),后期慢慢调小(多利用),是常见套路。
+        </p>
+
+        <h2>7. Q-learning:用一张表,把价值从终点倒灌回起点</h2>
+        <p>
+          上面那张漂亮的价值表,老鼠<strong>怎么自己算出来</strong>?这就是 <span class="term">Q-learning</span> 干的事。
+          它维护一张 <var>Q</var>(<var>s</var>,<var>a</var>) 表(一开始全填 0),每走一步就用这条<strong>更新公式</strong>修一下对应的格子:
+        </p>
+        <div class="mathblock reveal">
+          <var>Q</var>(<var>s</var>,<var>a</var>) ← <var>Q</var>(<var>s</var>,<var>a</var>) + α · [ <var>r</var> + γ · max<sub><var>a</var>′</sub> <var>Q</var>(<var>s</var>′,<var>a</var>′) − <var>Q</var>(<var>s</var>,<var>a</var>) ]
+          <span class="label">α 是学习率(步子多大);方括号里是“新估计 − 旧估计”,叫 TD 误差</span>
+        </div>
+        <p>
+          别被公式吓到,它说的是一句大白话:<strong>“我原本以为这一步值这么多,实际走完发现(即时奖励 <var>r</var> + 打折后的‘下一步最好能有多少’),两者有差距,就朝实际那边挪一点点。”</strong>
+          其中 <code>r + γ·max Q(s′,·)</code> 是“走完这步后对价值的<strong>新估计</strong>”,减去旧的 Q 就是<strong>误差</strong>,乘以 α 挪过去。
+        </p>
+        <h3>手算一次更新</h3>
+        <p>设 α=0.5、γ=0.9,表全是 0。老鼠这次在<strong>格子2 往右</strong>,一步到奶酪(格子3),拿到 <var>r</var>=+10。格子3 是终点,之后没得走,所以 max Q(s′,·)=0:</p>
+        <div class="mathblock reveal">
+          <var>Q</var>(格子2, 右) ← 0 + 0.5 · [ 10 + 0.9·0 − 0 ] = <strong>5</strong>
+          <span class="label">第一次:从 0 挪到 5(只挪了“误差 10”的一半,因为 α=0.5)</span>
+        </div>
+        <p>下次它又走这一步,旧 Q 已经是 5 了:</p>
+        <div class="mathblock reveal">
+          <var>Q</var>(格子2, 右) ← 5 + 0.5 · [ 10 + 0 − 5 ] = <strong>7.5</strong> → 再来 8.75 → 9.375 → … → <strong>逼近 10</strong>
+          <span class="label">反复走,Q(格子2,右) 会稳稳收敛到真值 10</span>
+        </div>
+        <p>
+          精彩的地方在于<strong>“倒灌”</strong>:一旦 Q(格子2,右) 变成了 10,下次老鼠在<strong>格子1 往右</strong>走到格子2 时,
+          那条更新里的 <code>max Q(格子2,·)</code> 就不再是 0,而是 10——于是 Q(格子1,右) 开始朝 <code>0 + 0.9·10 = 9</code> 爬。
+          同理再倒灌到格子0。<strong>价值就这样从奶酪所在的终点,一格一格地往回“渗”到起点</strong>,最后长成第 5 节那张表。没有人给过任何一格“标准答案”,全是试错 + 这条更新公式自己算出来的。
+        </p>
+
+        <h2>8. 状态太多怎么办:用神经网络近似(DQN)</h2>
+        <p>
+          四格走廊只有 4 个状态,一张表绰绰有余。可要是状态是<strong>一整屏雅达利游戏画面</strong>呢?可能的画面近乎无穷,表根本存不下。
+          办法很自然:<strong>别存表了,训一个神经网络来“预测” Q 值</strong>——输入状态,输出每个动作的 Q。这就是大名鼎鼎的
+          <span class="term">DQN(Deep Q-Network)</span>。
+        </p>
+        <p>
+          注意:这里用的还是你<a class="xref" href="chapter-03.html">第 3 章</a>的网络、<a class="xref" href="chapter-06.html">第 6 章</a>的反向传播,<strong>一套新算法都不需要</strong>。
+          唯一的不同是“训练目标”从哪来:监督学习的目标是人工标签,而 DQN 的目标是上面那条更新公式里的
+          <code>r + γ·max Q(s′,·)</code>——<strong>目标来自智能体自己的试错,而不是人工标注</strong>。DeepMind 当年用它让 AI 仅看画面就学会玩几十种雅达利游戏,一战成名。
+        </p>
+
+        <h2>9. 动作太多怎么办:直接学策略(策略梯度 / PPO)</h2>
+        <p>
+          Q-learning 每步都要 <code>max Q(s′,·)</code>——把所有动作比一遍挑最大。动作只有“左/右”时没问题;
+          可要是动作空间<strong>大得吓人</strong>呢?比如语言模型每一步要从<strong>几万个 token</strong> 里挑一个(<a class="xref" href="chapter-19.html">第 19 章</a>),
+          挨个比 Q 就不现实了。
+        </p>
+        <p>
+          这时换个思路:<strong>不去费劲估每个动作的价值,而是直接学那个“出招习惯”——策略 π<sub>θ</sub>(<var>a</var>|<var>s</var>) 本身</strong>,用一个网络输出各动作的概率。
+          训练信号也很直白:<strong>某个动作最终带来的回报高,就调参数让它下次概率更大;回报低,就调小</strong>。这类方法叫<span class="term">策略梯度(policy gradient)</span>。
+        </p>
+        <p>
+          纯策略梯度容易“步子迈太大”——一次更新就把好不容易学到的策略带偏。<span class="term">PPO(近端策略优化)</span>给它加了两道保险:
+          <strong>裁剪</strong>(每次更新幅度别超过一个范围)和 <strong>KL 惩罚</strong>(新策略别离旧策略太远)。
+          正因为“稳”,PPO 成了<a class="xref" href="chapter-20.html">第 20 章</a> RLHF 里最常用的算法。
+        </p>
+
+        <h2>10. 回到大模型:RLHF 就是一次强化学习</h2>
+        <p>
+          绕了一圈,回到本书主线。你在<a class="xref" href="chapter-20.html">第 20 章</a>会读到,大模型训练的最后一步 <strong>RLHF(基于人类反馈的强化学习)</strong>,
+          用的正是本章这套语言——只要把五个概念对号入座,它立刻就不神秘了:
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">RLHF 用 RL 语言怎么说?</span>
+          <p>
+            <strong>状态 s</strong> = 用户的问题 + 已经生成的前缀;<strong>动作 a</strong> = 下一个 token;
+            <strong>奖励 r</strong> = 整段回答写完后,由一个“<strong>奖励模型</strong>”(学人类喜好训出来的裁判)打的分;
+            <strong>策略 π</strong> = 当前这个大模型;<strong>算法</strong> = PPO,一边提高“高分回答”的概率,一边用 KL 拴住它别偏离原模型太远。<br />
+            所以 RLHF 不是什么新范式,就是<strong>把大模型当成一个在“对话环境”里试错的智能体</strong>,让它朝“人更喜欢”的方向调。
+            拴得太紧或奖励模型有偏,就会付出<a class="xref" href="chapter-20.html">第 20 章</a>说的<strong>对齐税</strong>——更安全听话,但某些能力、创造性可能打折。
+          </p>
+        </div>
+        <p>
+          最近火的<strong>推理模型</strong>(如 o1、DeepSeek-R1)也沿用这套:对数学、代码这类<strong>有标准答案</strong>的题,
+          用“答对给正奖励、答错给负奖励”的强化学习,让模型自己摸索出好的推理套路(<a class="xref" href="chapter-20.html">第 20 章</a>)。可见强化学习这套“靠奖励试错”的思想,正越来越深地嵌进大模型。
+        </p>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>全连接处理图像有三个硬伤:<strong>参数爆炸、丢空间结构、无平移不变</strong>。</li>
-            <li><strong>卷积</strong> = 一个小核在图上滑动,每处和局部小块做点积,产出<strong>特征图</strong>。</li>
-            <li><strong>权重共享</strong>(同核扫全图):参数暴减 + 保留空间 + <strong>平移不变</strong>。</li>
-            <li><strong>池化</strong>缩小特征图、增强鲁棒;<strong>多核 = 多通道</strong>,堆叠出“边缘→部件→物体”的层级特征。</li>
-            <li>经典结构 LeNet/AlexNet/ResNet 都是“卷积池化做特征 + 全连接分类”,ResNet 用残差堆到很深。</li>
+            <li>强化学习是与监督学习并列的<strong>另一种学习范式</strong>:没有标准答案,靠<strong>奖励</strong>在试错中学策略,适合决策、控制、对齐。</li>
+            <li>五件套(MDP):状态 s、动作 a、奖励 r、转移、折扣 γ;优化的是<strong>打过折的长期回报</strong>,不是眼前一步。</li>
+            <li><strong>策略 π</strong> 是“该怎么出招”,<strong>价值 Q</strong> 是“这么出招值多少”;知道了 Q,策略就是“每步挑 Q 最大的动作”。</li>
+            <li><strong>探索 vs 利用</strong>:ε-greedy——多数走最优,偶尔随机试。</li>
+            <li><strong>Q-learning</strong> 用一条更新公式,把价值从终点一格格<strong>倒灌</strong>回起点;状态太多就用 <strong>DQN</strong> 拿神经网络近似 Q。</li>
+            <li>动作空间巨大(如词表)时,用<strong>策略梯度 / PPO</strong> 直接学策略;PPO 靠裁剪 + KL 保持稳定。</li>
+            <li><strong>RLHF</strong>(<a class="xref" href="chapter-20.html">第 20 章</a>)= 把大模型当策略、奖励模型当裁判的一次强化学习。</li>
           </ul>
         </section>
 
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:强化学习和监督学习最本质的区别是什么?</summary>
+            <div class="quiz__a">
+              <p>训练信号不同。监督学习每条样本都有<strong>标准答案(标签)</strong>,损失衡量“离答案多远”;强化学习没有逐步答案,只有环境给的<strong>奖励</strong>(可能延迟、可能稀疏),目标是最大化<strong>长期累积回报</strong>,学的是“在什么状态做什么动作”的策略。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:为什么回报要引入折扣 γ?</summary>
+            <div class="quiz__a">
+              <p>两个原因:①防止无限长的任务里奖励加起来发散;②让“眼前的奖励”比“很久以后的奖励”更值钱,促使智能体尽快达成目标。γ 越接近 1 越看长远,越接近 0 越只顾眼前。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:Q-learning 里“价值从终点倒灌回起点”是什么意思?</summary>
+            <div class="quiz__a">
+              <p>更新公式 <code>Q(s,a) ← Q(s,a)+α[r+γ·max Q(s′,·)−Q(s,a)]</code> 依赖“下一状态的最好价值”。终点旁边的动作最先学到真值(直接拿奖励),然后它成为更前一格的“下一状态价值”,于是价值一格格往回传播,最终从奖励所在的终点渗到起点——全程没有人工标注,靠试错自己算出。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:探索与利用为什么是矛盾?ε-greedy 怎么折中?</summary>
+            <div class="quiz__a">
+              <p>只利用已知最优,可能错过更好的路;只探索则永远拿不到稳定高分。ε-greedy 让智能体以概率 1−ε 选当前最优(利用)、以概率 ε 随机试(探索),通常前期 ε 大、后期 ε 小。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 5:动作空间巨大(如语言模型的几万 token)时,为什么偏爱策略梯度/PPO 而不是 Q-learning?</summary>
+            <div class="quiz__a">
+              <p>Q-learning 每步要 <code>max Q(s′,·)</code>,得把所有动作比一遍;动作有几万个时代价太大。策略梯度直接用网络输出各动作的概率、按“回报高就加大概率”来学,不必逐个估价值。PPO 再加裁剪和 KL 惩罚保持更新稳定,因此成为 RLHF 的常用算法。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 6:把 RLHF 翻译成 RL 的五件套,分别对应什么?</summary>
+            <div class="quiz__a">
+              <p>状态 = 问题 + 已生成前缀;动作 = 下一个 token;奖励 = 整段回答由奖励模型打的分;策略 = 当前大模型;算法 = PPO(加 KL 约束别偏离原模型太远)。本质就是让大模型在“对话环境”里试错,朝“人更喜欢”的方向调。</p>
+            </div>
+          </details>
+        </div>
+
         <p class="muted">
-          CNN 专治图像。可另一类数据——<strong>一句话、一段时间序列</strong>——需要“记住前文”。
-          下一章认识第二位专才:<strong>RNN 与 LSTM</strong>,顺便看清它有哪些先天短板,为第四部分的注意力埋下伏笔。
+          两大学习范式都认识了。<strong>下一部分</strong>换个视角:<strong>不同的数据,适合不同结构的网络</strong>——
+          我们去认识处理图像的 <strong>CNN</strong> 和处理序列的 <strong>RNN</strong>,先从卷积开始。
         </p>
       </div>
     </main>

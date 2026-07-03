@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 20 章 · 大模型的工程与基础设施 | 深度学习入门</title>
+    <title>第 20 章 · 通往大模型:原理与训练 | 深度学习入门</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -12,533 +12,506 @@
     <main class="chapter">
       <div class="chapter__inner">
         <p class="chapter__eyebrow">第 20 章 · 通往大模型</p>
-        <h1>大模型的工程与基础设施</h1>
+        <h1>通往大模型:原理与训练</h1>
 
         <p class="lead">
-          上一章我们讲清了大模型“是什么、怎么训”。但“<strong>上千 GPU 训数周</strong>”这句话背后,
-          藏着一整个工程世界。这一章我们钻进机房,用大白话讲清楚:为什么非用 <strong>GPU</strong> 不可、
-          <strong>显存</strong>为什么是真正的瓶颈、一个单卡放不下的模型怎么<strong>切开分到成百上千张卡</strong>上、
-          这些卡又<strong>怎么高速通信</strong>,以及推理时那些让它“快起来”的关键技巧。
+          你已经亲手把一个完整的语言模型从一个神经元拆到了底。现在我们站远一点,看看把<a class="xref" href="chapter-19.html">第 19 章</a>那个小模型
+          <strong>放大一万倍</strong>会发生什么。这一章讲清楚三件事:大模型<strong>怎么读懂文字</strong>(分词与词嵌入)、
+          <strong>为什么越大越强</strong>(规模定律与涌现)、以及<strong>是怎么“炼”出来的</strong>(预训练 → 微调 → 对齐 → 蒸馏)。
+          至于它靠什么硬件跑起来、你又该怎么用好它,留给第 21、22 章。
         </p>
+
+        <div class="callout callout--note reveal" aria-label="本章在整条链路的位置">
+          <span class="callout__title">路线图 · 你在这一段的哪一站</span>
+          <nav class="chain-map">
+            <a class="chain-map__step" href="chapter-16.html">16 为什么要注意力</a>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-17.html">17 注意力机制</a>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-18.html">18 Transformer</a>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-19.html">19 语言模型</a>
+            <span class="chain-map__sep">›</span>
+            <span class="chain-map__step is-here">20 放大成大模型</span>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-21.html">21 工程与基建</a>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-22.html">22 用好它</a>
+          </nav>
+          <p class="chain-map__note">上一站(<a class="xref" href="chapter-19.html">第 19 章</a>)你已亲手搭出迷你语言模型;<strong>本站</strong>把它放大一万倍——分词 / 词嵌入、规模定律与涌现、预训练 → SFT → RLHF → 蒸馏(全景图第 ⑦ 步);下一站(<a class="xref" href="chapter-21.html">第 21 章</a>)讲它靠什么硬件才跑得起来。</p>
+        </div>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>GPU 凭什么比 CPU 适合深度学习(上万个“小工人”并行);</li>
-            <li>为什么<strong>显存</strong>是训练大模型最先撞上的墙,以及混合精度/量化怎么省显存;</li>
-            <li>数据并行、张量并行、流水线并行分别把什么“切开”了;</li>
-            <li>AllReduce、NCCL、NVLink 这些通信黑话在干嘛;</li>
-            <li>推理提速的关键:KV cache、批处理、量化,以及量化与“降智”体感的关系;</li>
-            <li><strong>MoE(混合专家)</strong>到底把什么换成了“专家”、路由器怎么选、为什么最难的是负载均衡,以及<strong>压 k/缩专家会不会降智</strong>;</li>
-            <li><strong>稀疏注意力</strong>的几种套路(滑动窗口 / 全局 / 动态 top-k),以及它和 FlashAttention 的区别。</li>
+            <li>真实大模型怎么分词(BPE / 子词),词表大小意味着什么;</li>
+            <li>“词嵌入”把词变成<strong>语义坐标</strong>,为什么向量夹角能表示“意思相近”;</li>
+            <li>规模定律(Scaling Law)和涌现能力,到底在说什么;</li>
+            <li><strong>预训练</strong>与<strong>后训练</strong>(SFT、RLHF、蒸馏)的分工,以及“底座模型”和“对话模型”的区别;</li>
+            <li>推理模型、多模态(图像/语音怎么进 Transformer)、长上下文等最近的新方向,大致是怎么回事;</li>
+            <li>常见“体感”问题:<strong>模型降智</strong>、<strong>对齐税</strong>、<strong>灾难性遗忘</strong>各自发生在训练链路的哪一环;</li>
+            <li>一串训练“黑话”:自监督、泛化、过拟合、epoch/batch/step、超参数;</li>
+            <li>大模型的本质与局限——它为什么会“一本正经地胡说八道”。</li>
           </ul>
         </section>
 
-        <h2>1. 规模带来的三座大山</h2>
+        <h2>1. 先看一个惊人的事实:内核没变</h2>
         <p>
-          回忆一下:大模型的训练和推理,归根结底就是<strong>海量的矩阵乘法</strong>(第 3、16 章),
-          说白了是天量的加法和乘法。规模一上来,立刻撞上三座大山:
+          GPT、DeepSeek 这类模型,做的事和你<a class="xref" href="chapter-19.html">第 19 章</a>那个 mini LM <strong>一模一样</strong>:
+          <em>看着前文,预测下一个 token,然后自回归地一个个往下写</em>。区别只在量级:
         </p>
         <div class="figure figure--reading reveal">
           <div class="diagram">
             <div class="pipe">
-              <div class="pipe__box">算力<small>天量加乘,单核算到天荒地老</small></div>
-              <div class="pipe__arrow">·</div>
-              <div class="pipe__box">显存<small>参数+梯度+状态,单卡装不下</small></div>
-              <div class="pipe__arrow">·</div>
-              <div class="pipe__box">通信<small>切到多卡后,数据要来回同步</small></div>
+              <div class="pipe__box">本书 mini LM<small>几千参数 · 几句话语料 · CPU 几秒</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">GPT-3<small>1750 亿参数 · 数千亿 token · 上千 GPU 训数周</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">DeepSeek-V3<small>6710 亿参数(MoE)· 十几万亿 token</small></div>
             </div>
           </div>
-          <p class="figure__cap">大模型工程的三大挑战。本章逐个击破。</p>
+          <p class="figure__cap">同一套机制(Embedding + Transformer + 预测下一个 token),规模相差上亿倍。</p>
         </div>
-
-        <h2>2. GPU:为“并行”而生</h2>
-        <p>
-          一颗 CPU 很聪明,但核心不多——家用的 4 核、16 核,服务器上百核也就到头了。它擅长“<strong>一件复杂的事,一步步做好</strong>”。
-          可矩阵乘法不需要“聪明”,它需要的是<strong>同时做成千上万次简单的乘加</strong>。这正是
-          <span class="term">GPU(图形处理器)</span>的主场。
-        </p>
-        <div class="callout callout--analogy reveal">
-          <span class="callout__title">CPU 像博士,GPU 像一万个小学生</span>
-          <p>
-            一颗 CPU 像几位博士:能解难题,但人少。一块 GPU(如英伟达 H100)有<strong>上万个</strong>计算核心
-            (<span class="term">CUDA 核</span>),像一万个小学生:每个只会算简单的加减乘除,但<strong>一万道口算题同时开做</strong>,
-            瞬间就完。大模型的矩阵运算恰好能拆成海量互不依赖的小乘加,天生适合这种“人海战术”。
-          </p>
-        </div>
-        <p>
-          怎么把一个大矩阵乘法均匀地拆给上万个核、让它们别打架又别闲着?这件苦活由英伟达的
-          <span class="term">CUDA</span> 平台包办。开发者只管调用,底层调度交给它——这也是英伟达护城河极深的原因之一。
-          (人们口中的“买卡”,买的就是这种 GPU 卡。)
-        </p>
-
-        <h2>3. 显存:第一堵墙</h2>
-        <p>
-          比“算得慢”更早撞上的,往往是“<strong>放不下</strong>”。GPU 自带的高速内存叫<span class="term">显存(VRAM)</span>,
-          训练时它要同时装下好几样东西:
-        </p>
-        <ul>
-          <li><strong>参数</strong>本身(那 1750 亿个权重);</li>
-          <li>每个参数的<strong>梯度</strong>(反向传播算出的更新量,和参数一样多);</li>
-          <li>优化器的<strong>状态</strong>(比如 Adam 要为每个参数多存两个量,<a class="xref" href="chapter-08.html">第 8 章</a>);</li>
-          <li>前向时的<strong>激活值</strong>(留着反向传播用,第 3、6 章)。</li>
-        </ul>
-        <p>
-          粗略一算:光是“参数 + 梯度 + Adam 状态”,每个参数就要存好几份。1750 亿参数用普通精度存,
-          轻松需要<strong>上 TB</strong> 的显存——而一张顶级 GPU 也就几十 GB。<strong>结论很硬:大模型根本塞不进单卡,必须切开。</strong>
-          怎么切,是第 5 节的主题。先看两招“把每份都变小”的省显存术。
-        </p>
-
-        <h2>4. 省显存两招:混合精度与量化</h2>
-        <p>
-          数字存得越“精细”,占的空间越大。一个小数默认用 32 位(float32)存;但训练/推理其实用不了那么精确。
-        </p>
-        <ul>
-          <li><span class="pill">混合精度训练</span>训练时把大部分数值改用 <strong>16 位</strong>(float16/bf16)存和算,显存直接减半、还更快;
-          少数对精度敏感的地方仍用 32 位兜底,所以叫“混合”。</li>
-          <li><span class="pill">量化(quantization)</span>推理时更狠,把权重压到 <strong>8 位甚至 4 位</strong>整数。
-          这就是你能在个人电脑上跑“量化版”开源模型的原因。</li>
-        </ul>
-        <div class="callout callout--analogy reveal">
-          <span class="callout__title">量化就像把无损音乐压成 MP3</span>
-          <p>
-            无损音乐(float32)音质完美但文件巨大;压成 MP3(int8/int4)体积骤减,大多数人几乎听不出差别。
-            量化同理:用一点点几乎察觉不到的精度损失,换来<strong>好几倍</strong>的显存和速度收益,让大模型能“瘦身”下沉到消费级设备。
-          </p>
-        </div>
-        <div class="callout callout--warn reveal">
-          <span class="callout__title">“模型降智”最常发生在这里(推理压缩)</span>
-          <p>
-            网上说的“<strong>降智</strong>”,很多发生在<strong>推理部署</strong>环节,而不是预训练把参数改坏了:
-          </p>
-          <ul>
-            <li><strong>低比特量化</strong>(INT8/INT4/GGUF 等):权重精度变粗,难题、长尾知识、细腻推理最先掉链子。</li>
-            <li><strong>蒸馏后的小模型</strong>(<a class="xref" href="chapter-19.html">第 19 章</a>):容量上限更低,不是同一档聪明。</li>
-            <li><strong>上下文被截断</strong>:KV cache 或产品限制只保留短窗口,模型“看不见”完整材料。</li>
-            <li><strong>对齐过猛</strong>(<a class="xref" href="chapter-19.html">对齐税</a>):更安全、更拒答,体感像“不敢想、不会答”。</li>
-            <li><strong>MoE 激活过少</strong>(<a class="xref" href="chapter-20.html#8-moe-不是每次都动用全部参数">第 8 节</a>):为省算力把 top-k、专家规模压得太狠,每步实际用的“脑子”变小。</li>
-          </ul>
-          <p>
-            同一套权重,用 FP16 云端跑和用 4-bit 本地跑,<strong>不是同一个体验</strong>——降智往往是<strong>工程权衡</strong>(速度/成本/安全)的副产品,先查部署配置再怀疑“模型本身”。
-          </p>
-        </div>
-
-        <h2>5. 把模型切到多卡:三种并行</h2>
-        <p>既然单卡放不下、也算不快,就得把活儿拆给很多卡。主流有三种拆法,常常混着用。</p>
-
-        <h3>① 数据并行:人手一份模型,各看一部分数据</h3>
-        <p>
-          最直观的一种。每张卡都放<strong>一份完整的模型</strong>,但各自只吃<strong>一部分训练数据</strong>,各自跑前向反向、
-          算出自己的梯度。问题来了:每张卡只看了局部数据,梯度各不相同,怎么保证大家的模型还是“同一个”?
-        </p>
-        <p>
-          办法是:每一步之后,把所有卡的梯度<strong>求和再取平均</strong>,然后广播回每张卡,大家用同一个平均梯度更新。
-          这个“各自算 → 汇总平均 → 同步回去”的集体动作,就是大名鼎鼎的 <span class="term">AllReduce</span>。
-        </p>
         <div class="callout callout--note reveal">
-          <span class="callout__title">从“参数服务器”到 AllReduce</span>
+          <span class="callout__title">最重要的一句话</span>
           <p>
-            早期做法是设一台中心“<strong>参数服务器</strong>”收集、平均、再下发梯度,但它很快成为通信瓶颈(所有卡都挤它)。
-            现代训练改用<strong>环形/树形</strong>等去中心结构,让每张卡都能拿到全局平均梯度——这类“大家一起求和平均”的通信,
-            统称 AllReduce。
+            大模型不是用了什么你没学过的“黑魔法”。它就是把你已经理解的
+            <strong>注意力、Transformer Block、预测下一个 token</strong> 堆得更深、喂得更多、训得更久。
+            这一章新增的每个概念,都只是围绕这个内核的“外围工程”。
           </p>
         </div>
 
-        <h3>② 张量并行:一层太大,横切开分给几张卡</h3>
+        <h2>2. 第一步:把文字切成 token(分词与 BPE)</h2>
         <p>
-          如果模型大到<strong>单层的权重矩阵</strong>一张卡都放不下,就得把这个矩阵本身切块,分给多张卡各算一部分,
-          再把结果<strong>拼接</strong>起来。因为权重是用<strong>张量</strong>表示的,这种切法叫
-          <span class="term">张量并行(也叫模型并行)</span>。
+          <a class="xref" href="chapter-19.html">第 19 章</a>我们用的是最简单的<strong>字符级</strong>分词——一个字一个 token。真实大模型嫌它太浪费:
+          英文一个单词能拆成好几个字符,序列变得很长,而注意力的计算量随长度<strong>平方</strong>增长(<a class="xref" href="chapter-17.html">第 17 章</a>),很不划算。
+          于是它们用<strong>子词(subword)</strong>分词,最常见的算法叫 <span class="term">BPE(Byte Pair Encoding)</span>。
         </p>
         <div class="callout callout--analogy reveal">
-          <span class="callout__title">像把一张大拼图分给几个人</span>
+          <span class="callout__title">BPE 的直觉:高频搭档就“焊”在一起</span>
           <p>
-            想象你在一张大拼图上画了整个神经网络,然后把拼图<strong>掰成几块</strong>,每块交给一张 GPU——
-            每张卡只负责网络的一部分计算。算完再把碎片<strong>拼回去</strong>凑成完整结果。这种“只搬运、拼接,不改变数值”的通信,
-            有个专门的名字叫 <span class="term">AllGather</span>(区别于 AllReduce 的“求和平均”)。
+            BPE 的规则很朴素:<strong>谁和谁经常挨在一起出现,就把它俩合并成一个新 token</strong>,反复合并。
+            就像 “ing”“tion” 这种后缀在英文里到处出现,于是它们被合成一个整体;中文里“沙发”“葡萄”这种
+            高频组合也会被当成一个词。这样常用的东西用一个 token 就能表示,既短又高效。
+            (类比一下:晚自习后你和她三番五次被班主任“偶遇”,久了大家就默认你俩是“一对儿”——高频共现,合并成一个整体。)
           </p>
         </div>
-
-        <h3>③ 流水线并行:不同层放不同卡,像流水线接力</h3>
         <p>
-          还有一种:把网络的<strong>不同层</strong>放到不同卡上——第 1–10 层在卡 A,第 11–20 层在卡 B……
-          数据像工厂流水线一样,算完 A 的部分传给 B 接着算。这叫<span class="term">流水线并行</span>。
-          真实的超大模型训练,往往<strong>三种并行叠加</strong>使用,才能把一个庞然大物铺到上千张卡上同时开动。
-        </p>
-
-        <h2>6. 卡与卡怎么通信</h2>
-        <p>
-          一旦切到多卡,数据就得在卡之间<strong>飞来飞去</strong>,通信快慢直接决定训练效率。这里有几层:
+          切出来的这些 token,会预先登记在一张<span class="term">词表(vocabulary)</span>里,每个 token 配一个唯一 id。
+          训练和推理都<strong>查这张表</strong>来分词,不能临时换算法(否则会切出词表里查不到的“陌生” token)。
+          词表大小(<code>vocab_size</code>)是个权衡:
         </p>
         <ul>
-          <li><span class="pill">NCCL</span>英伟达的集合通信库。开发者只要调 <code>allreduce()</code>、<code>allgather()</code> 这些函数,
-          底层怎么高效传由它搞定,不用操心。</li>
-          <li><span class="pill">NVLink / NVSwitch</span>同一台服务器内,GPU 之间的<strong>专用高速公路</strong>(带宽远超普通网络),
-          让 8 张卡像一张大卡一样紧密协作。</li>
-          <li><span class="pill">跨服务器</span>成千上万张卡分布在很多台机器上,靠高速网卡 + 交换机(接入层 leaf、汇聚层 spine)连起来——
-          这套“分层组网”思想,和普通数据中心网络一脉相承。</li>
+          <li><strong>太小</strong>:像拿着一年级生字本读专业书,啥都得拆成一堆碎片,表达力不足;</li>
+          <li><strong>太大</strong>:每个词见得太少、学不充分,还白白撑大输出层。主流模型的词表通常在几万到十几万之间。</li>
         </ul>
         <div class="callout callout--tip reveal">
-          <span class="callout__title">一个有意思的类比</span>
+          <span class="callout__title">动手看一眼</span>
           <p>
-            训练大模型,本质是“不断调参数,让输出去<strong>碰</strong>目标”;而挖矿是“不断试,让 hash 去<strong>碰</strong>目标值”。
-            两者都是海量并行的“碰撞”游戏——这也是为什么显卡在这两股浪潮里都成了硬通货。
+            OpenAI 提供了在线分词器 <code>platform.openai.com/tokenizer</code>,把一句中英文粘进去,
+            就能看到它被切成了哪些 token、各自的 id。你会直观感到:<strong>token 数 ≠ 字数</strong>,这也是 API 按 token 计费的原因。
           </p>
         </div>
 
-        <h2>7. 推理提速:让它“回答得快”</h2>
-        <p>训练是一次性的苦工,推理(你每次提问)却要天天做、追求又快又省。几个关键招数:</p>
-        <ul>
-          <li><span class="pill">KV cache</span>最重要的一招。自回归生成时(<a class="xref" href="chapter-18.html">第 18 章</a>),每多写一个词,<strong>前面那些词的 Key、Value 并不会变</strong>
-          (<a class="xref" href="chapter-16.html">第 16 章</a>)。把它们缓存下来,新词只算自己的部分,省掉海量重复计算,生成因此快很多。它直接建立在你学过的 Q/K/V 之上。</li>
-          <li><span class="pill">批处理(batching)</span>把很多用户的请求<strong>攒成一批</strong>一起算,充分喂饱 GPU 的上万个核,提高吞吐。</li>
-          <li><span class="pill">量化</span>推理用低精度权重(第 4 节),又快又省显存——也最容易带来<a class="xref" href="chapter-20.html#4-省显存两招-混合精度与量化">“降智”体感</a>。</li>
-          <li><span class="pill">推测解码(speculative decoding)</span>用小模型先“猜”一串 token,大模型再批量验证,猜对就白赚速度;猜错再回退。不降低能力,是<strong>用额外算力换延迟</strong>的推理技巧。</li>
-        </ul>
-
-        <h2>8. MoE:不是每次都动用全部参数</h2>
+        <h2>3. 词嵌入:给每个词一个“语义坐标”</h2>
         <p>
-          还记得 DeepSeek-V3 “6710 亿参数,但每次只激活 370 亿”吗?秘密就是
-          <span class="term">MoE(Mixture of Experts,混合专家)</span>。一句话:<strong>参数堆得很多,但每个 token 只用得上其中一小撮</strong>。
-          下面把它到底怎么运作,一步步拆开。
-        </p>
-
-        <h3>① 到底把什么换成了“专家”?</h3>
-        <p>
-          回忆<a class="xref" href="chapter-17.html">第 17 章</a>:一块 Transformer Block = 注意力 + 前馈网络(FFN)。MoE 动的<strong>不是注意力,而是那层 FFN</strong>——
-          把原来<strong>一个</strong> FFN,换成<strong>并排的许多个</strong>结构相同的 FFN,每一个就叫一个<span class="term">专家(expert)</span>。
-          注意力照旧由所有 token 共享;真正“分家”的只是 FFN 这一层。
+          token 的 id 只是个编号(2 不比 1 “大”)。<a class="xref" href="chapter-19.html">第 19 章</a>讲过,<span class="term">词嵌入(embedding)</span>
+          给每个 id 配一个可学习的<strong>多维向量</strong>。这里我们把这件事的“妙处”讲透,因为它是大模型能“懂语义”的地基。
         </p>
         <div class="callout callout--analogy reveal">
-          <span class="callout__title">像综合医院分科室</span>
+          <span class="callout__title">用 RGB 颜色理解“向量”</span>
           <p>
-            原来是一位“全科 FFN 医生”给每个 token 看病;MoE 把他拆成几十个<strong>专科医生(专家)</strong>。
-            你挂号(一个 token)进来,分诊台只把你分给<strong>最对口的一两个科</strong>,用不着惊动所有医生。
-            于是“医院很大、科室很全”(总参数多),但“你这一次只看一两个科”(每次算得少)。
+            怎么用几个数字表示一个复杂事物?你其实早就会了:屏幕上任何颜色都用 <strong>RGB 三个数</strong>表示,
+            比如橙色 ≈ (255, 165, 0)。相近的颜色,三个数也相近。词嵌入一模一样,只是维度更高
+            (几百到上万维),用一串数字表示一个词的“意思”。<strong>意思相近的词,向量也相近。</strong>
           </p>
         </div>
-
-        <h3>② 路由器:每个 token 该找哪几个专家?</h3>
         <p>
-          决定“分诊”的是一个<span class="term">路由器 / 门控网络(router / gating)</span>——其实就是一个<strong>很小的线性层</strong>。
-          它给每个 token 对 N 个专家各打一个分,softmax 之后挑出分最高的 <strong>top-k</strong> 个(常见 k=2),
-          只让这几个专家干活,它们的输出再按门控分<strong>加权求和</strong>。
-        </p>
-        <div class="figure reveal">
-          <div class="diagram">
-            <svg viewBox="0 0 700 200" role="img" aria-label="MoE 路由示意图">
-              <defs>
-                <marker id="moe-dim" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8499bd" /></marker>
-                <marker id="moe-hot" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8b7bff" /></marker>
-                <marker id="moe-out" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" /></marker>
-              </defs>
-              <!-- token -->
-              <rect x="10" y="78" width="80" height="44" rx="9" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="2" />
-              <text x="50" y="105" text-anchor="middle" fill="#eef4ff" font-size="13">token</text>
-              <line x1="90" y1="100" x2="118" y2="100" stroke="#8499bd" stroke-width="2" marker-end="url(#moe-dim)" />
-              <!-- router -->
-              <rect x="120" y="72" width="110" height="56" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" />
-              <text x="175" y="95" text-anchor="middle" fill="#eef4ff" font-size="13">Router 路由器</text>
-              <text x="175" y="114" text-anchor="middle" fill="#b6c5e1" font-size="11">打分 → 选 top-2</text>
-              <!-- experts -->
-              <rect x="356" y="8" width="150" height="30" rx="8" fill="rgba(149,176,227,0.06)" stroke="rgba(149,176,227,0.32)" stroke-width="1.5" stroke-dasharray="4 3" />
-              <text x="431" y="27" text-anchor="middle" fill="#8499bd" font-size="12">FFN 专家 ①</text>
-              <rect x="356" y="54" width="150" height="30" rx="8" fill="rgba(139,123,255,0.22)" stroke="#8b7bff" stroke-width="2" />
-              <text x="431" y="73" text-anchor="middle" fill="#eef4ff" font-size="12">FFN 专家 ②</text>
-              <rect x="356" y="100" width="150" height="30" rx="8" fill="rgba(149,176,227,0.06)" stroke="rgba(149,176,227,0.32)" stroke-width="1.5" stroke-dasharray="4 3" />
-              <text x="431" y="119" text-anchor="middle" fill="#8499bd" font-size="12">FFN 专家 ③</text>
-              <rect x="356" y="146" width="150" height="30" rx="8" fill="rgba(139,123,255,0.22)" stroke="#8b7bff" stroke-width="2" />
-              <text x="431" y="165" text-anchor="middle" fill="#eef4ff" font-size="12">FFN 专家 ④</text>
-              <!-- router -> experts -->
-              <line x1="230" y1="100" x2="356" y2="23"  stroke="rgba(149,176,227,0.3)" stroke-width="1.2" stroke-dasharray="4 3" />
-              <line x1="230" y1="100" x2="352" y2="69"  stroke="#8b7bff" stroke-width="2" marker-end="url(#moe-hot)" />
-              <line x1="230" y1="100" x2="356" y2="115" stroke="rgba(149,176,227,0.3)" stroke-width="1.2" stroke-dasharray="4 3" />
-              <line x1="230" y1="100" x2="352" y2="161" stroke="#8b7bff" stroke-width="2" marker-end="url(#moe-hot)" />
-              <!-- weighted sum -->
-              <rect x="548" y="71" width="96" height="58" rx="10" fill="rgba(142,240,209,0.16)" stroke="#8ef0d1" stroke-width="2" />
-              <text x="596" y="95" text-anchor="middle" fill="#eef4ff" font-size="13">加权求和</text>
-              <text x="596" y="114" text-anchor="middle" fill="#b6c5e1" font-size="11">按门控值</text>
-              <!-- chosen experts -> sum -->
-              <line x1="506" y1="69"  x2="544" y2="92"  stroke="#8b7bff" stroke-width="2" marker-end="url(#moe-hot)" />
-              <line x1="506" y1="161" x2="544" y2="112" stroke="#8b7bff" stroke-width="2" marker-end="url(#moe-hot)" />
-              <!-- output -->
-              <text x="672" y="93" text-anchor="middle" fill="#8ef0d1" font-size="12">输出</text>
-              <line x1="644" y1="100" x2="690" y2="100" stroke="#8ef0d1" stroke-width="2" marker-end="url(#moe-out)" />
-            </svg>
-          </div>
-          <p class="figure__cap">同一个 token 进来,路由器只点亮 top-2 个专家(紫色实线),其余专家(灰色虚线)这次一次都不跑。</p>
-        </div>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">MoE 路由 · 示意伪代码(帮助理解,非本仓库代码)</figcaption>
-          <pre class="code-walk__code"><code>// 每个 token 各走一遍:
-scores = softmax(token · W_gate);      // 小线性层给 N 个专家打分     <b class="cw-tag">1</b>
-top    = top_k(scores, k = 2);         // 只留分最高的 2 个专家       <b class="cw-tag">2</b>
-
-out = 0;
-for (e : top)                          // 只计算被选中的专家
-  out += scores[e] * Expert[e](token); // 各自算 FFN, 再按门控分加权  <b class="cw-tag">3</b>
-// 其余 N-2 个专家: 这一步一次都不跑                                 <b class="cw-tag">4</b></code></pre>
-          <ol class="code-walk__notes">
-            <li>门控网络就是一个小小的线性层 <code>W_gate</code>,把 token 映射成“对每个专家的偏好分”。</li>
-            <li>取 top-k(这里 k=2)——<strong>“稀疏”正来自这一步</strong>:N 个专家每次只点亮 k 个。</li>
-            <li>每个被选中的专家是一个<strong>完整 FFN(<a class="xref" href="chapter-17.html">第 17 章</a>)</strong>,各自输出再按门控分加权相加。</li>
-            <li>关键:算力只花在 k 个专家上,<strong>和专家总数 N 无关</strong>——这就是“参数多、算得少”。</li>
-          </ol>
-        </figure>
-        <p>
-          举个数:N=8 个专家、每次只选 k=2,那每个 token 实际只算了 <strong>2/8 = 25%</strong> 的 FFN 参数。
-          <strong>算力只跟“激活的专家数 k”走,和“专家总数 N”无关</strong>——这就是“参数能堆到很大、计算量却不跟着爆”的根源。
-          DeepSeek-V3 更进一步:用了几百个“细粒度”小专家 + 1 个<strong>始终激活的共享专家</strong>(存放通用知识),
-          每个 token 激活其中 8 个 + 那个共享专家,于是 6710 亿总参数里,每步只算了约 370 亿。
-        </p>
-
-        <h3>③ 最难的一环:负载均衡</h3>
-        <p>
-          MoE 有个“不训不知道”的坑:路由器会<strong>“偏心”</strong>。它一旦尝到某几个专家好用的甜头,就老往那儿送 token,
-          结果<strong>热门专家被挤爆、冷门专家饿死</strong>(收不到数据就永远练不好)——这叫<span class="term">专家坍缩(routing collapse)</span>,
-          等于白白浪费了大半参数。所以 MoE 训练里,<strong>怎么把 token 摊匀</strong>比路由本身还关键:
-        </p>
-        <ul>
-          <li><strong>负载均衡损失</strong>:在主损失之外加一个惩罚项,谁分配得越不均衡就罚得越狠,逼路由器把 token 尽量<strong>摊平</strong>到所有专家。</li>
-          <li><strong>专家容量</strong>:给每个专家设一个“每批最多接多少 token”的上限,超出的“溢出”给别人或跳过,防止个别专家过载。</li>
-          <li><strong>DeepSeek 的改进</strong>:提出<strong>“无辅助损失”的均衡</strong>——给每个专家加一个会自动调整的偏置分来纠偏,既均衡,又不让惩罚项来干扰主目标。</li>
-        </ul>
-        <div class="callout callout--warn reveal">
-          <span class="callout__title">MoE 省的是算力,不是显存</span>
-          <p>
-            一个常见误会:“每次只激活 370 亿,那放得下 370 亿不就行了?”<strong>不行。</strong>
-            你事先并不知道每个 token 会用到哪些专家,所以<strong>全部 6710 亿参数都得常驻显存待命</strong>。
-            也就是:<strong>显存开销 ≈ 总参数,算力开销 ≈ 激活参数</strong>。MoE 的本质是“<strong>用显存换算力</strong>”——
-            这也是为什么 MoE 大模型依旧是“显存大户”,只是训练/推理更省算力罢了。
-          </p>
-        </div>
-
-        <h3>④ 为省算力压 k、缩专家:会不会“降智”?</h3>
-        <p>
-          这是很多人问 MoE 时真正纠结的点:<strong>宣传的是几百 B 总参数,但推理时每个 token 只点亮少数几个专家</strong>——
-          如果产品侧为了再省一点算力,把 <strong>top-k 从 8 降到 1</strong>、把<strong>专家做得更小</strong>、或<strong>可路由的专家池变少</strong>,
-          算不算另一种“降智”?
-        </p>
-        <p>
-          <strong>理论上:会。</strong> 但机制和<a class="xref" href="chapter-20.html#4-省显存两招-混合精度与量化">量化</a>不同——不是权重变糙,而是<strong>这一步前向实际调用的容量变小了</strong>。
-          每个 token 在 MoE 层真正吃到的算力,大致正比于:
+          那怎么用数学衡量“两个向量意思有多近”?一个直觉是算它们的<strong>距离</strong>,但训练中向量会被整体拉伸缩放,
+          距离不稳。更稳的是看<strong>方向(夹角)</strong>:两个向量夹角越小,就认为语义越接近。而衡量夹角的工具,
+          正是你在<a class="xref" href="chapter-17.html">第 17 章</a>反复用的<span class="term">点积</span>——<strong>点积越大,夹角越小,语义越相近</strong>。
         </p>
         <div class="mathblock reveal">
-          激活算力 ∝ <var>k</var> × 单个专家的 FFN 规模(宽度/深度)
-          <span class="label"><var>k</var> = 路由器点亮的专家个数;和专家总数 <var>N</var> 不是一回事</span>
+          相似度 ≈ cos(夹角) = <span class="frac"><span><var>a</var> · <var>b</var></span><span>|<var>a</var>| |<var>b</var>|</span></span>
+          <span class="label">这叫“余弦相似度”:只看方向、不看长短。它就是把点积按长度归一化了一下</span>
         </div>
-        <table class="reveal">
-          <thead>
-            <tr><th>为了省算力常做的收紧</th><th>会发生什么</th><th>谁最先吃亏</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>k 变小</strong>(如 8→2→1)</td>
-              <td>每步只问更少的“专科医生”,综合意见变窄</td>
-              <td>复杂推理、需要多专长混搭的任务</td>
-            </tr>
-            <tr>
-              <td><strong>专家 FFN 变窄/变浅</strong></td>
-              <td>单个专家容量下降,专科也变成“小诊所”</td>
-              <td>长尾知识、细腻变换</td>
-            </tr>
-            <tr>
-              <td><strong>专家总数 N 变少</strong></td>
-              <td>可分工的“科室”变少,路由选择空间变小</td>
-              <td>多领域、多风格并存的任务</td>
-            </tr>
-            <tr>
-              <td><strong>路由出错 / 负载失衡</strong></td>
-              <td>token 被分给不合适的专家,或冷门专家没训好</td>
-              <td>表面像“随机变笨”,实为专家坍缩</td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="callout callout--analogy reveal">
-          <span class="callout__title">总参数 ≠ 这一步有多聪明</span>
+        <p>
+          于是训练会把语义相近的词“<strong>挤</strong>”到相近的方向上。一个经典的神奇现象:在训练好的词向量里,
+          <em>向量(“国王”) − 向量(“男人”) + 向量(“女人”) ≈ 向量(“女王”)</em>——语义关系居然变成了可以做加减法的几何关系。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">迁移学习:别人练好的,可以直接拿来用</span>
           <p>
-            广告牌写“671B 参数”,像说医院有几百个科室;但你这次挂号若<strong>只允许看 1 个小科室</strong>,
-            体验取决于<strong>当次激活的那一小撮</strong>,不是墙上挂的总编制。
-            简单问答可能差不多;难题、代码、多步规划更容易露出差距——体感就是“同一个 GPT,有时神有时呆”。
+            词向量一开始是随机的,要靠海量训练才长出语义。好消息是:别人训好的向量可以<strong>直接下载来用</strong>
+            (比如经典的 GloVe 词向量),这叫<span class="term">迁移学习</span>——站在别人的肩膀上,省掉从零训练的巨大成本。
+            大模型时代更是如此:绝大多数人不会从头训一个,而是拿开源的“预训练模型”接着用。
+          </p>
+        </div>
+
+        <h2>4. 规模化(Scaling Law):大力真的出奇迹</h2>
+        <p>
+          研究者发现一个惊人规律——<span class="term">Scaling Law(规模定律)</span>:当你<strong>同时</strong>放大三样东西——
+          <strong>参数量、数据量、算力</strong>——模型的损失会沿着一条<strong>平滑、可预测</strong>的曲线持续下降。
+          也就是说,“做得更大”能<em>可靠地</em>换来“做得更好”。这条规律是过去几年“军备竞赛”的底气:既然变大几乎稳赚,那就拼命变大。
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">注意:三样要一起涨,不能只堆参数</span>
+          <p>
+            很关键但常被忽略:光把参数堆大、数据却不够,模型会“吃不饱”,反而学不好(后面会讲的<strong>过拟合</strong>)。
+            研究(如 Chinchilla)发现:参数和数据要<strong>按比例一起增长</strong>才最划算。所以你会看到现代模型动辄用
+            <strong>十几万亿 token</strong> 训练——参数大,喂的数据也得跟上。
+          </p>
+        </div>
+        <p>
+          顺便建立一个数量级直觉:<strong>参数量 ≈ 网络里连线(权重)的总数</strong>。1750 亿参数,就是 1750 亿个
+          <a class="xref" href="chapter-02.html">第 2 章</a>那样的“权重旋钮”。它们全部存成小数,这也是为什么模型文件动辄几十上百 GB。
+        </p>
+
+        <h3>那到底该配多少数据、多少算力?</h3>
+        <p>
+          “三样一起放大”不是拍脑袋,业界有能<strong>上手估算</strong>的经验法则。DeepMind 的 Chinchilla 研究给了个著名结论:
+          在算力预算固定时,<strong>参数量和训练 token 数最好按大约 1 : 20 搭配</strong>——每 1 个参数,大约要配 20 个训练 token 才“吃得饱”。
+        </p>
+        <ul>
+          <li>照这个比例,一个 <strong>70 亿参数</strong>的模型,大约需要 <strong>1400 亿 token</strong> 才算喂到位;</li>
+          <li>早期不少模型“参数堆得很大、数据却没跟上”,其实是<strong>没训透</strong>:同样的算力,匀一部分去多喂数据,效果反而更好。这就是前面那句“不能只堆参数”的量化版。</li>
+        </ul>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">算力也能估:一个粗略但好用的公式</span>
+          <p>
+            训练要烧多少算力(浮点运算次数 FLOPs),有个广为流传的估算:<strong>FLOPs ≈ 6 × 参数量 × 训练 token 数</strong>。
+            它告诉你一件扎心的事:参数和数据<strong>任意一个翻倍,算力就翻倍</strong>——两个都想涨,成本是<strong>相乘</strong>着往上冲的。
+            这也是为什么训一个前沿大模型动辄要<strong>上千张 GPU、烧数百万美元、跑好几周</strong>:不是钱多烧得慌,是这条曲线逼的
+            (硬件账细算见<a class="xref" href="chapter-21.html">第 21 章</a>)。
+          </p>
+        </div>
+
+        <h2>5. 涌现能力:量变到质变</h2>
+        <p>
+          <span class="term">涌现能力(emergent abilities)</span>指的是:某些能力在小模型上<strong>几乎为零</strong>,
+          但当规模越过某个门槛后会<strong>突然出现</strong>。比如:
+        </p>
+        <ul>
+          <li><strong>少样本学习(few-shot)</strong>:在提示里给几个例子,它就能照着做新题,不用重新训练;</li>
+          <li><strong>按步骤推理(chain-of-thought)</strong>:让它“一步一步想”,复杂问题的正确率明显提高;</li>
+          <li><strong>遵循复杂指令</strong>:听懂并完成多步骤任务。</li>
+        </ul>
+        <p>这些能力没有被任何人“显式编程”进去,而是在“预测下一个 token”这个朴素目标 + 巨大规模下,自己长出来的。</p>
+
+        <h2>6. 大模型是怎么炼成的:预训练 + 后训练</h2>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">① 预训练<small>海量文本上预测下一个词</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">② 微调 SFT<small>用指令数据教它“听话”</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">③ RLHF<small>按人类偏好对齐</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">④ 蒸馏(可选)<small>把大模型能力压进小模型</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">从“会接话的语料模型”到“有用、能落地的助手”,通常要走这几步。</p>
+        </div>
+        <p>这几步可以归成<strong>两大阶段</strong>,这也是你会反复听到的两个词:</p>
+        <ul>
+          <li><strong>预训练(pre-training)</strong> = 第 ① 步:在海量文本上自监督地学“通用语言能力 + 世界知识”。最烧钱、最耗时,决定了模型的“底子”。</li>
+          <li><strong>后训练(post-training)</strong> = 第 ②③④ 步:在预训练好的<strong>底座模型(base model)</strong>之上做的所有加工——SFT 教它听话、RLHF/DPO 按人类偏好对齐、蒸馏压小。数据量比预训练小得多,却直接决定它<strong>好不好用</strong>。</li>
+        </ul>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">“底座模型”和“对话模型”的区别</span>
+          <p>
+            开源社区里名字带 <code>-base</code> 的通常是只做过<strong>预训练</strong>的底座模型:博学,但只会顺着你的话往下接;
+            带 <code>-chat</code> / <code>-instruct</code> 的则是又做过<strong>后训练</strong>的版本,才会好好回答问题、听从指令。
+            今天各家大模型拉开体验差距的,很大一部分就在后训练这一段的数据质量与工艺。
+          </p>
+        </div>
+
+        <h3>① 预训练(Pre-training):自监督地读遍互联网</h3>
+        <p>
+          在<strong>海量</strong>文本(互联网级别)上,做的就是<a class="xref" href="chapter-19.html">第 19 章</a>那件事:预测下一个词。它最妙的一点是
+          <strong>不需要人工标注</strong>——因为“下一个词是什么”文本里现成就有,把后文盖住让模型猜即可。
+          这种“答案自带、不用人工打标签”的方式叫<span class="term">自监督学习</span>。这一步最烧钱、最耗时,
+          却是模型获得“通用语言能力 + 世界知识”的来源。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">监督 vs 自监督:区别只在“目标从哪来”</span>
+          <p>
+            <strong>监督学习</strong>:目标(答案)由人工标注,比如给一张图片标上“猫”。<br />
+            <strong>自监督学习</strong>:目标从数据里<strong>自动抠出来</strong>,比如把“青海长云暗雪山,孤城遥望玉门关”里的
+            “玉门关”盖住,让模型猜——被盖的词就是现成的答案。两者都要有目标值,只是自监督省掉了人工。
+            海量数据下人工标注不可能,所以预训练必须靠自监督。
+          </p>
+        </div>
+
+        <h3>② 指令微调(SFT):把“博学”调教成“听话”</h3>
+        <p>
+          预训练完的模型“博学但不一定听话”——你问它问题,它可能只顾着把你的话<em>接着往下写</em>,而不是回答。
+          <span class="term">指令微调(SFT,Supervised Fine-Tuning)</span>用一批“<strong>指令 + 理想回答</strong>”的高质量数据继续训练,
+          把它从“只会接话”调成“会回答你的问题、完成你的任务”。这一步数据量小得多,但作用关键。
+          注意:它用的还是<a class="xref" href="chapter-19.html">第 19 章</a>那套“预测下一个 token + 交叉熵 + 反向传播”,<strong>只是把训练数据从“互联网文本”换成了“标准问答范文”</strong>,并没有换算法。
+        </p>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">一条 SFT 数据长什么样</span>
+          <p>
+            就是一问一答的“范文”,比如:<br />
+            <strong>指令</strong>:“用一句话解释什么是黑洞。” → <strong>理想回答</strong>:“黑洞是引力强到连光都逃不出来的天体。”<br />
+            成千上万条这样覆盖问答、翻译、写代码、总结的范文,教会模型<strong>看到指令就给出对应的回答</strong>,
+            而不是把指令当普通文本接着往下续。这里<strong>质量远比数量重要</strong>——几万条精挑细选的,常胜过几百万条粗制滥造的。
           </p>
         </div>
         <div class="callout callout--warn reveal">
-          <span class="callout__title">和量化降智怎么区分?</span>
+          <span class="callout__title">灾难性遗忘(catastrophic forgetting)</span>
           <p>
-            <strong>量化</strong>:同一套网络,数字精度变粗(4-bit/8-bit)。<br />
-            <strong>MoE 收紧</strong>:网络还在,但<strong>这一步只走了更窄的子路径</strong>(更少的专家 × 更小的专家)。<br />
-            两者都可能掉能力,也都可以是<strong>线上为成本/延迟做的工程取舍</strong>——外面很少写清楚,用户只能凭体感猜。
-            设计良好的 MoE 本意是:<strong>用更少的激活算力,逼近更大稠密模型的效果</strong>;若收紧过头,就从“省算力不损太多质”变成“真降智”。
+            在预训练底座上继续 SFT/微调时,模型可能<strong>新任务学会了、旧本领丢了</strong>——比如微调成“只会写邮件”,通用推理变差。
+            缓解办法包括:混一定比例的原预训练数据、用小学习率、只训少量参数(<span class="term">LoRA/PEFT</span>——在权重旁加低秩小矩阵,只更新这部分),
+            以及控制微调轮次。这不是 bug,而是<strong>在旧分布与新任务之间抢参数</strong>的必然张力。
           </p>
         </div>
-        <p>
-          训练阶段也有同类风险:负载均衡没做好 → 部分专家饿死 → 相当于<strong>大半个参数名存实亡</strong>(见上一节)。
-          所以 MoE 既要会“路由”,也要会“摊活”;推理阶段则要分清:<strong>你体验到的能力,看的是激活算力,不是 PPT 上的总参数量。</strong>
-        </p>
 
-        <h2>9. 稀疏注意力:不必“人人都聊”</h2>
+        <h3>③ RLHF:按人类的喜好“对齐”</h3>
         <p>
-          <a class="xref" href="chapter-16.html">第 16 章</a>的注意力是“<strong>稠密</strong>”的:每个 token 都要和其他<strong>所有</strong> token 两两打分。
-          长度为 <var>n</var>,计算量就是 <var>n</var>×<var>n</var>——长度翻倍,计算和显存<strong>翻四倍</strong>。
-          <var>n</var>=1000 时是百万对还好,可长上下文动辄 <var>n</var>=十万,那就是<strong>百亿量级</strong>的两两打分
-          (还得每层、每个头都来一遍),这正是<a class="xref" href="chapter-19.html">第 19 章</a>“长上下文难”的根子。
+          SFT 已经能让模型“好好回答”,但“<strong>什么才是更好的回答</strong>”很难写成标准答案——语气、分寸、有没有真的帮上忙,
+          这些没法像“1+1=2”那样标注。这里有个关键的转念:<strong>让人“写出满分答案”很难,但让人“判断两个答案哪个更好”很容易。</strong>
+          <span class="term">RLHF(基于人类反馈的强化学习)</span>就建立在这句话上,分三步走:
         </p>
-        <p>
-          <span class="term">稀疏注意力(sparse attention)</span>的想法很朴素:<strong>没必要人人都聊</strong>。
-          大多数 token 只跟少数几个真正相关的 token 有关系,那就<strong>只算这部分连接,其余干脆不算</strong>。
-          至于“算哪些”,分成两大流派。
-        </p>
-
-        <h3>① 固定套路:按位置预先规定谁跟谁算</h3>
-        <ul>
-          <li><strong>滑动窗口(局部注意力)</strong>:每个 token 只跟最近的 <var>w</var> 个邻居算(如某些模型 <var>w</var>=4096)。计算量从 <var>n</var>² 降到 <var>n</var>×<var>w</var>(线性)。别担心看不到远处:多层叠起来,感受野会像 CNN 一样<strong>层层扩大</strong>,远处信息仍能“一跳一跳”传过来。</li>
-          <li><strong>全局 token</strong>:留几个“公共联络员”token,它们<strong>对所有人可见、也能看所有人</strong>,专门负责跨全局传信息(比如句首的特殊标记)。</li>
-          <li><strong>跳跃 / 膨胀</strong>:每隔几个 token 才看一个,用很小的代价覆盖很远的距离。</li>
-        </ul>
-        <p>把“局部窗口 + 少数全局”拼起来,就是 Longformer、BigBird 这类长文本模型的经典配方。看图最直观:</p>
         <div class="figure reveal">
           <div class="diagram">
-            <div class="pattern-mats">
-              <div class="pattern-mat">
-                <p class="pattern-mat__title">稠密(全算)</p>
-                <div class="pattern-mat__grid">
-                  <span class="on"></span><span></span><span></span><span></span><span></span><span></span>
-                  <span class="on"></span><span class="on"></span><span></span><span></span><span></span><span></span>
-                  <span class="on"></span><span class="on"></span><span class="on"></span><span></span><span></span><span></span>
-                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span><span></span>
-                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span>
-                  <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span>
-                </div>
-                <p class="pattern-mat__cap">每个词和它<strong>之前所有</strong>词都算:n² 量级</p>
-              </div>
-              <div class="pattern-mat">
-                <p class="pattern-mat__title">滑动窗口</p>
-                <div class="pattern-mat__grid">
-                  <span class="on"></span><span></span><span></span><span></span><span></span><span></span>
-                  <span class="on"></span><span class="on"></span><span></span><span></span><span></span><span></span>
-                  <span></span><span class="on"></span><span class="on"></span><span></span><span></span><span></span>
-                  <span></span><span></span><span class="on"></span><span class="on"></span><span></span><span></span>
-                  <span></span><span></span><span></span><span class="on"></span><span class="on"></span><span></span>
-                  <span></span><span></span><span></span><span></span><span class="on"></span><span class="on"></span>
-                </div>
-                <p class="pattern-mat__cap">只跟最近几个邻居算:n×w 线性</p>
-              </div>
-              <div class="pattern-mat">
-                <p class="pattern-mat__title">窗口 + 全局</p>
-                <div class="pattern-mat__grid">
-                  <span class="on--g"></span><span></span><span></span><span></span><span></span><span></span>
-                  <span class="on--g"></span><span class="on"></span><span></span><span></span><span></span><span></span>
-                  <span class="on--g"></span><span class="on"></span><span class="on"></span><span></span><span></span><span></span>
-                  <span class="on--g"></span><span></span><span class="on"></span><span class="on"></span><span></span><span></span>
-                  <span class="on--g"></span><span></span><span></span><span class="on"></span><span class="on"></span><span></span>
-                  <span class="on--g"></span><span></span><span></span><span></span><span class="on"></span><span class="on"></span>
-                </div>
-                <p class="pattern-mat__cap">再留一个“全局列”负责跨远传信息</p>
-              </div>
-            </div>
-            <div class="diagram__legend">
-              <span><i style="background:var(--primary)"></i>窗口内 · 要算</span>
-              <span><i style="background:var(--accent)"></i>全局 token</span>
-              <span><i style="background:rgba(149,176,227,0.1)"></i>跳过 · 不算</span>
+            <div class="pipe">
+              <div class="pipe__box">① 收集偏好<small>同一问题多个答案,人来排序</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">② 训练奖励模型<small>学会给答案打“人有多喜欢”的分</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">③ 强化学习<small>把大模型朝高分方向推(+KL 约束)</small></div>
             </div>
           </div>
-          <p class="figure__cap">同一段 6 词序列(行 = 当前词,列 = 被看的词;只画下三角,因为 decoder 只能看前文)。稀疏,就是把大片格子“留白不算”。</p>
+          <p class="figure__cap">把“人的口味”先蒸馏成一个会自动打分的裁判,再让模型去追这个裁判的高分。</p>
+        </div>
+        <ol>
+          <li><strong>收集偏好</strong>:同一个问题让模型给出多个回答,请人<strong>排序</strong>哪个更好。这种“比较题”标起来又快又稳。</li>
+          <li><strong>训练奖励模型</strong>:用这些排序,训练一个专门的<strong>打分模型(reward model)</strong>,让它学会给任意回答打出一个“人类有多喜欢”的分数——相当于把“人的口味”蒸馏成一个可自动打分的裁判。</li>
+          <li><strong>用强化学习优化</strong>:让大模型不停生成回答、让裁判打分,再用强化学习(如 PPO)把它朝<strong>高分</strong>方向推。同时挂一个“别跑太偏”的约束(<strong>KL 惩罚</strong>),防止它为了<strong>讨好打分器</strong>而说出一堆通顺却怪异的废话。(PPO、策略梯度等 RL 基础见<a class="xref" href="chapter-12.html">第 12 章</a>。)</li>
+        </ol>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">对齐税(alignment tax)</span>
+          <p>
+            RLHF/DPO 把模型调得更<strong>安全、听话、像助手</strong>,但往往要付一点能力代价——复杂推理、创造性、某些专业深度可能不如对齐前的底座。
+            俗称“<strong>对齐税</strong>”:不是模型“坏了”,而是优化目标从“接话像互联网”变成了“人类更喜欢”。KL 惩罚、保守的奖励模型、过度拒绝有害内容,
+            都会让这种体感更明显。工程上常在<strong>能力评测</strong>与<strong>安全评测</strong>之间找平衡。
+          </p>
+        </div>
+        <p>
+          今天聊天助手那种得体的语气、拒绝有害请求的分寸,很多就来自这一步。近来也流行更简化的
+          <span class="term">DPO</span>:跳过“单独训一个奖励模型”,直接拿人类偏好数据把模型“掰”过去,工程上更省事,思路完全一致。
+        </p>
+
+        <h3>④ 知识蒸馏:让小模型“拜大模型为师”</h3>
+        <p>
+          大模型效果好,但太重,难以塞进你的手机或个人电脑。<span class="term">知识蒸馏(distillation)</span>让一个小的
+          <strong>学生模型</strong>去模仿大的<strong>教师模型</strong>:不只学“正确答案”,还学教师输出的<strong>整个概率分布</strong>
+          (即“软目标”)——因为“它觉得‘吃饭’概率 0.6、‘干饭’0.2、‘用膳’0.05”这种<strong>细微的偏好</strong>本身就是宝贵知识。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">这里用上了<a class="xref" href="chapter-19.html">第 19 章</a>的温度</span>
+          <p>
+            蒸馏时常把 softmax 的<strong>温度调高</strong>(<a class="xref" href="chapter-19.html">第 19 章</a>),让那些低概率但有意义的选项“显形”,
+            学生才学得到这些“隐藏知识”。DeepSeek 就曾用 R1 蒸馏出多个小模型(如
+            <code>DeepSeek-R1-Distill-Qwen-14B</code>,140 亿参数)开源给社区——学生虽小,却继承了老师不少本事。
+          </p>
+        </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">蒸馏、小模型与“降智”的一种来源</span>
+          <p>
+            蒸馏和直接做小模型,换的是<strong>体积与速度</strong>,付的是<strong>能力上限</strong>。学生很难 100% 复制教师的“暗知识”,
+            复杂推理、长尾知识、细腻概率偏好最容易丢——用起来就像“同款但没那么聪明”。这和<a class="xref" href="chapter-21.html#4-省显存两招-混合精度与量化">量化</a>、<a class="xref" href="chapter-21.html#8-moe-不是每次都动用全部参数">MoE 压 k</a>导致的降智是不同环节,
+            但体感类似:<strong>不是不会,而是浅了、窄了</strong>。
+          </p>
         </div>
 
-        <h3>② 动态挑选:让模型自己找“该聊的人”</h3>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">训练黑话速查(这些词在哪都会遇到)</span>
+          <p>
+            <strong>· epoch(轮次)</strong>:把全部训练数据完整过一遍叫一个 epoch;要读好几遍(常读常新),但每遍会打乱顺序防“死记硬背”。<br />
+            <strong>· batch(批)</strong>:一次喂进去的一小撮样本(<a class="xref" href="chapter-05.html">第 5 章</a>)。<br />
+            <strong>· step(步)/迭代</strong>:用一个 batch 更新一次参数,叫一步。<br />
+            <strong>· 超参数</strong>:不是模型自己学的参数,而是<strong>你手动设定</strong>的旋钮——学习率、层数、batch 大小等(第 5、9 章)。“超”只是“在模型参数之外”的意思,不神秘。<br />
+            <strong>· 泛化</strong>:在<strong>没见过</strong>的数据上也表现好,就叫泛化能力强(适应力强)。<br />
+            <strong>· 过拟合 / 欠拟合</strong>:过拟合 = 训练集很好、测试集很差(“死记硬背”);欠拟合 = 训练集都学不好(模型太弱或没训够)。<a class="xref" href="chapter-09.html">第 9 章</a>讲过怎么缓解。
+          </p>
+        </div>
+
+        <h2>7. 最近的一些新方向(建立个印象就好)</h2>
         <p>
-          固定套路有个软肋:万一“该关注的词”恰好落在窗口之外呢?于是有了<strong>内容自适应</strong>的稀疏——
-          不按位置死板划定,而是<strong>当场挑出最相关的那几个</strong>。做法通常是:先用一个<strong>廉价的打分器</strong>快速估一下
-          每个历史 token 跟当前 query 有多相关,只留下 <strong>top-k</strong> 个,再对这 top-k 做精确注意力。
+          大模型领域跑得飞快,新词层出不穷。但你会发现一个规律:<strong>再新的花样,也都长在前面这套地基上</strong>。
+          下面几个最常被提到的方向,不求精通,先混个脸熟。
         </p>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">DeepSeek-V3.2 的稀疏注意力(DSA)</span>
-          <p>
-            它用一个叫<strong>“闪电索引器(lightning indexer)”</strong>的小模块,为每个 query 飞快选出 top-k 个最该看的历史 token,
-            只对这 top-k 算注意力。说白了,就是把<a class="xref" href="chapter-18.html">第 18 章</a>的 <strong>top-k</strong> 思想从“挑下一个字”搬到了“挑该关注的 token”上,
-            让长上下文推理成本大幅下降。
-          </p>
-        </div>
+
+        <h3>推理模型:先“想很久”,再作答</h3>
+        <p>
+          以 OpenAI o1、DeepSeek-R1 为代表的<span class="term">推理模型(reasoning model)</span>,核心变化是:
+          在给出最终答案前,先自己生成一大段<strong>思维链</strong>(<a class="xref" href="chapter-22.html">第 22 章</a>会细讲),一步步推演,想清楚了再回答。
+          相当于把“一步一步想”从<strong>你来提示</strong>,变成了模型<strong>天生就会、而且能想很长</strong>。
+        </p>
+        <ul>
+          <li><strong>测试时算力(test-time compute)</strong>:让模型在回答时“多花时间思考”(生成更多中间推理),难题正确率明显提升——花的不再只是训练算力,还有<strong>推理时</strong>的算力。</li>
+          <li><strong>怎么训出来的</strong>:很多用一种“<strong>可验证奖励</strong>”的强化学习(RLVR)——数学、代码这类<strong>有标准答案</strong>的任务,答对给正奖励、答错给负奖励,让模型自己摸索出好的推理套路。这是 RLHF 之后后训练的新玩法。</li>
+        </ul>
+
+        <h3>多模态:不只吃文字</h3>
+        <p>
+          <span class="term">多模态(multimodal)</span>模型(GPT-4V、Gemini、Qwen-VL 等)能同时处理图、音、视频和文字。
+          <strong>内核不变</strong>:各模态都切成 token → 编成向量 → 拼成一条序列 → 送进同一个 Transformer → 往往仍自回归生成文字。
+        </p>
+        <h4>① 各模态怎么切成 token</h4>
+        <table class="reveal">
+          <thead><tr><th>模态</th><th>切法</th><th>直觉</th></tr></thead>
+          <tbody>
+            <tr><td>文字</td><td>BPE / 子词</td><td>本章 §2</td></tr>
+            <tr><td>图像</td><td>16×16 等 <span class="term">patch</span> 小块</td><td>一张图 ≈ 一句由上百个“图块词”组成的句子(<a class="xref" href="chapter-13.html">第 13 章</a>局部块思想)</td></tr>
+            <tr><td>音频</td><td>频谱片段或神经 codec 码</td><td>声音也排成 token 序列</td></tr>
+            <tr><td>视频</td><td>抽帧后每帧走图像流程</td><td>序列更长,更吃算力</td></tr>
+          </tbody>
+        </table>
+        <h4>② 编码、投影、拼进 LLM</h4>
+        <p>
+          图像经 <span class="term">ViT</span> 等视觉编码器变成 patch 向量,再经<strong>投影层 MLP</strong>拉到与词嵌入相同维度;
+          文字照常 BPE + 嵌入。推理时典型序列:
+        </p>
+        <pre class="code-walk__code" style="margin:0.8rem 0"><code>[系统提示] [图开始] patch₁…patchₙ [图结束] [用户问题 tokens] [模型开始生成…]</code></pre>
+        <p>
+          <a class="xref" href="chapter-17.html">自注意力</a>让“猫”这类文字 token 直接关注猫所在的 patch——<strong>跨模态对齐靠统一注意力</strong>,不必硬接两套系统。
+        </p>
+        <h4>③ 训练通常分阶段</h4>
+        <ol>
+          <li><strong>CLIP 式对齐</strong>:成对“图+配文”,用<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积/余弦</a>把配对拉近、非配对推远。</li>
+          <li><strong>接 LLM + 训投影</strong>:冻住或轻微微调语言模型,用“图→描述”学连接器。</li>
+          <li><strong>多模态指令微调</strong>:图+问答三元组(VQA 等),类似 SFT。</li>
+          <li><strong>(可选) RLHF</strong>:按人类偏好再对齐(<a class="xref" href="chapter-12.html">第 12 章</a>)。</li>
+        </ol>
         <div class="callout callout--tip reveal">
-          <span class="callout__title">别混:稀疏注意力 ≠ FlashAttention</span>
+          <span class="callout__title">早融合 vs 双塔</span>
           <p>
-            让注意力更快有<strong>两条不同的路</strong>,常被搞混:<br />
-            <strong>· 稀疏注意力</strong>:<strong>少算一些</strong>(近似)——用极小的精度损失换大幅提速。<br />
-            <strong>· FlashAttention</strong>:<strong>一个都不少算</strong>(精确),但把计算重新编排、大幅减少显存读写,让同样的稠密注意力跑得更快更省显存。<br />
-            前者是“<strong>少做题</strong>”,后者是“<strong>做题更利索</strong>”,两者还能叠加使用。
+            名字不同,套路都是:<strong>编码 → 对齐维度 → 拼序列 → 注意力融合 → 预测下一个 token</strong>。
+            LLaVA、Qwen-VL 等主流属于 patch 向量直接与文字 token <strong>早融合</strong>进一个 Transformer。
           </p>
         </div>
+
+        <h3>更长的上下文</h3>
+        <p>
+          早期模型一次只能读几千 token,如今动辄支持几十万甚至上百万——你能把一整本书、一个代码仓库丢进去让它一起看。
+          难点在<a class="xref" href="chapter-17.html">第 17 章</a>那句话:注意力计算量随长度<strong>平方</strong>增长,所以需要稀疏注意力等优化(<a class="xref" href="chapter-21.html">第 21 章</a>)才扛得住。
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">上下文不够长,也会像“降智”</span>
+          <p>
+            若产品侧把输入<strong>截断</strong>(只保留最后几千 token),或你贴的代码/文档超出窗口被 silently 砍掉,
+            模型等于<strong>没看到关键前文</strong>——回答变短、变偏、变健忘,常被误以为是“模型变笨了”。
+            长上下文能力取决于<strong>训练时的长度扩展</strong>与<strong>推理时的显存/KV cache</strong>(<a class="xref" href="chapter-21.html">第 21 章</a>),也取决于你有没有真的把材料完整送进去。
+          </p>
+        </div>
+
+        <h3>更省的架构、更强的“手脚”</h3>
+        <ul>
+          <li><strong>MoE(混合专家)</strong>:每次只激活一部分“专家”子网络,用更少的实际计算撑起更大的参数量(<a class="xref" href="chapter-21.html">第 21 章</a>细讲)。DeepSeek-V3 就是典型。</li>
+          <li><strong>Agent(智能体)</strong>:让模型学会调用工具、上网、写代码、多步做事,从“会聊天”变成“能办事”(<a class="xref" href="chapter-22.html">第 22 章</a>细讲)。</li>
+        </ul>
         <div class="callout callout--note reveal">
-          <span class="callout__title">两种“稀疏”别搞混</span>
+          <span class="callout__title">万变不离其宗</span>
           <p>
-            <strong>MoE</strong> 稀疏的是<strong>参数 / 计算路径</strong>——每个 token 只走部分专家 FFN(第 8 节)。<br />
-            <strong>稀疏注意力</strong>稀疏的是<strong>token 两两连接</strong>——每个 token 只和部分 token 打分。<br />
-            一个省在“<strong>哪些参数参与</strong>”,一个省在“<strong>哪些 token 互动</strong>”,超大模型里常常两个一起上。
+            推理模型、多模态、长上下文、MoE……概念很唬人,但拆开都是你已经学过的东西:
+            <strong>token 化 + Transformer + 预测下一个 token + (后)训练</strong>。抓住这个内核,追新会轻松很多。
           </p>
         </div>
+
+        <h2>8. 它的本质与局限:清醒地看待它</h2>
+        <p>
+          把上面串起来,你会得到对大模型最准确的一句话概括:
+          <strong>它是一个被海量文本喂大的、极其强大的“下一个 token 概率预测器”。</strong>
+          理解这一点,它的“超能力”和“毛病”就都说得通了。
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">大模型并不“无所不知”</span>
+          <p>
+            <strong>幻觉(hallucination)</strong>:它的目标是“预测最像样、最连贯的下一个词”,而不是“说真话”。
+            当它对某事没有可靠依据时,照样会生成通顺合理、却是<strong>编造</strong>的内容。<br />
+            <strong>知识截止</strong>:参数一旦训练完就固定,它的知识停在训练数据那一刻,不知道今天的新闻、天气、股价。<br />
+            <strong>偏见</strong>:训练数据里的偏见会被它一并学进去。<br />
+            <strong>不会真正“算”与“查”</strong>:它是在做极其复杂的模式延续,不是在执行精确计算或实时检索。
+          </p>
+        </div>
+        <p>
+          好消息是:这些局限大多有<strong>工程解法</strong>——给它接上实时检索(RAG)、外部工具(function calling)、
+          让它调用计算器或搜索引擎。这些正是<a class="xref" href="chapter-22.html">第 22 章</a>的主题。把它当成一个
+          <strong>强大但会犯错的概率文本生成器</strong>,而不是全知神谕,你就能用得又稳又好。
+        </p>
+
+        <h2>9. 你已经走通了主干</h2>
+        <p>回头看看这一路搭起来的东西:</p>
+        <ul>
+          <li>从<strong>一个神经元</strong>的加权求和 + 激活(<a class="xref" href="chapter-02.html">第 2 章</a>),</li>
+          <li>到堆成<strong>网络(MLP)</strong>、让数据<strong>前向</strong>流动(<a class="xref" href="chapter-03.html">第 3 章</a>),</li>
+          <li>用<strong>损失</strong>衡量错误、靠<strong>梯度下降</strong>和<strong>反向传播</strong>学习(第 4–6 章),</li>
+          <li>再用<strong>现代训练栈</strong>把它训稳(<a class="xref" href="chapter-09.html">第 9 章</a>),</li>
+          <li>用<strong>注意力</strong>处理序列、拼出<strong>Transformer</strong>(第 16–18 章),</li>
+          <li>做成会写字的<strong>语言模型</strong>(<a class="xref" href="chapter-19.html">第 19 章</a>),</li>
+          <li>最后放大成<strong>大模型</strong>,并学会它是怎么训练、为何有局限(本章)。</li>
+        </ul>
+        <p>
+          原理主干到此走完。但一个上千亿参数的模型,靠什么硬件才跑得起来?普通人又该怎么把它用好?
+          这两个非常实际的问题,我们用接下来两章回答。
+        </p>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>大模型工程的三座大山:算力、显存、通信。</li>
-            <li>GPU 靠上万个 CUDA 核并行,天然适合矩阵乘法;CUDA 平台负责调度。</li>
-            <li>显存是第一堵墙(要放参数+梯度+优化器状态+激活);混合精度、量化能大幅省显存。</li>
-            <li>三种并行:数据并行(人手一份模型,AllReduce 同步梯度)、张量并行(切开单层矩阵,AllGather 拼接)、流水线并行(不同层放不同卡)。</li>
-            <li>NCCL 管通信,NVLink/NVSwitch 是卡间高速公路;推理靠 KV cache、批处理、量化提速。</li>
-            <li>MoE:把每层 FFN 换成多个专家,路由器给每个 token 只点 top-k 个 → 参数多但算得少;代价是全部专家要常驻显存(省算力不省显存),还得靠负载均衡防“专家坍缩”。<strong>压 k/缩专家会掉能力</strong>,是另一类“降智”来源。</li>
-            <li>稀疏注意力:只算部分 token 对——固定套路(滑动窗口 + 全局)或动态挑 top-k,把 O(n²) 压下来;它是“少算”(近似),区别于 FlashAttention 的“精确加速”。</li>
+            <li>大模型内核 = <a class="xref" href="chapter-19.html">第 19 章</a>的“预测下一个 token + 自回归”,只是规模大上亿倍。</li>
+            <li>真实分词用 BPE/子词:高频组合合并成一个 token,存进词表;词表大小是权衡。</li>
+            <li>词嵌入把词变成“语义坐标”,<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦相似度衡量语义远近;词向量可迁移复用。</li>
+            <li>Scaling Law:参数、数据、算力一起放大,性能可预测提升;超过门槛会“涌现”新能力。</li>
+            <li>预训练(自监督)练出底座能力;后训练(SFT → RLHF/DPO → 蒸馏)把它调成好用的助手,这也是 base 与 chat 模型的区别。</li>
+            <li>最近方向:推理模型、多模态(patch→ViT→投影→拼序列)、长上下文、MoE——内核仍是 token + Transformer。</li>
+            <li>降智/对齐税/遗忘等多半发生在<strong>后训练、蒸馏、量化、MoE 压 k、截断、产品护栏</strong>等环节,先定位链路再判断能力。</li>
+            <li>它本质是概率预测器,所以会幻觉、有知识截止和偏见——要理性使用,并靠 RAG/工具补救。</li>
           </ul>
         </section>
 
         <h2>动手与思考</h2>
         <div class="quiz reveal">
           <details class="quiz__item">
-            <summary class="quiz__q">问题 1:为什么深度学习用 GPU 而不是 CPU?</summary>
+            <summary class="quiz__q">问题 1:为什么真实大模型用 BPE/子词,而不是像本书那样按字符分词?</summary>
             <div class="quiz__a">
-              <p>因为训练/推理的核心是海量互不依赖的简单乘加(矩阵运算)。CPU 核心少但强,擅长复杂串行任务;GPU 有上万个简单核心,能把这些乘加同时并行做完,吞吐高得多。</p>
+              <p>字符级会让序列变得很长,而注意力计算量随长度平方增长,代价高。BPE 把高频组合合并成一个 token,序列更短、更高效,同时又比“整词”更灵活(能拼出没见过的词)。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 2:数据并行和张量并行,切开的分别是什么?</summary>
+            <summary class="quiz__q">问题 2:为什么用“向量夹角/点积”而不是“距离”来衡量词的语义相似度?</summary>
             <div class="quiz__a">
-              <p>数据并行切的是<strong>数据</strong>:每卡放完整模型、各吃一部分数据,再用 AllReduce 平均梯度同步。张量并行切的是<strong>模型本身</strong>(单层权重矩阵太大放不下),把矩阵分块到多卡再拼接。</p>
+              <p>因为训练中向量会被整体拉伸或缩放,距离会“强烈波动”,不稳定;而方向(夹角)更能反映本质的语义关系。<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦相似度只看方向,点积越大夹角越小、语义越近。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 3:KV cache 为什么能加速生成?它依赖哪一章的知识?</summary>
+            <summary class="quiz__q">问题 3:预训练用的是“自监督”,它和“监督学习”的区别到底在哪?</summary>
             <div class="quiz__a">
-              <p>自回归生成时,已经出现的词的 Key/Value 不会改变,缓存起来就不必每步重算,新词只算自己的部分。它直接建立在<a class="xref" href="chapter-16.html">第 16 章</a>注意力的 Q/K/V 机制之上。</p>
+              <p>两者都要有目标值(答案)。监督学习的目标靠人工标注;自监督的目标从数据本身自动产生,比如遮住一个词让模型预测,被遮的词就是答案。海量数据无法人工标注,所以预训练靠自监督。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 4:MoE“6710 亿参数只激活 370 亿”是什么意思?好处是什么?</summary>
+            <summary class="quiz__q">问题 4:大模型为什么会“一本正经地胡说八道”?怎么缓解?</summary>
             <div class="quiz__a">
-              <p>模型里有很多“专家”子网络(其实是并排的多个 FFN),每个 token 只被路由到最相关的少数几个专家计算,其余不参与。于是总参数(知识容量)可以很大,但每次实际算的量不大——用较小的算力代价换更大更强的模型。</p>
+              <p>因为它的目标是预测“最像样、最连贯的下一个词”,而不是“说真话”;缺乏依据时也会编出通顺但错误的内容(幻觉)。缓解办法包括给它接实时检索(RAG)、外部工具/计算器(function calling),以及对关键事实自己核对。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 5:MoE 每次只激活一小部分参数,那是不是显存也跟着省了?</summary>
+            <summary class="quiz__q">问题 5:“预训练”和“后训练”分工是什么?为什么 <code>-base</code> 模型不好直接聊天?</summary>
             <div class="quiz__a">
-              <p>不省。因为事先不知道每个 token 会用到哪些专家,<strong>全部专家都得常驻显存待命</strong>。所以 MoE 是“显存开销 ≈ 总参数,算力开销 ≈ 激活参数”——它<strong>用显存换算力</strong>,省的是计算量,不是显存。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 6:为省算力把 MoE 的 top-k 压得很小,会不会“降智”?和量化降智一样吗?</summary>
-            <div class="quiz__a">
-              <p>会掉能力,但机制不同。量化是<strong>同一网络权重精度变粗</strong>;压 k/缩专家是<strong>每步只走更窄的子网络</strong>(更少专家 × 更小专家),激活算力变小。简单题可能差不多,难题、代码、多步推理更容易露怯。总参数量大不代表每一步都动用那么多能力——看的是当次激活算力。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 7:稀疏注意力和 FlashAttention 都能让注意力更快,区别在哪?</summary>
-            <div class="quiz__a">
-              <p>稀疏注意力是<strong>近似</strong>:干脆<strong>少算</strong>一些 token 对(只保留窗口/全局/top-k 的连接),用极小精度损失换速度。FlashAttention 是<strong>精确</strong>:一个都不少算,只是把计算重排、减少显存读写,让同样的稠密注意力更快更省显存。前者“少做题”,后者“做题更利索”,可叠加。</p>
+              <p>预训练在海量文本上自监督地学到通用语言能力和世界知识,给出一个“博学但只会接话”的底座模型(base)。后训练(SFT → RLHF/DPO → 蒸馏)在底座之上加工,教它听指令、按人类偏好回答。<code>-base</code> 没做后训练,所以往往只会顺着你的话往下写,而不是好好回答——要 <code>-chat</code>/<code>-instruct</code> 那样做过后训练的版本才好用。</p>
             </div>
           </details>
         </div>
 
         <p class="muted">
-          硬件和并行搞定,模型终于能跑了。可是对绝大多数人来说,我们既不训练也不部署,而是直接<strong>使用</strong>别人的大模型。
-          最后一章,我们讲讲怎么把它用好:提示词、RAG、工具调用、Agent、MCP……
+          原理清楚了,但“上千 GPU 训数周”到底是怎么回事?下一章我们钻进机房,
+          看看大模型靠什么<strong>硬件和并行技巧</strong>才跑得起来:GPU、显存、数据并行、张量并行、KV cache……
         </p>
       </div>
     </main>

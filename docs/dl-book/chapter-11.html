@@ -24,9 +24,12 @@
           <h2>读完这一章,你会明白</h2>
           <ul>
             <li><strong>train / val / test</strong> 三个数据集各自的职责,以及“测试集不能碰”的铁律;</li>
-            <li>数据少时怎么用<strong>交叉验证</strong>把每一条数据都用足;</li>
-            <li>为什么<strong>只看准确率会骗人</strong>,以及<strong>精确率 / 召回 / F1 / 混淆矩阵</strong>怎么读;</li>
-            <li>数据为什么要<strong>归一化</strong>(对照 MNIST 的 <code>[0,1]</code> 预处理);</li>
+            <li>划分数据时的隐藏坑:<strong>时间序列不能打乱、同组数据不能串台、训练与上线要同分布</strong>;</li>
+            <li>数据少时怎么用<strong>交叉验证</strong>(含分层 K 折)把每一条数据都用足;</li>
+            <li>为什么<strong>只看准确率会骗人</strong>,以及先立一个<strong>笨基线</strong>再谈高低;</li>
+            <li><strong>精确率 / 召回 / F1 / 混淆矩阵</strong>怎么读、怎么算,以及指标如何随<strong>判定门槛</strong>变化(ROC/PR、AUC);</li>
+            <li>多分类(如 MNIST 10 类)的 <strong>macro / micro 平均</strong>是怎么回事;</li>
+            <li>数据为什么要<strong>归一化</strong>,以及<strong>统计量只能从训练集算</strong>(否则泄漏);</li>
             <li>训练“不降 / 发散 / 过拟合”时的一份<strong>调试清单</strong>。</li>
           </ul>
         </section>
@@ -59,12 +62,67 @@
           </p>
         </div>
 
+        <h3>划分时最容易忽略的三个坑</h3>
+        <p>“随机切三份”听着简单,但下面三种情况随机切就会<strong>偷偷泄漏</strong>,让分数虚高、上线打回原形:</p>
+        <ul>
+          <li><strong>时间序列别打乱</strong>:预测股价、天气、下周销量这类,必须<strong>按时间切</strong>——拿过去训练、未来测试。若随机打乱,模型就在“用未来预测过去”,等于开卷考试。</li>
+          <li><strong>同组数据别串台</strong>:同一个病人的多张片子、同一个用户的多条记录,要<strong>整组</strong>只放进一边。否则模型见过“张三的左手”,再考“张三的右手”就是作弊(group leakage)。</li>
+          <li><strong>训练与上线要同分布</strong>:训练数据若和真实场景分布不一致(只用晴天照片训、却要在雨天用),线下再高、上线也崩。这叫<strong>分布偏移(distribution shift)</strong>。</li>
+        </ul>
+
         <h2>2. 数据太少?交叉验证</h2>
         <p>
-          数据很少时,单独切一块出来当验证集太奢侈。<span class="term">K 折交叉验证</span>的做法:把数据平分成 K 份,
-          <strong>轮流</strong>拿其中 1 份当验证、其余 K−1 份训练,做 K 次,再把 K 次的成绩<strong>取平均</strong>。
-          这样每条数据都当过一次“考题”,评估更稳、也更省数据。代价是要训 K 次,算力换可靠。
+          数据很少时,单独切一大块当验证集太奢侈——训练数据本就不够,再挖走一块就更学不好。
+          <span class="term">K 折交叉验证</span>把数据平分成 K 份,<strong>轮流</strong>拿其中 1 份当验证、其余 K−1 份训练,做 K 次,
+          再把 K 次成绩<strong>取平均</strong>。这样每条数据都当过一次“考题”,评估更稳、也更省数据;代价是要训 K 次,拿算力换可靠。
         </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 520 214" role="img" aria-label="5 折交叉验证:每折轮流拿一块当验证">
+              <text x="260" y="16" text-anchor="middle" fill="#8499bd" font-size="12">把数据分 5 份,每折换一块当验证,训 5 次取平均</text>
+              <text x="46" y="45" fill="#8499bd" font-size="11">第1折</text>
+              <rect x="88" y="30" width="74" height="22" rx="4" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" />
+              <rect x="170" y="30" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="252" y="30" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="334" y="30" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="416" y="30" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <text x="46" y="79" fill="#8499bd" font-size="11">第2折</text>
+              <rect x="88" y="64" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="170" y="64" width="74" height="22" rx="4" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" />
+              <rect x="252" y="64" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="334" y="64" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="416" y="64" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <text x="46" y="113" fill="#8499bd" font-size="11">第3折</text>
+              <rect x="88" y="98" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="170" y="98" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="252" y="98" width="74" height="22" rx="4" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" />
+              <rect x="334" y="98" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="416" y="98" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <text x="46" y="147" fill="#8499bd" font-size="11">第4折</text>
+              <rect x="88" y="132" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="170" y="132" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="252" y="132" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="334" y="132" width="74" height="22" rx="4" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" />
+              <rect x="416" y="132" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <text x="46" y="181" fill="#8499bd" font-size="11">第5折</text>
+              <rect x="88" y="166" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="170" y="166" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="252" y="166" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="334" y="166" width="74" height="22" rx="4" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <rect x="416" y="166" width="74" height="22" rx="4" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" />
+              <rect x="176" y="196" width="14" height="12" rx="3" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" />
+              <text x="198" y="206" fill="#8499bd" font-size="11">验证</text>
+              <rect x="256" y="196" width="14" height="12" rx="3" fill="rgba(142,240,209,0.15)" stroke="#8ef0d1" />
+              <text x="278" y="206" fill="#8499bd" font-size="11">训练</text>
+            </svg>
+          </div>
+          <p class="figure__cap">5 折为例:每一折用不同的一块当验证(橙),其余训练(绿),最后把 5 次成绩取平均。</p>
+        </div>
+        <ul>
+          <li><strong>分层 K 折(stratified)</strong>:类别不平衡时用。切分时<strong>保持每折的类别比例和整体一致</strong>,免得某一折恰好一个欺诈样本都没有,评估失真。</li>
+          <li><strong>留一法(LOO)</strong>:K 取到“样本总数”那么大,每次只留 1 条当验证。极省数据但要训 N 次,只在数据极少时才划算。</li>
+          <li><strong>什么时候别用</strong>:数据很多时直接单切一份 val 就够了,没必要训 K 次;<strong>时间序列</strong>要用“按时间滚动”的 CV,绝不能随机分折(理由见上一节的坑)。</li>
+        </ul>
 
         <h2>3. 只看“准确率”会骗人</h2>
         <p>
@@ -76,6 +134,14 @@
             假设 1000 笔交易里只有 10 笔是欺诈。有个模型偷懒,<strong>无脑判所有交易都正常</strong>——
             它的准确率是 <strong>990/1000 = 99%</strong>,看着很牛。可它<strong>一笔欺诈都没抓到</strong>,毫无用处。
             准确率被“正常样本太多”给稀释了。这时就需要更细的指标。
+          </p>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">先立一个“笨基线”,再谈高低</span>
+          <p>
+            任何分数单看都没意义,得和一个<strong>零成本的笨办法</strong>比。分类可以用“<strong>永远猜最多的那一类</strong>”(majority),
+            回归可以用“<strong>永远猜平均值</strong>”。上面那个 99% 的模型,其实连“全猜正常”这个笨基线都没赢——所以 99% 一文不值。
+            <strong>先跑基线</strong>,你的模型至少要明显超过它,才谈得上“有用”。
           </p>
         </div>
 
@@ -111,8 +177,54 @@
             <strong>抓欺诈/查癌症宁可误报也别漏</strong>(重召回);<strong>垃圾邮件宁可漏也别把重要邮件误杀</strong>(重精确)。
           </p>
         </div>
+
+        <h3>把上面的欺诈例子算到底</h3>
+        <p>还是 1000 笔交易、10 笔欺诈。对比两个模型,看四个格子和三个指标各是多少:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>模型</th><th>TP/FP/FN/TN</th><th>准确率</th><th>精确率</th><th>召回率</th><th>F1</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>全猜正常(笨基线)</td><td>0 / 0 / 10 / 990</td><td class="is-hot">99%</td><td class="is-cold">未定义</td><td class="is-cold">0</td><td class="is-cold">0</td></tr>
+              <tr><td>真做事的模型</td><td>8 / 20 / 2 / 970</td><td>97.8%</td><td>0.29</td><td class="is-hot">0.80</td><td>0.42</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">准确率<strong>更低</strong>的模型反而<strong>有用</strong>——它抓住了 10 个坏人里的 8 个。只看准确率就会选错。</p>
+        </div>
         <p>
-          回归任务(预测数值)则看 <strong>MSE / MAE</strong>(<a class="xref" href="chapter-04.html">第 4 章</a>);语言模型看<strong>困惑度</strong>(<a class="xref" href="chapter-18.html">第 18 章</a>)。
+          第二行怎么来的:抓到 8 笔真欺诈(TP=8)、漏了 2 笔(FN=2)、误报 20 个好人(FP=20)、其余 970 笔放对(TN=970)。代入公式:
+          精确率 = 8/(8+20) ≈ <strong>0.29</strong>(报警里大多是虚惊),召回率 = 8/(8+2) = <strong>0.80</strong>(十个坏人抓到八个),
+          F1 = 2·(0.29·0.80)/(0.29+0.80) ≈ <strong>0.42</strong>。抓欺诈更看重<strong>召回</strong>,这个模型合格;嫌误报太多,再想办法提精确率。
+        </p>
+
+        <h3>指标会随“判定门槛”变:ROC 与 PR 曲线</h3>
+        <p>
+          模型其实输出的是一个<strong>概率</strong>(“这笔有 0.7 的概率是欺诈”),报不报警取决于你设的<strong>门槛</strong>。
+          门槛调高:报得少而准(精确率↑、召回↓);门槛调低:宁可错杀(召回↑、精确率↓)。
+          所以精确率、召回率从来不是一个死数,而是<strong>随门槛滑动的一条曲线</strong>:
+        </p>
+        <ul>
+          <li><strong>PR 曲线</strong>:横轴召回、纵轴精确率。类别不平衡(如欺诈)时最该看它。</li>
+          <li><strong>ROC 曲线</strong>:横轴“误报率”、纵轴“召回率”。曲线下面积 <strong>AUC</strong> 用一个数概括整体好坏——<strong>1.0 完美、0.5 等于瞎猜</strong>。</li>
+        </ul>
+        <p class="muted">一句话:报一个指标前先想清楚它是在<strong>哪个门槛</strong>下算的;要比较模型的整体能力,用 AUC 这种“扫遍所有门槛”的数更公平。</p>
+
+        <h3>多分类怎么办(如 MNIST 10 类)</h3>
+        <p>
+          上面是二分类。像 MNIST 认 0~9 有 10 类,混淆矩阵就变成 <strong>10×10</strong>:对角线是认对的,非对角线告诉你<strong>谁被认成了谁</strong>(比如 4 常被认成 9)。
+          精确率/召回率改成<strong>逐类</strong>各算一份,再汇总成一个数,常见两种汇总:
+        </p>
+        <ul>
+          <li><strong>macro 平均</strong>:先算每类的指标,再<strong>简单平均</strong>——每个类<strong>同等重要</strong>,少数类不会被淹没。</li>
+          <li><strong>micro 平均</strong>:把所有类的 TP/FP/FN <strong>汇总到一起</strong>再算——样本多的大类说了算,数值上等于总体准确率。</li>
+        </ul>
+        <p>
+          本仓库 MNIST demo 报的是总体准确率(约 97.8%,<a class="xref" href="chapter-23.html">第 23 章</a>),因为 10 个数字大致均衡;
+          一旦类别不均衡,就该看 <strong>macro 平均</strong>或逐类召回,才不会被大类的高分掩盖了小类的糟糕表现。
+        </p>
+        <p>
+          换个任务就换指标:回归(预测数值)看 <strong>MSE / MAE</strong>(<a class="xref" href="chapter-04.html">第 4 章</a>);语言模型看<strong>困惑度</strong>(<a class="xref" href="chapter-19.html">第 19 章</a>)。
           指标要<strong>配任务</strong>选,没有万能的一个数。
         </p>
 
@@ -123,7 +235,7 @@
         </p>
         <ul>
           <li><strong>归一化到 [0,1]</strong>:减最小值、除以范围。MNIST 的像素(0~255)就是这么除以 255 变成 [0,1] 的。</li>
-          <li><strong>标准化(zero-mean)</strong>:减均值、除标准差,变成“均值 0、标准差 1”。(是不是很眼熟?LayerNorm 就是这套,<a class="xref" href="chapter-17.html">第 17 章</a>。)</li>
+          <li><strong>标准化(zero-mean)</strong>:减均值、除标准差,变成“均值 0、标准差 1”。(是不是很眼熟?LayerNorm 就是这套,<a class="xref" href="chapter-18.html">第 18 章</a>。)</li>
         </ul>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/demo/mnist/mnist_data.h(思路)</figcaption>
@@ -134,6 +246,26 @@ pixel_value = raw_pixel / 255.0;                <b class="cw-tag">1</b></code></
           </ol>
         </figure>
 
+        <h3>关键纪律:统计量只能从训练集算</h3>
+        <p>
+          归一化/标准化要用到一些<strong>统计量</strong>(最小值、最大值、均值、标准差)。这些数<strong>只能在训练集上算</strong>,
+          然后把<strong>同一组数</strong>原样套到 val/test 上——而不是各自重新算。
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">用“全量数据”算均值 = 数据泄漏</span>
+          <p>
+            要是图省事,拿<strong>训练 + 测试合在一起</strong>算均值和标准差,测试集的信息就顺着这几个统计量<strong>漏</strong>进了训练,
+            分数虚高、上线原形毕露。正确姿势:<code>μ、σ ← 只用训练集</code>,再对 val/test 做 <code>(x − μ) / σ</code>。
+            这正是<a class="xref" href="chapter-11.html#1-三个数据集-学调考">第 1 节</a>那条泄漏铁律最常见的一次翻车。
+          </p>
+        </div>
+        <h3>归一化还是标准化?怎么选</h3>
+        <ul>
+          <li><strong>[0,1] 归一化</strong>:数据有<strong>明确上下界</strong>时最自然(像素 0~255、百分比 0~100%)。缺点是对异常值敏感——一个超大值会把其余全压扁。</li>
+          <li><strong>标准化(zero-mean)</strong>:数据近似<strong>钟形分布</strong>、或各特征量纲差异大时更稳,对异常值也更耐受,是深度网络里最常用的一种。</li>
+          <li><strong>别漏了非数值特征</strong>:类别型(如“星期几”“城市”)一般转成 <strong>one-hot</strong> 编码;有<strong>缺失值</strong>要先填补(常用训练集的均值/众数)——同样只用训练集的统计量。</li>
+        </ul>
+
         <h2>6. 训练不动?一份排查清单</h2>
         <p>真上手训练,十有八九会遇到“不对劲”。按这个顺序排查,能解决大部分问题:</p>
         <ul>
@@ -141,6 +273,7 @@ pixel_value = raw_pixel / 255.0;                <b class="cw-tag">1</b></code></
           <li><strong>损失几乎不降</strong> → 学习率太小,或模型太弱/激活选错(<a class="xref" href="chapter-07.html">第 7 章</a>);先确认能在<strong>一小撮数据上过拟合</strong>(连背都背不下来,说明代码有 bug)。</li>
           <li><strong>训练降、验证不降甚至回升</strong> → 过拟合,上正则化(<a class="xref" href="chapter-10.html">第 10 章</a>):weight decay、Dropout、early stop、更多数据。</li>
           <li><strong>训练/验证差距很大又都不好</strong> → 可能数据有问题(标签错、泄漏、分布不一致),回头查数据。</li>
+          <li><strong>分数看着不错,但吃不准好不好</strong> → 回到<a class="xref" href="chapter-11.html#3-只看准确率会骗人">笨基线</a>比一比:没明显超过基线,先别调参,查数据和指标选得对不对。</li>
         </ul>
         <div class="callout callout--tip reveal">
           <span class="callout__title">黄金第一步:先过拟合一小撮</span>
@@ -154,17 +287,18 @@ pixel_value = raw_pixel / 255.0;                <b class="cw-tag">1</b></code></
           <h2>小结</h2>
           <ul>
             <li><strong>train/val/test</strong>:学 / 调 / 考,三份互不重叠;测试集全程不能碰,当心数据泄漏。</li>
-            <li>数据少用 <strong>K 折交叉验证</strong>,每条数据都当一次考题。</li>
-            <li><strong>准确率在不平衡时会骗人</strong>;用<strong>混淆矩阵</strong>推出精确率(查准)、召回(查全)、F1。</li>
-            <li>指标要配任务:分类看 P/R/F1,回归看 MSE,语言模型看困惑度。</li>
-            <li>喂数据前先<strong>归一化</strong>(MNIST 除以 255);训练不动就按清单排查,先“过拟合一小撮”验证管道。</li>
+            <li>划分小心三个坑:<strong>时间序列不打乱、同组不串台、训练与上线同分布</strong>。</li>
+            <li>数据少用 <strong>K 折 / 分层 K 折</strong>,每条数据都当一次考题。</li>
+            <li><strong>先立笨基线</strong>;准确率在不平衡时会骗人,用<strong>混淆矩阵</strong>推出精确率、召回、F1,并记得它们随<strong>门槛</strong>变(ROC/PR、AUC)。</li>
+            <li>指标要配任务:分类看 P/R/F1(多类看 macro/micro),回归看 MSE,语言模型看困惑度。</li>
+            <li>喂数据前先<strong>归一化</strong>(MNIST 除以 255),统计量<strong>只从训练集算</strong>;训练不动就按清单排查,先“过拟合一小撮”验证管道。</li>
           </ul>
         </section>
 
         <p class="muted">
-          到这里,“如何训练好一个网络”的完整功夫就齐了。接下来换个视角:
-          <strong>不同的数据,适合不同结构的网络</strong>。下一部分我们认识两位“专才”——
-          处理图像的 <strong>CNN</strong> 和处理序列的 <strong>RNN</strong>,先从卷积开始。
+          到这里,监督学习“如何训练好一个网络”的完整功夫就齐了。但<strong>学习不止监督这一种</strong>——
+          下一章我们认识一种很不一样的范式:<strong>强化学习</strong>,没有标准答案,只靠“奖励”在试错里学策略;
+          它也是日后<strong>对齐大模型(RLHF)</strong>的底子。之后再进入第三部分,认识 CNN、RNN 这些“专才”结构。
         </p>
       </div>
     </main>

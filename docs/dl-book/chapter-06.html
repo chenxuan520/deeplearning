@@ -24,152 +24,14 @@
           <h2>读完这一章,你会明白</h2>
           <ul>
             <li>链式法则的直觉:把“最终的错”一段段分配责任回去;</li>
-            <li>配套速查图里<strong>每一块公式</strong>对应前向/反向哪一步、在代码里哪一行;</li>
-            <li>反向传播的三步:从输出误差出发 → 逐层往回传 → 算出每个权重的梯度;</li>
+            <li>反向传播的三步:从输出误差出发 → 逐层往回传 → 算出每个权重<strong>和偏置</strong>的梯度;</li>
+            <li>怎么<strong>按真实计算顺序</strong>,把配套速查图里的公式(含 <var>w</var> 和 <var>b</var>)一条条现场推出来(而不是死记);</li>
             <li>为什么前向时要存下每层的 <var>z</var>(<a class="xref" href="chapter-03.html#5-逐行读懂前向传播">第 3 章那个伏笔</a>);</li>
             <li>逐行读懂真实的反向传播实现。</li>
           </ul>
         </section>
 
-        <h2>1. 速查图走读:图里这个 demo 各项公式怎么用</h2>
-        <p>
-          下面这张配套速查图不是“公式大全”,而是<strong>同一个玩具网络</strong>从头到尾走一遍的备忘录。
-          我们按图上的五个区块,把它当成一个 mini demo 拆开讲:每一块公式,都对应<strong>前向算一次</strong>或<strong>反向算一次</strong>里的具体一步。
-        </p>
-
-        <div class="figure reveal">
-          <img
-            class="figure__photo"
-            src="assets/cover-hero.png"
-            alt="深度学习速查图:多层网络结构、基础公式与反向传播求导示例"
-            width="1032"
-            height="1549"
-            loading="lazy"
-          />
-          <p class="figure__cap">读下面五个小节时,可以一边看图里对应区域,一边往下翻。</p>
-        </div>
-
-        <h3>① struct — 这个 demo 的网络长什么样?</h3>
-        <p>图左上角画的是一张<strong>缩小版 MLP</strong>,和仓库里 MNIST 的 <code>784→128→64→10</code> 是同一类东西,只是故意画小方便手算:</p>
-        <ul>
-          <li><strong>第 0 层(输入)</strong>:2 个输入节点,前向时它们的值记作 <var>out</var><sub>00</sub>、<var>out</var><sub>01</sub>(也就是原始特征)。</li>
-          <li><strong>第 1 层(隐藏)</strong>:2 个神经元,偏置叫 <var>b</var><sub>10</sub>、<var>b</var><sub>11</sub>。</li>
-          <li><strong>第 2 层(隐藏)</strong>:2 个神经元,<var>b</var><sub>20</sub>、<var>b</var><sub>21</sub>。</li>
-          <li><strong>第 3 层(输出)</strong>:1 个神经元 <var>b</var><sub>30</sub>,输出 <var>out</var><sub>30</sub>,拿去和 <code>target</code> 比。</li>
-        </ul>
-        <p>
-          连线的权重怎么读?图里 <var>w</var><sub>100</sub> 表示:<strong>从输入 0 连到第 1 层 0 号神经元</strong>的那根线。
-          一般记法 <var>w</var><sub><em>层号</em><em>本层神经元</em><em>上一层输入</em></sub>——三位数字分别对应“连到第几层 / 本层哪个神经元 / 上一层哪个输入”。
-          前向时数据从左往右流;反向时误差从 <var>out</var><sub>30</sub> 往左传。
-        </p>
-
-        <h3>② base — 基础公式:前向和更新各干什么?</h3>
-        <p>图中间 <code>base</code> 区列的是<strong>每次训练步都会用到的积木</strong>,按使用顺序理解最清楚:</p>
-        <div class="table-wrap reveal">
-          <table class="calc-table">
-            <thead>
-              <tr><th>图上的式子</th><th>在 demo 里干什么</th><th>对应章节 / 代码</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Σ <var>w</var>·input + <var>b</var> = <var>net</var></td>
-                <td><strong>前向第 1 步</strong>:每个神经元先算“加权和 + 偏置”,得到<strong>激活前</strong>的值 <var>net</var>(书里常叫 <var>z</var>)</td>
-                <td><a class="xref" href="chapter-02.html">第 2 章</a> · <code>neuron_preact_</code></td>
-              </tr>
-              <tr>
-                <td>sigmoid(<var>net</var>) = <var>output</var></td>
-                <td><strong>前向第 2 步</strong>:过激活函数,把 <var>net</var> 压到 (0,1),得到这一层输出,传给下一层当 input</td>
-                <td><a class="xref" href="chapter-02.html">第 2 章</a> · <code>neuron_output_</code></td>
-              </tr>
-              <tr>
-                <td><var>S</var>′(<var>x</var>) = <var>S</var>(<var>x</var>)(1−<var>S</var>(<var>x</var>))</td>
-                <td><strong>反向时要乘</strong>:链式法则里“<var>output</var> 对 <var>net</var> 的导数”。Sigmoid 两端平、中间陡,饱和区导数≈0 → 梯度容易消失</td>
-                <td><code>DerivActivate</code></td>
-              </tr>
-              <tr>
-                <td>Softmax</td>
-                <td>输出层若有多类(如 MNIST 的 10 类),把多个 <var>net</var> 变成概率分布。本图只有 1 个输出神经元,更常见是配 MSE;多分类 demo 见<a class="xref" href="chapter-23.html">第 23 章</a></td>
-                <td><a class="xref" href="chapter-04.html">第 4 章</a></td>
-              </tr>
-              <tr>
-                <td><var>E</var><sub>total</sub> = ½<var>n</var> Σ|<var>target</var>−<var>output</var>|²</td>
-                <td><strong>前向末尾</strong>:拿 <var>out</var><sub>30</sub> 和 <code>target</code> 算 MSE,得到一个标量“错得多离谱”</td>
-                <td><a class="xref" href="chapter-04.html">第 4 章</a> · <code>CalcLoss</code></td>
-              </tr>
-              <tr>
-                <td>∂<var>E</var>/∂<var>out</var> = −(1/<var>n</var>)(<var>target</var>−<var>out</var>)</td>
-                <td><strong>反向起点</strong>:损失对输出层激活值的导数——预测比目标大,导数为负,告诉网络“该往下调”</td>
-                <td><code>DerivLoss</code></td>
-              </tr>
-              <tr>
-                <td><var>w</var>⁺ = <var>w</var> − <var>η</var>·∂<var>E</var>/∂<var>w</var></td>
-                <td><strong>反传之后</strong>:优化器按梯度更新权重;<var>η</var> 是学习率。反传只算 ∂<var>E</var>/∂<var>w</var>,真正改 <var>w</var> 是<a class="xref" href="chapter-05.html">第 5 章</a>的事</td>
-                <td><code>ApplyGradient</code></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <h3>③ neuron — 以前向为例:神经元 <var>b</var><sub>10</sub> 怎么算?</h3>
-        <p>图里 <code>neuron</code> 区把上面两行公式<strong>钉在一个具体节点</strong>上。以第 1 层 0 号神经元为例:</p>
-        <div class="mathblock reveal">
-          <var>net</var><sub>10</sub> = <var>out</var><sub>00</sub>·<var>w</var><sub>100</sub> + <var>out</var><sub>01</sub>·<var>w</var><sub>101</sub> + <var>b</var><sub>10</sub><br />
-          <var>out</var><sub>10</sub> = sigmoid(<var>net</var><sub>10</sub>)
-          <span class="label">先线性组合,再激活——每个神经元都是这一套</span>
-        </div>
-        <p>
-          把两个输入各自乘上连过来的权重,加上偏置,得到 <var>net</var><sub>10</sub>;再套 sigmoid 得到 <var>out</var><sub>10</sub>,供第 2 层使用。
-          在代码里,这就是<a class="xref" href="chapter-03.html#5-逐行读懂前向传播">第 3 章前向传播</a>内层循环对每个神经元做的事:
-          先写 <code>neuron_preact_</code>,再写 <code>neuron_output_</code>。<strong>反向时要用到刚存下的 <var>net</var><sub>10</sub></strong>,所以前向不能省这一步。
-        </p>
-
-        <h3>④ formula — 反向通用式:δ 是什么?</h3>
-        <p>图右侧 <code>formula</code> 区是<strong>不依赖具体下标</strong>的反向模板。先引入 <var>δ</var>(delta):某个神经元对最终损失负多少责。</p>
-        <ul>
-          <li><strong>输出层</strong>:<var>δ</var><sub><var>o</var></sub> = ∂<var>E</var>/∂<var>out</var><sub><var>o</var></sub> · <var>S</var>′(<var>net</var><sub><var>o</var></sub>) — “损失对该神经元输出的影响”乘“激活有多敏感”。</li>
-          <li><strong>隐藏层</strong>:<var>δ</var><sub><var>l</var></sub> = ( Σ<sub><var>o</var></sub> <var>δ</var><sub><var>o</var></sub>·<var>w</var><sub><var>o</var></sub> ) · <var>S</var>′(<var>net</var><sub><var>l</var></sub>) — 把<strong>后面一层</strong>传回来的责任,经权重汇总,再乘本层激活导数。</li>
-          <li><strong>权重梯度</strong>:∂<var>E</var>/∂<var>w</var> = <var>δ</var> · (连到这条边的<strong>上一层输入</strong>)。</li>
-          <li><strong>偏置梯度</strong>:∂<var>E</var>/∂<var>b</var> = <var>δ</var> — 偏置没有“另一端的输入”,责任就是它本身。</li>
-        </ul>
-        <p>这四行就是下面<a class="xref" href="chapter-06.html#3-反向传播的三步">§3 反向传播三步</a>的公式版;读懂图,再读三步只是换了个叙述顺序。</p>
-
-        <h3>⑤ example — 落到两根具体连线</h3>
-        <p>图最右 <code>example</code> 区把模板<strong>代入本图的下标</strong>,这是最值得对照手算的两类情形:</p>
-
-        <p><strong>情形 A · 输出层权重 <var>w</var><sub>300</sub>(连 <var>b</var><sub>30</sub> 的那根)</strong></p>
-        <div class="mathblock reveal">
-          ∂<var>E</var>/∂<var>w</var><sub>300</sub> = <var>δ</var><sub>30</sub> · <var>out</var><sub>20</sub><br />
-          ∂<var>E</var>/∂<var>b</var><sub>30</sub> = <var>δ</var><sub>30</sub>
-          <span class="label"><var>δ</var><sub>30</sub> 由 target 与 out<sub>30</sub> 算出;乘的输入是上一层神经元 20 的输出</span>
-        </div>
-        <p>
-          输出层没有“更后面”的层,所以 <var>δ</var><sub>30</sub> 直接从损失算起。
-          代码里对应 <code>BackPropagationBatch</code> 里<strong>先处理最后一层</strong>、再 <code>grad_weight_[last][o][i] += d * in_vec[i]</code> 那一支。
-        </p>
-
-        <p><strong>情形 B · 隐藏层权重 <var>w</var><sub>100</sub>(连 <var>b</var><sub>10</sub> 的那根)</strong></p>
-        <div class="mathblock reveal">
-          <var>δ</var><sub>10</sub> = ( <var>δ</var><sub>20</sub>·<var>w</var><sub>200</sub> + <var>δ</var><sub>21</sub>·<var>w</var><sub>210</sub> ) · <var>S</var>′(<var>net</var><sub>10</sub>)<br />
-          ∂<var>E</var>/∂<var>w</var><sub>100</sub> = <var>δ</var><sub>10</sub> · <var>out</var><sub>00</sub><br />
-          ∂<var>E</var>/∂<var>b</var><sub>10</sub> = <var>δ</var><sub>10</sub>
-          <span class="label">隐藏层 δ 要先“汇总”后面所有连出去的边,再算这根 w 的梯度</span>
-        </div>
-        <p>
-          和输出层不同,<var>w</var><sub>100</sub> 的梯度不能一步写完:得先知道 <var>δ</var><sub>10</sub>,
-          而 <var>δ</var><sub>10</sub> 又依赖后面 <var>b</var><sub>20</sub>、<var>b</var><sub>21</sub> 传回来的责任——这就是<strong>为什么要从后往前</strong>一层层算。
-          代码里就是倒序循环 <code>for (l = last-1; l &gt;= 1; l--)</code> 里那个 <code>sum += weight * delta</code> 累加,再乘 <code>DerivActivate(preact, output)</code>。
-        </p>
-
-        <div class="callout callout--tip reveal">
-          <span class="callout__title">把 demo 和一次完整训练步对齐</span>
-          <p>
-            <strong>前向</strong>:按 ③ 对每个神经元算 <var>net</var>、<var>out</var>(struct 整图走一遍) → 用 base 里的 MSE 算 <var>E</var>。<br />
-            <strong>反向</strong>:用 base 里 ∂<var>E</var>/∂<var>out</var> 得输出层 <var>δ</var>(④) → 按 example B 从后往前传 hidden 的 <var>δ</var> → 按 example A/B 算每根 <var>w</var>、<var>b</var> 的梯度 → 用 <var>w</var>⁺ = <var>w</var> − <var>η</var>·∂<var>E</var>/∂<var>w</var> 更新(<a class="xref" href="chapter-05.html">第 5 章</a>)。<br />
-            MNIST 只是把输入从 2 换成 784、层变宽,公式<strong>完全一样</strong>。
-          </p>
-        </div>
-
-        <h2>2. 链式法则:一段段地追责任</h2>
+        <h2>1. 链式法则:一段段地追责任</h2>
         <p>
           先看最简单的情形:一个参数 <var>w</var>,它影响 <var>z</var>,<var>z</var> 影响激活值 <var>a</var>,
           <var>a</var> 最终影响损失 <var>L</var>。这是一条“影响链”:
@@ -226,6 +88,26 @@
           <span class="frac"><span>∂<var>z</var></span><span>∂<var>w</var></span></span>
           <span class="label">总影响 = 损失对 a 的影响 × a 对 z 的影响 × z 对 w 的影响</span>
         </div>
+        <p>
+          <strong>偏置 <var>b</var> 更省事。</strong>一个神经元里 <var>z</var> = Σ <var>w</var>·<var>a</var> + <var>b</var>,
+          对 <var>b</var> 求导时那些带 <var>w</var> 的项都是常数、导数为 0,只剩 <var>b</var> 自己,系数是 1——也就是 ∂<var>z</var>/∂<var>b</var> = 1。
+          于是同一条链走到最后一段换成 1,偏置的梯度就<strong>直接等于</strong> ∂<var>L</var>/∂<var>z</var>(也就是下一节要反复出现的 <var>δ</var>),连输入都不用再乘:
+        </p>
+        <div class="mathblock reveal">
+          <span class="frac"><span>∂<var>L</var></span><span>∂<var>b</var></span></span>
+          =
+          <span class="frac"><span>∂<var>L</var></span><span>∂<var>a</var></span></span>
+          ·
+          <span class="frac"><span>∂<var>a</var></span><span>∂<var>z</var></span></span>
+          ·
+          <span class="frac"><span>∂<var>z</var></span><span>∂<var>b</var></span></span>
+          =
+          <span class="frac"><span>∂<var>L</var></span><span>∂<var>a</var></span></span>
+          ·
+          <span class="frac"><span>∂<var>a</var></span><span>∂<var>z</var></span></span>
+          · 1
+          <span class="label">和上面 ∂<var>L</var>/∂<var>w</var> 只差最后一段:<var>w</var> 那段是输入 <var>a</var>,<var>b</var> 这段是 1</span>
+        </div>
         <div class="callout callout--analogy reveal">
           <span class="callout__title">一个类比</span>
           <p>
@@ -235,7 +117,7 @@
           </p>
         </div>
 
-        <h2>3. 反向传播的三步</h2>
+        <h2>2. 反向传播的三步</h2>
         <p>把上面的思路推广到整张多层网络,就是干净利落的三步。我们引入一个中间量 <var>δ</var>(delta),表示“某个神经元对最终损失的责任”。</p>
 
         <h3>第一步:从输出层的误差开始</h3>
@@ -254,12 +136,180 @@
         </div>
 
         <h3>第三步:用 δ 算出每个参数的梯度</h3>
-        <p>一旦每个神经元都有了自己的 <var>δ</var>,梯度就唾手可得——权重的梯度,就是“它两端的 <var>δ</var> 和输入”的乘积:</p>
+        <p>一旦每个神经元都有了自己的 <var>δ</var>,梯度就唾手可得——权重的梯度,是“它两端的 <var>δ</var> 和输入”的乘积;偏置的梯度,就是 <var>δ</var> 本身(还记得吗?偏置那段局部导数是 1):</p>
         <div class="mathblock reveal">
           <span class="frac"><span>∂<var>L</var></span><span>∂<var>w</var><sub>l,o,i</sub></span></span> = <var>δ</var><sub>l,o</sub> · <var>a</var><sub>l−1,i</sub>
           &nbsp;&nbsp;&nbsp;&nbsp;
           <span class="frac"><span>∂<var>L</var></span><span>∂<var>b</var><sub>l,o</sub></span></span> = <var>δ</var><sub>l,o</sub>
           <span class="label">权重梯度 = 本神经元的 δ × 上一层对应的输入;偏置梯度就是 δ 本身</span>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">框架到手,下一节现场验一遍</span>
+          <p>
+            这三步就是反向传播的<strong>全部骨架</strong>。但光看通用公式容易“懂了又没懂”。
+            所以下一节,我们拿一张真实的速查图、带具体下标,把每个 <var>δ</var>、每根 <var>w</var>、每个 <var>b</var> 的梯度<strong>按真实计算顺序现场推一遍</strong>——你会看到,推来推去都没跳出这三步。
+          </p>
+        </div>
+
+        <h2>3. 跟着速查图,按真实计算顺序推一遍</h2>
+        <p>
+          链式法则(第 1 节)和三步框架(第 2 节)都到手了,现在拿它们去啃一张<strong>真实的速查图</strong>:把抽象公式落到<strong>具体下标</strong>上。
+          这张图乍看是一堵“公式墙”,分成 <code>struct / base / neuron / formula / example</code> 五块。
+          但这五块只是<strong>速查时的分区</strong>,不是计算顺序——<code>base</code> 把零件摊在那儿,<code>formula</code> 写通用模板,<code>example</code> 才代入具体下标。
+          真要看懂,得<strong>按一次训练真正发生的顺序</strong>走:前向逐个神经元算 → 到输出算损失 → 从末层往回推每个梯度 → 最后才更新参数。
+          下面就按这个顺序,用刚学的链式法则,把图里的公式<strong>一条条现场推出来</strong>——每冒出一条,都先说清“这一步为什么需要它”。
+        </p>
+
+        <div class="figure reveal">
+          <img
+            class="figure__photo"
+            src="assets/cover-hero.png"
+            alt="深度学习速查图:多层网络结构、基础公式与反向传播求导示例"
+            width="1032"
+            height="1549"
+            loading="lazy"
+          />
+          <p class="figure__cap">别按区块顺序读;跟着下面第 1~5 步走,在图上找到对应位置即可。</p>
+        </div>
+
+        <h3>读图约定:先认下标(struct 区)</h3>
+        <p>图左上 <code>struct</code> 是一张缩小版 MLP,和仓库里 MNIST 的 <code>784→128→64→10</code> 同类,只是画小了方便手算:</p>
+        <ul>
+          <li><strong>第 0 层(输入)</strong>:2 个输入,值记作 <var>out</var><sub>00</sub>、<var>out</var><sub>01</sub>。</li>
+          <li><strong>第 1、2 层(隐藏)</strong>:各 2 个神经元 <var>b</var><sub>10</sub>/<var>b</var><sub>11</sub>、<var>b</var><sub>20</sub>/<var>b</var><sub>21</sub>。</li>
+          <li><strong>第 3 层(输出)</strong>:1 个神经元 <var>b</var><sub>30</sub>,输出 <var>out</var><sub>30</sub>,拿去和 <code>target</code> 比。</li>
+        </ul>
+        <p>
+          权重 <var>w</var> 的三位下标 = <strong>连到第几层 / 本层第几个神经元 / 上一层第几个输入</strong>。
+          例:<var>w</var><sub>100</sub> 是“输入 0 → 第 1 层 0 号”那根线;<var>w</var><sub>210</sub> 是“第 1 层 0 号 → 第 2 层 1 号”。
+          <var>out</var><sub>20</sub> 则是第 2 层 0 号神经元的输出。认准这套记法,后面每条公式都能在图上指出来。
+        </p>
+
+        <h3>第 1 步 · 前向:一个神经元怎么算(neuron 区 + base 前两行)</h3>
+        <p>前向时数据从左往右流。以第 1 层 0 号神经元为例,它只干两件事——先把连进来的输入<strong>加权求和</strong>,再过一次<strong>激活函数</strong>:</p>
+        <div class="mathblock reveal">
+          <var>net</var><sub>10</sub> = <var>out</var><sub>00</sub>·<var>w</var><sub>100</sub> + <var>out</var><sub>01</sub>·<var>w</var><sub>101</sub> + <var>b</var><sub>10</sub> = Σ <var>out</var>·<var>w</var> + <var>b</var><br />
+          <var>out</var><sub>10</sub> = sigmoid(<var>net</var><sub>10</sub>)
+          <span class="label">就是 base 里 “Σ w·input+b = net” 和 “sigmoid(net) = output” 落到 neuron10 上(图 neuron 区)</span>
+        </div>
+        <p>
+          每个神经元都这么算:第 1 层算完喂给第 2 层,第 2 层喂给第 3 层,一路到 <var>out</var><sub>30</sub>。
+          <strong>一个要记住的细节</strong>:算 <var>net</var> 时顺手把它存下来(代码里的 <code>neuron_preact_</code>,见<a class="xref" href="chapter-03.html#5-逐行读懂前向传播">第 3 章</a>),第 3、4 步反向求导还要回头用它。
+        </p>
+
+        <h3>第 2 步 · 前向到头,量一下错得多离谱(base 的 E<sub>total</sub>)</h3>
+        <p>数据流到输出层,<var>out</var><sub>30</sub> 就是这次的预测。拿它和 <code>target</code> 比,用均方误差(MSE)压成一个数:</p>
+        <div class="mathblock reveal">
+          <var>E</var><sub>total</sub> = <span class="frac"><span>1</span><span>2<var>n</var></span></span> Σ |<var>target</var> − <var>output</var>|²
+          <span class="label"><var>n</var> 是输出神经元个数;本图只有 <var>out</var><sub>30</sub> 一个,所以 <var>n</var>=1</span>
+        </div>
+        <p>
+          这个标量就是“错得多离谱”。想让它变小,就得知道<strong>每个权重该往哪调、调多少</strong>——也就是对每个 <var>w</var> 求
+          <span class="frac"><span>∂<var>E</var></span><span>∂<var>w</var></span></span>。正是这一问,才逼出下面的反向传播。
+        </p>
+        <p class="muted">
+          (图 base 区还列了 Softmax:本图单输出配 MSE,用不到它;多分类如 MNIST 10 类才用 softmax 把多个 <var>net</var> 变成概率分布,见<a class="xref" href="chapter-23.html">第 23 章</a>。)
+        </p>
+
+        <h3>第 3 步 · 反向第一站:输出层的 w<sub>300</sub> 和 b<sub>30</sub>(base 的 ∂E/∂out、S′ → example A)</h3>
+        <p>损失有了,现在要梯度。先挑<strong>最靠近损失</strong>的一根权重 <var>w</var><sub>300</sub>——它只经一条路影响损失:<code>w300 → net30 → out30 → E</code>。链式法则把这条路上三段局部导数<strong>连乘</strong>:</p>
+        <div class="mathblock reveal">
+          <span class="frac"><span>∂<var>E</var></span><span>∂<var>w</var><sub>300</sub></span></span>
+          =
+          <span class="frac"><span>∂<var>E</var></span><span>∂<var>out</var><sub>30</sub></span></span>
+          ·
+          <span class="frac"><span>∂<var>out</var><sub>30</sub></span><span>∂<var>net</var><sub>30</sub></span></span>
+          ·
+          <span class="frac"><span>∂<var>net</var><sub>30</sub></span><span>∂<var>w</var><sub>300</sub></span></span>
+        </div>
+        <p>三段挨个算,零件全在 base 区现成:</p>
+        <ol>
+          <li><strong>∂<var>E</var>/∂<var>out</var><sub>30</sub> = −(<var>target</var> − <var>out</var><sub>30</sub>)</strong> —— 对第 2 步的 MSE 求导,得 base 里的 −<span class="frac"><span>1</span><span><var>n</var></span></span>(<var>target</var>−<var>out</var>),<var>n</var>=1 就是它。预测比目标大时为正,提示“该往下调”。</li>
+          <li><strong>∂<var>out</var><sub>30</sub>/∂<var>net</var><sub>30</sub> = <var>out</var><sub>30</sub>(1 − <var>out</var><sub>30</sub>)</strong> —— 因为 <var>out</var><sub>30</sub>=sigmoid(<var>net</var><sub>30</sub>),直接套 base 里的 <var>S</var>′(<var>x</var>)=<var>S</var>(<var>x</var>)(1−<var>S</var>(<var>x</var>))。</li>
+          <li><strong>∂<var>net</var><sub>30</sub>/∂<var>w</var><sub>300</sub> = <var>out</var><sub>20</sub></strong> —— 因为 <var>net</var><sub>30</sub> = <var>out</var><sub>20</sub>·<var>w</var><sub>300</sub> + <var>out</var><sub>21</sub>·<var>w</var><sub>301</sub> + <var>b</var><sub>30</sub>,对 <var>w</var><sub>300</sub> 求导只剩它的系数 <var>out</var><sub>20</sub>。</li>
+        </ol>
+        <p>把前两段(只跟这个神经元自己有关、后面反复要用)打包起个名字叫 <var>δ</var><sub>30</sub>,连乘就收成一行:</p>
+        <div class="mathblock reveal">
+          <var>δ</var><sub>30</sub> = <span class="frac"><span>∂<var>E</var></span><span>∂<var>out</var><sub>30</sub></span></span> · <span class="frac"><span>∂<var>out</var><sub>30</sub></span><span>∂<var>net</var><sub>30</sub></span></span> = −(<var>target</var>−<var>out</var><sub>30</sub>)·<var>out</var><sub>30</sub>(1−<var>out</var><sub>30</sub>)<br />
+          ∂<var>E</var>/∂<var>w</var><sub>300</sub> = <var>δ</var><sub>30</sub> · <var>out</var><sub>20</sub>
+          &nbsp;&nbsp;&nbsp;&nbsp;
+          ∂<var>E</var>/∂<var>b</var><sub>30</sub> = <var>δ</var><sub>30</sub>
+          <span class="label">这就是图 example 区头两行</span>
+        </div>
+        <p>
+          <strong>那 <var>b</var><sub>30</sub> 的梯度怎么来的?</strong> 一模一样的链子,只是最后一段换成偏置:
+          <code>b30 → net30 → out30 → E</code>。前两段和 <var>w</var><sub>300</sub> 共用,正是 <var>δ</var><sub>30</sub>;
+          最后一段回到第 1 步那个式子 <var>net</var><sub>30</sub> = … + <var>b</var><sub>30</sub>,对 <var>b</var><sub>30</sub> 求导 = 1。所以
+          ∂<var>E</var>/∂<var>b</var><sub>30</sub> = <var>δ</var><sub>30</sub> · 1 = <var>δ</var><sub>30</sub>——偏置梯度就等于它自己神经元的 <var>δ</var>,连 <var>out</var> 都不用乘。
+        </p>
+        <p>图 formula 区那句 <var>δ</var><sub>last</sub> = ∂<var>E</var>/∂<var>out</var><sub>last</sub> · ∂<var>out</var><sub>last</sub>/∂<var>net</var><sub>last</sub>,不过是给“前两段乘积”起的通用名而已。</p>
+
+        <h3>第 4 步 · 反向往里走:隐藏层的 w<sub>100</sub> 和 b<sub>10</sub>(formula 的 δ 递推 → example B)</h3>
+        <p>
+          再挑一根深处的 <var>w</var><sub>100</sub>。它离损失远,而且 <var>out</var><sub>10</sub> <strong>同时</strong>连去第 2 层两个神经元(<var>b</var><sub>20</sub>、<var>b</var><sub>21</sub>),
+          所以它对损失的影响要把<strong>两条路加起来</strong>。整条链照样连乘:
+        </p>
+        <div class="mathblock reveal">
+          <span class="frac"><span>∂<var>E</var></span><span>∂<var>w</var><sub>100</sub></span></span>
+          =
+          <span class="frac"><span>∂<var>E</var></span><span>∂<var>out</var><sub>10</sub></span></span>
+          ·
+          <span class="frac"><span>∂<var>out</var><sub>10</sub></span><span>∂<var>net</var><sub>10</sub></span></span>
+          ·
+          <span class="frac"><span>∂<var>net</var><sub>10</sub></span><span>∂<var>w</var><sub>100</sub></span></span>
+        </div>
+        <p>难点只在第一段 ∂<var>E</var>/∂<var>out</var><sub>10</sub>:<var>out</var><sub>10</sub> 要经 <var>b</var><sub>20</sub>、<var>b</var><sub>21</sub> 才影响到 <var>E</var>,于是把这两条路<strong>求和</strong>:</p>
+        <div class="mathblock reveal">
+          <span class="frac"><span>∂<var>E</var></span><span>∂<var>out</var><sub>10</sub></span></span>
+          = Σ<sub><var>o</var>∈{20,21}</sub> ( <var>δ</var><sub><var>o</var></sub> · <var>w</var><sub><var>o</var></sub> )
+          = <var>δ</var><sub>20</sub>·<var>w</var><sub>200</sub> + <var>δ</var><sub>21</sub>·<var>w</var><sub>210</sub>
+          <span class="label"><var>δ</var><sub>20</sub>、<var>δ</var><sub>21</sub> 就是第 3 步那种“前两段乘积”,已在上一层算好;<var>w</var><sub>200</sub>/<var>w</var><sub>210</sub> 是 <var>out</var><sub>10</sub> 连出去的两根权重</span>
+        </div>
+        <p>另外两段照旧:∂<var>out</var><sub>10</sub>/∂<var>net</var><sub>10</sub> = <var>out</var><sub>10</sub>(1−<var>out</var><sub>10</sub>),∂<var>net</var><sub>10</sub>/∂<var>w</var><sub>100</sub> = <var>out</var><sub>00</sub>。三段合起来,同样打包出 <var>δ</var><sub>10</sub>:</p>
+        <div class="mathblock reveal">
+          <var>δ</var><sub>10</sub> = ( <var>δ</var><sub>20</sub>·<var>w</var><sub>200</sub> + <var>δ</var><sub>21</sub>·<var>w</var><sub>210</sub> ) · <var>out</var><sub>10</sub>(1−<var>out</var><sub>10</sub>)<br />
+          ∂<var>E</var>/∂<var>w</var><sub>100</sub> = <var>δ</var><sub>10</sub> · <var>out</var><sub>00</sub>
+          &nbsp;&nbsp;&nbsp;&nbsp;
+          ∂<var>E</var>/∂<var>b</var><sub>10</sub> = <var>δ</var><sub>10</sub>
+          <span class="label">这就是图 example 区后两行;formula 区通用式 <var>δ</var><sub><var>o</var></sub>=(Σ <var>δ</var><sub><var>o</var>+1</sub>·<var>w</var><sub><var>o</var>+1</sub>)·∂<var>out</var><sub><var>o</var></sub>/∂<var>net</var><sub><var>o</var></sub> 就是它的模板</span>
+        </div>
+        <p>
+          <strong>b<sub>10</sub> 的梯度也一并说清</strong>(这根最容易被跳过):偏置走的链子是 <code>b10 → net10 → out10 → …… → E</code>,
+          和 <var>w</var><sub>100</sub> <strong>共用后面全部路段</strong>,唯一不同还是最后一段——回到第 1 步
+          <var>net</var><sub>10</sub> = <var>out</var><sub>00</sub>·<var>w</var><sub>100</sub> + <var>out</var><sub>01</sub>·<var>w</var><sub>101</sub> + <var>b</var><sub>10</sub>,
+          对 <var>b</var><sub>10</sub> 求导,带 <var>w</var> 的项全变 0,只剩系数 1,即 ∂<var>net</var><sub>10</sub>/∂<var>b</var><sub>10</sub> = 1。
+          于是 ∂<var>E</var>/∂<var>b</var><sub>10</sub> = <var>δ</var><sub>10</sub> · 1 = <var>δ</var><sub>10</sub>。
+          <strong>规律一句话:任何一根偏置的梯度,都等于它所在神经元的 <var>δ</var>;权重才要再乘一个“上一层输入”。</strong>
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">这一步才说清“反向”二字</span>
+          <p>
+            算 <var>δ</var><sub>10</sub> 得先有 <var>δ</var><sub>20</sub>、<var>δ</var><sub>21</sub>;要它们又得先有 <var>δ</var><sub>30</sub>。
+            所以只能<strong>从末层往前一层层算</strong>——前一层刚算出的 <var>δ</var>,正好喂给更前面一层用。
+            这就是“反向”传播名字的由来,也是它高效的原因:每个 <var>δ</var> 只算一次,之后重复利用。
+            对应代码里的倒序循环 <code>for (l = last-1; l &gt;= 1; l--)</code>。
+          </p>
+        </div>
+
+        <h3>第 5 步 · 梯度全到手,最后才更新(base 的 w⁺)</h3>
+        <p>把每一层都这么从后往前扫一遍,网络里每个 <var>w</var>、每个 <var>b</var> 都拿到了自己的梯度。<strong>到这一步,也只有到这一步</strong>,才轮到更新参数:</p>
+        <div class="mathblock reveal">
+          <var>w</var>⁺ = <var>w</var> − <var>η</var> · <span class="frac"><span>∂<var>E</var></span><span>∂<var>w</var></span></span>
+          <span class="label"><var>η</var> 是学习率;反向传播只算出 ∂<var>E</var>/∂<var>w</var>,真正挪参数是优化器的活</span>
+        </div>
+        <p>
+          注意 <var>w</var>⁺ 虽然写在 base 区里,却是整个流程<strong>最后</strong>才发生的一步。“反传求梯度”和“更新参数”是两码事——具体怎么挪,见<a class="xref" href="chapter-05.html">第 5 章</a>的梯度下降和<a class="xref" href="chapter-08.html">第 8 章</a>的各种优化器。
+        </p>
+
+        <div class="callout callout--note reveal">
+          <span class="callout__title">一次训练步的真实顺序(回头对速查图)</span>
+          <p>
+            <strong>①前向</strong> 每个神经元 <var>net</var>→<var>out</var>,逐层算到 <var>out</var><sub>30</sub>(neuron 区 / base 前两行) →
+            <strong>②损失</strong> <var>E</var><sub>total</sub> 量误差(base) →
+            <strong>③④反向</strong> <var>δ</var> 从末层往前推,顺手得每根 <var>w</var>、<var>b</var> 的梯度(formula 写通用式,example 代入下标) →
+            <strong>⑤更新</strong> <var>w</var>⁺ = <var>w</var> − <var>η</var>·∂<var>E</var>/∂<var>w</var>(base)。<br />
+            速查图五块只是把这五步用到的零件<strong>分门别类摆好</strong>;MNIST 的 <code>784→128→64→10</code> 也只是把输入变宽、层加深,这套顺序<strong>一字不改</strong>。
+          </p>
         </div>
 
         <h2>4. 边看动画边走一遍</h2>
@@ -327,7 +377,7 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
   }
 }</code></pre>
           <ol class="code-walk__notes">
-            <li>偏置的梯度,就是这个神经元的 <var>δ</var> 本身(对应公式 ∂<var>L</var>/∂<var>b</var> = <var>δ</var>)。</li>
+            <li>偏置的梯度,就是这个神经元的 <var>δ</var> 本身(对应公式 ∂<var>L</var>/∂<var>b</var> = <var>δ</var>)——和第 3 节、第 3~4 步推的完全一致,代码里就一句 <code>grad_bias_[l][o] += d</code>。</li>
             <li>权重的梯度,是 <var>δ</var> 乘以“上一层对应的输入”(对应 ∂<var>L</var>/∂<var>w</var> = <var>δ</var>·<var>a</var>)。注意是 <code>+=</code>:一批里每个样本都累加进来,最后在 <code>ApplyGradient</code> 里除以 <code>B</code> 取平均(<a class="xref" href="chapter-05.html">第 5 章</a>)。</li>
           </ol>
         </figure>
@@ -354,9 +404,10 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>配套速查图五块:struct 看结构,base/neuron 看前向,formula/example 看反向,最后 <var>w</var>⁺ 才是更新。</li>
             <li>反向传播 = 链式法则:把“最终损失”按每段局部导数连乘,分配责任回每个参数。</li>
             <li>三步:① 末层 <var>δ</var> = ∂<var>L</var>/∂<var>a</var> · <var>f</var>′(<var>z</var>)(softmax+CE 时就是 <var>p</var>−<var>t</var>);② 逐层回传 <var>δ</var><sub>l</sub> = (<var>W</var><sup>T</sup><var>δ</var>) ⊙ <var>f</var>′(<var>z</var>);③ 梯度 = <var>δ</var> × 输入。</li>
+            <li>权重梯度 = <var>δ</var> × 上一层输入;<strong>偏置梯度 = <var>δ</var> 本身</strong>(因为 ∂<var>net</var>/∂<var>b</var> = 1)。</li>
+            <li>配套速查图五块:struct 看结构,base/neuron 看前向,formula/example 看反向,最后 <var>w</var>⁺ 才是更新;按“前向→损失→反向→更新”的真实顺序读,而不是按区块。</li>
             <li>反向时要用前向存下的 <var>z</var>(<code>neuron_preact_</code>)来算激活导数。</li>
             <li>前向 → 损失 → 反向 → 更新,四步一循环,反复多次即为训练。</li>
           </ul>
@@ -377,13 +428,19 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 3:权重 <var>w</var><sub>l,o,i</sub> 的梯度由哪两样东西相乘得到?</summary>
+            <summary class="quiz__q">问题 3:同一个神经元,它的偏置 <var>b</var> 和权重 <var>w</var> 的梯度算法差在哪?</summary>
+            <div class="quiz__a">
+              <p>两者共用同一个 <var>δ</var>(前面所有路段都一样),只差最后一段局部导数:权重那段是 ∂<var>net</var>/∂<var>w</var> = 上一层的输入,所以 ∂<var>L</var>/∂<var>w</var> = <var>δ</var> × 输入;偏置那段是 ∂<var>net</var>/∂<var>b</var> = 1,所以 ∂<var>L</var>/∂<var>b</var> = <var>δ</var> × 1 = <var>δ</var> 本身,连输入都不用乘。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:权重 <var>w</var><sub>l,o,i</sub> 的梯度由哪两样东西相乘得到?</summary>
             <div class="quiz__a">
               <p>由“这个权重指向的神经元的 <var>δ</var>(<code>neuron_delta_[l][o]</code>)”乘以“它接收的那个输入(上一层的输出 <code>in_vec[i]</code>)”。直觉:责任越大、输入越强,这个权重就该调得越多。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 4:如果前向时没有保存每层的 <var>z</var>,反向传播会怎样?</summary>
+            <summary class="quiz__q">问题 5:如果前向时没有保存每层的 <var>z</var>,反向传播会怎样?</summary>
             <div class="quiz__a">
               <p>很多激活函数(尤其 GELU)的导数需要原始的 <var>z</var> 才能算准,缺了它就只能用粗略近似,梯度不准、训练变差。所以前向时顺手把 <var>z</var> 存进 <code>neuron_preact_</code> 是必要的。</p>
             </div>

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 14 章 · 词嵌入与 word2vec | 深度学习入门</title>
+    <title>第 14 章 · RNN 与 LSTM | 深度学习入门</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -12,140 +12,307 @@
     <main class="chapter">
       <div class="chapter__inner">
         <p class="chapter__eyebrow">第 14 章 · 经典网络结构</p>
-        <h1>词嵌入与 word2vec</h1>
+        <h1>RNN 与 LSTM</h1>
 
         <p class="lead">
-          不管是 RNN 还是后面的 Transformer,处理文字前都得先把<strong>词变成向量</strong>。可“词”本是一个个
-          <strong>离散符号</strong>,怎么变成<strong>有含义</strong>的数字?这一章讲<span class="term">词嵌入(embedding)</span>——
-          让每个词第一次拥有自己的“<strong>语义坐标</strong>”,意思相近的词,坐标也相近。
+          CNN 专治图像。可另一类数据——<strong>一句话、一段语音、一串股价</strong>——是有<strong>先后顺序</strong>的
+          <span class="term">序列</span>,要处理它,得能“<strong>记住前面</strong>”。这一章认识第二位专才:
+          <span class="term">RNN(循环神经网络)</span>和它的升级版 <span class="term">LSTM</span>,并看清它们的先天短板——
+          这正是下一部分<strong>注意力</strong>要来救的场。
         </p>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>为什么最朴素的 <strong>one-hot</strong> 表示又<strong>浪费</strong>又<strong>不懂语义</strong>;</li>
-            <li><strong>分布式表示</strong>:用一个稠密向量当词的“语义坐标”;</li>
-            <li>怎么用<strong><a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦</strong>衡量两个词有多相近(<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">回到第 1 章</a>);</li>
-            <li><strong>word2vec</strong> 怎么靠“看上下文”把词向量学出来(CBOW / skip-gram);</li>
-            <li>为什么会有 <em>国王−男人+女人≈女王</em> 这种神奇的向量算术,以及它和大模型 embedding 层的关系。</li>
+            <li>序列数据为什么需要“<strong>记忆</strong>”,而 MLP 给不了;</li>
+            <li>RNN 怎么用一个<strong>隐藏状态</strong>把信息一路带下去(按时间展开);</li>
+            <li>用<strong>下一词预测</strong>走通一遍:前向按时推进 → 逐步算损失 → <strong>BPTT</strong> 反传、<strong>权重共享</strong>下梯度怎么累加;</li>
+            <li>截断 BPTT、<strong>teacher forcing</strong>、<a class="xref" href="chapter-09.html#4-防止训练踩空-梯度裁剪">梯度裁剪</a>这些训练时绕不开的工程招;</li>
+            <li>RNN 的两个硬伤:<strong>梯度消失/爆炸</strong>(长依赖学不到)和<strong>没法并行</strong>(慢);</li>
+            <li>LSTM 怎么用<strong>“门”</strong>管理记忆,缓解长依赖;</li>
+            <li>为什么后来 <strong>Transformer</strong> 把它取代了(承接第四部分)。</li>
           </ul>
         </section>
 
-        <h2>1. 计算机只认数字:先看最笨的 one-hot</h2>
+        <h2>1. 序列:顺序很重要,还得记住前文</h2>
         <p>
-          词是符号,得先编码成数字。最直接的办法是<span class="term">one-hot</span>:词表里有 <var>V</var> 个词,
-          就用一个长度 <var>V</var> 的向量,<strong>只有这个词对应的位置是 1,其余全是 0</strong>。
-          比如词表 [猫, 狗, 苹果],那“狗” = [0, 1, 0]。
+          “狗咬人”和“人咬狗”用的字一样,顺序不同意思就反了;要判断“它太重了”里的“它”指谁,得<strong>回看前文</strong>。
+          这类数据有两个特点:<strong>长度不固定</strong>、<strong>元素间有顺序和依赖</strong>。固定大小的 MLP(<a class="xref" href="chapter-03.html">第 3 章</a>)一次只吃固定长度、
+          还把顺序信息丢了,天然不适合。我们需要一种能“<strong>边读边记</strong>”的结构。
         </p>
 
-        <h2>2. one-hot 的两个毛病</h2>
-        <ul>
-          <li><strong>维度爆炸、极其稀疏</strong>:真实词表动辄几万几十万,每个词就是一个几万维、只有一个 1 的向量,又大又空。</li>
-          <li><strong>完全不懂语义</strong>:任意两个不同词的向量都<strong>互相垂直</strong>,点积恒为 0(<a class="xref" href="chapter-01.html">第 1 章</a>)。也就是说,在 one-hot 眼里,
-          “猫”和“狗”的相似度,跟“猫”和“苹果”的相似度<strong>一样都是 0</strong>——它把词与词之间的关系全丢了。</li>
-        </ul>
-        <div class="callout callout--warn reveal">
-          <span class="callout__title">我们真正想要的</span>
+        <h2>2. RNN:一个带“隐藏状态”的循环</h2>
+        <p>
+          RNN 的想法非常像<strong>人读句子</strong>:一个词一个词地读,每读一个,就把“<strong>到目前为止记住的东西</strong>”
+          打包成一个向量,叫<span class="term">隐藏状态(hidden state)</span>,带到下一步。读下一个词时,它同时看两样东西:
+          <strong>这个新词 + 上一步传来的隐藏状态</strong>,更新出新的隐藏状态。
+        </p>
+        <div class="mathblock reveal">
+          <var>h</var><sub>t</sub> = 激活( <var>W</var><sub>x</sub>·<var>x</var><sub>t</sub> + <var>W</var><sub>h</sub>·<var>h</var><sub>t−1</sub> + <var>b</var> )
+          <span class="label">新记忆 hₜ = 由“当前输入 xₜ”和“上一刻记忆 hₜ₋₁”共同决定</span>
+        </div>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 520 180" role="img" aria-label="RNN 按时间展开示意">
+              <defs><marker id="rm" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8499bd" /></marker></defs>
+              <text x="40" y="30" fill="#8ef0d1" font-size="12">隐藏状态(记忆)一路向右传</text>
+              <!-- hidden boxes -->
+              <g>
+                <rect x="46" y="56" width="72" height="40" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" /><text x="82" y="81" text-anchor="middle" fill="#eef4ff" font-size="13">h₁</text>
+                <rect x="166" y="56" width="72" height="40" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" /><text x="202" y="81" text-anchor="middle" fill="#eef4ff" font-size="13">h₂</text>
+                <rect x="286" y="56" width="72" height="40" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" /><text x="322" y="81" text-anchor="middle" fill="#eef4ff" font-size="13">h₃</text>
+                <rect x="406" y="56" width="72" height="40" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" /><text x="442" y="81" text-anchor="middle" fill="#eef4ff" font-size="13">h₄</text>
+              </g>
+              <!-- recurrent arrows -->
+              <g stroke="#8499bd" stroke-width="2" fill="none" marker-end="url(#rm)">
+                <line x1="118" y1="76" x2="166" y2="76" /><line x1="238" y1="76" x2="286" y2="76" /><line x1="358" y1="76" x2="406" y2="76" />
+              </g>
+              <!-- inputs -->
+              <g stroke="#6ac3ff" stroke-width="2" fill="none" marker-end="url(#rm)">
+                <line x1="82" y1="140" x2="82" y2="98" /><line x1="202" y1="140" x2="202" y2="98" /><line x1="322" y1="140" x2="322" y2="98" /><line x1="442" y1="140" x2="442" y2="98" />
+              </g>
+              <g fill="#8499bd" font-size="12" text-anchor="middle">
+                <text x="82" y="156">词₁</text><text x="202" y="156">词₂</text><text x="322" y="156">词₃</text><text x="442" y="156">词₄</text>
+              </g>
+            </svg>
+          </div>
+          <p class="figure__cap">同一个 RNN 单元被“按时间展开”:每步吃一个词 + 上一步的隐藏状态,更新记忆再传给下一步。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">“循环”和“展开”是一回事</span>
           <p>
-            一种<strong>又短又懂语义</strong>的表示:维度不大(几百维),而且<strong>意思相近的词,向量也相近</strong>
-            (“猫”和“狗”应该离得近,“猫”和“苹果”离得远)。这就是词嵌入。
+            RNN 其实只有<strong>一个单元</strong>,靠“把输出接回输入”循环使用。为了看清和训练它,我们把这个循环
+            <strong>按时间摊平</strong>(unroll)成上图那样一长串——本质是<strong>同一套权重重复用了很多次</strong>。
           </p>
         </div>
 
-        <h2>3. 分布式表示:给词一个“语义坐标”</h2>
+        <h2>3. 怎么训练:从下一词预测走一遍</h2>
         <p>
-          <span class="term">词嵌入</span>把每个词表示成一个<strong>稠密的低维向量</strong>(比如 300 维,每一维都是有意义的小数)。
-          怎么用几个数字表示一个复杂事物?你其实早会了——屏幕上任何颜色都用 <strong>RGB 三个数</strong>表示,
-          相近的颜色三个数也相近。词嵌入一模一样,只是维度更高:<strong>用一串数字表示一个词的“意思”,意思越近,向量越近。</strong>
+          §2 只讲了“读进去时怎么更新记忆”。<strong>训练</strong>还要回答三件事:目标是什么、前向怎么按时推进、
+          误差怎么沿时间传回去。下面用最常见的任务——<strong>语言建模 / 下一词预测</strong>——把整条链路讲清楚;
+          它和<a class="xref" href="chapter-20.html">第 20 章</a>大模型预训练是同一类思想,只是规模小得多。
         </p>
 
-        <h2>4. 语义相近 = 向量相近</h2>
+        <h3>① 任务:每一步猜“下一个词”</h3>
         <p>
-          有了向量,就能用<a class="xref" href="chapter-01.html">第 1 章</a>的<strong><a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a> / 余弦相似度</strong>衡量两个词有多像:<strong>方向越接近,越相似</strong>。
-          训练的目标,就是把语义相近的词“<strong>挤</strong>”到相近的方向上。画到二维平面上,大概是这样:
+          拿句子「我 / 喜欢 / 深度 / 学习」当训练样本。RNN 从左到右读,读到第 <var>t</var> 个词时,
+          手里握着隐藏状态 <var>h</var><sub>t</sub>(“到目前为止的理解”),再接一个小头
+          <span class="term">输出层</span>去预测<strong>下一个词</strong>是谁:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>时间步 <var>t</var></th><th>输入 <var>x</var><sub>t</sub>(已读到的词)</th><th>隐藏状态 <var>h</var><sub>t</sub></th><th>要预测的目标(下一个词)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>1</td><td>「我」的向量</td><td><var>h</var><sub>1</sub></td><td>「喜欢」</td></tr>
+              <tr><td>2</td><td>「喜欢」的向量</td><td><var>h</var><sub>2</sub></td><td>「深度」</td></tr>
+              <tr><td>3</td><td>「深度」的向量</td><td><var>h</var><sub>3</sub></td><td>「学习」</td></tr>
+              <tr><td>4</td><td>「学习」的向量</td><td><var>h</var><sub>4</sub></td><td>句末 / 标点 / 特殊结束符</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          每个词先变成向量 <var>x</var><sub>t</sub>(<a class="xref" href="chapter-15.html">第 15 章</a>的 embedding 或 one-hot 再乘矩阵),
+          再喂进 RNN。输出层通常是<strong>线性层 + Softmax</strong>(<a class="xref" href="chapter-04.html">第 4 章</a>),
+          在词表上给出概率分布 <var>ŷ</var><sub>t</sub>。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">Teacher forcing:训练时“偷看答案”</span>
+          <p>
+            训练第 2 步时,输入用的是<strong>数据里真实的「喜欢」</strong>,而不是模型第 1 步猜出来的词——这叫
+            <span class="term">teacher forcing(教师强制)</span>。这样每步的输入都靠谱,网络先专心学“给定正确前文时怎么预测”。
+            <strong>推理生成</strong>时没有标准答案,只能把自己上一步的输出接回去,误差会累积,那是另一回事(<a class="xref" href="chapter-19.html">第 19 章</a>)。
+          </p>
+        </div>
+
+        <h3>② 前向:按时推进,并把中间结果存下来</h3>
+        <p>一条样本的训练步,前向可以写成下面这个循环——和<a class="xref" href="chapter-03.html#5-逐行读懂前向传播">第 3 章前向</a>一样,只是“层”换成了“时间步”:</p>
+        <ol>
+          <li><strong>初始化</strong>:<var>h</var><sub>0</sub> 常设为全 0,或学一个可训练的初始向量。</li>
+          <li><strong>对每个时间步</strong> <var>t</var> = 1 … <var>T</var>:
+            <ul>
+              <li>用 §2 的式子算 <var>h</var><sub>t</sub> = 激活( <var>W</var><sub>x</sub>·<var>x</var><sub>t</sub> + <var>W</var><sub>h</sub>·<var>h</var><sub>t−1</sub> + <var>b</var> );</li>
+              <li>用输出层算 <var>ŷ</var><sub>t</sub> = Softmax( <var>W</var><sub>o</sub>·<var>h</var><sub>t</sub> + <var>b</var><sub>o</sub> );</li>
+              <li><strong>把 <var>h</var><sub>t</sub>、<var>x</var><sub>t</sub>、<var>ŷ</var><sub>t</sub> 存进缓存</strong>——反向时要靠它们(<a class="xref" href="chapter-06.html">第 6 章</a>存 <var>z</var> 是同一道理)。</li>
+            </ul>
+          </li>
+        </ol>
+        <p>
+          展开后,RNN 就像一条有 <var>T</var> 段的深链:每段结构相同,共用同一套 <var>W</var><sub>x</sub>、<var>W</var><sub>h</sub>、<var>b</var>。
+          第 <var>t</var> 步<strong>必须等</strong>第 <var>t</var>−1 步的 <var>h</var> 算完,所以前向天然串行——这也是后面“没法并行”的根源。
+        </p>
+
+        <h3>③ 损失:每一步各算一次,再汇总</h3>
+        <p>
+          第 <var>t</var> 步的预测 <var>ŷ</var><sub>t</sub> 和真实下一个词 <var>y</var><sub>t</sub> 比,用
+          <strong>交叉熵</strong>(<a class="xref" href="chapter-04.html">第 4 章</a>)打分。整句的损失通常是各步之和或平均:
+        </p>
+        <div class="mathblock reveal">
+          <var>L</var> = (1/<var>T</var>) Σ<sub>t=1..T</sub> CrossEntropy( <var>ŷ</var><sub>t</sub>, <var>y</var><sub>t</sub> )
+          <span class="label">每个时间步都有一份“猜词”的错题本,最后合在一起</span>
+        </div>
+        <p>不同任务只是在“哪几步算损失、输出头接在哪”上换一下:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>任务</th><th>损失算在哪</th><th>直觉</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>语言建模</strong></td><td>几乎每一步</td><td>每读一个词,都要会猜下一个</td></tr>
+              <tr><td><strong>序列标注</strong>(词性、NER)</td><td>每一步</td><td>每个词一个标签,边读边标</td></tr>
+              <tr><td><strong>句级分类</strong>(情感正负)</td><td>通常只用最后一步 <var>h</var><sub>T</sub></td><td>读完整句,最后一个记忆做判断</td></tr>
+              <tr><td><strong>序列到序列</strong>(翻译)</td><td>编码器 + 解码器各有一套 RNN</td><td>先读源句,再按步生成目标句(<a class="xref" href="chapter-17.html">第 17 章</a>注意力版更常见)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>④ 反向:BPTT 与“同一套权重,梯度要相加”</h3>
+        <p>
+          损失 <var>L</var> 对参数求导,还是<a class="xref" href="chapter-06.html#2-反向传播的三步">第 6 章反向传播</a>的三步:
+          从输出层误差出发 → 沿计算图往回传 → 得到每个参数的梯度。只不过这里的“深”是<strong>沿时间展开</strong>的,
+          所以叫 <span class="term">BPTT(Backpropagation Through Time,按时间反向传播)</span>。
         </p>
         <div class="figure reveal">
           <div class="diagram">
-            <svg viewBox="0 0 460 250" role="img" aria-label="词向量语义空间示意">
-              <defs><marker id="wm" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8ef0d1" /></marker></defs>
-              <line x1="30" y1="220" x2="440" y2="220" stroke="#2b3a58" stroke-width="1" />
-              <line x1="30" y1="30" x2="30" y2="220" stroke="#2b3a58" stroke-width="1" />
-              <!-- cat/dog cluster -->
-              <circle cx="90" cy="185" r="4" fill="#6ac3ff" /><text x="66" y="200" fill="#b6c5e1" font-size="12">猫</text>
-              <circle cx="120" cy="168" r="4" fill="#6ac3ff" /><text x="128" y="164" fill="#b6c5e1" font-size="12">狗</text>
-              <text x="60" y="225" fill="#8499bd" font-size="10">语义相近 → 挨得近</text>
-              <!-- analogy -->
-              <circle cx="250" cy="180" r="4" fill="#ffcf72" /><text x="222" y="196" fill="#b6c5e1" font-size="12">男人</text>
-              <circle cx="300" cy="100" r="4" fill="#ffcf72" /><text x="306" y="96" fill="#b6c5e1" font-size="12">国王</text>
-              <circle cx="340" cy="196" r="4" fill="#ffcf72" /><text x="346" y="210" fill="#b6c5e1" font-size="12">女人</text>
-              <circle cx="390" cy="116" r="4" fill="#ffcf72" /><text x="396" y="112" fill="#b6c5e1" font-size="12">女王</text>
-              <line x1="250" y1="180" x2="300" y2="100" stroke="#8ef0d1" stroke-width="2" marker-end="url(#wm)" />
-              <line x1="340" y1="196" x2="390" y2="116" stroke="#8ef0d1" stroke-width="2" marker-end="url(#wm)" />
-              <text x="300" y="150" fill="#8ef0d1" font-size="10">“变成王室”的方向</text>
+            <svg viewBox="0 0 560 200" role="img" aria-label="BPTT 前向与反向示意">
+              <defs>
+                <marker id="bptt-fwd" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8499bd" /></marker>
+                <marker id="bptt-bwd" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ff8fa3" /></marker>
+              </defs>
+              <text x="20" y="24" fill="#8ef0d1" font-size="12">前向 →  反向 ←  (沿时间)</text>
+              <g>
+                <rect x="40" y="44" width="56" height="32" rx="8" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" /><text x="68" y="65" text-anchor="middle" fill="#eef4ff" font-size="12">h₁</text>
+                <rect x="140" y="44" width="56" height="32" rx="8" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" /><text x="168" y="65" text-anchor="middle" fill="#eef4ff" font-size="12">h₂</text>
+                <rect x="240" y="44" width="56" height="32" rx="8" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" /><text x="268" y="65" text-anchor="middle" fill="#eef4ff" font-size="12">h₃</text>
+                <rect x="340" y="44" width="56" height="32" rx="8" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" /><text x="368" y="65" text-anchor="middle" fill="#eef4ff" font-size="12">h₄</text>
+              </g>
+              <g stroke="#8499bd" stroke-width="2" fill="none" marker-end="url(#bptt-fwd)">
+                <line x1="96" y1="60" x2="140" y2="60" /><line x1="196" y1="60" x2="240" y2="60" /><line x1="296" y1="60" x2="340" y2="60" />
+              </g>
+              <g stroke="#ff8fa3" stroke-width="2" fill="none" marker-end="url(#bptt-bwd)">
+                <line x1="340" y1="96" x2="296" y2="96" /><line x1="240" y1="96" x2="196" y2="96" /><line x1="140" y1="96" x2="96" y2="96" />
+              </g>
+              <text x="268" y="118" text-anchor="middle" fill="#ff8fa3" font-size="11">∂L/∂h 沿 Wₕ 一路往回乘(链式法则)</text>
+              <g fill="#6ac3ff" font-size="11" text-anchor="middle">
+                <text x="68" y="148">L₁</text><text x="168" y="148">L₂</text><text x="268" y="148">L₃</text><text x="368" y="148">L₄</text>
+              </g>
+              <g stroke="#6ac3ff" stroke-width="1.5" fill="none">
+                <line x1="68" y1="132" x2="68" y2="78" /><line x1="168" y1="132" x2="168" y2="78" /><line x1="268" y1="132" x2="268" y2="78" /><line x1="368" y1="132" x2="368" y2="78" />
+              </g>
+              <text x="430" y="60" fill="#b6c5e1" font-size="11">每步损失 Lₜ</text>
+              <text x="430" y="78" fill="#b6c5e1" font-size="11">↓ 反传到 hₜ</text>
+              <text x="430" y="96" fill="#b6c5e1" font-size="11">再经 Wₕ 传到 hₜ₋₁</text>
             </svg>
           </div>
-          <p class="figure__cap">在训练好的词空间里,“猫/狗”聚成一堆;而“男人→国王”和“女人→女王”竟是<strong>平行</strong>的——语义关系变成了几何关系。</p>
+          <p class="figure__cap">前向:h<sub>t−1</sub> → h<sub>t</sub> 一路向右;反向:各步损失产生的梯度,沿隐藏状态连线从后往前传(BPTT)。</p>
         </div>
-
-        <h2>5. word2vec:靠“上下文”把词向量学出来</h2>
-        <p>
-          这些向量不是人手工标的,而是<strong>训练学出来的</strong>。经典方法 <span class="term">word2vec</span> 基于一个朴素假设——
-          <strong>“看它跟谁在一起,就知道它是什么”</strong>(近朱者赤):经常出现在<strong>相似上下文</strong>里的词,意思也相近。
-          它把这变成一个“完形填空”式的预测任务,用海量文本自监督地训练:
-        </p>
+        <p>和 MLP 相比,BPTT 多出来两个必须记住的点:</p>
         <ul>
-          <li><span class="pill">CBOW</span>用<strong>上下文猜中心词</strong>:遮住中间的词,拿两边的词去预测它(“我 __ 了一杯咖啡” → “喝”)。</li>
-          <li><span class="pill">skip-gram</span>反过来,用<strong>中心词猜上下文</strong>:给“喝”,预测它周围可能出现“咖啡/水/酒”。</li>
+          <li>
+            <strong>梯度要穿过“记忆连线”</strong>:<var>h</var><sub>4</sub> 的误差会经 <var>W</var><sub>h</sub> 传到 <var>h</var><sub>3</sub>、<var>h</var><sub>2</sub>……
+            每传一步都乘一次 <var>W</var><sub>h</sub> 和激活导数——乘多了就<strong>消失或爆炸</strong>(下一节 §4)。
+          </li>
+          <li>
+            <strong>同一套权重,各步梯度要相加</strong>:<var>W</var><sub>h</sub> 在每一步都被复用,
+            所以 ∂<var>L</var>/∂<var>W</var><sub>h</sub> = Σ<sub>t</sub> (∂<var>L</var><sub>t</sub>/∂<var>W</var><sub>h</sub>),
+            <var>W</var><sub>x</sub>、<var>b</var> 同理。实现上就是:从最后一个时间步往前循环,每步算出局部梯度,<strong>累加</strong>到同一块参数上。
+          </li>
         </ul>
         <p>
-          训练中,为了把这些完形填空做对,模型被迫把<strong>常出现在相似语境</strong>的词,调整到<strong>相近的向量方向</strong>——
-          语义就这样“<strong>无中生有</strong>”地长了出来。这其实就是<a class="xref" href="chapter-11.html">第 11 章</a>说的<strong>自监督</strong>:答案(被遮的词)文本里现成就有,不用人标。
+          反传结束后,用<a class="xref" href="chapter-05.html">第 5 章</a>的优化器(常配合<a class="xref" href="chapter-08.html">第 8 章</a>的 Adam)
+          按学习率更新 <var>W</var><sub>x</sub>、<var>W</var><sub>h</sub>、<var>W</var><sub>o</sub> 等——和全连接网络没有本质区别。
         </p>
 
-        <h2>6. 神奇的向量算术</h2>
-        <p>
-          训练好的词向量有个令人惊艳的性质:<strong>语义关系变成了可以加减的几何关系</strong>。最著名的例子:
-        </p>
-        <div class="mathblock reveal">
-          向量(国王) − 向量(男人) + 向量(女人) ≈ 向量(女王)
-          <span class="label">“去掉男性、加上女性”,国王就平移成了女王——正是上图那两条平行箭头</span>
-        </div>
-        <p>
-          类似地还有 <em>北京 − 中国 + 日本 ≈ 东京</em>。这说明词向量不只是“相近词靠近”,还<strong>编码了可组合的语义维度</strong>
-          (性别、首都关系……)。一个只是为了“完形填空”而训练出来的副产品,却学到了如此结构化的语义,这也是深度学习最迷人的地方之一。
-        </p>
-
-        <h2>7. 从 word2vec 到大模型的 embedding 层</h2>
-        <p>
-          今天的大模型里,词嵌入以<span class="term">embedding 层</span>的形式存在:它就是一张<strong>可学习的查找表</strong>——
-          每个 token 的 id 对应表里的一行向量(<a class="xref" href="chapter-18.html">第 18 章</a>会看到它的代码)。有两点值得记住:
-        </p>
+        <h3>⑤ 工程上绕不开的两招</h3>
         <ul>
-          <li><strong>可以“拿来就用”</strong>:别人在海量语料上训好的词向量(如经典的 GloVe)能<strong>直接下载复用</strong>,这叫<span class="term">迁移学习</span>——省掉从零训练的巨大成本。</li>
-          <li><strong>在大模型里是端到端一起训的</strong>:embedding 表不再单独训练,而是和整个网络一起,被“预测下一个词”的损失顺带优化(第 18、19 章)。原理没变,还是“靠上下文学语义”。</li>
+          <li>
+            <strong>截断 BPTT (Truncated BPTT)</strong>:句子很长时,既不现实也不稳定把梯度从句末一路传回句首。
+            常见做法是只反传<strong>最近 <var>K</var> 步</strong>(例如 20~50),更早的时间步当“起点”截断。
+            这样省显存、减轻消失梯度,代价是<strong>更远的依赖</strong>在这一轮里学不到——LSTM 的门、后来的注意力,都是为补这块短板。
+          </li>
+          <li>
+            <strong><a class="xref" href="chapter-09.html#4-防止训练踩空-梯度裁剪">梯度裁剪</a></strong>:RNN 特别容易梯度爆炸。
+            反传后若全局梯度范数超过阈值,就整体缩放(<a class="xref" href="chapter-09.html">第 9 章</a>),避免一步更新把权重炸飞。
+          </li>
         </ul>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">一条线串起来</span>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">和一次 MLP 训练步对齐</span>
           <p>
-            <strong>one-hot</strong>(离散、无语义)→ <strong>词嵌入</strong>(稠密、有语义坐标)→ <strong>用点积比相似度</strong>(<a class="xref" href="chapter-01.html">第 1 章</a>)→
-            <strong><a class="xref" href="chapter-16.html#5-为什么点积能当相关性">注意力用 Q·K 打分</a></strong>(<a class="xref" href="chapter-16.html">第 16 章</a>)→ <strong>大模型的 embedding 层</strong>(<a class="xref" href="chapter-18.html">第 18 章</a>)。词向量,是整条 NLP 链路的起点。
+            <strong>前向</strong>:<var>h</var><sub>0</sub> 起步 → 逐步算 <var>h</var><sub>t</sub>、<var>ŷ</var><sub>t</sub> 并缓存 → 各步交叉熵求和得 <var>L</var>。<br />
+            <strong>反向</strong>:从 <var>t</var>=<var>T</var> 往前做 BPTT → 每步对共享权重<strong>累加梯度</strong> → (可选)裁剪 → 优化器更新。<br />
+            <strong>外圈</strong>:多个句子组成 minibatch,每条序列各自前向/反传,梯度再在 batch 上平均(<a class="xref" href="chapter-09.html#6-一个-minibatch-里发生什么">第 9 章</a>)。
+            本仓库没有 RNN 训练代码,但<a class="xref" href="chapter-23.html">第 23 章</a> MNIST 的 Train 循环是同一套“前向 → 损失 → 反传 → 更新”,只是时间维换成了样本维。
+          </p>
+        </div>
+
+        <h2>4. 两个硬伤</h2>
+        <p>正是“链条特别长 + 严格按顺序”,带来了 RNN 的两个致命短板:</p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">硬伤一:长依赖会“失忆”(梯度消失/爆炸)</span>
+          <p>
+            信息像一场<strong>传话游戏</strong>:每传一步,梯度都要乘一次权重和激活的导数(<a class="xref" href="chapter-07.html">第 7 章</a>)。乘的次数一多,
+            梯度要么<strong>越乘越小、趋近 0(消失)</strong>,要么<strong>越乘越大、炸掉(爆炸)</strong>。结果就是
+            <strong>隔得远的词之间,依赖关系几乎学不到</strong>——而“它 ↔ 前文某个名词”这种长距离关联恰恰最重要。
+          </p>
+        </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">硬伤二:没法并行,训练慢</span>
+          <p>
+            要算第 5 个词的隐藏状态,<strong>必须先等第 4 个算完</strong>——天生<strong>串行</strong>。这就没法把工作切开
+            丢给一堆 GPU 同时算(<a class="xref" href="chapter-21.html">第 21 章</a>),在超长序列、超大数据上慢得要命。这一点,后来<strong>直接决定了它的命运</strong>。
+          </p>
+        </div>
+
+        <h2>5. LSTM:给记忆装上“门”</h2>
+        <p>
+          为了缓解“失忆”,<span class="term">LSTM(长短期记忆网络)</span>给 RNN 加了一条<strong>专门的记忆传送带
+          (cell state)</strong>,并用三个<strong>“门”</strong>来精细地管理它。门就是一个输出 0~1 的小开关(用 Sigmoid,<a class="xref" href="chapter-07.html">第 7 章</a>),
+          0 = 关掉、1 = 放行:
+        </p>
+        <ul>
+          <li><span class="pill">遗忘门</span>决定<strong>旧记忆丢掉多少</strong>(读到新主语,可以忘掉旧主语)。</li>
+          <li><span class="pill">输入门</span>决定<strong>新信息写入多少</strong>到记忆里。</li>
+          <li><span class="pill">输出门</span>决定<strong>这一步向外吐出多少</strong>记忆。</li>
+        </ul>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">像一条能“选择性记忆”的传送带</span>
+          <p>
+            普通 RNN 每步都把记忆<strong>整个重写</strong>一遍,信息很容易在反复改写中丢失。LSTM 的记忆传送带则可以
+            <strong>大部分原样往前带</strong>,只在门允许时才增删——重要的信息因此能<strong>“搭直通车”</strong>走很远而不衰减,
+            长依赖就保住了。<strong>GRU</strong> 是它的简化版(两个门),更轻但思路一致。
+          </p>
+        </div>
+
+        <h2>6. 承上启下:为什么 Transformer 取代了它</h2>
+        <p>
+          LSTM 缓解了“失忆”,但<strong>串行、慢</strong>这条硬伤仍在:再怎么改门,它还是得一步一步顺着读。
+          当数据和模型都要爆炸式放大时,“<strong>不能并行</strong>”成了无法忍受的瓶颈。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">下一部分的主角就是来解决这两点的</span>
+          <p>
+            <strong>注意力 / Transformer</strong>(第四部分)换了个思路:不再一站站传话,而是让<strong>每个词直接看全序列</strong>——
+            长依赖一步直达(治“失忆”),而且所有位置<strong>可以同时算</strong>(治“串行”)。于是它几乎全面取代了 RNN/LSTM,
+            成了今天大模型的地基。带着 RNN 这两个短板去读<a class="xref" href="chapter-16.html">第 16 章</a>,你会立刻明白注意力“妙在哪”。
           </p>
         </div>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li><strong>one-hot</strong> 又大又空,且任意两词都正交、毫无相似度——丢了语义。</li>
-            <li><strong>词嵌入</strong>用稠密低维向量当“语义坐标”,意思相近 → 向量相近(<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦衡量)。</li>
-            <li><strong>word2vec</strong> 基于“近朱者赤”,用 CBOW/skip-gram 的完形填空自监督地学出词向量。</li>
-            <li>词向量能做<strong>算术</strong>:国王−男人+女人≈女王,语义关系变成几何关系。</li>
-            <li>大模型的 <strong>embedding 层</strong>就是可学习查找表,可迁移复用,也可端到端一起训。</li>
+            <li>序列数据有顺序、需记忆,MLP 不合适;RNN 用<strong>隐藏状态</strong>边读边记,按时间展开成很深的网络。</li>
+            <li><strong>下一词预测</strong>:每步用 <var>h</var><sub>t</sub> 猜下一个词;训练用 teacher forcing;损失多为各步交叉熵之和。</li>
+            <li><strong>BPTT</strong>:展开后按时间反传;共享的 <var>W</var><sub>h</sub>、<var>W</var><sub>x</sub> 在各步的梯度要<strong>累加</strong>;长序列常用截断 BPTT + 梯度裁剪。</li>
+            <li>两大硬伤:长依赖<strong>梯度消失/爆炸</strong>(记不住远处)、严格<strong>串行不能并行</strong>(慢)。</li>
+            <li><strong>LSTM</strong> 用遗忘/输入/输出三个门 + 记忆传送带,让重要信息走直通车,缓解长依赖(GRU 是简化版)。</li>
+            <li>但“串行慢”没解决——这正是 Transformer 用注意力取而代之的原因(第四部分)。</li>
           </ul>
         </section>
 
         <p class="muted">
-          词有了语义坐标,序列有了 RNN——但 RNN 那两个硬伤(记不住远处、不能并行)还悬着。
-          下一部分,我们正式请出解决这一切的主角:<strong>注意力</strong>。先看它到底要解决什么问题。
+          RNN 也好、注意力也好,处理文字前都得先把<strong>词变成向量</strong>。可“词”本是离散符号,
+          怎么变成有含义的数字?下一章讲<strong>词嵌入与 word2vec</strong>——让词第一次拥有“语义坐标”。
         </p>
       </div>
     </main>

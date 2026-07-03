@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 18 章 · 字符级语言模型 | 深度学习入门</title>
+    <title>第 18 章 · Transformer 的完整结构 | 深度学习入门</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -11,342 +11,514 @@
   <body data-chapter="18">
     <main class="chapter">
       <div class="chapter__inner">
-        <p class="chapter__eyebrow">第 18 章 · 通往大模型</p>
-        <h1>字符级语言模型</h1>
+        <p class="chapter__eyebrow">第 18 章 · 序列与 Transformer</p>
+        <h1>Transformer 的完整结构</h1>
 
         <p class="lead">
-          现在把前面所有积木接起来,造一个真能<strong>一个字一个字写下去</strong>的模型。
-          它的任务朴素得出奇:<strong>看着前文,预测下一个字符</strong>。
-          但你会惊讶地发现——今天那些会聊天、会写代码的大模型,做的本质上就是这一件事,只是规模大得多。
+          注意力是发动机,但光有发动机还开不了车。要把注意力堆成又深又能训的网络,
+          还需要几个关键配件:<strong>残差连接、LayerNorm、前馈网络</strong>,
+          再加上让模型知道词序的<strong>位置编码</strong>。把它们组装起来,就是一块完整的
+          <span class="term">Transformer Block</span>——今天所有大模型的基本积木。
         </p>
+
+        <div class="callout callout--note reveal" aria-label="本章在整条链路的位置">
+          <span class="callout__title">路线图 · 你在这一段的哪一站</span>
+          <nav class="chain-map">
+            <a class="chain-map__step" href="chapter-16.html">16 为什么要注意力</a>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-17.html">17 注意力机制</a>
+            <span class="chain-map__sep">›</span>
+            <span class="chain-map__step is-here">18 Transformer</span>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-19.html">19 语言模型</a>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-20.html">20 放大成大模型</a>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-21.html">21 工程与基建</a>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-22.html">22 用好它</a>
+          </nav>
+          <p class="chain-map__note">上一站(<a class="xref" href="chapter-17.html">第 17 章</a>)拆了注意力这颗发动机;<strong>本站</strong>把它和残差 / LayerNorm / 前馈 / 位置编码拼成一块可堆叠的 Transformer(全景图第 ③ 步);下一站(<a class="xref" href="chapter-19.html">第 19 章</a>)接上输入输出,做成会写字的语言模型。</p>
+        </div>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>从文本到预测,数据要经过 tokenizer → embedding → Transformer → 输出层这一条完整链路;</li>
-            <li><strong>模型到底怎么“学”</strong>:训练数据怎么造、损失怎么算、反向传播怎么一路更新到<a class="xref" href="chapter-16.html">第 16 章</a>那三个矩阵;</li>
-            <li>“预测下一个字”怎么变成“写出一整段”(自回归生成);</li>
-            <li>greedy、temperature、top-k、top-p 这些采样策略各自的脾气;</li>
-            <li>怎么用困惑度(perplexity)评估一个语言模型的好坏。</li>
+            <li>残差连接为什么能让“很深的网络”也训得动;</li>
+            <li>LayerNorm 在归一化什么,为什么能稳住训练;</li>
+            <li>前馈网络(FFN)在 attention 之后又补了什么;</li>
+            <li>位置编码怎么把“词的顺序”告诉模型,以及 encoder 和 decoder 的区别;</li>
+            <li>读懂那张<strong>最经典的 Transformer 全架构图</strong>:编码器、解码器,以及它们之间的 cross-attention;</li>
+            <li>self / masked / cross <strong>三种注意力</strong>的区别,以及 GPT / BERT / T5 三种家族的由来。</li>
           </ul>
         </section>
 
-        <h2>1. 完整链路:从一句话到下一个字</h2>
-        <p>一个字符级语言模型,把一段文本变成“下一个字的概率”,要走这么一条流水线:</p>
-        <div class="figure reveal">
-          <div class="diagram">
-            <div class="pipe">
-              <div class="pipe__box">文本<small>"hello wor"</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">Tokenizer<small>字符 → id</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">Embedding<small>id → 向量(+位置)</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">Transformer<small>融合上下文</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">LM Head<small>投影到词表</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">下一字概率<small>挑一个:'l'</small></div>
-            </div>
-          </div>
-          <p class="figure__cap">每生成一个字,就把它接回输入,再走一遍这条流水线——这就是“自回归”。</p>
-        </div>
-
-        <h2>2. Tokenizer:把字符变成数字</h2>
+        <h2>1. 残差连接:给信息和梯度修一条高速公路</h2>
         <p>
-          模型只认数字,不认字符。<span class="term">Tokenizer(分词器)</span>负责两件事:
-          先扫一遍语料,给每个出现过的字符<strong>编一个 id</strong>(建词表);
-          之后就能在“字符串”和“id 序列”之间来回翻译。本书用最简单的<strong>字符级</strong>分词(一个字符一个 token)。
-        </p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/character_tokenizer.cpp(精简)</figcaption>
-          <pre class="code-walk__code"><code>// 建词表: 每遇到一个没见过的字符, 就分配下一个 id
-for (char ch : text)
-  if (char_to_id.count(ch) == 0) {
-    char_to_id[ch] = vocabulary.size();
-    vocabulary.push_back(ch);                 <b class="cw-tag">1</b>
-  }
-
-// 编码: 把字符串翻译成 id 序列
-for (char ch : text)
-  token_ids.push_back(char_to_id[ch]);        <b class="cw-tag">2</b></code></pre>
-          <ol class="code-walk__notes">
-            <li>词表就是“字符 ↔ id”的一一对应。比如 'h'→0, 'e'→1, 'l'→2……词表大小 <code>vocab_size</code> 就是不同字符的个数。</li>
-            <li>编码:逐字符查表,得到一串整数。解码(<code>Decode</code>)则反过来,把 id 还原成字符。</li>
-          </ol>
-        </figure>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">真实大模型用的是“子词”</span>
-          <p>
-            真实的 GPT 不是按单个字符,而是按<strong>子词(subword)</strong>切分(比如把 “playing” 切成 “play”+“ing”)。
-            原理完全一样,只是词表里的单位更大、更省。我们用字符级,是为了让原理一目了然。
-          </p>
-        </div>
-
-        <h2>3. Embedding:把 id 变成有含义的向量</h2>
-        <p>
-          id 只是个编号,本身没有含义(2 不比 1 “大”)。<span class="term">Embedding(词嵌入)</span>
-          给每个 id 配一个<strong>可学习的向量</strong>,训练中这些向量会逐渐学到语义(相近的字符向量也相近)。
-          它就是一张大查找表:
-        </p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/token_embedding.cpp · Encode</figcaption>
-          <pre class="code-walk__code"><code>for (int token_id : token_ids)
-  output.push_back(embedding_table_[token_id]);   <b class="cw-tag">1</b></code></pre>
-          <ol class="code-walk__notes">
-            <li><code>embedding_table_</code> 是 <code>vocab_size × model_dim</code> 的表。拿 id 当行号<strong>查表</strong>,取出对应的向量。一串 id 就变成了一串向量,交给 Transformer。</li>
-          </ol>
-        </figure>
-        <p>在送进主干前,还会(可选地)给向量乘个缩放、加上<a class="xref" href="chapter-17.html">第 17 章</a>的位置编码:</p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · EncodeSequence(精简)</figcaption>
-          <pre class="code-walk__code"><code>token_embedding_.Encode(token_ids, hidden);              <b class="cw-tag">1</b>
-if (scale_embedding_) hidden *= std::sqrt(model_dim_);
-PositionalEncoding::Apply(hidden);                       <b class="cw-tag">2</b>
-decoder_.Forward(hidden, encoded);  // 或 encoder_       <b class="cw-tag">3</b></code></pre>
-          <ol class="code-walk__notes">
-            <li>查表得到词向量。</li>
-            <li>加上位置编码,让模型知道每个字在第几位。</li>
-            <li>送进 Transformer 主干(decoder 带 causal mask),得到每个位置“看过上文”的表示 <code>encoded</code>。</li>
-          </ol>
-        </figure>
-
-        <h2>4. LM Head:把表示投影成“下一字概率”</h2>
-        <p>
-          主干输出的还是向量,得再过一个输出层(<span class="term">LM Head</span>),
-          把每个位置的向量投影到<strong>词表大小</strong>,得到对每个候选字符的打分(logits)。
-          再过 softmax,就是“下一个字是谁”的概率分布。
-        </p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · Forward(精简)</figcaption>
-          <pre class="code-walk__code"><code>for (int pos = 0; pos &lt; encoded.size(); pos++)
-  for (int token_id = 0; token_id &lt; vocab_size_; token_id++) {
-    logits[pos][token_id] = output_bias_[token_id];
-    for (int dim = 0; dim &lt; model_dim_; dim++)
-      logits[pos][token_id] +=
-          output_weight_[token_id][dim] * encoded[pos][dim];   <b class="cw-tag">1</b>
-  }</code></pre>
-          <ol class="code-walk__notes">
-            <li>对每个位置,把它的向量和每个候选字符的权重做点积(还是“加权求和”),得到这个字符的分数。<code>vocab_size</code> 个分数,就是这个位置对“下一个字”的全部打分。</li>
-          </ol>
-        </figure>
-
-        <h2>5. 训练数据:答案就藏在“下一个字”里</h2>
-        <p>
-          上面四步搭好了一个能吐出“下一字概率”的网络,但它一开始参数全是随机的,预测得一塌糊涂。
-          要让它变准,就得<strong>喂数据训练</strong>。可训练需要“标准答案”,难道要人一句句去标?
-          语言模型最妙的地方就在这里:<strong>答案根本不用人标,它就藏在文本自己里</strong>——
-          每个位置“正确的下一个字”,不就是原文里紧跟着的那个字吗?
-        </p>
-        <p>
-          于是造训练样本只要拿一个<strong>滑动窗口</strong>在语料上滑:窗口里的一小段字符当<strong>输入</strong>,
-          紧跟其后的那个字符当<strong>目标(答案)</strong>;窗口每右移一格,就多一条样本。
-        </p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/character_dataset.cpp · BuildNextTokenSamples(精简)</figcaption>
-          <pre class="code-walk__code"><code>for (int i = 0; i + context_size &lt; token_ids.size(); i++) {
-  input_samples.push_back( token_ids[i .. i+context_size) );   <b class="cw-tag">1</b>
-  target_tokens.push_back( token_ids[i + context_size] );      <b class="cw-tag">2</b>
-}</code></pre>
-          <ol class="code-walk__notes">
-            <li>输入 = 从第 <code>i</code> 个字符起、长度为 <code>context_size</code>(上下文窗口)的一段。窗口越大,模型一次能“看到”的上文越长。</li>
-            <li>目标 = 紧跟这段之后的<strong>那一个</strong>字符。它天生就是答案,不需要任何人工标注。</li>
-          </ol>
-        </figure>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">“答案自带”有个名字,叫自监督</span>
-          <p>
-            这种<strong>从数据本身自动抠出答案</strong>、不用人工打标签的训练方式,叫<span class="term">自监督学习</span>。
-            正因为答案免费,才敢拿“整个互联网”当训练集——这也是大模型能被喂那么多数据的根本原因(<a class="xref" href="chapter-19.html">第 19 章</a>细讲)。
-          </p>
-        </div>
-
-        <h2>6. 怎么学:一次训练 step 拆开看</h2>
-        <p>有了“输入 → 目标”样本,训练就是第 5、6 章那条老流水线,一步(step)做四件事:</p>
-        <ol>
-          <li><strong>前向</strong>:把输入跑一遍第 1 节的链路,得到对“下一个字”的概率分布 <code>probs</code>。</li>
-          <li><strong>算损失</strong>:看它给<strong>正确答案</strong>那个字打了多少概率,用交叉熵 <code>−log(probs[答案])</code> 量出“错得多离谱”(<a class="xref" href="chapter-04.html">第 4 章</a>)。答案概率越低,损失越大。</li>
-          <li><strong>反向传播</strong>:用链式法则把损失反着传回去,算出每个参数的梯度(<a class="xref" href="chapter-06.html">第 6 章</a>)。</li>
-          <li><strong>更新</strong>:每个参数沿梯度反方向挪一小步(<a class="xref" href="chapter-05.html">第 5 章</a>)。</li>
-        </ol>
-        <p>
-          softmax + 交叉熵的梯度还是那个漂亮结果:<strong>预测概率分布,减去“正确答案的 one-hot”</strong>。
-          代码里就一句 <code>grad_logits[答案] -= 1</code>——你给答案的概率比 1 差多少,就往回补多少:
-        </p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · TrainNextToken(精简)</figcaption>
-          <pre class="code-walk__code"><code>auto probs = Softmax(logits);
-loss_sum += -std::log(probs[target_token]);        <b class="cw-tag">1</b>
-
-std::vector&lt;double&gt; grad_logits = probs;
-grad_logits[target_token] -= 1.0;                  <b class="cw-tag">2</b>
-
-// 把梯度依次反传, 并就地更新每一层的参数:
-decoder_.Backward(grad_encoded, grad_hidden, lr);  // 或 encoder_    <b class="cw-tag">3</b>
-// ... 最后再更新 embedding_table ...                                <b class="cw-tag">4</b></code></pre>
-          <ol class="code-walk__notes">
-            <li>前向拿到概率,算这条样本的交叉熵损失。</li>
-            <li>softmax + 交叉熵的梯度 = <code>probs − one-hot(答案)</code>,和<a class="xref" href="chapter-06.html">第 6 章</a>、MNIST 里用的<strong>是同一个式子</strong>。</li>
-            <li>关键一步:把梯度传进 Transformer 主干。<code>decoder_.Backward</code> 会一层层调用每块 Block 的反向,<strong>其中就包含<a class="xref" href="chapter-16.html">第 16 章</a>那段 self-attention 的 <code>Backward</code></strong>——<var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub> 正是在这里被更新的!</li>
-            <li>最后连词嵌入表也一起更新。于是<strong>从输出层、到每块 Transformer、到 embedding,全网参数都被这同一个损失“拧”了一下</strong>。</li>
-          </ol>
-        </figure>
-        <div class="callout callout--tip reveal">
-          <span class="callout__title">这就接上了<a class="xref" href="chapter-16.html">第 16 章</a>留的扣子</span>
-          <p>
-            <a class="xref" href="chapter-16.html">第 16 章</a>问“那三个矩阵怎么训练出来的”,完整答案就在这里:损失从“预测下一个字对不对”产生,
-            顺着反向传播的“电流”流过输出层、流过每一块 Transformer,最后流进 <var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub>,
-            把它们朝“让预测更准”的方向挪一点点。<strong>练一次挪一点,练亿万次,矩阵就学会了该关注谁。</strong>
-          </p>
-        </div>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">训练时“抄着答案做题”,生成时“自己接龙”——teacher forcing</span>
-          <p>
-            这里有个值得留意的反差:<strong>训练</strong>时每条样本的上文用的都是<strong>语料里的真字符</strong>
-            (相当于让模型对着标准答案的前半段做题),这叫 <span class="term">teacher forcing</span>,好处是每步互相独立、能高效并行。
-            而<strong>生成</strong>时没有答案可抄,只能把<strong>自己刚吐出的字</strong>接回去继续(见第 8 节的自回归)。
-            另外,真实大模型一次前向会<strong>同时预测所有位置</strong>的下一字(一遍算出一大批损失),
-            我们这个 mini 版为了好懂,一条样本只盯一个目标。
-          </p>
-        </div>
-
-        <h2>7. 怎么挑下一个字:从 greedy 到采样</h2>
-        <p>有了概率分布,怎么挑出下一个字?最简单的是 <span class="term">greedy(贪心)</span>:永远挑概率最高的那个。</p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · PredictNextToken(精简)</figcaption>
-          <pre class="code-walk__code"><code>token_id = 0;
-double best = logits[0];
-for (int i = 1; i &lt; logits.size(); i++)
-  if (logits[i] &gt; best) { best = logits[i]; token_id = i; }   <b class="cw-tag">1</b></code></pre>
-          <ol class="code-walk__notes">
-            <li>就是取 argmax——分数最高的字符。简单,但<strong>太死板</strong>:同样的开头永远生成同样的、往往很重复无聊的内容。</li>
-          </ol>
-        </figure>
-        <p>更好的办法是<strong>带点随机性地采样</strong>,由三个旋钮控制:</p>
-        <ul>
-          <li><span class="pill">Temperature 温度</span>先把 logits 除以温度再 softmax。温度<strong>低</strong> → 分布更尖锐、更保守(接近 greedy);温度<strong>高</strong> → 分布更平、更大胆有创意(也更容易跑偏)。</li>
-          <li><span class="pill">top-k</span>只在概率最高的 <var>k</var> 个候选里抽,堵住长尾的奇怪字符。</li>
-          <li><span class="pill">top-p(核采样)</span>从高到低累加概率,只保留累积到 <var>p</var>(如 0.9)的那一小撮候选,再抽。</li>
-        </ul>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · SampleNextToken(精简)</figcaption>
-          <pre class="code-walk__code"><code>auto probs = SoftmaxWithTemperature(logits, temperature);   <b class="cw-tag">1</b>
-sort(order by probs desc);                                  <b class="cw-tag">2</b>
-// top-k: 最多保留前 k 个; top-p: 累积概率达到 p 就截断
-keep_count = ...;                                           <b class="cw-tag">3</b>
-// 在保留的候选里重新归一化, 按概率随机抽一个
-token_id = sample_from(filtered_probs);                     <b class="cw-tag">4</b></code></pre>
-          <ol class="code-walk__notes">
-            <li>先按温度把 logits 变成概率。</li>
-            <li>按概率从高到低排序。</li>
-            <li>用 top-k / top-p 把候选裁剪成“最靠谱的一小撮”。</li>
-            <li>在这一小撮里按概率掷一次骰子,抽出下一个字。既有随机性,又不至于太离谱。</li>
-          </ol>
-        </figure>
-
-        <h2>8. 自回归:把刚写的字接回去,再写下一个</h2>
-        <p>
-          生成一整段的诀窍叫<span class="term">自回归(autoregressive)</span>:预测出一个字后,
-          把它<strong>追加到输入末尾</strong>,再用更长的上文预测下一个字,如此循环。
-          你看到的 ChatGPT “一个字一个字往外蹦”,就是这个循环在跑。
-        </p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · Generate(精简)</figcaption>
-          <pre class="code-walk__code"><code>generated = prompt;
-for (int i = 0; i &lt; generate_num; i++) {
-  PredictNextToken(generated, token_id);   <b class="cw-tag">1</b>
-  generated.push_back(token_id);           <b class="cw-tag">2</b>
-}</code></pre>
-          <ol class="code-walk__notes">
-            <li>用目前为止的全部内容,预测下一个字。</li>
-            <li>把它接到末尾,然后回到第 1 步——下一轮的“上文”就多了一个字。这就是自回归生成。</li>
-          </ol>
-        </figure>
-
-        <h2>9. 它学得好不好?用困惑度衡量</h2>
-        <p>
-          评估语言模型最常用的指标是<span class="term">困惑度(perplexity)</span>。它是“平均交叉熵损失”取指数:
+          网络一深,就容易“训不动”:梯度反传到前面几层时已经衰减得几乎为 0(梯度消失)。
+          <span class="term">残差连接(residual connection)</span>的解法简单得惊人——
+          让每个子层的输出<strong>加上它自己的输入</strong>:
         </p>
         <div class="mathblock reveal">
-          困惑度 = <var>e</var><sup>平均交叉熵损失</sup>
-          <span class="label">直觉:模型预测下一个字时,平均像在“多少个等可能选项”里纠结。越小越好</span>
+          输出 = <var>x</var> + Sublayer(<var>x</var>)
+          <span class="label">不是用子层的输出替换 x,而是在 x 的基础上“加一个增量”</span>
         </div>
         <p>
-          比如困惑度 = 5,大致意思是模型每一步平均在 5 个候选里犹豫。完美模型困惑度接近 1(每次都笃定);乱猜的模型困惑度接近词表大小。
+          这条“<var>x</var> +”的捷径有两个好处:① 梯度可以<strong>原路直通</strong>回前面的层(高速公路),
+          深网络也不怕梯度消失;② 每个子层只需要学“在原有基础上改进多少”,比从零学一个新表示容易得多。
         </p>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · 损失与困惑度(精简)</figcaption>
-          <pre class="code-walk__code"><code>loss_sum += -std::log(std::max(probs[target], 1e-12));   <b class="cw-tag">1</b>
-average_loss = loss_sum / N;
-perplexity = std::exp(average_loss);                     <b class="cw-tag">2</b></code></pre>
+          <figcaption class="code-walk__file">src/deeplearning/transformer/transformer_block.cpp · 残差(精简)</figcaption>
+          <pre class="code-walk__code"><code>last_residual_1_ = input;                          <b class="cw-tag">1</b>
+for (int i ...) for (int j ...)
+  last_residual_1_[i][j] += last_attention_output_[i][j];   <b class="cw-tag">2</b>
+attention_norm_.Forward(last_residual_1_, last_norm_1_);    <b class="cw-tag">3</b></code></pre>
           <ol class="code-walk__notes">
-            <li>对每个样本,取“正确的下一个字”被预测到的概率,算 −log(<a class="xref" href="chapter-04.html#4-用交叉熵衡量两个概率的差距">第 4 章的交叉熵</a>)。<code>max(..., 1e-12)</code> 防止 log(0)。</li>
-            <li>平均损失取指数,就是困惑度。训练有效的话,你会看到它随训练稳步下降。</li>
+            <li>先把原始输入 <code>input</code> 留一份。</li>
+            <li>把注意力的输出<strong>加回</strong>到输入上——这就是 <var>x</var> + Attention(<var>x</var>)。</li>
+            <li>再交给 LayerNorm(下一节)。这种“子层 → 加残差 → 归一化”的三连,在 block 里会出现两次。</li>
           </ol>
         </figure>
-
-        <h2>10. 看真实模型的注意力(回放)</h2>
-        <p>
-          下面这个工具能读取本项目<strong>真实导出</strong>的 attention 权重(不是教学示意),
-          逐步回放生成时每一层、每个头的注意力。点“读取内置样例”,再用“上一步/下一步”观察:
-          模型每要写下一个字时,到底在“看”前文的哪些位置。
-        </p>
-        <div class="figure reveal">
-          <div data-lab="real-attention"></div>
-          <p class="figure__cap">若直接双击打开本页(file://)读取样例失败,请用本地静态服务器,或手动选择导出的 JSON 文件。</p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">为什么这条“捷径”能让梯度直通</span>
+          <p>
+            反向传播是把梯度从后往前<strong>连乘</strong>回去。对 <var>y</var> = <var>x</var> + F(<var>x</var>) 求导:<code>∂y/∂x = 1 + ∂F/∂x</code>。
+            关键是那个 <strong>“+1”</strong>——哪怕子层 F 的梯度 <code>∂F/∂x</code> 很小甚至接近 0,梯度也能靠这个 1 <strong>原样传回前一层</strong>,不会被一路乘没。
+            没有残差时,深层梯度是一串小于 1 的数连乘,越乘越小(这就是<strong>梯度消失</strong>);有了残差,等于永远留了一条“直达车道”,几十上百层也传得回去。
+          </p>
         </div>
 
-        <div class="callout callout--tip reveal">
-          <span class="callout__title">自己跑一个</span>
+        <h2>2. LayerNorm:把每个词的特征“拉回正常范围”</h2>
+        <p>
+          训练中,各层数值的大小、波动会乱飘,拖慢甚至搞崩训练。<span class="term">LayerNorm(层归一化)</span>
+          对<strong>每一个词向量</strong>单独做标准化:减去均值、除以标准差,把它拉成“均值 0、波动 1”的分布,
+          再用两个可学习参数 <var>γ</var>(scale)和 <var>β</var>(bias)做微调:
+        </p>
+        <div class="mathblock reveal">
+          LN(<var>x</var>) = <span class="frac"><span><var>x</var> − μ</span><span>√(σ<sup>2</sup> + ε)</span></span> · <var>γ</var> + <var>β</var>
+          <span class="label">μ、σ² 是这个词向量自己的均值和方差;ε 防止除以 0;γ、β 可学习</span>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/layer_norm.cpp · Forward(精简)</figcaption>
+          <pre class="code-walk__code"><code>double mean = 0;
+for (double v : token) mean += v;
+mean /= feature_dim_;                                  <b class="cw-tag">1</b>
+
+double variance = 0;
+for (double v : token) variance += (v - mean) * (v - mean);
+variance /= feature_dim_;                              <b class="cw-tag">2</b>
+
+double denom = std::sqrt(variance + epsilon_);
+for (int i = 0; i &lt; feature_dim_; i++)
+  token[i] = ((token[i] - mean) / denom) * scale_[i] + bias_[i];  <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>算这个词向量所有维度的<strong>均值</strong> μ。</li>
+            <li>算<strong>方差</strong> σ²(各维度偏离均值的平方的平均)。</li>
+            <li>标准化(减均值、除标准差),再乘 <code>scale</code>(γ)、加 <code>bias</code>(β)。注意:它是对<em>每个词自己</em>归一化,和样本数无关,这正是它适合序列的原因。</li>
+          </ol>
+        </figure>
+        <p>抽象?把一个词向量 <code>[1, 2, 3]</code> 亲手归一化一遍就通了(设 γ=1、β=0):</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead><tr><th>步骤</th><th>算式</th><th>结果</th></tr></thead>
+            <tbody>
+              <tr><td>① 均值 μ</td><td>(1 + 2 + 3) / 3</td><td>2</td></tr>
+              <tr><td>② 方差 σ²</td><td>[(1−2)² + (2−2)² + (3−2)²] / 3</td><td>≈ 0.667</td></tr>
+              <tr><td>③ 标准差</td><td>√0.667</td><td>≈ 0.816</td></tr>
+              <tr><td>④ 标准化</td><td>(x − 2) / 0.816</td><td>[−1.22, 0, 1.22]</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">忽大忽小的 [1,2,3] 被拉成一组均值 0、波动 1 的数;γ、β 再在此基础上做可学习的微调(初始 γ=1、β=0 就原样输出)。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">为什么是“每个词各自归一化”,而不是按 batch</span>
           <p>
-            配套项目里 <code>src/demo/transformer_char</code> 就是一个能训练、能生成的完整字符级语言模型。
-            编译后运行 <code>./bin/transformer_char --prompt "hello" --generate-num 100</code> 之类,
-            就能看到它根据你的提示往下写。各种采样参数(<code>--temperature</code>、<code>--top-k</code>、<code>--top-p</code>)都能在命令行调。
+            注意上面全程<strong>只用了这一个词自己的几个数</strong>——和同批里别的句子、同句里别的词<strong>统统无关</strong>。
+            这正是 <strong>Layer</strong>Norm 与 <strong>Batch</strong>Norm 的分水岭:BatchNorm 要跨一批样本统计,句子一变长、batch 一变小就很别扭;
+            LayerNorm 只看“一个词的这几十/几百个特征”,于是<strong>不依赖 batch 大小、对变长序列天然友好、训练和推理表现一致</strong>——序列模型因此偏爱它。
+            好处很直接:每层拿到的输入分布都被拉回稳定范围,梯度不易忽大忽小,就能用更大的学习率、堆更深也不易训崩。
+          </p>
+        </div>
+
+        <h2>3. 前馈网络 FFN:逐个词再加工一次</h2>
+        <p>
+          注意力让每个词“看了全局”,但融合方式基本是线性加权。<span class="term">前馈网络(FFN)</span>
+          紧随其后,对<strong>每个词</strong>独立地做一次“放大 → 非线性 → 压缩”:先用一个矩阵升到更高维度(比如 4 倍),
+          过 ReLU,再压回原维度。这给了模型额外的非线性加工能力。
+        </p>
+        <div class="mathblock reveal">
+          FFN(<var>x</var>) = ReLU(<var>x</var> <var>W</var><sub>1</sub> + <var>b</var><sub>1</sub>) <var>W</var><sub>2</sub> + <var>b</var><sub>2</sub>
+          <span class="label">W₁ 把维度升上去,ReLU 加非线性,W₂ 再压回来</span>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/transformer_block.cpp · FFN(精简)</figcaption>
+          <pre class="code-walk__code"><code>hidden = ApplyLinear(norm_1, W1, b1);   // model_dim → ff_dim   <b class="cw-tag">1</b>
+for (double &amp;v : hidden) v = Relu(v);                          <b class="cw-tag">2</b>
+ff_output = ApplyLinear(hidden, W2, b2);  // ff_dim → model_dim <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>第一层线性:把每个词向量从 <code>model_dim</code> 升到更大的 <code>ff_dim</code>。</li>
+            <li>过 ReLU 加入非线性(<a class="xref" href="chapter-02.html">第 2 章</a>的老朋友)。</li>
+            <li>第二层线性:再压回 <code>model_dim</code>,方便接下来继续残差相加。每个词都独立走这一遍。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">两句话记住 FFN 的定位</span>
+          <p>
+            <strong>· “逐词(position-wise)”是什么意思?</strong> 同一套 <var>W</var><sub>1</sub>/<var>W</var><sub>2</sub> 对每个词<strong>各算各的</strong>,词与词之间不交换任何信息。
+            所以分工很清楚:<strong>attention 负责“跨词混合”,FFN 负责“逐词深加工”</strong>,一横一纵。<br />
+            <strong>· 为什么先升维、再降维(常是 4 倍)?</strong> 把每个词摊到更宽的空间里,ReLU 才能切出更多“分段”、拟合更复杂的非线性变换;
+            加工完再压回原维度,好和残差相加、继续往下堆。像“摊到大桌上加工,再收回口袋”。
+          </p>
+        </div>
+
+        <h2>4. 把它们拼成一块 Block</h2>
+        <p>一块标准 Transformer Block,就是“注意力 + 残差 + 归一化”和“FFN + 残差 + 归一化”这两段串起来:</p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 460 470" role="img" aria-label="Transformer Block 结构图">
+              <defs>
+                <marker id="m9" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#46587a" /></marker>
+                <marker id="b9" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" /></marker>
+              </defs>
+              <!-- 主干箭头 -->
+              <g stroke="#46587a" stroke-width="2" fill="none" marker-end="url(#m9)">
+                <line x1="230" y1="44" x2="230" y2="60" />
+                <line x1="230" y1="100" x2="230" y2="135" />
+                <line x1="230" y1="168" x2="230" y2="196" />
+                <line x1="230" y1="228" x2="230" y2="242" />
+                <line x1="230" y1="280" x2="230" y2="315" />
+                <line x1="230" y1="348" x2="230" y2="376" />
+                <line x1="230" y1="408" x2="230" y2="424" />
+              </g>
+              <!-- 方框与文字 -->
+              <text x="230" y="30" text-anchor="middle" fill="#8499bd" font-size="13">输入序列(每个词一个向量)</text>
+              <rect x="130" y="64" width="200" height="36" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" />
+              <text x="230" y="87" text-anchor="middle" fill="#eef4ff" font-size="14">Self-Attention</text>
+              <rect x="130" y="198" width="200" height="30" rx="9" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="2" />
+              <text x="230" y="218" text-anchor="middle" fill="#eef4ff" font-size="13">LayerNorm</text>
+              <rect x="130" y="244" width="200" height="36" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" />
+              <text x="230" y="267" text-anchor="middle" fill="#eef4ff" font-size="14">Feed-Forward (FFN)</text>
+              <rect x="130" y="378" width="200" height="30" rx="9" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="2" />
+              <text x="230" y="398" text-anchor="middle" fill="#eef4ff" font-size="13">LayerNorm</text>
+              <text x="230" y="446" text-anchor="middle" fill="#8499bd" font-size="13">输出序列(可送入下一块 Block)</text>
+              <!-- 残差跳线 1: 从"输入"主干分叉, 绕左侧汇入第一个加号 -->
+              <path d="M 230 52 L 72 52 L 72 152 L 213 152" fill="none" stroke="#8ef0d1" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#b9)" />
+              <circle cx="230" cy="52" r="3.2" fill="#8ef0d1" />
+              <text x="82" y="106" fill="#8ef0d1" font-size="11">残差(加回输入)</text>
+              <!-- 残差跳线 2: 从"FFN 输入"主干分叉, 绕右侧汇入第二个加号 -->
+              <path d="M 230 236 L 388 236 L 388 332 L 247 332" fill="none" stroke="#8ef0d1" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#b9)" />
+              <circle cx="230" cy="236" r="3.2" fill="#8ef0d1" />
+              <text x="378" y="290" fill="#8ef0d1" font-size="11" text-anchor="end">残差(加回输入)</text>
+              <!-- 两个"加号"结点(画在残差线之上, 保证箭头清晰) -->
+              <circle cx="230" cy="152" r="15" fill="rgba(142,240,209,0.2)" stroke="#8ef0d1" stroke-width="2" /><text x="230" y="157" text-anchor="middle" fill="#eef4ff" font-size="15">＋</text>
+              <circle cx="230" cy="332" r="15" fill="rgba(142,240,209,0.2)" stroke="#8ef0d1" stroke-width="2" /><text x="230" y="337" text-anchor="middle" fill="#eef4ff" font-size="15">＋</text>
+            </svg>
+          </div>
+          <p class="figure__cap">一块 Transformer Block:Self-Attention → 加残差 → LayerNorm → FFN → 加残差 → LayerNorm。</p>
+        </div>
+        <p>
+          关键在于:这块 Block 的<strong>输入和输出形状完全一样</strong>(都是“一串词向量”)。
+          所以它能像乐高一样<strong>一块叠一块</strong>:堆 6 块、12 块、96 块……越深,模型能力越强。
+          这正是“GPT-3 有 96 层”这类说法的含义。
+        </p>
+
+        <h2>5. 位置编码:告诉模型“谁在前谁在后”</h2>
+        <p>
+          注意力有个“缺陷”:它对所有位置一视同仁,<strong>本身并不知道词的先后顺序</strong>
+          ——把“狗咬人”和“人咬狗”打乱了它也分不清。解决办法是给每个位置造一个独特的“位置指纹”,
+          加到词向量上。经典做法用不同频率的<strong>正弦和余弦</strong>:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/positional_encoding.cpp(精简)</figcaption>
+          <pre class="code-walk__code"><code>double angle = pos / std::pow(10000.0, (double)i / model_dim);  <b class="cw-tag">1</b>
+encoding[pos][i]     = std::sin(angle);                         <b class="cw-tag">2</b>
+encoding[pos][i + 1] = std::cos(angle);
+// 之后: sequence[i][j] += encoding[i][j];                      <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>每个位置 <code>pos</code>、每个维度 <code>i</code> 对应一个角度;不同维度用不同频率(<code>10000</code> 的幂)。</li>
+            <li>偶数维用 sin,奇数维用 cos——这样每个位置都得到一串独一无二、且“相邻位置相近”的编码。</li>
+            <li>把位置编码<strong>加</strong>到词向量上,词向量从此既带“是什么词”也带“在第几位”的信息。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">直觉:像时钟的指针,也像二进制计数器</span>
+          <p>
+            为什么要用<strong>好几个不同频率</strong>的 sin/cos,而不是一个数字?想想时钟:秒针快、分针中、时针慢——
+            单看一根针说不清“几点”,<strong>三根合起来</strong>就能唯一锁定一个时刻。位置编码同理:
+            <strong>高频维度</strong>变化快,负责“精确到第几个词”;<strong>低频维度</strong>变化慢,负责“大致在句子前段还是后段”。
+            多个频率叠在一起,每个位置就拿到一串<strong>独一无二又有规律</strong>的指纹。
+          </p>
+        </div>
+        <p>这和<strong>二进制计数</strong>是一个道理——低位翻得快、高位翻得慢,合起来给每个数一个唯一编码:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>位置</th><th>高位(慢)</th><th>中位</th><th>低位(快)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+              <tr><td>1</td><td>0</td><td>0</td><td class="is-hot">1</td></tr>
+              <tr><td>2</td><td>0</td><td class="is-hot">1</td><td>0</td></tr>
+              <tr><td>3</td><td>0</td><td class="is-hot">1</td><td class="is-hot">1</td></tr>
+              <tr><td>4</td><td class="is-hot">1</td><td>0</td><td>0</td></tr>
+              <tr><td>5</td><td class="is-hot">1</td><td>0</td><td class="is-hot">1</td></tr>
+              <tr><td>6</td><td class="is-hot">1</td><td class="is-hot">1</td><td>0</td></tr>
+              <tr><td>7</td><td class="is-hot">1</td><td class="is-hot">1</td><td class="is-hot">1</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">低位每 1 步就翻一次(高频),高位每 4 步才翻一次(低频)。位置编码就是它的“连续版”:把 0/1 换成不同频率的 sin/cos。</p>
+        </div>
+        <p>把公式真代进去,给一个 4 维位置编码算前几个位置(<code>d=4</code>,偶数维用 sin、奇数维用 cos):</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>位置 pos</th><th>维0 = sin(pos)</th><th>维1 = cos(pos)</th><th>维2 = sin(pos/100)</th><th>维3 = cos(pos/100)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>0</td><td>0.00</td><td>1.00</td><td>0.00</td><td>1.00</td></tr>
+              <tr><td>1</td><td>0.84</td><td>0.54</td><td>0.01</td><td>1.00</td></tr>
+              <tr><td>2</td><td>0.91</td><td>−0.42</td><td>0.02</td><td>1.00</td></tr>
+              <tr><td>3</td><td>0.14</td><td>−0.99</td><td>0.03</td><td>1.00</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">左两维(高频)相邻位置就明显不同——管“精确位次”;右两维(低频)几乎没动——管“大致段落”。每行合起来各不相同,就是该位置的指纹。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">两个常见疑问</span>
+          <p>
+            <strong>· 为什么是“加”到词向量上,而不是拼接?</strong> 相加<strong>不增加维度、不多花参数</strong>,模型能在同一组数里同时读到“是什么词 + 在第几位”。(也有模型改用<strong>可学习</strong>的位置向量,思路一样,只是编码从公式改成训练得到。)<br />
+            <strong>· sin/cos 还有个隐藏好处:</strong> 位置 <code>pos+k</code> 的编码可以由位置 <code>pos</code> 的编码<strong>线性组合</strong>出来。于是模型很容易学会“相对位置”(比如“往前第三个词”),而不只是死记绝对位次。
+          </p>
+        </div>
+
+        <h2>6. Encoder 与 Decoder</h2>
+        <p>同样的 Block,按“能看到哪些词”分成两种用法:</p>
+        <ul>
+          <li><span class="pill">Encoder 编码器</span>不加 causal mask,每个词能看到<strong>整句</strong>(双向)。适合“理解”类任务(如 BERT)。</li>
+          <li><span class="pill">Decoder 解码器</span>加上 causal mask(<a class="xref" href="chapter-17.html">第 17 章</a>),每个词只能看到<strong>它之前</strong>的词。适合“生成”类任务——因为生成时本来就还没有后文。GPT 系列就是纯 decoder。</li>
+        </ul>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">本项目两种都支持</span>
+          <p>
+            配套的 <code>MiniTransformerLM</code> 用一个 <code>backbone</code> 配置在 encoder / decoder 之间切换。
+            下一章我们要做“预测下一个字”,用的就是带 causal mask 的 decoder 思路。
+          </p>
+        </div>
+
+        <h2>7. 合体:那张最经典的 Transformer 全图</h2>
+        <p>
+          把前面所有零件拼齐,就得到了 2017 年论文 <em>Attention Is All You Need</em> 里那张<strong>最经典的架构图</strong>。
+          很多人第一次看它就发怵,其实图里<strong>每一个方块你都已经学过了</strong>。我们照着把它画出来,再一块块讲清楚“它到底在说什么”。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 660 772" role="img" aria-label="Transformer 完整架构图(编码器-解码器)">
+              <defs>
+                <marker id="tf-flow" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8499bd" /></marker>
+                <marker id="tf-cross" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#6ac3ff" /></marker>
+              </defs>
+
+              <!-- 容器 Nx -->
+              <rect x="80" y="340" width="210" height="300" rx="14" fill="none" stroke="rgba(149,176,227,0.35)" stroke-width="1.5" stroke-dasharray="6 4" />
+              <rect x="400" y="340" width="210" height="300" rx="14" fill="none" stroke="rgba(149,176,227,0.35)" stroke-width="1.5" stroke-dasharray="6 4" />
+              <text x="52" y="488" text-anchor="middle" fill="#b6c5e1" font-size="12">编码器</text>
+              <text x="52" y="506" text-anchor="middle" fill="#8499bd" font-size="13">N×</text>
+              <text x="628" y="488" text-anchor="middle" fill="#b6c5e1" font-size="12">解码器</text>
+              <text x="628" y="506" text-anchor="middle" fill="#8499bd" font-size="13">N×</text>
+
+              <!-- 主干箭头(灰) -->
+              <g stroke="#8499bd" stroke-width="2" fill="none" marker-end="url(#tf-flow)">
+                <line x1="185" y1="751" x2="185" y2="746" />
+                <line x1="185" y1="708" x2="185" y2="697" />
+                <line x1="185" y1="673" x2="185" y2="598" />
+                <line x1="185" y1="552" x2="185" y2="544" />
+                <line x1="185" y1="520" x2="185" y2="498" />
+                <line x1="185" y1="452" x2="185" y2="424" />
+                <line x1="505" y1="751" x2="505" y2="746" />
+                <line x1="505" y1="708" x2="505" y2="697" />
+                <line x1="505" y1="673" x2="505" y2="594" />
+                <line x1="505" y1="548" x2="505" y2="540" />
+                <line x1="505" y1="516" x2="505" y2="508" />
+                <line x1="505" y1="462" x2="505" y2="454" />
+                <line x1="505" y1="430" x2="505" y2="422" />
+                <line x1="505" y1="380" x2="505" y2="370" />
+                <line x1="505" y1="346" x2="505" y2="316" />
+                <line x1="505" y1="280" x2="505" y2="260" />
+                <line x1="505" y1="224" x2="505" y2="210" />
+              </g>
+
+              <!-- 残差(绿虚线) = Add & Norm 里的 Add -->
+              <g stroke="#8ef0d1" stroke-width="1.3" fill="none" stroke-dasharray="4 3" opacity="0.7">
+                <path d="M185,600 L90,600 L90,531 L100,531" />
+                <path d="M185,500 L90,500 L90,411 L100,411" />
+                <path d="M505,596 L600,596 L600,527 L590,527" />
+                <path d="M505,510 L600,510 L600,441 L590,441" />
+                <path d="M505,424 L600,424 L600,357 L590,357" />
+              </g>
+
+              <!-- 交叉连接(蓝):编码器输出 → 解码器交叉注意力 -->
+              <path d="M185,400 L185,300 L330,300 L330,484 L420,484" fill="none" stroke="#6ac3ff" stroke-width="2.5" marker-end="url(#tf-cross)" />
+              <circle cx="185" cy="400" r="3.2" fill="#6ac3ff" />
+              <text x="238" y="293" fill="#6ac3ff" font-size="11">编码器输出 → K, V</text>
+
+              <!-- ===== 编码器方块 ===== -->
+              <text x="185" y="762" text-anchor="middle" fill="#8499bd" font-size="11">Inputs 输入</text>
+              <rect x="100" y="708" width="170" height="36" rx="8" fill="rgba(142,240,209,0.16)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="185" y="723" text-anchor="middle" fill="#eef4ff" font-size="12">Input Embedding</text>
+              <text x="185" y="737" text-anchor="middle" fill="#b6c5e1" font-size="10">输入嵌入</text>
+              <circle cx="185" cy="684" r="11" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.6" />
+              <text x="185" y="689" text-anchor="middle" fill="#eef4ff" font-size="14">＋</text>
+              <text x="203" y="688" fill="#8499bd" font-size="10">位置编码</text>
+              <rect x="100" y="552" width="170" height="44" rx="8" fill="rgba(139,123,255,0.2)" stroke="#8b7bff" stroke-width="2" />
+              <text x="185" y="572" text-anchor="middle" fill="#eef4ff" font-size="12">Multi-Head Attention</text>
+              <text x="185" y="586" text-anchor="middle" fill="#b6c5e1" font-size="10">自注意力</text>
+              <rect x="100" y="520" width="170" height="22" rx="7" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="185" y="535" text-anchor="middle" fill="#eef4ff" font-size="11">Add &amp; Norm</text>
+              <rect x="100" y="452" width="170" height="44" rx="8" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="2" />
+              <text x="185" y="472" text-anchor="middle" fill="#eef4ff" font-size="12">Feed Forward</text>
+              <text x="185" y="486" text-anchor="middle" fill="#b6c5e1" font-size="10">前馈网络</text>
+              <rect x="100" y="400" width="170" height="22" rx="7" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="185" y="415" text-anchor="middle" fill="#eef4ff" font-size="11">Add &amp; Norm</text>
+
+              <!-- ===== 解码器方块 ===== -->
+              <text x="505" y="762" text-anchor="middle" fill="#8499bd" font-size="11">Outputs 输出(右移一位)</text>
+              <rect x="420" y="708" width="170" height="36" rx="8" fill="rgba(142,240,209,0.16)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="505" y="723" text-anchor="middle" fill="#eef4ff" font-size="12">Output Embedding</text>
+              <text x="505" y="737" text-anchor="middle" fill="#b6c5e1" font-size="10">输出嵌入</text>
+              <circle cx="505" cy="684" r="11" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.6" />
+              <text x="505" y="689" text-anchor="middle" fill="#eef4ff" font-size="14">＋</text>
+              <text x="523" y="688" fill="#8499bd" font-size="10">位置编码</text>
+              <rect x="420" y="548" width="170" height="44" rx="8" fill="rgba(139,123,255,0.2)" stroke="#8b7bff" stroke-width="2" />
+              <text x="505" y="567" text-anchor="middle" fill="#eef4ff" font-size="10">Masked Multi-Head Attention</text>
+              <text x="505" y="581" text-anchor="middle" fill="#b6c5e1" font-size="10">掩码自注意力</text>
+              <rect x="420" y="516" width="170" height="22" rx="7" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="505" y="531" text-anchor="middle" fill="#eef4ff" font-size="11">Add &amp; Norm</text>
+              <rect x="420" y="462" width="170" height="44" rx="8" fill="rgba(139,123,255,0.2)" stroke="#8b7bff" stroke-width="2" />
+              <text x="505" y="480" text-anchor="middle" fill="#eef4ff" font-size="12">Multi-Head Attention</text>
+              <text x="505" y="494" text-anchor="middle" fill="#b6c5e1" font-size="10">交叉注意力 cross</text>
+              <rect x="420" y="430" width="170" height="22" rx="7" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="505" y="445" text-anchor="middle" fill="#eef4ff" font-size="11">Add &amp; Norm</text>
+              <rect x="420" y="380" width="170" height="40" rx="8" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="2" />
+              <text x="505" y="398" text-anchor="middle" fill="#eef4ff" font-size="12">Feed Forward</text>
+              <text x="505" y="412" text-anchor="middle" fill="#b6c5e1" font-size="10">前馈网络</text>
+              <rect x="420" y="346" width="170" height="22" rx="7" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="505" y="361" text-anchor="middle" fill="#eef4ff" font-size="11">Add &amp; Norm</text>
+              <rect x="420" y="280" width="170" height="34" rx="8" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="2" />
+              <text x="505" y="301" text-anchor="middle" fill="#eef4ff" font-size="12">Linear</text>
+              <rect x="420" y="224" width="170" height="34" rx="8" fill="rgba(142,240,209,0.16)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="505" y="245" text-anchor="middle" fill="#eef4ff" font-size="12">Softmax</text>
+              <text x="505" y="205" text-anchor="middle" fill="#8499bd" font-size="11">Output Probabilities 输出概率</text>
+            </svg>
+          </div>
+          <p class="figure__cap">经典 Transformer:左塔<strong>编码器</strong>读懂输入,右塔<strong>解码器</strong>一个词一个词生成输出,中间那条蓝线是<strong>交叉注意力</strong>(编码器输出当 K、V)。绿色虚线是各处的残差——Add &amp; Norm 里的“Add”,就是第 1 节讲的残差相加。</p>
+        </div>
+
+        <h3>顺着数据流走一遍</h3>
+        <p><strong>左边这座塔是编码器(Encoder),负责“读懂输入”:</strong></p>
+        <ol>
+          <li><strong>输入嵌入 + 位置编码</strong>:把输入每个词查成向量(<a class="xref" href="chapter-19.html">第 19 章</a>),⊕ 上位置编码(第 5 节),让它既知道“是什么词”又知道“在第几位”。</li>
+          <li><strong>N× 编码器块</strong>:每块 = 自注意力 → Add &amp; Norm → 前馈网络 → Add &amp; Norm(第 1–4 节);堆 N 层(原论文 N=6),越堆理解越深。</li>
+          <li><strong>编码器输出</strong>:一串“看过全句上下文”的向量,原样送给右边的解码器备用。</li>
+        </ol>
+        <p><strong>右边这座塔是解码器(Decoder),负责“一个词一个词生成输出”:</strong></p>
+        <ol>
+          <li><strong>输出嵌入 + 位置编码</strong>:把“到目前为止已生成的词”嵌入 + 位置编码。注意底部写着 <span class="term">Outputs(shifted right,右移一位)</span>——预测第 <var>t</var> 个词时,喂进去的是第 1…<var>t</var>−1 个词,这正是<a class="xref" href="chapter-19.html">第 19 章</a>的 teacher forcing。</li>
+          <li><strong>掩码自注意力</strong>:带 causal mask 的自注意力,保证生成时<strong>只能看前文、不能偷看未来</strong>(<a class="xref" href="chapter-17.html">第 17 章</a>)。</li>
+          <li><strong>交叉注意力(cross-attention)</strong>:关键一环——它一边看解码器自己的状态,一边<strong>回头查阅编码器的输出</strong>(下面细讲)。</li>
+          <li><strong>前馈网络</strong>,再 Add &amp; Norm;同样堆 N 层。</li>
+          <li><strong>Linear + Softmax</strong>:最顶上把解码器输出投影到词表大小、过 softmax,得到“下一个词的概率”——这就是<a class="xref" href="chapter-19.html">第 19 章</a>的 LM Head。</li>
+        </ol>
+
+        <h3>全图的“三种注意力”,一次看懂</h3>
+        <p>
+          很多人卡在“怎么突然冒出三个 Multi-Head Attention?”其实它们是<strong>同一套机制(<a class="xref" href="chapter-17.html">第 17 章</a>)</strong>,只是<strong>Q、K、V 来自哪里</strong>不同。
+          这张表,是读懂整张图的钥匙:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>注意力</th><th>图中位置</th><th>Q 来自</th><th>K、V 来自</th><th>mask</th><th>作用</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>编码器自注意力</td><td>左塔</td><td>输入序列</td><td>输入序列</td><td>无(双向)</td><td>让输入每个词读懂全句</td></tr>
+              <tr><td>掩码自注意力</td><td>右塔 · 底部</td><td>已生成序列</td><td>已生成序列</td><td>有(causal)</td><td>生成时只看前文</td></tr>
+              <tr><td>交叉注意力</td><td>右塔 · 中部</td><td>解码器</td><td>编码器输出</td><td>无</td><td>解码时“查阅原文”</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">三处注意力,同一套算法,区别只在 Q / K / V 的来源。</p>
+        </div>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">交叉注意力 = 一边写译文,一边回头看原文</span>
+          <p>
+            想象你在做翻译:每写下一个译词(解码器),都会<strong>回头扫一眼原文</strong>(编码器输出),看看该对齐到哪里。
+            落到机制上就是:<strong>Query 来自解码器</strong>(我正要写什么),<strong>Key、Value 来自编码器</strong>(原文里有什么)。
+            这就是图中那条<strong>从左塔顶伸到右塔中部的蓝线</strong>——原始 Transformer 本来就是为“机器翻译”设计的,cross-attention 正是连接“原文”和“译文”的那座桥。
+          </p>
+        </div>
+
+        <h3>三种家族:后来的模型只取半张图</h3>
+        <p>这张全图是“编码器 + 解码器”的完整版。后来的模型常常<strong>只取其中一半</strong>:</p>
+        <ul>
+          <li><span class="pill">Encoder-only</span>只留左塔,双向看全句,擅长<strong>理解</strong>(分类、检索)。代表:<strong>BERT</strong>。</li>
+          <li><span class="pill">Decoder-only</span>只留右塔(并去掉交叉注意力),带 causal mask 专心<strong>生成</strong>。代表:<strong>GPT</strong> 系列——今天的大模型几乎都是这一派。</li>
+          <li><span class="pill">Encoder-Decoder</span>两塔都要,适合“输入 → 输出”的转换任务,如翻译、摘要。代表:<strong>T5</strong>、原始 Transformer。</li>
+        </ul>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">为什么如今大模型多是 decoder-only?</span>
+          <p>
+            因为“预测下一个 token”这一个目标,既逼它学会理解、又逼它学会生成,而且训练数据全是现成的文本(自监督,<a class="xref" href="chapter-20.html">第 20 章</a>)。
+            于是最简洁的 decoder-only 反而最能<strong>吃满规模红利</strong>。你在<a class="xref" href="chapter-19.html">第 19 章</a>亲手搭的那个字符级模型,正是一个 decoder-only 的迷你版。
           </p>
         </div>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>语言模型的任务:看前文,预测下一个字。链路 = Tokenizer → Embedding(+位置)→ Transformer → LM Head → 概率。</li>
-            <li>Tokenizer 把字符 ↔ id;Embedding 把 id 查表成可学习向量。</li>
-            <li>训练:滑动窗口造“输入 → 下一字”样本(自监督);交叉熵损失反向传播,一路更新到<a class="xref" href="chapter-16.html">第 16 章</a>的 Q/K/V 矩阵和词嵌入。</li>
-            <li>挑字:greedy(取最高)死板;采样(temperature / top-k / top-p)更自然有创意。</li>
-            <li>自回归:把生成的字接回输入,循环往下写——这就是大模型逐字输出的原理。</li>
-            <li>困惑度 = e^(平均交叉熵),衡量模型“平均在几个选项里纠结”,越低越好。</li>
+            <li><strong>残差连接</strong>(<var>x</var> + Sublayer(<var>x</var>)):给梯度修高速公路,让深网络训得动,每层只学“增量”。</li>
+            <li><strong>LayerNorm</strong>:对每个词向量减均值除标准差再缩放,稳住数值、加速收敛。</li>
+            <li><strong>FFN</strong>:对每个词独立做“升维 → ReLU → 降维”,补充非线性加工。</li>
+            <li>一块 Block = 注意力+残差+Norm,再 FFN+残差+Norm;输入输出同形,可无限堆叠。</li>
+            <li><strong>位置编码</strong>用 sin/cos 把词序加进向量;encoder 双向看全句,decoder 带 causal mask 只看前文。</li>
+            <li><strong>完整架构</strong> = 编码器塔 + 解码器塔;图中三处注意力(自注意力 / 掩码自注意力 / 交叉注意力)是同一套机制,只是 Q/K/V 来源不同。</li>
+            <li><strong>交叉注意力</strong>让解码器“查阅”编码器输出(Q 来自解码器,K/V 来自编码器);GPT=decoder-only,BERT=encoder-only,T5/翻译=encoder-decoder。</li>
           </ul>
         </section>
 
         <h2>动手与思考</h2>
         <div class="quiz reveal">
           <details class="quiz__item">
-            <summary class="quiz__q">问题 1:为什么 greedy 解码常常生成重复、无聊的内容?</summary>
+            <summary class="quiz__q">问题 1:残差连接 <var>x</var> + Sublayer(<var>x</var>) 为什么有助于训练很深的网络?</summary>
             <div class="quiz__a">
-              <p>因为它每一步都只挑概率最高的那个字,毫无随机性。相同的上文必然得到相同的输出,容易陷入“高概率但单调”的循环。引入温度和 top-k/top-p 采样能带来多样性。</p>
+              <p>那条“+ x”的捷径让梯度在反向传播时能几乎无损地直通回前面的层,缓解梯度消失;同时每个子层只需学习“在输入基础上的增量”,优化更容易。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 2:把 temperature 调得很高会怎样?调得很低呢?</summary>
+            <summary class="quiz__q">问题 2:为什么注意力机制需要额外的“位置编码”?</summary>
             <div class="quiz__a">
-              <p>很高:概率分布被抹平,采样更随机、更有创意,但也更容易语无伦次。很低:分布更尖锐,趋近 greedy,稳定但单调。常用值在 0.7–1.0 附近折中。</p>
+              <p>因为注意力对所有位置对称,本身分不清词的先后顺序。位置编码给每个位置一个独特指纹并加到词向量上,模型才能区分“狗咬人”和“人咬狗”。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 3:困惑度从 20 降到 4 说明了什么?</summary>
+            <summary class="quiz__q">问题 3:做“预测下一个词”的语言模型,应该用 encoder 还是 decoder?为什么?</summary>
             <div class="quiz__a">
-              <p>说明模型对“下一个字”的预测从“平均在约 20 个候选里纠结”进步到“约 4 个里纠结”,即预测准了很多、更有把握。困惑度越低,语言模型通常越好。</p>
+              <p>用 decoder。因为生成时只能依赖已经出现的前文,必须用 causal mask 屏蔽未来;encoder 能看全句,会“偷看答案”,不适合自回归生成。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:经典 Transformer 图里有三个注意力模块,它们到底有什么不同?</summary>
+            <div class="quiz__a">
+              <p>是同一套注意力机制,区别只在 Q/K/V 的来源:①<strong>编码器自注意力</strong>(Q/K/V 都来自输入,双向,无 mask);②<strong>解码器掩码自注意力</strong>(Q/K/V 来自已生成序列,带 causal mask,只看前文);③<strong>交叉注意力</strong>(Q 来自解码器,K/V 来自编码器输出),让解码时能“查阅原文”。</p>
             </div>
           </details>
         </div>
 
         <p class="muted">
-          你已经亲手把一个完整的语言模型从零拆到底了。最后一章,我们站远一点看:
-          把这个小模型<strong>放大一万倍</strong>会发生什么?预训练、微调、RLHF、涌现……大模型的故事,就从这里开始。
+          积木齐了!下一章我们把 embedding、Transformer、再加一个“输出层”接起来,
+          做成一个真正能<strong>一个字一个字写下去</strong>的字符级语言模型,并看看它怎么采样、怎么评估。
         </p>
       </div>
     </main>
 
     <script src="assets/book.js"></script>
-    <script src="assets/labs.js"></script>
   </body>
 </html>

@@ -121,20 +121,77 @@ net.optimizer_function()-&gt;set_weight_decay(1e-4); <b class="cw-tag">2</b></co
 
         <h2>3. 梯度消失与梯度爆炸</h2>
         <p>
-          反向传播要把误差从输出层一路传回输入层。网络一深,这条链上会发生两类经典故障——
-          搞懂它们,才知道本章后面为什么要<strong>初始化、裁剪、热身</strong>:
+          这是深层网络最有名的两个“训不动”故障。它俩其实<strong>同根同源</strong>——都出自反向传播那一长串乘法,只是一个越乘越小、一个越乘越大。
+          先把根源讲透,后面为什么要<strong>初始化、裁剪、热身</strong>就全顺理成章了。
+        </p>
+
+        <h3>根源:反传其实是「一长串数」在连乘</h3>
+        <p>
+          回忆<a class="xref" href="chapter-06.html#2-反向传播的三步">第 6 章的 δ 递推</a>:误差每往回穿过<strong>一层</strong>,就要乘一次
+          “<strong>这一层的权重</strong> × <strong>这一层激活函数的导数</strong>”。所以当它传到很前面的某个权重时,那个梯度长这样:
+        </p>
+        <div class="mathblock reveal">
+          <span class="frac"><span>∂<var>L</var></span><span>∂<var>w</var><sub>前面某层</sub></span></span>
+          = <var>δ</var><sub>末层</sub> · (<var>w</var>·<var>f</var>′) · (<var>w</var>·<var>f</var>′) · … · (<var>w</var>·<var>f</var>′) · <var>out</var>
+          <span class="label">网络有几层,中间就有几个「权重 × 激活导数」在连乘</span>
+        </div>
+        <p>
+          一串数连乘,结果几乎<strong>只由“每个因子的平均大小 <var>r</var>”决定</strong>,而且是<strong>指数级</strong>的:穿过 <var>L</var> 层就约等于 <var>r</var><sup><var>L</var></sup>。
+          于是只有三种命运:
         </p>
         <ul>
+          <li>因子平均 <strong><var>r</var> &lt; 1</strong> → <var>r</var><sup><var>L</var></sup> 迅速趋近 0 → <span class="pill">梯度消失</span></li>
+          <li>因子平均 <strong><var>r</var> &gt; 1</strong> → <var>r</var><sup><var>L</var></sup> 迅速冲上天 → <span class="pill">梯度爆炸</span></li>
+          <li>因子平均 <strong><var>r</var> ≈ 1</strong> → 梯度能稳稳传过几十层(这正是好初始化、残差、归一化拼命想维持的状态)</li>
+        </ul>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">类比:连续打折 vs 利滚利</span>
+          <p>
+            每层乘 0.8,像每过一关打八折:一两关看不出,连着穿 30 层就只剩原来的千分之一(消失)。
+            每层乘 1.5,像利滚利:30 层后翻了近 20 万倍(爆炸)。
+            差别不在“单层乘多少”,而在“<strong>连乘多少次</strong>”——网络越深,两头越极端。
+          </p>
+        </div>
+
+        <h3>一个数字例子:深度一上来,差距有多离谱</h3>
+        <p>假设每层因子 <var>r</var> 大致稳定,看梯度乘到第 5 / 10 / 30 层还剩多少倍:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>每层因子 <var>r</var></th><th>×5 层</th><th>×10 层</th><th>×30 层</th><th>结局</th></tr>
+            </thead>
+            <tbody>
+              <tr class="is-cold"><td>0.25(Sigmoid 最好情况)</td><td>≈1e−3</td><td>≈1e−6</td><td>≈9e−19</td><td>梯度消失</td></tr>
+              <tr class="is-cold"><td>0.8</td><td>0.33</td><td>0.11</td><td>≈1e−3</td><td>慢慢消失</td></tr>
+              <tr><td>1.0</td><td>1.0</td><td>1.0</td><td>1.0</td><td>刚好稳定</td></tr>
+              <tr class="is-hot"><td>1.1</td><td>1.6</td><td>2.6</td><td>≈17</td><td>温和放大</td></tr>
+              <tr class="is-hot"><td>1.5</td><td>7.6</td><td>58</td><td>≈1.9e5</td><td>梯度爆炸</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">同样“每层只差一点点”,乘到 30 层就是天壤之别——这就是深网络对初始化和尺度格外敏感的原因。</p>
+        </div>
+
+        <h3>套到具体元凶上:谁把 <var>r</var> 推离了 1</h3>
+        <p>有了“因子连乘”这个根,常见诱因就都能归成一句话——它们要么把 <var>r</var> 压到小于 1,要么把 <var>r</var> 顶到大于 1:</p>
+        <ul>
           <li>
-            <span class="pill">梯度消失</span>误差信号越传越<strong>小</strong>,前面几层几乎收不到更新,学不动。
-            常见诱因:权重太小、激活函数在饱和区(Sigmoid/Tanh 两端)、网络太深。
-            <strong>对策</strong>:合适的初始化(本节 §1)、选 ReLU/GELU 等不易饱和的激活(<a class="xref" href="chapter-07.html">第 7 章</a>)、残差连接(<a class="xref" href="chapter-17.html">第 17 章</a>)。
+            <span class="pill">梯度消失</span>(<var>r</var> &lt; 1,越传越小)
+            <ul>
+              <li><strong>激活函数饱和</strong>:Sigmoid 的导数最大也只有 0.25,两端更趋近 0;Tanh 类似。于是每层先天带一个 ≤0.25 的乘数,层一多必然归零。(<a class="xref" href="chapter-07.html#2-怎么读一张激活函数图">第 7 章:斜率≈0 就断流</a>)</li>
+              <li><strong>权重初始化太小</strong>:<var>w</var> 本身就小于 1,再和小小的 <var>f</var>′ 相乘,因子雪上加霜。</li>
+              <li><strong>网络太深</strong>:哪怕每层因子有 0.9,30 层后也只剩约 4%——深度本身就是放大器。</li>
+              <li><strong>怎么救</strong>:好初始化(把因子拉回 ≈1,见<a class="xref" href="chapter-09.html#1-起点很重要-参数初始化">本章 §1 的 Xavier/He</a>)、换 ReLU/GELU(正区间导数=1,不衰减)、残差连接(给梯度留一条 +1 的直通车道,<a class="xref" href="chapter-18.html">第 18 章</a>)。</li>
+            </ul>
           </li>
           <li>
-            <span class="pill">梯度爆炸</span>某一步梯度突然<strong>巨大</strong>,参数被一脚踹飞,损失变 NaN。
-            常见于 RNN/很深的网络、学习率过大、数据没归一化。
-            <strong>对策</strong>:调小学习率、<a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">warmup 热身</a>、
-            <a class="xref" href="chapter-09.html#4-防止训练踩空-梯度裁剪">梯度裁剪</a>(下一节)、先把输入缩放到合理尺度(<a class="xref" href="chapter-11.html#5-数据预处理-先把数据摆正">第 11 章</a>)。
+            <span class="pill">梯度爆炸</span>(<var>r</var> &gt; 1,越传越大)
+            <ul>
+              <li><strong>权重过大 / 初始化不当</strong>:<var>w</var> 偏大让因子 &gt;1,连乘就指数级放大。</li>
+              <li><strong>学习率过大</strong>:就算梯度本身正常,一步 <var>w</var> ← <var>w</var> − <var>η</var>·<var>g</var> 迈得太猛,会把参数推进激活的极端区,下一轮梯度更大——形成<strong>正反馈</strong>,几步就发散成 NaN。</li>
+              <li><strong>输入没归一化</strong>:<var>x</var> 尺度过大,第一层的 <var>net</var> 就偏离正常范围,整条链的数值跟着一起失控。(<a class="xref" href="chapter-11.html#5-数据预处理-先把数据摆正">第 11 章</a>)</li>
+              <li><strong>RNN 尤其危险</strong>:它沿时间步反复乘<strong>同一个</strong>权重矩阵 <var>T</var> 次,相当于一张超深网络,两头都比普通网络更容易失控。(<a class="xref" href="chapter-14.html">第 14 章</a>)</li>
+              <li><strong>怎么救</strong>:<a class="xref" href="chapter-09.html#4-防止训练踩空-梯度裁剪">梯度裁剪</a>(直接给梯度封顶,下一节)、<a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">warmup 热身</a>(前期用小学习率)、把输入缩放到合理尺度。</li>
+            </ul>
           </li>
         </ul>
         <div class="figure reveal">
@@ -287,7 +344,35 @@ if (norm &gt; grad_clip_norm_ &amp;&amp; norm &gt; 0.0) {
           <code>progress=1</code> 时 <code>cos(π)=−1</code>,lr 降到 <code>min_lr</code> 并停住(小步精修、稳稳落底)。
         </p>
 
-        <p>把数字代进去走一遍最直观。假设 <code>base_lr=0.1</code>、<code>warmup_steps=100</code>、<code>t_max=1000</code>、<code>min_lr=0.01</code>:</p>
+        <p><strong>这四个参数怎么定?</strong> 它们不是拍脑袋的魔法数,每个都有来路——下面给出经验法则,并标上<strong>本仓库两个 demo 的真实取值</strong>:</p>
+        <ul>
+          <li>
+            <strong><code>base_lr</code> — 峰值,其实就是主学习率</strong>:就是你平时给优化器设的那个 lr,也是这四个里唯一真正要“调”的旋钮。拿不准先用优化器的典型值(Adam ≈ 1e-3、SGD ≈ 0.1),或做一次 LR range test,挑“最大但还没发散”的那个。<br />
+            <span class="muted">仓库里:MNIST 用 <code>1e-3</code>(续训微调降到 <code>1e-4</code>);transformer 用命令行 <code>--learning-rate</code>。</span>
+          </li>
+          <li>
+            <strong><code>warmup_steps</code> — 用多少步爬到峰值</strong>:取总步数的一小截,常见 <strong>3%~10%</strong>,或干脆“1 个 epoch”。<br />
+            <span class="muted">仓库里:MNIST = <code>steps_per_epoch</code>(1 个 epoch = 938 步);transformer = <code>epoch_num / 20</code>(≈5%)。</span>
+          </li>
+          <li>
+            <strong><code>t_max</code> — 退火铺满多少步(退火终点)</strong>:一般 = <strong>整个训练的总步数</strong>,让 lr 正好在训练<strong>结束时</strong>降到底,不多不少。<br />
+            <span class="muted">仓库里:MNIST = <code>epochs × steps_per_epoch</code> = 5 × 938 = <strong>4690</strong>;transformer = <code>epoch_num</code>。</span>
+          </li>
+          <li>
+            <strong><code>min_lr</code> — 退火终点的最低学习率</strong>:取 <code>base_lr</code> 的一个小比例,常见 <strong>×0.1 或 ×0.01</strong>(也有人直接设 0)。<br />
+            <span class="muted">仓库里:MNIST = <code>base_lr × 0.01</code> = 1e-5;transformer = <code>base_lr × 0.1</code>。</span>
+          </li>
+        </ul>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">三个“步数”参数其实是算出来的,不用猜</span>
+          <p>
+            <code>steps_per_epoch = ⌈样本数 / batch_size⌉</code>(一个 epoch 要跑多少个 minibatch),
+            再 <code>t_max = 总步数 = epochs × steps_per_epoch</code>,<code>warmup_steps</code> 取其中一小截。
+            MNIST 就是 <code>⌈60000 / 64⌉ = 938</code> 步/epoch,训 5 个 epoch 共 <code>4690</code> 步——所以 <code>warmup_steps</code>、<code>t_max</code> 都是<strong>从 batch 大小和训练轮数推出来的</strong>,只有 <code>base_lr</code>、<code>min_lr</code> 需要你挑。
+          </p>
+        </div>
+
+        <p>为了让算术清爽,下面换一组<strong>整数示例</strong>走一遍(规律和上面的真实取值<strong>完全一样</strong>,只是把数字凑圆好心算):<code>base_lr=0.1</code>、<code>warmup_steps=100</code>(总步数的 10%)、<code>t_max=1000</code>、<code>min_lr=0.01</code>(= base_lr × 0.1):</p>
         <div class="table-wrap reveal">
           <table class="calc-table">
             <thead>

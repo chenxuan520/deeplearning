@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 19 章 · 通往大模型:原理与训练 | 深度学习入门</title>
+    <title>第 19 章 · 字符级语言模型 | 深度学习入门</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -12,490 +12,391 @@
     <main class="chapter">
       <div class="chapter__inner">
         <p class="chapter__eyebrow">第 19 章 · 通往大模型</p>
-        <h1>通往大模型:原理与训练</h1>
+        <h1>字符级语言模型</h1>
 
         <p class="lead">
-          你已经亲手把一个完整的语言模型从一个神经元拆到了底。现在我们站远一点,看看把<a class="xref" href="chapter-18.html">第 18 章</a>那个小模型
-          <strong>放大一万倍</strong>会发生什么。这一章讲清楚三件事:大模型<strong>怎么读懂文字</strong>(分词与词嵌入)、
-          <strong>为什么越大越强</strong>(规模定律与涌现)、以及<strong>是怎么“炼”出来的</strong>(预训练 → 微调 → 对齐 → 蒸馏)。
-          至于它靠什么硬件跑起来、你又该怎么用好它,留给第 20、21 章。
+          现在把前面所有积木接起来,造一个真能<strong>一个字一个字写下去</strong>的模型。
+          它的任务朴素得出奇:<strong>看着前文,预测下一个字符</strong>。
+          但你会惊讶地发现——今天那些会聊天、会写代码的大模型,做的本质上就是这一件事,只是规模大得多。
         </p>
+
+        <div class="callout callout--note reveal" aria-label="本章在整条链路的位置">
+          <span class="callout__title">路线图 · 你在这一段的哪一站</span>
+          <nav class="chain-map">
+            <a class="chain-map__step" href="chapter-16.html">16 为什么要注意力</a>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-17.html">17 注意力机制</a>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-18.html">18 Transformer</a>
+            <span class="chain-map__sep">›</span>
+            <span class="chain-map__step is-here">19 语言模型</span>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-20.html">20 放大成大模型</a>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-21.html">21 工程与基建</a>
+            <span class="chain-map__sep">›</span>
+            <a class="chain-map__step" href="chapter-22.html">22 用好它</a>
+          </nav>
+          <p class="chain-map__note">上一站(<a class="xref" href="chapter-18.html">第 18 章</a>)搭好了 Transformer 积木;<strong>本站</strong>把 tokenizer → 嵌入 → Transformer → 输出层接成完整链路,并讲清它<strong>怎么训练、怎么推理</strong>——就是<a class="xref" href="chapter-16.html">第 16 章</a>那句诗例子的“正式版”;下一站(<a class="xref" href="chapter-20.html">第 20 章</a>)把它放大成大模型。</p>
+        </div>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>真实大模型怎么分词(BPE / 子词),词表大小意味着什么;</li>
-            <li>“词嵌入”把词变成<strong>语义坐标</strong>,为什么向量夹角能表示“意思相近”;</li>
-            <li>规模定律(Scaling Law)和涌现能力,到底在说什么;</li>
-            <li><strong>预训练</strong>与<strong>后训练</strong>(SFT、RLHF、蒸馏)的分工,以及“底座模型”和“对话模型”的区别;</li>
-            <li>推理模型、多模态(图像/语音怎么进 Transformer)、长上下文等最近的新方向,大致是怎么回事;</li>
-            <li>常见“体感”问题:<strong>模型降智</strong>、<strong>对齐税</strong>、<strong>灾难性遗忘</strong>各自发生在训练链路的哪一环;</li>
-            <li>一串训练“黑话”:自监督、泛化、过拟合、epoch/batch/step、超参数;</li>
-            <li>大模型的本质与局限——它为什么会“一本正经地胡说八道”。</li>
+            <li>从文本到预测,数据要经过 tokenizer → embedding → Transformer → 输出层这一条完整链路;</li>
+            <li><strong>模型到底怎么“学”</strong>:训练数据怎么造、损失怎么算、反向传播怎么一路更新到<a class="xref" href="chapter-17.html">第 17 章</a>那三个矩阵;</li>
+            <li>“预测下一个字”怎么变成“写出一整段”(自回归生成);</li>
+            <li>greedy、temperature、top-k、top-p 这些采样策略各自的脾气;</li>
+            <li>怎么用困惑度(perplexity)评估一个语言模型的好坏。</li>
           </ul>
         </section>
 
-        <h2>1. 先看一个惊人的事实:内核没变</h2>
-        <p>
-          GPT、DeepSeek 这类模型,做的事和你<a class="xref" href="chapter-18.html">第 18 章</a>那个 mini LM <strong>一模一样</strong>:
-          <em>看着前文,预测下一个 token,然后自回归地一个个往下写</em>。区别只在量级:
-        </p>
-        <div class="figure figure--reading reveal">
+        <h2>1. 完整链路:从一句话到下一个字</h2>
+        <p>一个字符级语言模型,把一段文本变成“下一个字的概率”,要走这么一条流水线:</p>
+        <div class="figure reveal">
           <div class="diagram">
             <div class="pipe">
-              <div class="pipe__box">本书 mini LM<small>几千参数 · 几句话语料 · CPU 几秒</small></div>
+              <div class="pipe__box">文本<small>"hello wor"</small></div>
               <div class="pipe__arrow">→</div>
-              <div class="pipe__box">GPT-3<small>1750 亿参数 · 数千亿 token · 上千 GPU 训数周</small></div>
+              <div class="pipe__box">Tokenizer<small>字符 → id</small></div>
               <div class="pipe__arrow">→</div>
-              <div class="pipe__box">DeepSeek-V3<small>6710 亿参数(MoE)· 十几万亿 token</small></div>
+              <div class="pipe__box">Embedding<small>id → 向量(+位置)</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">Transformer<small>融合上下文</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">LM Head<small>投影到词表</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">下一字概率<small>挑一个:'l'</small></div>
             </div>
           </div>
-          <p class="figure__cap">同一套机制(Embedding + Transformer + 预测下一个 token),规模相差上亿倍。</p>
+          <p class="figure__cap">每生成一个字,就把它接回输入,再走一遍这条流水线——这就是“自回归”。</p>
         </div>
+
+        <h2>2. Tokenizer:把字符变成数字</h2>
+        <p>
+          模型只认数字,不认字符。<span class="term">Tokenizer(分词器)</span>负责两件事:
+          先扫一遍语料,给每个出现过的字符<strong>编一个 id</strong>(建词表);
+          之后就能在“字符串”和“id 序列”之间来回翻译。本书用最简单的<strong>字符级</strong>分词(一个字符一个 token)。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/character_tokenizer.cpp(精简)</figcaption>
+          <pre class="code-walk__code"><code>// 建词表: 每遇到一个没见过的字符, 就分配下一个 id
+for (char ch : text)
+  if (char_to_id.count(ch) == 0) {
+    char_to_id[ch] = vocabulary.size();
+    vocabulary.push_back(ch);                 <b class="cw-tag">1</b>
+  }
+
+// 编码: 把字符串翻译成 id 序列
+for (char ch : text)
+  token_ids.push_back(char_to_id[ch]);        <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>词表就是“字符 ↔ id”的一一对应。比如 'h'→0, 'e'→1, 'l'→2……词表大小 <code>vocab_size</code> 就是不同字符的个数。</li>
+            <li>编码:逐字符查表,得到一串整数。解码(<code>Decode</code>)则反过来,把 id 还原成字符。</li>
+          </ol>
+        </figure>
         <div class="callout callout--note reveal">
-          <span class="callout__title">最重要的一句话</span>
+          <span class="callout__title">真实大模型用的是“子词”</span>
           <p>
-            大模型不是用了什么你没学过的“黑魔法”。它就是把你已经理解的
-            <strong>注意力、Transformer Block、预测下一个 token</strong> 堆得更深、喂得更多、训得更久。
-            这一章新增的每个概念,都只是围绕这个内核的“外围工程”。
+            真实的 GPT 不是按单个字符,而是按<strong>子词(subword)</strong>切分(比如把 “playing” 切成 “play”+“ing”)。
+            原理完全一样,只是词表里的单位更大、更省。我们用字符级,是为了让原理一目了然。
           </p>
         </div>
 
-        <h2>2. 第一步:把文字切成 token(分词与 BPE)</h2>
+        <h2>3. Embedding:把 id 变成有含义的向量</h2>
         <p>
-          <a class="xref" href="chapter-18.html">第 18 章</a>我们用的是最简单的<strong>字符级</strong>分词——一个字一个 token。真实大模型嫌它太浪费:
-          英文一个单词能拆成好几个字符,序列变得很长,而注意力的计算量随长度<strong>平方</strong>增长(<a class="xref" href="chapter-16.html">第 16 章</a>),很不划算。
-          于是它们用<strong>子词(subword)</strong>分词,最常见的算法叫 <span class="term">BPE(Byte Pair Encoding)</span>。
+          id 只是个编号,本身没有含义(2 不比 1 “大”)。<span class="term">Embedding(词嵌入)</span>
+          给每个 id 配一个<strong>可学习的向量</strong>,训练中这些向量会逐渐学到语义(相近的字符向量也相近)。
+          它就是一张大查找表:
         </p>
-        <div class="callout callout--analogy reveal">
-          <span class="callout__title">BPE 的直觉:高频搭档就“焊”在一起</span>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/token_embedding.cpp · Encode</figcaption>
+          <pre class="code-walk__code"><code>for (int token_id : token_ids)
+  output.push_back(embedding_table_[token_id]);   <b class="cw-tag">1</b></code></pre>
+          <ol class="code-walk__notes">
+            <li><code>embedding_table_</code> 是 <code>vocab_size × model_dim</code> 的表。拿 id 当行号<strong>查表</strong>,取出对应的向量。一串 id 就变成了一串向量,交给 Transformer。</li>
+          </ol>
+        </figure>
+        <p>在送进主干前,还会(可选地)给向量乘个缩放、加上<a class="xref" href="chapter-18.html">第 18 章</a>的位置编码:</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · EncodeSequence(精简)</figcaption>
+          <pre class="code-walk__code"><code>token_embedding_.Encode(token_ids, hidden);              <b class="cw-tag">1</b>
+if (scale_embedding_) hidden *= std::sqrt(model_dim_);
+PositionalEncoding::Apply(hidden);                       <b class="cw-tag">2</b>
+decoder_.Forward(hidden, encoded);  // 或 encoder_       <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>查表得到词向量。</li>
+            <li>加上位置编码,让模型知道每个字在第几位。</li>
+            <li>送进 Transformer 主干(decoder 带 causal mask),得到每个位置“看过上文”的表示 <code>encoded</code>。</li>
+          </ol>
+        </figure>
+
+        <h2>4. LM Head:把表示投影成“下一字概率”</h2>
+        <p>
+          主干输出的还是向量,得再过一个输出层(<span class="term">LM Head</span>),
+          把每个位置的向量投影到<strong>词表大小</strong>,得到对每个候选字符的打分(logits)。
+          再过 softmax,就是“下一个字是谁”的概率分布。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · Forward(精简)</figcaption>
+          <pre class="code-walk__code"><code>for (int pos = 0; pos &lt; encoded.size(); pos++)
+  for (int token_id = 0; token_id &lt; vocab_size_; token_id++) {
+    logits[pos][token_id] = output_bias_[token_id];
+    for (int dim = 0; dim &lt; model_dim_; dim++)
+      logits[pos][token_id] +=
+          output_weight_[token_id][dim] * encoded[pos][dim];   <b class="cw-tag">1</b>
+  }</code></pre>
+          <ol class="code-walk__notes">
+            <li>对每个位置,把它的向量和每个候选字符的权重做点积(还是“加权求和”),得到这个字符的分数。<code>vocab_size</code> 个分数,就是这个位置对“下一个字”的全部打分。</li>
+          </ol>
+        </figure>
+
+        <h2>5. 训练数据:答案就藏在“下一个字”里</h2>
+        <p>
+          上面四步搭好了一个能吐出“下一字概率”的网络,但它一开始参数全是随机的,预测得一塌糊涂。
+          要让它变准,就得<strong>喂数据训练</strong>。可训练需要“标准答案”,难道要人一句句去标?
+          语言模型最妙的地方就在这里:<strong>答案根本不用人标,它就藏在文本自己里</strong>——
+          每个位置“正确的下一个字”,不就是原文里紧跟着的那个字吗?
+        </p>
+        <p>
+          于是造训练样本只要拿一个<strong>滑动窗口</strong>在语料上滑:窗口里的一小段字符当<strong>输入</strong>,
+          紧跟其后的那个字符当<strong>目标(答案)</strong>;窗口每右移一格,就多一条样本。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/character_dataset.cpp · BuildNextTokenSamples(精简)</figcaption>
+          <pre class="code-walk__code"><code>for (int i = 0; i + context_size &lt; token_ids.size(); i++) {
+  input_samples.push_back( token_ids[i .. i+context_size) );   <b class="cw-tag">1</b>
+  target_tokens.push_back( token_ids[i + context_size] );      <b class="cw-tag">2</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>输入 = 从第 <code>i</code> 个字符起、长度为 <code>context_size</code>(上下文窗口)的一段。窗口越大,模型一次能“看到”的上文越长。</li>
+            <li>目标 = 紧跟这段之后的<strong>那一个</strong>字符。它天生就是答案,不需要任何人工标注。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">“答案自带”有个名字,叫自监督</span>
           <p>
-            BPE 的规则很朴素:<strong>谁和谁经常挨在一起出现,就把它俩合并成一个新 token</strong>,反复合并。
-            就像 “ing”“tion” 这种后缀在英文里到处出现,于是它们被合成一个整体;中文里“沙发”“葡萄”这种
-            高频组合也会被当成一个词。这样常用的东西用一个 token 就能表示,既短又高效。
-            (类比一下:晚自习后你和她三番五次被班主任“偶遇”,久了大家就默认你俩是“一对儿”——高频共现,合并成一个整体。)
+            这种<strong>从数据本身自动抠出答案</strong>、不用人工打标签的训练方式,叫<span class="term">自监督学习</span>。
+            正因为答案免费,才敢拿“整个互联网”当训练集——这也是大模型能被喂那么多数据的根本原因(<a class="xref" href="chapter-20.html">第 20 章</a>细讲)。
           </p>
         </div>
+
+        <h2>6. 怎么学:一次训练 step 拆开看</h2>
+        <p>有了“输入 → 目标”样本,训练就是第 5、6 章那条老流水线,一步(step)做四件事:</p>
+        <ol>
+          <li><strong>前向</strong>:把输入跑一遍第 1 节的链路,得到对“下一个字”的概率分布 <code>probs</code>。</li>
+          <li><strong>算损失</strong>:看它给<strong>正确答案</strong>那个字打了多少概率,用交叉熵 <code>−log(probs[答案])</code> 量出“错得多离谱”(<a class="xref" href="chapter-04.html">第 4 章</a>)。答案概率越低,损失越大。</li>
+          <li><strong>反向传播</strong>:用链式法则把损失反着传回去,算出每个参数的梯度(<a class="xref" href="chapter-06.html">第 6 章</a>)。</li>
+          <li><strong>更新</strong>:每个参数沿梯度反方向挪一小步(<a class="xref" href="chapter-05.html">第 5 章</a>)。</li>
+        </ol>
         <p>
-          切出来的这些 token,会预先登记在一张<span class="term">词表(vocabulary)</span>里,每个 token 配一个唯一 id。
-          训练和推理都<strong>查这张表</strong>来分词,不能临时换算法(否则会切出词表里查不到的“陌生” token)。
-          词表大小(<code>vocab_size</code>)是个权衡:
+          softmax + 交叉熵的梯度还是那个漂亮结果:<strong>预测概率分布,减去“正确答案的 one-hot”</strong>。
+          代码里就一句 <code>grad_logits[答案] -= 1</code>——你给答案的概率比 1 差多少,就往回补多少:
         </p>
-        <ul>
-          <li><strong>太小</strong>:像拿着一年级生字本读专业书,啥都得拆成一堆碎片,表达力不足;</li>
-          <li><strong>太大</strong>:每个词见得太少、学不充分,还白白撑大输出层。主流模型的词表通常在几万到十几万之间。</li>
-        </ul>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · TrainNextToken(精简)</figcaption>
+          <pre class="code-walk__code"><code>auto probs = Softmax(logits);
+loss_sum += -std::log(probs[target_token]);        <b class="cw-tag">1</b>
+
+std::vector&lt;double&gt; grad_logits = probs;
+grad_logits[target_token] -= 1.0;                  <b class="cw-tag">2</b>
+
+// 把梯度依次反传, 并就地更新每一层的参数:
+decoder_.Backward(grad_encoded, grad_hidden, lr);  // 或 encoder_    <b class="cw-tag">3</b>
+// ... 最后再更新 embedding_table ...                                <b class="cw-tag">4</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>前向拿到概率,算这条样本的交叉熵损失。</li>
+            <li>softmax + 交叉熵的梯度 = <code>probs − one-hot(答案)</code>,和<a class="xref" href="chapter-06.html">第 6 章</a>、MNIST 里用的<strong>是同一个式子</strong>。</li>
+            <li>关键一步:把梯度传进 Transformer 主干。<code>decoder_.Backward</code> 会一层层调用每块 Block 的反向,<strong>其中就包含<a class="xref" href="chapter-17.html">第 17 章</a>那段 self-attention 的 <code>Backward</code></strong>——<var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub> 正是在这里被更新的!</li>
+            <li>最后连词嵌入表也一起更新。于是<strong>从输出层、到每块 Transformer、到 embedding,全网参数都被这同一个损失“拧”了一下</strong>。</li>
+          </ol>
+        </figure>
         <div class="callout callout--tip reveal">
-          <span class="callout__title">动手看一眼</span>
+          <span class="callout__title">这就接上了<a class="xref" href="chapter-17.html">第 17 章</a>留的扣子</span>
           <p>
-            OpenAI 提供了在线分词器 <code>platform.openai.com/tokenizer</code>,把一句中英文粘进去,
-            就能看到它被切成了哪些 token、各自的 id。你会直观感到:<strong>token 数 ≠ 字数</strong>,这也是 API 按 token 计费的原因。
+            <a class="xref" href="chapter-17.html">第 17 章</a>问“那三个矩阵怎么训练出来的”,完整答案就在这里:损失从“预测下一个字对不对”产生,
+            顺着反向传播的“电流”流过输出层、流过每一块 Transformer,最后流进 <var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub>,
+            把它们朝“让预测更准”的方向挪一点点。<strong>练一次挪一点,练亿万次,矩阵就学会了该关注谁。</strong>
           </p>
         </div>
 
-        <h2>3. 词嵌入:给每个词一个“语义坐标”</h2>
+        <h3>那“全网参数”到底有哪些?——一张清单</h3>
         <p>
-          token 的 id 只是个编号(2 不比 1 “大”)。<a class="xref" href="chapter-18.html">第 18 章</a>讲过,<span class="term">词嵌入(embedding)</span>
-          给每个 id 配一个可学习的<strong>多维向量</strong>。这里我们把这件事的“妙处”讲透,因为它是大模型能“懂语义”的地基。
+          上面反复说“更新每一个参数”“全网参数被拧一下”,可<strong>到底有哪些参数</strong>?很多人到这儿就糊了,尤其觉得它和
+          <a class="xref" href="chapter-23.html">MNIST</a> “好像不太一样”。其实<strong>本质一模一样</strong>,只是<strong>种类更多</strong>。把这个 mini LM 里所有“可训练的数”列全:
         </p>
-        <div class="callout callout--analogy reveal">
-          <span class="callout__title">用 RGB 颜色理解“向量”</span>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>参数(代码里的名字)</th><th>是什么 / 干嘛的</th><th>形状(量级)</th><th>相当于 MNIST 里的谁</th></tr></thead>
+            <tbody>
+              <tr><td><strong>词嵌入表</strong> <code>embedding_table_</code></td><td>每个字一行向量,查表得到词向量(第 3 节)</td><td>vocab_size × model_dim</td><td>新种类:一大堆权重</td></tr>
+              <tr><td><strong>Q/K/V 矩阵</strong> <code>query/key/value_weight_</code></td><td>把每个词投影成查询 / 键 / 值(<a class="xref" href="chapter-17.html">第 17 章</a>),<em>每块 Block 各一套</em></td><td>model_dim × model_dim</td><td>就是权重矩阵</td></tr>
+              <tr><td><strong>输出投影</strong> <code>output_weight_</code>(W<sub>O</sub>)</td><td>把多头拼接的结果融合回去(<a class="xref" href="chapter-17.html">第 17 章</a>)</td><td>model_dim × model_dim</td><td>权重矩阵</td></tr>
+              <tr><td><strong>前馈网络</strong> FFN 的 W₁/b₁/W₂/b₂</td><td>逐词再加工的两层小网络(<a class="xref" href="chapter-18.html">第 18 章</a>)</td><td>model_dim×ff_dim 等</td><td>就是个小 MLP(第 2、3 章)</td></tr>
+              <tr><td><strong>LayerNorm</strong> 的 γ、β</td><td>每层的缩放 / 平移系数(<a class="xref" href="chapter-18.html">第 18 章</a>)</td><td>model_dim</td><td>新种类:类似偏置</td></tr>
+              <tr><td><strong>LM Head</strong> <code>output_weight_/bias_</code></td><td>把向量投影成“下一个字的概率”(第 4 节)</td><td>model_dim × vocab_size</td><td>和 MNIST 输出层一模一样</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">位置编码在本项目是<strong>固定的 sin/cos、不参与训练</strong>(有的模型改成可学习的);其余全部都是要训练的参数。</p>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">和 MNIST 到底差在哪?其实只差“种类”</span>
           <p>
-            怎么用几个数字表示一个复杂事物?你其实早就会了:屏幕上任何颜色都用 <strong>RGB 三个数</strong>表示,
-            比如橙色 ≈ (255, 165, 0)。相近的颜色,三个数也相近。词嵌入一模一样,只是维度更高
-            (几百到上万维),用一串数字表示一个词的“意思”。<strong>意思相近的词,向量也相近。</strong>
+            <strong>更新方式完全相同</strong>:上面每一个参数,反向传播都会算出它的梯度,再用同一条
+            <code>新值 = 旧值 − 学习率 × 梯度</code> 挪一步(<a class="xref" href="chapter-05.html">第 5 章</a>;真实大模型换成 Adam,<a class="xref" href="chapter-08.html">第 8 章</a>,但也只是“挪得更聪明”)。<br />
+            <strong>唯一的区别</strong>:<a class="xref" href="chapter-23.html">MNIST</a> 那张 <code>784→128→64→10</code> 的网只有“<strong>权重 + 偏置</strong>”两类参数;
+            语言模型多了“<strong>嵌入表、Q/K/V/O 矩阵、LayerNorm 系数</strong>”这些新种类,而且<strong>每一块 Block 都各有一整套</strong>,层数一多,参数量就滚雪球——这正是“大模型”之所以“大”的地方。但<strong>“算梯度 → 挪一步”这套学习机制,和 MNIST 一字不差。</strong>
           </p>
         </div>
+
+        <div class="callout callout--note reveal">
+          <span class="callout__title">训练时“抄着答案做题”,生成时“自己接龙”——teacher forcing</span>
+          <p>
+            这里有个值得留意的反差:<strong>训练</strong>时每条样本的上文用的都是<strong>语料里的真字符</strong>
+            (相当于让模型对着标准答案的前半段做题),这叫 <span class="term">teacher forcing</span>,好处是每步互相独立、能高效并行。
+            而<strong>生成</strong>时没有答案可抄,只能把<strong>自己刚吐出的字</strong>接回去继续(见第 8 节的自回归)。
+            另外,真实大模型一次前向会<strong>同时预测所有位置</strong>的下一字(一遍算出一大批损失),
+            我们这个 mini 版为了好懂,一条样本只盯一个目标。
+          </p>
+        </div>
+
+        <h2>7. 怎么挑下一个字:从 greedy 到采样</h2>
+        <p>有了概率分布,怎么挑出下一个字?最简单的是 <span class="term">greedy(贪心)</span>:永远挑概率最高的那个。</p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · PredictNextToken(精简)</figcaption>
+          <pre class="code-walk__code"><code>token_id = 0;
+double best = logits[0];
+for (int i = 1; i &lt; logits.size(); i++)
+  if (logits[i] &gt; best) { best = logits[i]; token_id = i; }   <b class="cw-tag">1</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>就是取 argmax——分数最高的字符。简单,但<strong>太死板</strong>:同样的开头永远生成同样的、往往很重复无聊的内容。</li>
+          </ol>
+        </figure>
+        <p>更好的办法是<strong>带点随机性地采样</strong>,由三个旋钮控制:</p>
+        <ul>
+          <li><span class="pill">Temperature 温度</span>先把 logits 除以温度再 softmax。温度<strong>低</strong> → 分布更尖锐、更保守(接近 greedy);温度<strong>高</strong> → 分布更平、更大胆有创意(也更容易跑偏)。</li>
+          <li><span class="pill">top-k</span>只在概率最高的 <var>k</var> 个候选里抽,堵住长尾的奇怪字符。</li>
+          <li><span class="pill">top-p(核采样)</span>从高到低累加概率,只保留累积到 <var>p</var>(如 0.9)的那一小撮候选,再抽。</li>
+        </ul>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · SampleNextToken(精简)</figcaption>
+          <pre class="code-walk__code"><code>auto probs = SoftmaxWithTemperature(logits, temperature);   <b class="cw-tag">1</b>
+sort(order by probs desc);                                  <b class="cw-tag">2</b>
+// top-k: 最多保留前 k 个; top-p: 累积概率达到 p 就截断
+keep_count = ...;                                           <b class="cw-tag">3</b>
+// 在保留的候选里重新归一化, 按概率随机抽一个
+token_id = sample_from(filtered_probs);                     <b class="cw-tag">4</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>先按温度把 logits 变成概率。</li>
+            <li>按概率从高到低排序。</li>
+            <li>用 top-k / top-p 把候选裁剪成“最靠谱的一小撮”。</li>
+            <li>在这一小撮里按概率掷一次骰子,抽出下一个字。既有随机性,又不至于太离谱。</li>
+          </ol>
+        </figure>
+
+        <h2>8. 自回归:把刚写的字接回去,再写下一个</h2>
         <p>
-          那怎么用数学衡量“两个向量意思有多近”?一个直觉是算它们的<strong>距离</strong>,但训练中向量会被整体拉伸缩放,
-          距离不稳。更稳的是看<strong>方向(夹角)</strong>:两个向量夹角越小,就认为语义越接近。而衡量夹角的工具,
-          正是你在<a class="xref" href="chapter-16.html">第 16 章</a>反复用的<span class="term">点积</span>——<strong>点积越大,夹角越小,语义越相近</strong>。
+          生成一整段的诀窍叫<span class="term">自回归(autoregressive)</span>:预测出一个字后,
+          把它<strong>追加到输入末尾</strong>,再用更长的上文预测下一个字,如此循环。
+          你看到的 ChatGPT “一个字一个字往外蹦”,就是这个循环在跑。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · Generate(精简)</figcaption>
+          <pre class="code-walk__code"><code>generated = prompt;
+for (int i = 0; i &lt; generate_num; i++) {
+  PredictNextToken(generated, token_id);   <b class="cw-tag">1</b>
+  generated.push_back(token_id);           <b class="cw-tag">2</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>用目前为止的全部内容,预测下一个字。</li>
+            <li>把它接到末尾,然后回到第 1 步——下一轮的“上文”就多了一个字。这就是自回归生成。</li>
+          </ol>
+        </figure>
+
+        <h2>9. 它学得好不好?用困惑度衡量</h2>
+        <p>
+          评估语言模型最常用的指标是<span class="term">困惑度(perplexity)</span>。它是“平均交叉熵损失”取指数:
         </p>
         <div class="mathblock reveal">
-          相似度 ≈ cos(夹角) = <span class="frac"><span><var>a</var> · <var>b</var></span><span>|<var>a</var>| |<var>b</var>|</span></span>
-          <span class="label">这叫“余弦相似度”:只看方向、不看长短。它就是把点积按长度归一化了一下</span>
+          困惑度 = <var>e</var><sup>平均交叉熵损失</sup>
+          <span class="label">直觉:模型预测下一个字时,平均像在“多少个等可能选项”里纠结。越小越好</span>
         </div>
         <p>
-          于是训练会把语义相近的词“<strong>挤</strong>”到相近的方向上。一个经典的神奇现象:在训练好的词向量里,
-          <em>向量(“国王”) − 向量(“男人”) + 向量(“女人”) ≈ 向量(“女王”)</em>——语义关系居然变成了可以做加减法的几何关系。
+          比如困惑度 = 5,大致意思是模型每一步平均在 5 个候选里犹豫。完美模型困惑度接近 1(每次都笃定);乱猜的模型困惑度接近词表大小。
         </p>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">迁移学习:别人练好的,可以直接拿来用</span>
-          <p>
-            词向量一开始是随机的,要靠海量训练才长出语义。好消息是:别人训好的向量可以<strong>直接下载来用</strong>
-            (比如经典的 GloVe 词向量),这叫<span class="term">迁移学习</span>——站在别人的肩膀上,省掉从零训练的巨大成本。
-            大模型时代更是如此:绝大多数人不会从头训一个,而是拿开源的“预训练模型”接着用。
-          </p>
-        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/transformer/mini_transformer_lm.cpp · 损失与困惑度(精简)</figcaption>
+          <pre class="code-walk__code"><code>loss_sum += -std::log(std::max(probs[target], 1e-12));   <b class="cw-tag">1</b>
+average_loss = loss_sum / N;
+perplexity = std::exp(average_loss);                     <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>对每个样本,取“正确的下一个字”被预测到的概率,算 −log(<a class="xref" href="chapter-04.html#4-用交叉熵衡量两个概率的差距">第 4 章的交叉熵</a>)。<code>max(..., 1e-12)</code> 防止 log(0)。</li>
+            <li>平均损失取指数,就是困惑度。训练有效的话,你会看到它随训练稳步下降。</li>
+          </ol>
+        </figure>
 
-        <h2>4. 规模化(Scaling Law):大力真的出奇迹</h2>
+        <h2>10. 看真实模型的注意力(回放)</h2>
         <p>
-          研究者发现一个惊人规律——<span class="term">Scaling Law(规模定律)</span>:当你<strong>同时</strong>放大三样东西——
-          <strong>参数量、数据量、算力</strong>——模型的损失会沿着一条<strong>平滑、可预测</strong>的曲线持续下降。
-          也就是说,“做得更大”能<em>可靠地</em>换来“做得更好”。这条规律是过去几年“军备竞赛”的底气:既然变大几乎稳赚,那就拼命变大。
-        </p>
-        <div class="callout callout--warn reveal">
-          <span class="callout__title">注意:三样要一起涨,不能只堆参数</span>
-          <p>
-            很关键但常被忽略:光把参数堆大、数据却不够,模型会“吃不饱”,反而学不好(后面会讲的<strong>过拟合</strong>)。
-            研究(如 Chinchilla)发现:参数和数据要<strong>按比例一起增长</strong>才最划算。所以你会看到现代模型动辄用
-            <strong>十几万亿 token</strong> 训练——参数大,喂的数据也得跟上。
-          </p>
-        </div>
-        <p>
-          顺便建立一个数量级直觉:<strong>参数量 ≈ 网络里连线(权重)的总数</strong>。1750 亿参数,就是 1750 亿个
-          <a class="xref" href="chapter-02.html">第 2 章</a>那样的“权重旋钮”。它们全部存成小数,这也是为什么模型文件动辄几十上百 GB。
-        </p>
-
-        <h3>那到底该配多少数据、多少算力?</h3>
-        <p>
-          “三样一起放大”不是拍脑袋,业界有能<strong>上手估算</strong>的经验法则。DeepMind 的 Chinchilla 研究给了个著名结论:
-          在算力预算固定时,<strong>参数量和训练 token 数最好按大约 1 : 20 搭配</strong>——每 1 个参数,大约要配 20 个训练 token 才“吃得饱”。
-        </p>
-        <ul>
-          <li>照这个比例,一个 <strong>70 亿参数</strong>的模型,大约需要 <strong>1400 亿 token</strong> 才算喂到位;</li>
-          <li>早期不少模型“参数堆得很大、数据却没跟上”,其实是<strong>没训透</strong>:同样的算力,匀一部分去多喂数据,效果反而更好。这就是前面那句“不能只堆参数”的量化版。</li>
-        </ul>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">算力也能估:一个粗略但好用的公式</span>
-          <p>
-            训练要烧多少算力(浮点运算次数 FLOPs),有个广为流传的估算:<strong>FLOPs ≈ 6 × 参数量 × 训练 token 数</strong>。
-            它告诉你一件扎心的事:参数和数据<strong>任意一个翻倍,算力就翻倍</strong>——两个都想涨,成本是<strong>相乘</strong>着往上冲的。
-            这也是为什么训一个前沿大模型动辄要<strong>上千张 GPU、烧数百万美元、跑好几周</strong>:不是钱多烧得慌,是这条曲线逼的
-            (硬件账细算见<a class="xref" href="chapter-20.html">第 20 章</a>)。
-          </p>
-        </div>
-
-        <h2>5. 涌现能力:量变到质变</h2>
-        <p>
-          <span class="term">涌现能力(emergent abilities)</span>指的是:某些能力在小模型上<strong>几乎为零</strong>,
-          但当规模越过某个门槛后会<strong>突然出现</strong>。比如:
-        </p>
-        <ul>
-          <li><strong>少样本学习(few-shot)</strong>:在提示里给几个例子,它就能照着做新题,不用重新训练;</li>
-          <li><strong>按步骤推理(chain-of-thought)</strong>:让它“一步一步想”,复杂问题的正确率明显提高;</li>
-          <li><strong>遵循复杂指令</strong>:听懂并完成多步骤任务。</li>
-        </ul>
-        <p>这些能力没有被任何人“显式编程”进去,而是在“预测下一个 token”这个朴素目标 + 巨大规模下,自己长出来的。</p>
-
-        <h2>6. 大模型是怎么炼成的:预训练 + 后训练</h2>
-        <div class="figure reveal">
-          <div class="diagram">
-            <div class="pipe">
-              <div class="pipe__box">① 预训练<small>海量文本上预测下一个词</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">② 微调 SFT<small>用指令数据教它“听话”</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">③ RLHF<small>按人类偏好对齐</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">④ 蒸馏(可选)<small>把大模型能力压进小模型</small></div>
-            </div>
-          </div>
-          <p class="figure__cap">从“会接话的语料模型”到“有用、能落地的助手”,通常要走这几步。</p>
-        </div>
-        <p>这几步可以归成<strong>两大阶段</strong>,这也是你会反复听到的两个词:</p>
-        <ul>
-          <li><strong>预训练(pre-training)</strong> = 第 ① 步:在海量文本上自监督地学“通用语言能力 + 世界知识”。最烧钱、最耗时,决定了模型的“底子”。</li>
-          <li><strong>后训练(post-training)</strong> = 第 ②③④ 步:在预训练好的<strong>底座模型(base model)</strong>之上做的所有加工——SFT 教它听话、RLHF/DPO 按人类偏好对齐、蒸馏压小。数据量比预训练小得多,却直接决定它<strong>好不好用</strong>。</li>
-        </ul>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">“底座模型”和“对话模型”的区别</span>
-          <p>
-            开源社区里名字带 <code>-base</code> 的通常是只做过<strong>预训练</strong>的底座模型:博学,但只会顺着你的话往下接;
-            带 <code>-chat</code> / <code>-instruct</code> 的则是又做过<strong>后训练</strong>的版本,才会好好回答问题、听从指令。
-            今天各家大模型拉开体验差距的,很大一部分就在后训练这一段的数据质量与工艺。
-          </p>
-        </div>
-
-        <h3>① 预训练(Pre-training):自监督地读遍互联网</h3>
-        <p>
-          在<strong>海量</strong>文本(互联网级别)上,做的就是<a class="xref" href="chapter-18.html">第 18 章</a>那件事:预测下一个词。它最妙的一点是
-          <strong>不需要人工标注</strong>——因为“下一个词是什么”文本里现成就有,把后文盖住让模型猜即可。
-          这种“答案自带、不用人工打标签”的方式叫<span class="term">自监督学习</span>。这一步最烧钱、最耗时,
-          却是模型获得“通用语言能力 + 世界知识”的来源。
-        </p>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">监督 vs 自监督:区别只在“目标从哪来”</span>
-          <p>
-            <strong>监督学习</strong>:目标(答案)由人工标注,比如给一张图片标上“猫”。<br />
-            <strong>自监督学习</strong>:目标从数据里<strong>自动抠出来</strong>,比如把“青海长云暗雪山,孤城遥望玉门关”里的
-            “玉门关”盖住,让模型猜——被盖的词就是现成的答案。两者都要有目标值,只是自监督省掉了人工。
-            海量数据下人工标注不可能,所以预训练必须靠自监督。
-          </p>
-        </div>
-
-        <h3>② 指令微调(SFT):把“博学”调教成“听话”</h3>
-        <p>
-          预训练完的模型“博学但不一定听话”——你问它问题,它可能只顾着把你的话<em>接着往下写</em>,而不是回答。
-          <span class="term">指令微调(SFT,Supervised Fine-Tuning)</span>用一批“<strong>指令 + 理想回答</strong>”的高质量数据继续训练,
-          把它从“只会接话”调成“会回答你的问题、完成你的任务”。这一步数据量小得多,但作用关键。
-          注意:它用的还是<a class="xref" href="chapter-18.html">第 18 章</a>那套“预测下一个 token + 交叉熵 + 反向传播”,<strong>只是把训练数据从“互联网文本”换成了“标准问答范文”</strong>,并没有换算法。
-        </p>
-        <div class="callout callout--analogy reveal">
-          <span class="callout__title">一条 SFT 数据长什么样</span>
-          <p>
-            就是一问一答的“范文”,比如:<br />
-            <strong>指令</strong>:“用一句话解释什么是黑洞。” → <strong>理想回答</strong>:“黑洞是引力强到连光都逃不出来的天体。”<br />
-            成千上万条这样覆盖问答、翻译、写代码、总结的范文,教会模型<strong>看到指令就给出对应的回答</strong>,
-            而不是把指令当普通文本接着往下续。这里<strong>质量远比数量重要</strong>——几万条精挑细选的,常胜过几百万条粗制滥造的。
-          </p>
-        </div>
-        <div class="callout callout--warn reveal">
-          <span class="callout__title">灾难性遗忘(catastrophic forgetting)</span>
-          <p>
-            在预训练底座上继续 SFT/微调时,模型可能<strong>新任务学会了、旧本领丢了</strong>——比如微调成“只会写邮件”,通用推理变差。
-            缓解办法包括:混一定比例的原预训练数据、用小学习率、只训少量参数(<span class="term">LoRA/PEFT</span>——在权重旁加低秩小矩阵,只更新这部分),
-            以及控制微调轮次。这不是 bug,而是<strong>在旧分布与新任务之间抢参数</strong>的必然张力。
-          </p>
-        </div>
-
-        <h3>③ RLHF:按人类的喜好“对齐”</h3>
-        <p>
-          SFT 已经能让模型“好好回答”,但“<strong>什么才是更好的回答</strong>”很难写成标准答案——语气、分寸、有没有真的帮上忙,
-          这些没法像“1+1=2”那样标注。这里有个关键的转念:<strong>让人“写出满分答案”很难,但让人“判断两个答案哪个更好”很容易。</strong>
-          <span class="term">RLHF(基于人类反馈的强化学习)</span>就建立在这句话上,分三步走:
+          下面这个工具能读取本项目<strong>真实导出</strong>的 attention 权重(不是教学示意),
+          逐步回放生成时每一层、每个头的注意力。点“读取内置样例”,再用“上一步/下一步”观察:
+          模型每要写下一个字时,到底在“看”前文的哪些位置。
         </p>
         <div class="figure reveal">
-          <div class="diagram">
-            <div class="pipe">
-              <div class="pipe__box">① 收集偏好<small>同一问题多个答案,人来排序</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">② 训练奖励模型<small>学会给答案打“人有多喜欢”的分</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">③ 强化学习<small>把大模型朝高分方向推(+KL 约束)</small></div>
-            </div>
-          </div>
-          <p class="figure__cap">把“人的口味”先蒸馏成一个会自动打分的裁判,再让模型去追这个裁判的高分。</p>
+          <div data-lab="real-attention"></div>
+          <p class="figure__cap">若直接双击打开本页(file://)读取样例失败,请用本地静态服务器,或手动选择导出的 JSON 文件。</p>
         </div>
-        <ol>
-          <li><strong>收集偏好</strong>:同一个问题让模型给出多个回答,请人<strong>排序</strong>哪个更好。这种“比较题”标起来又快又稳。</li>
-          <li><strong>训练奖励模型</strong>:用这些排序,训练一个专门的<strong>打分模型(reward model)</strong>,让它学会给任意回答打出一个“人类有多喜欢”的分数——相当于把“人的口味”蒸馏成一个可自动打分的裁判。</li>
-          <li><strong>用强化学习优化</strong>:让大模型不停生成回答、让裁判打分,再用强化学习(如 PPO)把它朝<strong>高分</strong>方向推。同时挂一个“别跑太偏”的约束(<strong>KL 惩罚</strong>),防止它为了<strong>讨好打分器</strong>而说出一堆通顺却怪异的废话。(PPO、策略梯度等 RL 基础见<a class="xref" href="chapter-22.html">第 22 章</a>。)</li>
-        </ol>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">对齐税(alignment tax)</span>
-          <p>
-            RLHF/DPO 把模型调得更<strong>安全、听话、像助手</strong>,但往往要付一点能力代价——复杂推理、创造性、某些专业深度可能不如对齐前的底座。
-            俗称“<strong>对齐税</strong>”:不是模型“坏了”,而是优化目标从“接话像互联网”变成了“人类更喜欢”。KL 惩罚、保守的奖励模型、过度拒绝有害内容,
-            都会让这种体感更明显。工程上常在<strong>能力评测</strong>与<strong>安全评测</strong>之间找平衡。
-          </p>
-        </div>
-        <p>
-          今天聊天助手那种得体的语气、拒绝有害请求的分寸,很多就来自这一步。近来也流行更简化的
-          <span class="term">DPO</span>:跳过“单独训一个奖励模型”,直接拿人类偏好数据把模型“掰”过去,工程上更省事,思路完全一致。
-        </p>
 
-        <h3>④ 知识蒸馏:让小模型“拜大模型为师”</h3>
-        <p>
-          大模型效果好,但太重,难以塞进你的手机或个人电脑。<span class="term">知识蒸馏(distillation)</span>让一个小的
-          <strong>学生模型</strong>去模仿大的<strong>教师模型</strong>:不只学“正确答案”,还学教师输出的<strong>整个概率分布</strong>
-          (即“软目标”)——因为“它觉得‘吃饭’概率 0.6、‘干饭’0.2、‘用膳’0.05”这种<strong>细微的偏好</strong>本身就是宝贵知识。
-        </p>
         <div class="callout callout--tip reveal">
-          <span class="callout__title">这里用上了<a class="xref" href="chapter-18.html">第 18 章</a>的温度</span>
+          <span class="callout__title">自己跑一个</span>
           <p>
-            蒸馏时常把 softmax 的<strong>温度调高</strong>(<a class="xref" href="chapter-18.html">第 18 章</a>),让那些低概率但有意义的选项“显形”,
-            学生才学得到这些“隐藏知识”。DeepSeek 就曾用 R1 蒸馏出多个小模型(如
-            <code>DeepSeek-R1-Distill-Qwen-14B</code>,140 亿参数)开源给社区——学生虽小,却继承了老师不少本事。
+            配套项目里 <code>src/demo/transformer_char</code> 就是一个能训练、能生成的完整字符级语言模型。
+            编译后运行 <code>./bin/transformer_char --prompt "hello" --generate-num 100</code> 之类,
+            就能看到它根据你的提示往下写。各种采样参数(<code>--temperature</code>、<code>--top-k</code>、<code>--top-p</code>)都能在命令行调。
           </p>
         </div>
-        <div class="callout callout--warn reveal">
-          <span class="callout__title">蒸馏、小模型与“降智”的一种来源</span>
-          <p>
-            蒸馏和直接做小模型,换的是<strong>体积与速度</strong>,付的是<strong>能力上限</strong>。学生很难 100% 复制教师的“暗知识”,
-            复杂推理、长尾知识、细腻概率偏好最容易丢——用起来就像“同款但没那么聪明”。这和<a class="xref" href="chapter-20.html#4-省显存两招-混合精度与量化">量化</a>、<a class="xref" href="chapter-20.html#8-moe-不是每次都动用全部参数">MoE 压 k</a>导致的降智是不同环节,
-            但体感类似:<strong>不是不会,而是浅了、窄了</strong>。
-          </p>
-        </div>
-
-        <div class="callout callout--note reveal">
-          <span class="callout__title">训练黑话速查(这些词在哪都会遇到)</span>
-          <p>
-            <strong>· epoch(轮次)</strong>:把全部训练数据完整过一遍叫一个 epoch;要读好几遍(常读常新),但每遍会打乱顺序防“死记硬背”。<br />
-            <strong>· batch(批)</strong>:一次喂进去的一小撮样本(<a class="xref" href="chapter-05.html">第 5 章</a>)。<br />
-            <strong>· step(步)/迭代</strong>:用一个 batch 更新一次参数,叫一步。<br />
-            <strong>· 超参数</strong>:不是模型自己学的参数,而是<strong>你手动设定</strong>的旋钮——学习率、层数、batch 大小等(第 5、9 章)。“超”只是“在模型参数之外”的意思,不神秘。<br />
-            <strong>· 泛化</strong>:在<strong>没见过</strong>的数据上也表现好,就叫泛化能力强(适应力强)。<br />
-            <strong>· 过拟合 / 欠拟合</strong>:过拟合 = 训练集很好、测试集很差(“死记硬背”);欠拟合 = 训练集都学不好(模型太弱或没训够)。<a class="xref" href="chapter-09.html">第 9 章</a>讲过怎么缓解。
-          </p>
-        </div>
-
-        <h2>7. 最近的一些新方向(建立个印象就好)</h2>
-        <p>
-          大模型领域跑得飞快,新词层出不穷。但你会发现一个规律:<strong>再新的花样,也都长在前面这套地基上</strong>。
-          下面几个最常被提到的方向,不求精通,先混个脸熟。
-        </p>
-
-        <h3>推理模型:先“想很久”,再作答</h3>
-        <p>
-          以 OpenAI o1、DeepSeek-R1 为代表的<span class="term">推理模型(reasoning model)</span>,核心变化是:
-          在给出最终答案前,先自己生成一大段<strong>思维链</strong>(<a class="xref" href="chapter-21.html">第 21 章</a>会细讲),一步步推演,想清楚了再回答。
-          相当于把“一步一步想”从<strong>你来提示</strong>,变成了模型<strong>天生就会、而且能想很长</strong>。
-        </p>
-        <ul>
-          <li><strong>测试时算力(test-time compute)</strong>:让模型在回答时“多花时间思考”(生成更多中间推理),难题正确率明显提升——花的不再只是训练算力,还有<strong>推理时</strong>的算力。</li>
-          <li><strong>怎么训出来的</strong>:很多用一种“<strong>可验证奖励</strong>”的强化学习(RLVR)——数学、代码这类<strong>有标准答案</strong>的任务,答对给正奖励、答错给负奖励,让模型自己摸索出好的推理套路。这是 RLHF 之后后训练的新玩法。</li>
-        </ul>
-
-        <h3>多模态:不只吃文字</h3>
-        <p>
-          <span class="term">多模态(multimodal)</span>模型(GPT-4V、Gemini、Qwen-VL 等)能同时处理图、音、视频和文字。
-          <strong>内核不变</strong>:各模态都切成 token → 编成向量 → 拼成一条序列 → 送进同一个 Transformer → 往往仍自回归生成文字。
-        </p>
-        <h4>① 各模态怎么切成 token</h4>
-        <table class="reveal">
-          <thead><tr><th>模态</th><th>切法</th><th>直觉</th></tr></thead>
-          <tbody>
-            <tr><td>文字</td><td>BPE / 子词</td><td>本章 §2</td></tr>
-            <tr><td>图像</td><td>16×16 等 <span class="term">patch</span> 小块</td><td>一张图 ≈ 一句由上百个“图块词”组成的句子(<a class="xref" href="chapter-12.html">第 12 章</a>局部块思想)</td></tr>
-            <tr><td>音频</td><td>频谱片段或神经 codec 码</td><td>声音也排成 token 序列</td></tr>
-            <tr><td>视频</td><td>抽帧后每帧走图像流程</td><td>序列更长,更吃算力</td></tr>
-          </tbody>
-        </table>
-        <h4>② 编码、投影、拼进 LLM</h4>
-        <p>
-          图像经 <span class="term">ViT</span> 等视觉编码器变成 patch 向量,再经<strong>投影层 MLP</strong>拉到与词嵌入相同维度;
-          文字照常 BPE + 嵌入。推理时典型序列:
-        </p>
-        <pre class="code-walk__code" style="margin:0.8rem 0"><code>[系统提示] [图开始] patch₁…patchₙ [图结束] [用户问题 tokens] [模型开始生成…]</code></pre>
-        <p>
-          <a class="xref" href="chapter-16.html">自注意力</a>让“猫”这类文字 token 直接关注猫所在的 patch——<strong>跨模态对齐靠统一注意力</strong>,不必硬接两套系统。
-        </p>
-        <h4>③ 训练通常分阶段</h4>
-        <ol>
-          <li><strong>CLIP 式对齐</strong>:成对“图+配文”,用<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积/余弦</a>把配对拉近、非配对推远。</li>
-          <li><strong>接 LLM + 训投影</strong>:冻住或轻微微调语言模型,用“图→描述”学连接器。</li>
-          <li><strong>多模态指令微调</strong>:图+问答三元组(VQA 等),类似 SFT。</li>
-          <li><strong>(可选) RLHF</strong>:按人类偏好再对齐(<a class="xref" href="chapter-22.html">第 22 章</a>)。</li>
-        </ol>
-        <div class="callout callout--tip reveal">
-          <span class="callout__title">早融合 vs 双塔</span>
-          <p>
-            名字不同,套路都是:<strong>编码 → 对齐维度 → 拼序列 → 注意力融合 → 预测下一个 token</strong>。
-            LLaVA、Qwen-VL 等主流属于 patch 向量直接与文字 token <strong>早融合</strong>进一个 Transformer。
-          </p>
-        </div>
-
-        <h3>更长的上下文</h3>
-        <p>
-          早期模型一次只能读几千 token,如今动辄支持几十万甚至上百万——你能把一整本书、一个代码仓库丢进去让它一起看。
-          难点在<a class="xref" href="chapter-16.html">第 16 章</a>那句话:注意力计算量随长度<strong>平方</strong>增长,所以需要稀疏注意力等优化(<a class="xref" href="chapter-20.html">第 20 章</a>)才扛得住。
-        </p>
-        <div class="callout callout--warn reveal">
-          <span class="callout__title">上下文不够长,也会像“降智”</span>
-          <p>
-            若产品侧把输入<strong>截断</strong>(只保留最后几千 token),或你贴的代码/文档超出窗口被 silently 砍掉,
-            模型等于<strong>没看到关键前文</strong>——回答变短、变偏、变健忘,常被误以为是“模型变笨了”。
-            长上下文能力取决于<strong>训练时的长度扩展</strong>与<strong>推理时的显存/KV cache</strong>(<a class="xref" href="chapter-20.html">第 20 章</a>),也取决于你有没有真的把材料完整送进去。
-          </p>
-        </div>
-
-        <h3>更省的架构、更强的“手脚”</h3>
-        <ul>
-          <li><strong>MoE(混合专家)</strong>:每次只激活一部分“专家”子网络,用更少的实际计算撑起更大的参数量(<a class="xref" href="chapter-20.html">第 20 章</a>细讲)。DeepSeek-V3 就是典型。</li>
-          <li><strong>Agent(智能体)</strong>:让模型学会调用工具、上网、写代码、多步做事,从“会聊天”变成“能办事”(<a class="xref" href="chapter-21.html">第 21 章</a>细讲)。</li>
-        </ul>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">万变不离其宗</span>
-          <p>
-            推理模型、多模态、长上下文、MoE……概念很唬人,但拆开都是你已经学过的东西:
-            <strong>token 化 + Transformer + 预测下一个 token + (后)训练</strong>。抓住这个内核,追新会轻松很多。
-          </p>
-        </div>
-
-        <h2>8. 它的本质与局限:清醒地看待它</h2>
-        <p>
-          把上面串起来,你会得到对大模型最准确的一句话概括:
-          <strong>它是一个被海量文本喂大的、极其强大的“下一个 token 概率预测器”。</strong>
-          理解这一点,它的“超能力”和“毛病”就都说得通了。
-        </p>
-        <div class="callout callout--warn reveal">
-          <span class="callout__title">大模型并不“无所不知”</span>
-          <p>
-            <strong>幻觉(hallucination)</strong>:它的目标是“预测最像样、最连贯的下一个词”,而不是“说真话”。
-            当它对某事没有可靠依据时,照样会生成通顺合理、却是<strong>编造</strong>的内容。<br />
-            <strong>知识截止</strong>:参数一旦训练完就固定,它的知识停在训练数据那一刻,不知道今天的新闻、天气、股价。<br />
-            <strong>偏见</strong>:训练数据里的偏见会被它一并学进去。<br />
-            <strong>不会真正“算”与“查”</strong>:它是在做极其复杂的模式延续,不是在执行精确计算或实时检索。
-          </p>
-        </div>
-        <p>
-          好消息是:这些局限大多有<strong>工程解法</strong>——给它接上实时检索(RAG)、外部工具(function calling)、
-          让它调用计算器或搜索引擎。这些正是<a class="xref" href="chapter-21.html">第 21 章</a>的主题。把它当成一个
-          <strong>强大但会犯错的概率文本生成器</strong>,而不是全知神谕,你就能用得又稳又好。
-        </p>
-
-        <h2>9. 你已经走通了主干</h2>
-        <p>回头看看这一路搭起来的东西:</p>
-        <ul>
-          <li>从<strong>一个神经元</strong>的加权求和 + 激活(<a class="xref" href="chapter-02.html">第 2 章</a>),</li>
-          <li>到堆成<strong>网络(MLP)</strong>、让数据<strong>前向</strong>流动(<a class="xref" href="chapter-03.html">第 3 章</a>),</li>
-          <li>用<strong>损失</strong>衡量错误、靠<strong>梯度下降</strong>和<strong>反向传播</strong>学习(第 4–6 章),</li>
-          <li>再用<strong>现代训练栈</strong>把它训稳(<a class="xref" href="chapter-09.html">第 9 章</a>),</li>
-          <li>用<strong>注意力</strong>处理序列、拼出<strong>Transformer</strong>(第 15–17 章),</li>
-          <li>做成会写字的<strong>语言模型</strong>(<a class="xref" href="chapter-18.html">第 18 章</a>),</li>
-          <li>最后放大成<strong>大模型</strong>,并学会它是怎么训练、为何有局限(本章)。</li>
-        </ul>
-        <p>
-          原理主干到此走完。但一个上千亿参数的模型,靠什么硬件才跑得起来?普通人又该怎么把它用好?
-          这两个非常实际的问题,我们用接下来两章回答。
-        </p>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>大模型内核 = <a class="xref" href="chapter-18.html">第 18 章</a>的“预测下一个 token + 自回归”,只是规模大上亿倍。</li>
-            <li>真实分词用 BPE/子词:高频组合合并成一个 token,存进词表;词表大小是权衡。</li>
-            <li>词嵌入把词变成“语义坐标”,<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦相似度衡量语义远近;词向量可迁移复用。</li>
-            <li>Scaling Law:参数、数据、算力一起放大,性能可预测提升;超过门槛会“涌现”新能力。</li>
-            <li>预训练(自监督)练出底座能力;后训练(SFT → RLHF/DPO → 蒸馏)把它调成好用的助手,这也是 base 与 chat 模型的区别。</li>
-            <li>最近方向:推理模型、多模态(patch→ViT→投影→拼序列)、长上下文、MoE——内核仍是 token + Transformer。</li>
-            <li>降智/对齐税/遗忘等多半发生在<strong>后训练、蒸馏、量化、MoE 压 k、截断、产品护栏</strong>等环节,先定位链路再判断能力。</li>
-            <li>它本质是概率预测器,所以会幻觉、有知识截止和偏见——要理性使用,并靠 RAG/工具补救。</li>
+            <li>语言模型的任务:看前文,预测下一个字。链路 = Tokenizer → Embedding(+位置)→ Transformer → LM Head → 概率。</li>
+            <li>Tokenizer 把字符 ↔ id;Embedding 把 id 查表成可学习向量。</li>
+            <li>训练:滑动窗口造“输入 → 下一字”样本(自监督);交叉熵损失反向传播,一路更新到<a class="xref" href="chapter-17.html">第 17 章</a>的 Q/K/V 矩阵和词嵌入。</li>
+            <li>挑字:greedy(取最高)死板;采样(temperature / top-k / top-p)更自然有创意。</li>
+            <li>自回归:把生成的字接回输入,循环往下写——这就是大模型逐字输出的原理。</li>
+            <li>困惑度 = e^(平均交叉熵),衡量模型“平均在几个选项里纠结”,越低越好。</li>
           </ul>
         </section>
 
         <h2>动手与思考</h2>
         <div class="quiz reveal">
           <details class="quiz__item">
-            <summary class="quiz__q">问题 1:为什么真实大模型用 BPE/子词,而不是像本书那样按字符分词?</summary>
+            <summary class="quiz__q">问题 1:为什么 greedy 解码常常生成重复、无聊的内容?</summary>
             <div class="quiz__a">
-              <p>字符级会让序列变得很长,而注意力计算量随长度平方增长,代价高。BPE 把高频组合合并成一个 token,序列更短、更高效,同时又比“整词”更灵活(能拼出没见过的词)。</p>
+              <p>因为它每一步都只挑概率最高的那个字,毫无随机性。相同的上文必然得到相同的输出,容易陷入“高概率但单调”的循环。引入温度和 top-k/top-p 采样能带来多样性。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 2:为什么用“向量夹角/点积”而不是“距离”来衡量词的语义相似度?</summary>
+            <summary class="quiz__q">问题 2:把 temperature 调得很高会怎样?调得很低呢?</summary>
             <div class="quiz__a">
-              <p>因为训练中向量会被整体拉伸或缩放,距离会“强烈波动”,不稳定;而方向(夹角)更能反映本质的语义关系。<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦相似度只看方向,点积越大夹角越小、语义越近。</p>
+              <p>很高:概率分布被抹平,采样更随机、更有创意,但也更容易语无伦次。很低:分布更尖锐,趋近 greedy,稳定但单调。常用值在 0.7–1.0 附近折中。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 3:预训练用的是“自监督”,它和“监督学习”的区别到底在哪?</summary>
+            <summary class="quiz__q">问题 3:困惑度从 20 降到 4 说明了什么?</summary>
             <div class="quiz__a">
-              <p>两者都要有目标值(答案)。监督学习的目标靠人工标注;自监督的目标从数据本身自动产生,比如遮住一个词让模型预测,被遮的词就是答案。海量数据无法人工标注,所以预训练靠自监督。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 4:大模型为什么会“一本正经地胡说八道”?怎么缓解?</summary>
-            <div class="quiz__a">
-              <p>因为它的目标是预测“最像样、最连贯的下一个词”,而不是“说真话”;缺乏依据时也会编出通顺但错误的内容(幻觉)。缓解办法包括给它接实时检索(RAG)、外部工具/计算器(function calling),以及对关键事实自己核对。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 5:“预训练”和“后训练”分工是什么?为什么 <code>-base</code> 模型不好直接聊天?</summary>
-            <div class="quiz__a">
-              <p>预训练在海量文本上自监督地学到通用语言能力和世界知识,给出一个“博学但只会接话”的底座模型(base)。后训练(SFT → RLHF/DPO → 蒸馏)在底座之上加工,教它听指令、按人类偏好回答。<code>-base</code> 没做后训练,所以往往只会顺着你的话往下写,而不是好好回答——要 <code>-chat</code>/<code>-instruct</code> 那样做过后训练的版本才好用。</p>
+              <p>说明模型对“下一个字”的预测从“平均在约 20 个候选里纠结”进步到“约 4 个里纠结”,即预测准了很多、更有把握。困惑度越低,语言模型通常越好。</p>
             </div>
           </details>
         </div>
 
         <p class="muted">
-          原理清楚了,但“上千 GPU 训数周”到底是怎么回事?下一章我们钻进机房,
-          看看大模型靠什么<strong>硬件和并行技巧</strong>才跑得起来:GPU、显存、数据并行、张量并行、KV cache……
+          你已经亲手把一个完整的语言模型从零拆到底了。最后一章,我们站远一点看:
+          把这个小模型<strong>放大一万倍</strong>会发生什么?预训练、微调、RLHF、涌现……大模型的故事,就从这里开始。
         </p>
       </div>
     </main>
 
     <script src="assets/book.js"></script>
+    <script src="assets/labs.js"></script>
   </body>
 </html>
