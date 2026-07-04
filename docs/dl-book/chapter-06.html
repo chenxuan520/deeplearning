@@ -126,7 +126,7 @@
         <p>反向传播的起点是<strong>最后一层</strong>。它的 <var>δ</var> 由“损失对输出的导数”乘上“激活函数的导数”得到:</p>
         <div class="mathblock reveal">
           <var>δ</var><sub>末层</sub> = <span class="frac"><span>∂<var>L</var></span><span>∂<var>a</var></span></span> · <var>f</var>′(<var>z</var>)
-          <span class="label">用到了<a class="xref" href="chapter-04.html#4-用交叉熵衡量两个概率的差距">第 4 章的 DerivLoss</a> 和<a class="xref" href="chapter-02.html#5-几种常见的激活函数">第 2 章的 DerivActivate</a></span>
+          <span class="label">用到了<a class="xref" href="chapter-04.html#32-交叉熵-衡量两个概率的差距这才是损失">第 4 章的 DerivLoss</a> 和<a class="xref" href="chapter-02.html#6-几种常见的激活函数">第 2 章的 DerivActivate</a></span>
         </div>
         <p>还记得<a class="xref" href="chapter-04.html">第 4 章</a>那个美妙巧合吗?如果用 softmax + 交叉熵,这一步直接简化成 <var>δ</var> = <var>p</var> − <var>t</var>。</p>
 
@@ -585,6 +585,65 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
           </p>
         </div>
 
+        <h3>落到那个小网络:反向每一步的矩阵长什么样</h3>
+        <p>
+          抽象的 <code>Xᵀ·G</code> 你可能还是没画面。我们把它落到<a class="xref" href="chapter-06.html#退一步-w-其实是矩阵一层前向就是一次矩阵乘法">第 3 节那个小网络</a>——同样是 <code>2→2→2→1</code>、同样的下标。前向时我们已看到每层是 <var>net</var><sub><var>l</var></sub> = <var>W</var><sub><var>l</var></sub>·<var>out</var><sub><var>l</var>−1</sub>;现在反向,<strong>把每一步的矩阵形状摆出来看</strong>(单个样本,所以“批”那一维是 1)。
+        </p>
+
+        <p>
+          <strong>先看输出层 <var>W</var><sub>3</sub>(形状 [1×2])。</strong> 末层只有 1 个神经元,它的责任就是一个数 <var>δ</var><sub>30</sub>(<a class="xref" href="chapter-06.html#第-3-步--反向第一站-输出层的-w300-和-b30base-的-eouts--example-a">第 3 步</a>已算过);上一层输出 <var>out</var><sub>2</sub> = [<var>out</var><sub>20</sub>, <var>out</var><sub>21</sub>]。梯度 = <strong>δ 这一列 × 输入那一行</strong>(外积),形状自然凑成和 <var>W</var><sub>3</sub> 一样的 [1×2]:
+        </p>
+        <div class="mathblock reveal">
+          <span class="frac"><span>∂<var>L</var></span><span>∂<var>W</var><sub>3</sub></span></span>
+          =
+          <span class="frac"><span>[ <var>δ</var><sub>30</sub> ]</span></span>
+          ·
+          [ <var>out</var><sub>20</sub>&nbsp;&nbsp;<var>out</var><sub>21</sub> ]
+          =
+          [ <var>δ</var><sub>30</sub>·<var>out</var><sub>20</sub>&nbsp;&nbsp;<var>δ</var><sub>30</sub>·<var>out</var><sub>21</sub> ]
+          <span class="label">[1×1]·[1×2] = [1×2],正好等于 <var>W</var><sub>3</sub> 的形状;两个格子正是<a class="xref" href="chapter-06.html#第-3-步--反向第一站-输出层的-w300-和-b30base-的-eouts--example-a">第 3 步</a>的 ∂<var>E</var>/∂<var>w</var><sub>300</sub>、∂<var>E</var>/∂<var>w</var><sub>301</sub></span>
+        </div>
+        <p>
+          往前一层要先拿到第 2 层的责任 <var>δ</var><sub>2</sub> = [<var>δ</var><sub>20</sub>, <var>δ</var><sub>21</sub>]。它由“把末层责任经 <var>W</var><sub>3</sub> 分回来、再乘本层激活导数”得到——这正是<a class="xref" href="chapter-06.html#第二步-把误差一层层往回传">三步框架第二步</a>的 <var>δ</var><sub>l</sub> = (<var>W</var><sub>l+1</sub><sup>T</sup>·<var>δ</var><sub>l+1</sub>) ⊙ <var>f</var>′,把形状摆出来:
+        </p>
+        <div class="mathblock reveal">
+          <var>W</var><sub>3</sub><sup>T</sup>·<var>δ</var><sub>3</sub> =
+          <span class="frac"><span>[ <var>w</var><sub>300</sub> ]</span><span>[ <var>w</var><sub>301</sub> ]</span></span>
+          ·
+          <span class="frac"><span>[ <var>δ</var><sub>30</sub> ]</span></span>
+          =
+          <span class="frac"><span>[ <var>w</var><sub>300</sub>·<var>δ</var><sub>30</sub> ]</span><span>[ <var>w</var><sub>301</sub>·<var>δ</var><sub>30</sub> ]</span></span>
+          <span class="label">[2×1]·[1×1] = [2×1]:把 1 个末层责任<strong>摊回</strong>第 2 层 2 个神经元;再逐元素乘 <var>f</var>′(<var>net</var><sub>2</sub>) 就得 <var>δ</var><sub>2</sub></span>
+        </div>
+        <p>
+          <strong>再看第 1 层 <var>W</var><sub>1</sub>(形状 [2×2])</strong>,它离损失最远,但公式一模一样:本层责任 <var>δ</var><sub>1</sub> = [<var>δ</var><sub>10</sub>, <var>δ</var><sub>11</sub>](竖列),输入 <var>out</var><sub>0</sub> = [<var>out</var><sub>00</sub>, <var>out</var><sub>01</sub>](横行),外积出 [2×2]:
+        </p>
+        <div class="mathblock reveal">
+          <span class="frac"><span>∂<var>L</var></span><span>∂<var>W</var><sub>1</sub></span></span>
+          =
+          <span class="frac"><span>[ <var>δ</var><sub>10</sub> ]</span><span>[ <var>δ</var><sub>11</sub> ]</span></span>
+          ·
+          [ <var>out</var><sub>00</sub>&nbsp;&nbsp;<var>out</var><sub>01</sub> ]
+          =
+          <span class="frac"><span>[ <var>δ</var><sub>10</sub><var>out</var><sub>00</sub>&nbsp;&nbsp;<var>δ</var><sub>10</sub><var>out</var><sub>01</sub> ]</span><span>[ <var>δ</var><sub>11</sub><var>out</var><sub>00</sub>&nbsp;&nbsp;<var>δ</var><sub>11</sub><var>out</var><sub>01</sub> ]</span></span>
+          <span class="label">[2×1]·[1×2] = [2×2] = <var>W</var><sub>1</sub> 的形状;左上角 <var>δ</var><sub>10</sub>·<var>out</var><sub>00</sub> 正是<a class="xref" href="chapter-06.html#第-4-步--反向往里走-隐藏层的-w100-和-b10formula-的-δ-递推--example-b">第 4 步</a>手推的 ∂<var>E</var>/∂<var>w</var><sub>100</sub></span>
+        </div>
+        <p>
+          对上号了吗?<strong>你在<a class="xref" href="chapter-06.html#3-跟着速查图按真实计算顺序推一遍">第 3 节</a>逐个下标手推的每个 ∂<var>E</var>/∂<var>w</var>,就是这些矩阵里的一个格子。</strong>
+          把这一层所有格子一起写,就是一次“δ 列 × 输入行”的外积;而当有一整批 <var>B</var> 个样本时,这个外积对每个样本累加,正好合并成 <code>Xᵀ·G</code> 那一次矩阵乘——所以下面的通用公式,和你手推的小网络<strong>是同一件事</strong>,只是把批和维度铺开了。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>这一层</th><th>δ(责任)</th><th>输入</th><th>∂L/∂W = δ·输入ᵀ</th></tr></thead>
+            <tbody>
+              <tr><td>输出层 <var>W</var><sub>3</sub> [1×2]</td><td>[1×1]</td><td><var>out</var><sub>2</sub> [1×2]</td><td>[1×1]·[1×2] = <strong>[1×2]</strong> ✓</td></tr>
+              <tr><td>第 2 层 <var>W</var><sub>2</sub> [2×2]</td><td>[2×1]</td><td><var>out</var><sub>1</sub> [1×2]</td><td>[2×1]·[1×2] = <strong>[2×2]</strong> ✓</td></tr>
+              <tr><td>第 1 层 <var>W</var><sub>1</sub> [2×2]</td><td>[2×1]</td><td><var>out</var><sub>0</sub> [1×2]</td><td>[2×1]·[1×2] = <strong>[2×2]</strong> ✓</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">每层的梯度形状,永远和这层的 <var>W</var> 一模一样——这就是上面“梯度和参数同形状”那条铁律,在小网络里逐层验了一遍。</p>
+        </div>
+
         <h3>线性层的“反向三件套”与形状对齐</h3>
         <p>
           于是 <code>Y = X·W</code> 这一层,反向时收到上游 <code>G = ∂L/∂Y</code>,本地只需算两样(偏置略):
@@ -629,10 +688,14 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
         <div class="callout callout--warn reveal">
           <span class="callout__title">那大模型训练到底“爆”在哪?</span>
           <p>
-            既然算梯度只要约 2 倍前向,大模型训练难在别处:<strong>① 显存</strong>——反向要用到前向存下的<strong>中间激活值</strong>,层多序列长时能吃光显存(解法是 <em>gradient checkpointing</em>:反向时<strong>重算</strong>一部分激活,拿算力换显存);
-            <strong>② 数值稳定</strong>——梯度穿过很多层连乘,可能<strong>爆炸或消失</strong>,这正是<a class="xref" href="chapter-18.html#1-残差连接-给信息和梯度修一条高速公路">残差连接</a>、<a class="xref" href="chapter-18.html#2-layernorm-把每个词的特征拉回正常范围">LayerNorm</a> 和<a class="xref" href="chapter-09.html">第 9 章</a>梯度裁剪要解决的;
-            <strong>③ 多卡同步</strong>——梯度要在上千张卡间 AllReduce 求平均(<a class="xref" href="chapter-21.html">第 21 章</a>)。计算量从不是瓶颈,这三样才是。
+            既然算梯度只要约 2 倍前向,大模型训练难在别处:
           </p>
+          <ul>
+            <li><strong>① 显存</strong>——反向要用到前向存下的<strong>中间激活值</strong>,层多序列长时能吃光显存。解法是 <em>gradient checkpointing</em>:反向时<strong>重算</strong>一部分激活,拿算力换显存。</li>
+            <li><strong>② 数值稳定</strong>——梯度穿过很多层连乘,可能<strong>爆炸或消失</strong>,这正是<a class="xref" href="chapter-18.html#1-残差连接-给信息和梯度修一条高速公路">残差连接</a>、<a class="xref" href="chapter-18.html#2-layernorm-把每个词的特征拉回正常范围">LayerNorm</a> 和<a class="xref" href="chapter-09.html">第 9 章</a>梯度裁剪要解决的。</li>
+            <li><strong>③ 多卡同步</strong>——梯度要在上千张卡间 AllReduce 求平均(<a class="xref" href="chapter-21.html">第 21 章</a>)。</li>
+          </ul>
+          <p>计算量从不是瓶颈,这三样才是。</p>
         </div>
 
         <section class="summary reveal">

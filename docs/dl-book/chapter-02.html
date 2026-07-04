@@ -23,6 +23,8 @@
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
+            <li>这套“加权求和 + 激活”的结构<strong>从哪来的</strong>——它其实是照着生物神经元抄的;</li>
+            <li>为什么非要有<strong>权重 w</strong> 和<strong>偏置 b</strong>,它们各自在管什么;</li>
             <li>一个神经元内部到底在算什么(其实就两步:加权求和、过激活函数);</li>
             <li>“权重”和“偏置”这两个旋钮分别在调什么;</li>
             <li>为什么<strong>非要有激活函数不可</strong>,没有它会发生什么;</li>
@@ -50,7 +52,110 @@
           <span class="term">激活函数(activation)</span>。
         </p>
 
-        <h2>2. 神经元内部的两步运算</h2>
+        <h2>2. 这个结构是怎么来的?</h2>
+        <p>
+          你可能会有个很自然的疑问:<strong>凭什么是“加权求和再过一个函数”?这套结构是谁拍脑袋定的?</strong>
+          答案是——它不是拍脑袋,而是<strong>照着我们脑子里真实的神经元“抄”来的</strong>。这也是“神经”网络这个名字的由来。
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 660 240" role="img" aria-label="生物神经元示意图:树突接收信号,胞体累加,轴突输出">
+              <!-- 树突(多个输入分支) -->
+              <path d="M60,60 C110,70 130,95 168,110" fill="none" stroke="#6ac3ff" stroke-width="2.4" />
+              <path d="M50,120 C110,120 135,118 168,120" fill="none" stroke="#6ac3ff" stroke-width="2.4" />
+              <path d="M60,182 C110,172 130,146 168,130" fill="none" stroke="#6ac3ff" stroke-width="2.4" />
+              <circle cx="52" cy="60" r="7" fill="rgba(106,195,255,0.5)" stroke="#6ac3ff" stroke-width="1.5" />
+              <circle cx="44" cy="120" r="7" fill="rgba(106,195,255,0.5)" stroke="#6ac3ff" stroke-width="1.5" />
+              <circle cx="52" cy="182" r="7" fill="rgba(106,195,255,0.5)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="40" y="42" text-anchor="middle" fill="#8499bd" font-size="12">树突</text>
+              <text x="40" y="204" text-anchor="middle" fill="#8499bd" font-size="12">(收信号)</text>
+              <!-- 胞体 -->
+              <circle cx="210" cy="120" r="44" fill="rgba(139,123,255,0.16)" stroke="#8b7bff" stroke-width="2.4" />
+              <text x="210" y="118" text-anchor="middle" fill="#eef4ff" font-size="14">胞体</text>
+              <text x="210" y="136" text-anchor="middle" fill="#b6c5e1" font-size="11">累加信号</text>
+              <!-- 轴突 -->
+              <line x1="254" y1="120" x2="470" y2="120" stroke="#8ef0d1" stroke-width="3" />
+              <text x="360" y="108" text-anchor="middle" fill="#8499bd" font-size="12">轴突(传出)</text>
+              <!-- 阈值闸门 -->
+              <rect x="360" y="104" width="8" height="32" rx="2" fill="#ffcf72" />
+              <text x="364" y="158" text-anchor="middle" fill="#8499bd" font-size="11">超过阈值才“点火”</text>
+              <!-- 轴突末梢 -->
+              <path d="M470,120 C500,112 512,96 532,88" fill="none" stroke="#8ef0d1" stroke-width="2.4" />
+              <path d="M470,120 C500,120 516,120 536,120" fill="none" stroke="#8ef0d1" stroke-width="2.4" />
+              <path d="M470,120 C500,128 512,144 532,152" fill="none" stroke="#8ef0d1" stroke-width="2.4" />
+              <circle cx="540" cy="88" r="6" fill="rgba(142,240,209,0.5)" stroke="#8ef0d1" stroke-width="1.5" />
+              <circle cx="544" cy="120" r="6" fill="rgba(142,240,209,0.5)" stroke="#8ef0d1" stroke-width="1.5" />
+              <circle cx="540" cy="152" r="6" fill="rgba(142,240,209,0.5)" stroke="#8ef0d1" stroke-width="1.5" />
+              <text x="596" y="124" text-anchor="middle" fill="#8499bd" font-size="12">→ 下一个</text>
+            </svg>
+          </div>
+          <p class="figure__cap">
+            一个生物神经元:<strong>树突</strong>从上游收进许多电信号,<strong>胞体</strong>把它们累加起来,一旦总量<strong>超过某个阈值</strong>就沿<strong>轴突</strong>“点火”放电,传给下一个神经元。
+          </p>
+        </div>
+
+        <p>
+          1943 年,McCulloch 和 Pitts 把这套生物机制抽象成了一个数学模型——这就是我们今天用的人工神经元。
+          对照着看,你会发现每一部分都能对上号,而<strong>那三个“为什么”也就随之有了答案</strong>:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>生物神经元</th><th>人工神经元</th><th>它在干嘛</th></tr></thead>
+            <tbody>
+              <tr><td>多根<strong>树突</strong>收信号</td><td>多个输入 <var>x</var><sub>1</sub>, <var>x</var><sub>2</sub>, …</td><td>接收上游传来的多条信息</td></tr>
+              <tr><td>每个<strong>突触连接强弱不同</strong></td><td>每个输入配一个权重 <var>w</var></td><td>有的信号被放大,有的被压弱</td></tr>
+              <tr><td>胞体把信号<strong>累加</strong></td><td>加权<strong>求和</strong> <var>Σ w·x</var></td><td>把所有证据汇总成一个总量</td></tr>
+              <tr><td>有个“<strong>点火阈值</strong>”</td><td>偏置 <var>b</var>(挪动阈值)</td><td>决定“多兴奋才算数”</td></tr>
+              <tr><td>超过阈值就<strong>点火</strong>放电</td><td>过<strong>激活函数</strong> <var>f</var></td><td>把总量转成“要不要输出、输出多强”</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">左边是生物事实,右边是它的数学抽象。所谓“神经元”,就是把这一列翻译成了能算、能求导、能训练的式子。</p>
+        </div>
+
+        <h3>2.1 为什么偏偏是“加权求和”?</h3>
+        <p>
+          因为它是“<strong>把多条证据汇总成一个判断</strong>”最朴素、也最好用的方式。回到上一节的面试例子:你要综合“工作年限”和“项目经验”两条线索给出一个总分。
+          最自然的做法就是——<strong>每条线索按它的重要程度打个折,再全部加起来</strong>。这正是加权求和 <var>Σ w·x</var>。
+        </p>
+        <p>
+          它的好处不止“简单”:加权求和是<strong>线性</strong>的,而线性运算<strong>处处可导、求导还特别简单</strong>——这一点等到<a class="xref" href="chapter-06.html">第 6 章</a>训练时会变成巨大的便利
+          (线性部分的导数就是输入本身)。换句话说,选加权求和,一半是因为它符合直觉,另一半是因为它<strong>好训练</strong>。
+        </p>
+
+        <h3>2.2 为什么要有权重 <var>w</var>?</h3>
+        <p>
+          因为<strong>不同的输入,重要程度天生就不一样</strong>,而且这个“重要程度”不该由我们手写死,而应该<strong>让模型自己从数据里学出来</strong>。
+          权重 <var>w</var> 就是每条输入的“音量旋钮”:
+        </p>
+        <ul>
+          <li><var>w</var> <strong>大</strong> → 这条输入很重要,稍微一变就大幅影响结果;</li>
+          <li><var>w</var> <strong>接近 0</strong> → 这条输入基本被忽略;</li>
+          <li><var>w</var> <strong>为负</strong> → 这条输入是“反向证据”,它越大反而越压低结果。</li>
+        </ul>
+        <p>
+          最关键的是:<strong>整个神经网络的“学习”,本质上就是在调这些 <var>w</var>(和 <var>b</var>)</strong>。
+          一个大模型的“上千亿参数”,数的就是这些 <var>w</var> 和 <var>b</var>。没有 <var>w</var>,模型就没有任何“可以被调整、可以被学习”的东西了。
+        </p>
+
+        <h3>2.3 为什么要有偏置 <var>b</var>?</h3>
+        <p>
+          光有加权求和还差一口气:它<strong>被钉死在原点</strong>——所有输入都是 0 时,输出必然是 0。可现实里,“什么证据都没有”时的<strong>默认倾向</strong>不一定是 0。
+          偏置 <var>b</var> 就是那个可调的“<strong>底分 / 门槛</strong>”,让神经元能自由地<strong>整体上移或下移</strong>:
+        </p>
+        <ul>
+          <li>回到生物那张图,<var>b</var> 相当于在挪动“<strong>点火阈值</strong>”——<var>b</var> 大,神经元很容易被激活(门槛低);<var>b</var> 很负,则要很强的输入才点得着(门槛高)。</li>
+          <li>几何上,<var>w</var> 决定那条“分界线”的<strong>斜率/方向</strong>,<var>b</var> 决定它的<strong>位置</strong>。没有 <var>b</var>,分界线只能穿过原点,能表达的判断就少了一大半。</li>
+        </ul>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">一句话记住 w 和 b 的分工</span>
+          <p>
+            <strong><var>w</var> 管“听谁的、听多少”,<var>b</var> 管“默认偏向哪边、门槛多高”。</strong>
+            两者都不是我们手动设定的,而是训练过程自动拧出来的——这也是后面几章的全部主题。
+          </p>
+        </div>
+
+        <h2>3. 神经元内部的两步运算</h2>
         <p>把上面的故事写成式子。设输入是 <var>x</var><sub>1</sub>、<var>x</var><sub>2</sub>,神经元先做<strong>第一步:加权求和 + 偏置</strong>,得到一个中间值 <var>z</var>:</p>
 
         <div class="mathblock reveal">
@@ -98,7 +203,7 @@
           <p class="figure__cap">一个神经元:输入各自乘上权重 → 求和再加偏置得到 z → 过激活函数 f → 输出 a。</p>
         </div>
 
-        <h2>3. 别光看,动手拧一拧</h2>
+        <h2>4. 别光看,动手拧一拧</h2>
         <p>
           下面是一个真正能玩的神经元。拖动滑块改变输入 <var>x</var>、权重 <var>w</var>、偏置 <var>b</var>,
           再切换不同的激活函数,观察输出怎么变。建议你试试这几件事:
@@ -114,7 +219,7 @@
           <p class="figure__cap">神经元实验台:中间那行式子,就是上面 z = wx + b 再过激活函数的实时计算。</p>
         </div>
 
-        <h2>4. 为什么<strong>非得</strong>有激活函数?</h2>
+        <h2>5. 为什么<strong>非得</strong>有激活函数?</h2>
         <p>
           这是初学者最容易忽略、但极其关键的一点。假如<strong>去掉</strong>激活函数,
           神经元就只剩“加权求和”这一步,也就是一个<strong>线性变换</strong>。
@@ -137,7 +242,7 @@
           </p>
         </div>
 
-        <h2>5. 几种常见的激活函数</h2>
+        <h2>6. 几种常见的激活函数</h2>
         <p>它们的差别,就在于“怎么根据总分 z 做决定”这条曲线长什么样:</p>
         <ul>
           <li><span class="pill">Sigmoid</span> 把任何数压到 0 和 1 之间,像一个平滑的开关。早期很常用,但两端容易“饱和”(梯度趋近 0,学不动)。</li>
@@ -198,7 +303,7 @@
         </div>
         <p>(上面的实验台里这些都能直接切换,建议挨个切一遍,对照这张图找找手感。)</p>
 
-        <h2>6. 对照真实代码:激活函数是怎么实现的</h2>
+        <h2>7. 对照真实代码:激活函数是怎么实现的</h2>
         <p>
           在本书配套的 C++ 项目里,每个激活函数都实现两个方法:<code>Activate</code>(前向,把 z 变成输出)
           和 <code>DerivActivate</code>(它的导数,留着<a class="xref" href="chapter-06.html">第 6 章</a>反向传播时用)。先看最经典的 Sigmoid:
@@ -272,6 +377,7 @@ double GeluActivate::DerivActivate(const double &amp;input,
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
+            <li>神经元不是拍脑袋设计的,而是照着生物神经元(树突收信号→胞体累加→超阈值点火)抽象来的。</li>
             <li>一个神经元只做两步:① 加权求和加偏置得到 <var>z</var> = <var>Σ w·x</var> + <var>b</var>;② 过激活函数 <var>a</var> = <var>f</var>(<var>z</var>)。</li>
             <li>权重决定每条输入“有多重要”(可正可负),偏置是一个可调的“底分 / 门槛”。</li>
             <li>没有激活函数,叠多少层都等价于一层线性变换——非线性是深度网络的命根子。</li>

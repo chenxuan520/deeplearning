@@ -31,6 +31,114 @@
           </ul>
         </section>
 
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 560" role="img" aria-label="CNN 完整网络结构:输入图像、卷积滑窗、池化下采样、可堆叠卷积块、Flatten、Linear 分类头、训练和预测输出">
+              <defs>
+                <marker id="cnn-arch-arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+                  <path d="M0,0 L7,3 L0,6 Z" fill="#9fb1d1" />
+                </marker>
+              </defs>
+
+              <text x="38" y="38" fill="#8ef0d1" font-size="17" font-weight="700">完整 CNN 长什么样?</text>
+              <text x="38" y="64" fill="#b6c5e1" font-size="12">先在图像上做卷积和池化,空间结构一路保留;最后才 flatten 接分类头。</text>
+
+              <rect x="36" y="116" width="134" height="96" rx="13" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="2.4" />
+              <text x="103" y="140" text-anchor="middle" fill="#eef4ff" font-size="14">输入图像</text>
+              <text x="103" y="158" text-anchor="middle" fill="#b6c5e1" font-size="10">[B, C, H, W]</text>
+              <g stroke="#46587a" stroke-width="0.8" fill="rgba(106,195,255,0.08)">
+                <rect x="66" y="170" width="12" height="12" /><rect x="79" y="170" width="12" height="12" /><rect x="92" y="170" width="12" height="12" /><rect x="105" y="170" width="12" height="12" /><rect x="118" y="170" width="12" height="12" />
+                <rect x="66" y="183" width="12" height="12" /><rect x="79" y="183" width="12" height="12" /><rect x="92" y="183" width="12" height="12" /><rect x="105" y="183" width="12" height="12" /><rect x="118" y="183" width="12" height="12" />
+                <rect x="66" y="196" width="12" height="12" /><rect x="79" y="196" width="12" height="12" /><rect x="92" y="196" width="12" height="12" /><rect x="105" y="196" width="12" height="12" /><rect x="118" y="196" width="12" height="12" />
+              </g>
+
+              <rect x="204" y="92" width="350" height="300" rx="18" fill="rgba(15,26,46,0.4)" stroke="#53658a" stroke-width="2" stroke-dasharray="8 6" />
+              <text x="188" y="216" text-anchor="end" fill="#b6c5e1" font-size="17">N×</text>
+              <text x="188" y="239" text-anchor="end" fill="#b6c5e1" font-size="13">Conv Block</text>
+              <text x="379" y="120" text-anchor="middle" fill="#8ef0d1" font-size="12">可堆叠: Conv2D → ReLU → MaxPool</text>
+
+              <text x="230" y="148" fill="#b6c5e1" font-size="11">卷积: 3×3 核在图上滑</text>
+              <g stroke="#46587a" stroke-width="0.9" fill="rgba(106,195,255,0.07)">
+                <rect x="230" y="162" width="14" height="14" /><rect x="245" y="162" width="14" height="14" /><rect x="260" y="162" width="14" height="14" /><rect x="275" y="162" width="14" height="14" /><rect x="290" y="162" width="14" height="14" />
+                <rect x="230" y="177" width="14" height="14" /><rect x="245" y="177" width="14" height="14" /><rect x="260" y="177" width="14" height="14" /><rect x="275" y="177" width="14" height="14" /><rect x="290" y="177" width="14" height="14" />
+                <rect x="230" y="192" width="14" height="14" /><rect x="245" y="192" width="14" height="14" /><rect x="260" y="192" width="14" height="14" /><rect x="275" y="192" width="14" height="14" /><rect x="290" y="192" width="14" height="14" />
+                <rect x="230" y="207" width="14" height="14" /><rect x="245" y="207" width="14" height="14" /><rect x="260" y="207" width="14" height="14" /><rect x="275" y="207" width="14" height="14" /><rect x="290" y="207" width="14" height="14" />
+              </g>
+              <rect x="230" y="162" width="44" height="44" fill="rgba(142,240,209,0.18)" stroke="#8ef0d1" stroke-width="2" />
+              <rect x="326" y="170" width="42" height="42" rx="7" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" />
+              <text x="347" y="187" text-anchor="middle" fill="#ffcf72" font-size="11">3×3</text>
+              <text x="347" y="203" text-anchor="middle" fill="#b6c5e1" font-size="9">kernel</text>
+              <g stroke="#46587a" stroke-width="0.8" fill="none">
+                <line x1="340" y1="170" x2="340" y2="212" /><line x1="354" y1="170" x2="354" y2="212" />
+                <line x1="326" y1="184" x2="368" y2="184" /><line x1="326" y1="198" x2="368" y2="198" />
+              </g>
+              <g stroke="#46587a" stroke-width="0.9" fill="rgba(139,123,255,0.07)">
+                <rect x="422" y="166" width="16" height="16" /><rect x="439" y="166" width="16" height="16" /><rect x="456" y="166" width="16" height="16" />
+                <rect x="422" y="183" width="16" height="16" /><rect x="439" y="183" width="16" height="16" /><rect x="456" y="183" width="16" height="16" />
+                <rect x="422" y="200" width="16" height="16" /><rect x="439" y="200" width="16" height="16" /><rect x="456" y="200" width="16" height="16" />
+              </g>
+              <rect x="422" y="166" width="16" height="16" fill="rgba(142,240,209,0.28)" stroke="#8ef0d1" stroke-width="1.6" />
+              <text x="448" y="235" text-anchor="middle" fill="#b6c5e1" font-size="10">特征图</text>
+
+              <rect x="250" y="252" width="92" height="38" rx="10" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="2" />
+              <text x="296" y="276" text-anchor="middle" fill="#eef4ff" font-size="12">ReLU 激活</text>
+
+              <text x="230" y="324" fill="#b6c5e1" font-size="11">池化: 2×2 区域取最大,图变小</text>
+              <g stroke="#46587a" stroke-width="0.9" fill="rgba(106,195,255,0.07)">
+                <rect x="230" y="338" width="14" height="14" /><rect x="245" y="338" width="14" height="14" /><rect x="260" y="338" width="14" height="14" /><rect x="275" y="338" width="14" height="14" />
+                <rect x="230" y="353" width="14" height="14" /><rect x="245" y="353" width="14" height="14" /><rect x="260" y="353" width="14" height="14" /><rect x="275" y="353" width="14" height="14" />
+                <rect x="230" y="368" width="14" height="14" /><rect x="245" y="368" width="14" height="14" /><rect x="260" y="368" width="14" height="14" /><rect x="275" y="368" width="14" height="14" />
+              </g>
+              <rect x="230" y="338" width="29" height="29" fill="rgba(255,207,114,0.18)" stroke="#ffcf72" stroke-width="2" />
+              <g stroke="#46587a" stroke-width="0.9" fill="rgba(255,207,114,0.1)">
+                <rect x="410" y="342" width="20" height="20" /><rect x="432" y="342" width="20" height="20" />
+                <rect x="410" y="364" width="20" height="20" /><rect x="432" y="364" width="20" height="20" />
+              </g>
+              <text x="431" y="405" text-anchor="middle" fill="#b6c5e1" font-size="10">下采样后的特征图</text>
+
+              <rect x="604" y="116" width="124" height="66" rx="13" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="2.4" />
+              <text x="666" y="142" text-anchor="middle" fill="#eef4ff" font-size="14">特征图堆</text>
+              <text x="666" y="162" text-anchor="middle" fill="#b6c5e1" font-size="10">[B, C', H', W']</text>
+
+              <rect x="604" y="224" width="124" height="52" rx="12" fill="rgba(139,123,255,0.16)" stroke="#8b7bff" stroke-width="2.2" />
+              <text x="666" y="245" text-anchor="middle" fill="#eef4ff" font-size="13">Flatten</text>
+              <text x="666" y="262" text-anchor="middle" fill="#b6c5e1" font-size="10">摊成一行向量</text>
+
+              <rect x="604" y="320" width="124" height="64" rx="13" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2.4" />
+              <text x="666" y="346" text-anchor="middle" fill="#eef4ff" font-size="14">Linear Head</text>
+              <text x="666" y="366" text-anchor="middle" fill="#b6c5e1" font-size="10">logits [B, 类别数]</text>
+
+              <rect x="452" y="442" width="126" height="58" rx="13" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2.3" />
+              <text x="515" y="467" text-anchor="middle" fill="#eef4ff" font-size="14">训练</text>
+              <text x="515" y="487" text-anchor="middle" fill="#b6c5e1" font-size="11">softmax + CE</text>
+
+              <rect x="604" y="442" width="126" height="58" rx="13" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="2.3" />
+              <text x="667" y="467" text-anchor="middle" fill="#eef4ff" font-size="14">预测</text>
+              <text x="667" y="487" text-anchor="middle" fill="#b6c5e1" font-size="11">argmax → 类别</text>
+
+              <g stroke="#9fb1d1" stroke-width="2.4" fill="none" marker-end="url(#cnn-arch-arrow)">
+                <line x1="170" y1="164" x2="230" y2="186" />
+                <line x1="304" y1="190" x2="326" y2="190" />
+                <line x1="368" y1="190" x2="422" y2="190" />
+                <line x1="296" y1="222" x2="296" y2="252" />
+                <line x1="296" y1="290" x2="296" y2="338" />
+                <line x1="290" y1="362" x2="410" y2="362" />
+                <line x1="554" y1="236" x2="604" y2="150" />
+                <line x1="666" y1="182" x2="666" y2="224" />
+                <line x1="666" y1="276" x2="666" y2="320" />
+                <line x1="630" y1="384" x2="544" y2="442" />
+                <line x1="667" y1="384" x2="667" y2="442" />
+              </g>
+              <path d="M505 362 C535 350 535 190 505 190" fill="none" stroke="#8ef0d1" stroke-width="2" stroke-dasharray="6 6" marker-end="url(#cnn-arch-arrow)" />
+
+              <text x="38" y="444" fill="#b6c5e1" font-size="12">本项目的 mini CNN:</text>
+              <text x="38" y="466" fill="#8499bd" font-size="11">1× Conv2D → ReLU → MaxPool → Flatten → Linear。</text>
+              <text x="38" y="486" fill="#8499bd" font-size="11">真实 CNN 会把 Conv Block 重复很多次,最后才接分类头。</text>
+            </svg>
+          </div>
+          <p class="figure__cap">CNN 主干 = 输入图像 → 可堆叠的卷积块 → Flatten → 分类头。能堆叠的是中间的 Conv Block,不是最后的 Linear Head。</p>
+        </div>
+
         <h2>1. 全连接处理图像,卡在哪?</h2>
         <p>把一张图片摊平成一个长向量、直接喂给 MLP,会撞上三个问题:</p>
         <ul>

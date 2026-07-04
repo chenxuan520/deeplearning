@@ -167,12 +167,45 @@
         </ul>
         <p>
           有“标准答案(标签)”可学的这种设定,叫<span class="term">监督学习(supervised learning)</span>,
-          也是本书的主线。它就像有老师在旁边,每道题都告诉你对错。
+          也是本书的主线。它就像有老师在旁边,每道题都告诉你对错。但它并不是唯一的学法。
         </p>
+
+        <h3>机器学习的三大“学习范式”</h3>
+        <p>
+          按“<strong>拿什么信号来学</strong>”,机器学习通常分成三大范式。现在只需扫一眼建立个地图,后面遇到就不会懵:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>范式</th><th>靠什么学</th><th>一句话例子</th><th>本书</th></tr></thead>
+            <tbody>
+              <tr><td><strong>监督学习</strong><br />supervised</td><td>每条数据都<strong>带标准答案</strong>(标签)</td><td>给“图片 + 这是猫”,学会认猫</td><td><strong>主线</strong>(第 2–11 章)</td></tr>
+              <tr><td><strong>无监督学习</strong><br />unsupervised</td><td><strong>只有数据、没有答案</strong>,自己找结构</td><td>把一堆用户<strong>自动聚成</strong>几群;压缩、降维</td><td><a class="xref" href="chapter-26.html#1-没有标签能学什么">番外·第 26 章</a></td></tr>
+              <tr><td><strong>强化学习</strong><br />reinforcement</td><td>没有标准答案,靠<strong>奖励/惩罚</strong>试错</td><td>下棋赢了给分,自己摸索策略</td><td><a class="xref" href="chapter-12.html">第 12 章</a></td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">监督学习和强化学习是本书主线;“无监督”(自己发现结构)放在<a class="xref" href="chapter-26.html">番外第 26 章</a>专门展开,完整分支地图和时间线放在<a class="xref" href="chapter-27.html">第 27 章</a>。你也会在<a class="xref" href="chapter-15.html">词嵌入</a>、大模型<a class="xref" href="chapter-20.html#7-大模型是怎么炼成的-预训练--后训练">预训练</a>里见到它的影子。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">插一句:自监督——大模型为什么能吃下整个互联网</span>
+          <p>
+            还有个近几年最重要的变体叫<span class="term">自监督(self-supervised)</span>:它形式上<strong>不用人工标注</strong>(像无监督),却又<strong>自己造出标准答案来学</strong>(像监督)——比如把一句话盖住最后一个词、让模型猜,“被盖住的词”就是现成的答案。<strong>这正是大模型预训练的核心玩法</strong>(<a class="xref" href="chapter-20.html">第 20 章</a>),因为答案免费,才敢拿海量文本来训。
+          </p>
+        </div>
 
         <h2>5. 那“深度”学习,“深”在哪?</h2>
         <p>
-          如果只有一层运算,模型能学的东西很有限。
+          先厘清一个很多人绕不清的关系:<strong>深度学习是机器学习的一个<em>分支</em>,不是另一回事</strong>。
+          机器学习是个大家族(上面三大范式都属于它),里面有决策树、支持向量机等各种“模型”;
+          <strong>深度学习特指其中用<em>深层神经网络</em>当模型的那一支</strong>。所以“深度学习”= 用一种特定的模型(多层神经网络)来做机器学习,训练那一套(预测→算损失→反向传播微调)完全通用。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">一句话理清三个词</span>
+          <p>
+            <strong>人工智能 ⊃ 机器学习 ⊃ 深度学习</strong>:人工智能是“让机器变聪明”的大目标;机器学习是实现它的<strong>主流路线</strong>(从数据里学规律);深度学习是机器学习里<strong>最能打的那一支</strong>(用深层神经网络)。本书讲的,就是最里层那个圈。
+          </p>
+        </div>
+        <p>
+          那“深度”的“深”到底指什么?如果只有一层运算,模型能学的东西很有限。
           <strong>“深度”指的是把很多层运算叠在一起</strong>——
           上一层的输出,当作下一层的输入,一层层叠下去。
         </p>
@@ -198,8 +231,14 @@
         <p>
           这本书最特别的地方是:它<strong>对照一份从零手写的 C++ 实现</strong>,不依赖 PyTorch、TensorFlow 这类大框架。
           这意味着书里讲的每一个概念——神经元、激活函数、反向传播、注意力——你都能在代码里翻到它<strong>真正是怎么算的</strong>,
-          而不是被一句 <code>import</code> 藏起来。仓库的结构是这样的:
+          而不是被一句 <code>import</code> 藏起来。具体来说,这本书 + 这个项目有三个和别处不太一样的地方:
         </p>
+        <ul>
+          <li><strong>零框架、从头手写</strong>:前向、反向、Adam、注意力……全是几百行朴素 C++(见 <code>src/deeplearning/</code>),没有任何黑盒;看不懂的公式,总能回到代码里看它一步步怎么算。</li>
+          <li><strong>边读边玩的交互实验</strong>:书里嵌了可拖动的<em>神经元实验台</em>、<em>前向/反向传播动画</em>、<em>注意力可视化</em>——参数一拖,结果实时变,比读三段文字管用。</li>
+          <li><strong>拿真实训练结果说话</strong>:<em>字符级语言模型</em>会导出<strong>真实的注意力权重</strong>供你在页面上逐步回放;MNIST、井字棋等 demo 都能亲手跑出书里说的效果(下面就教你跑)。</li>
+        </ul>
+        <p>仓库的结构是这样的:</p>
         <p class="muted">
           在线阅读:
           <a class="xref" href="https://chenxuan520.github.io/deeplearning/" target="_blank" rel="noopener">chenxuan520.github.io/deeplearning</a>
@@ -237,6 +276,22 @@
             <li><code>docs/dl-book/</code> 就是这本电子书本身(纯静态 HTML,零依赖)。</li>
           </ol>
         </figure>
+
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">三步把它跑起来(想亲手验证的话)</span>
+          <p>
+            不装任何深度学习框架,一个 C++ 编译器 + CMake 就够。三条命令就能训练出一个 <strong>~97.8% 准确率</strong>的手写数字识别器:
+          </p>
+          <pre class="code-walk__code"><code>git clone https://github.com/chenxuan520/deeplearning.git
+cd deeplearning/src &amp;&amp; ./build.sh   <b class="cw-tag">1</b>  编译(用 CMake, 首次约一两分钟)
+./bin/mnist                          <b class="cw-tag">2</b>  训练 + 评估 MNIST(工作目录要在 src/)</code></pre>
+          <p style="margin-bottom:0">
+            国内网络慢可把地址换成 Gitee:<code>https://gitee.com/chenxuan520/deeplearning.git</code>。
+            想开图形化损失曲线、切 Release、跑其他 demo(<code>rl_tictactoe</code>、<code>transformer_char</code>…)以及各种命令行参数,见仓库
+            <a class="xref" href="https://github.com/chenxuan520/deeplearning#readme" target="_blank" rel="noopener">README</a> 和<a class="xref" href="chapter-23.html">第 23 章</a>——现在不跑也完全不影响读下去。
+          </p>
+        </div>
+
         <p>下面这张表,是“书里的概念”和“代码里的真身”的对照速查——现在扫一眼即可,读到对应章节自然会懂:</p>
         <div class="table-wrap reveal">
           <table class="calc-table">

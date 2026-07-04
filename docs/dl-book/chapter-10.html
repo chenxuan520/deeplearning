@@ -178,12 +178,40 @@
             于是更不容易过拟合。相当于同时训练了无数个“缺人版”的小网络,再取平均。
           </p>
         </div>
+        <h3>那个“除以保留比例”到底在补什么?</h3>
         <p>
-          这里有个容易被忽略的细节:<strong>训练时关掉了一部分神经元,测试时又全开,两边的输出规模就对不上了</strong>。
-          比如训练时随机丢掉一半,那一层的输出总量平均只有平时的一半;测试时全开,总量却翻倍,后面的层就“懵”了。
-          解法是做一次<strong>缩放</strong>:常见做法叫 <em>inverted dropout</em>——训练时把没被丢掉的神经元输出<strong>除以保留比例</strong>
-          (丢一半就乘 2),把总量补回来;这样测试时啥都不用改,直接全开即可。记住一句话:<strong>Dropout 只在训练时开,测试/推理时关。</strong>
+          这里有个容易被忽略、也最容易看懵的细节。先想清楚<strong>问题出在哪</strong>:下一层神经元收到的是“上一层输出的<strong>加权求和</strong>”(<a class="xref" href="chapter-03.html">第 3 章</a>),它在训练中<strong>习惯</strong>了某个大小的输入总量。可 Dropout 一开,这个总量就变了——
         </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">先看不做缩放会出什么事(丢一半为例)</span>
+          <p>
+            假设某层有 10 个神经元,每个输出约为 1,那么下一层收到的总和 ≈ <strong>10</strong>。
+          </p>
+          <ul>
+            <li><strong>训练时</strong>随机丢掉一半:只剩 5 个在工作,总和 ≈ <strong>5</strong>;</li>
+            <li><strong>测试时</strong>全开(Dropout 只训练时用),10 个都在,总和 ≈ <strong>10</strong>。</li>
+          </ul>
+          <p>
+            于是同一层,训练时喂给下一层的是 5、测试时却是 10——<strong>整整差了一倍</strong>。下一层的权重是照着“总和≈5”练出来的,测试时突然来个 10,数值全偏,输出就“懵”了。<strong>根源:被丢掉的神经元少贡献了一半的量。</strong>
+          </p>
+        </div>
+        <p>
+          解法叫 <em>inverted dropout</em>,思路特别朴素:<strong>训练时,把没被丢掉的神经元输出除以“保留比例”,提前把缺的量补回来</strong>。丢一半 → 保留比例 = 0.5 → 除以 0.5 = <strong>乘 2</strong>:
+        </p>
+        <div class="mathblock reveal">
+          训练时:剩下 5 个 × (每个 ×2) ≈ <strong>10</strong> &nbsp;&nbsp;=&nbsp;&nbsp; 测试时:10 个 × 1 ≈ <strong>10</strong>
+          <span class="label">乘 2 把“丢掉一半”的量当场补齐,于是训练时的输出总量,和测试时全开<strong>对齐了</strong></span>
+        </div>
+        <p>
+          这就是为什么<strong>“测试时啥都不用改、直接全开”</strong>:缩放这件事已经在<strong>训练时</strong>做完了,测试时两边总量本就相等,自然不用再动手。(它叫 <em>inverted</em>「反转」,就是因为把缩放从“测试时缩小”反过来挪到了“训练时放大”——工程上更省事,测试/部署代码保持最干净。)
+          一般地,保留比例记作 <var>p</var>(丢弃率 = 1−<var>p</var>),训练时保留下来的输出都<strong>除以 <var>p</var></strong>;丢得越多、<var>p</var> 越小、补偿的倍数越大。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">一句话记住</span>
+          <p>
+            <strong>Dropout 只在训练时开,测试/推理时关。</strong>训练时随机丢 + 给幸存者按 <code>1/p</code> 放大补量;测试时全员上岗、原样输出。两边总量对齐,所以切换时什么都不用改。
+          </p>
+        </div>
 
         <h2>6. Early stopping:见好就收</h2>
         <p>

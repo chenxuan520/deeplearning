@@ -41,6 +41,38 @@
           <li><span class="pill">验证集 val</span>用来<strong>调</strong>——边训边监控、选超参数(学习率、层数)、决定何时 early stop。它不参与更新参数,但你会“照着它做决定”。</li>
           <li><span class="pill">测试集 test</span>用来<strong>考</strong>——<strong>最终一考</strong>,模拟“真实世界的新数据”。训练和调参全程<strong>绝不能碰</strong>,否则等于提前看了考题,分数不作数。</li>
         </ul>
+
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">用“备考”理解三份数据</span>
+          <p>
+            <strong>训练集 = 平时做的练习册</strong>(对着答案反复练,把知识学进去);
+            <strong>验证集 = 模拟考</strong>(不对答案训练,只用来看自己练得怎么样、要不要换套复习策略);
+            <strong>测试集 = 真正的高考</strong>(只考一次、平时绝不能看)。
+            三份必须<strong>互不重叠</strong>,道理就像:拿练习册原题当模拟考,你只会高估自己;而高考题要是提前泄露,分数更是毫无意义。
+          </p>
+        </div>
+
+        <h3>验证集到底“怎么用”?——它在训练循环里的位置</h3>
+        <p>
+          光说“用来调”太虚。具体讲:训练是<strong>一轮一轮(epoch)</strong>进行的,验证集就穿插在每轮之间,形成一个“训练 → 自检 → 做决定”的小循环:
+        </p>
+        <ol>
+          <li><strong>用训练集训一轮</strong>:反向传播更新参数(<a class="xref" href="chapter-06.html">第 6 章</a>)。<strong>只有这一步动参数</strong>。</li>
+          <li><strong>在验证集上跑一遍、只看不学</strong>:算出这轮的验证损失 / 准确率。<strong>不做反向传播、不更新任何参数</strong>——纯粹“考一下自己现在几斤几两”。</li>
+          <li><strong>照这个验证分数做决定</strong>:验证损失还在降 → 继续训;<a class="xref" href="chapter-10.html">第 10 章</a>那条验证损失<strong>开始回升</strong> → 该 <span class="term">early stop</span> 了;想比较“学习率 0.1 还是 0.01 好”“3 层还是 5 层好” → 看谁的验证分数高就选谁。</li>
+          <li>回到第 1 步,继续下一轮。</li>
+        </ol>
+        <p>
+          所以验证集的作用一句话概括:<strong>它是训练过程里唯一“诚实的镜子”</strong>——参数照着训练集学,但“学得好不好、该不该停、超参怎么选”这些<strong>决定</strong>,都照着验证集来。它不直接改参数,却<strong>间接左右</strong>了你怎么训。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">那为什么不能直接用训练集或测试集来“调”?</span>
+          <p>
+            <strong>不能用训练集看:</strong> 模型正是照着训练集学的,拿它自我评估,就像“对着答案做过的题再考自己”,分数虚高、发现不了过拟合——训练损失一直降,你根本看不出它是不是在<strong>背书</strong>。<br />
+            <strong>不能用测试集看:</strong> 只要你<strong>照着某个数据集的分数反复调</strong>(调学习率、挑模型、决定早停),就等于让模型<strong>偷偷适应</strong>了这份数据——它就“不再新鲜”、失去了模拟真实世界的资格。测试集必须<strong>全程锁起来、只在最后考一次</strong>,才能给出可信的“真实水平”。<br />
+            正因为“调”这个动作会<strong>污染</strong>数据,才必须<strong>专门牺牲一份 val 出来挨这个污染</strong>,把 test 保护干净。
+          </p>
+        </div>
         <div class="figure reveal">
           <div class="diagram">
             <svg viewBox="0 0 460 90" role="img" aria-label="数据集划分比例示意">

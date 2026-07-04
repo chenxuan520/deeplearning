@@ -48,7 +48,8 @@
         <ul class="glossary">
           <li id="g-init"><strong>参数初始化</strong> — 训练开始前给权重设一个合适的随机起点(如 He / Xavier)。<a href="chapter-09.html">→ 第 9 章</a></li>
           <li id="g-lrsched"><strong>学习率调度</strong> — 训练过程中动态调学习率(如 warmup + 余弦退火)。<a href="chapter-09.html">→ 第 9 章</a></li>
-          <li id="g-clip"><strong>梯度裁剪</strong> — 给梯度设上限,防止爆炸导致训练崩。<a href="chapter-09.html">→ 第 9 章</a></li>
+          <li id="g-norm" data-aliases="L2范数,L2 norm,全局范数,按范数缩放,按范数,向量长度"><strong>范数 norm</strong> — 向量“有多长”的一种度量;梯度裁剪里用的是 <strong>L2 范数</strong>‖<var>g</var>‖ = √(各分量平方之和),就像平面上箭头从原点到尖端的直线距离。「<strong>按范数缩放</strong>」= 把每个分量都乘<strong>同一个</strong>小于 1 的数,只把总长度拉回阈值、<strong>方向不变</strong>(和“每个分量单独砍上限”不同)。<a href="chapter-09.html#4-防止训练踩空-梯度裁剪">→ 第 9 章 §4</a></li>
+          <li id="g-clip"><strong>梯度裁剪</strong> — 给梯度设上限,防止爆炸导致训练崩;序列模型常用<strong>按全局 L2 范数</strong>整体等比缩短(见<a href="glossary.html#g-norm">范数</a>)。<a href="chapter-09.html">→ 第 9 章</a></li>
           <li id="g-overfit"><strong>过拟合 / 欠拟合</strong> — 训练好测试差(背题) / 都差(没学会)。<a href="chapter-10.html">→ 第 10 章</a></li>
           <li id="g-reg"><strong>正则化 regularization</strong> — 给学习加约束/干扰,逼模型别背训练集。<a href="chapter-10.html">→ 第 10 章</a></li>
           <li id="g-wd"><strong>weight decay(L2)</strong> — 惩罚过大权重,让模型更平滑克制。<a href="chapter-10.html">→ 第 10 章</a></li>
@@ -115,7 +116,9 @@
           <li id="g-rl"><strong>强化学习 RL</strong> — 靠奖励试错学策略;MDP / Q-learning / PPO。<a href="chapter-12.html">→ 第 12 章</a> · <a href="chapter-25.html">代码 → 第 25 章</a></li>
           <li id="g-align-tax"><strong>对齐税 alignment tax</strong> — RLHF 后更安全听话,但部分能力/创造性可能下降。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-forget"><strong>灾难性遗忘</strong> — 微调新任务时旧本领丢失;可用 LoRA/混训缓解。<a href="chapter-20.html">→ 第 20 章</a></li>
+          <li id="g-lora" data-aliases="LoRA,lora,PEFT,peft,参数高效微调,低秩,adapter"><strong>LoRA / PEFT</strong> — 参数高效微调:冻住底座大矩阵 <var>W</var>,只在旁边训练一对低秩小矩阵 <var>A</var>/<var>B</var>(<var>y</var>=<var>Wx</var>+<var>BAx</var>);可训练参数与显存省几十上百倍,产出的 adapter 才几 MB、可热插拔。<a href="chapter-20.html#②-指令微调sft-把博学调教成听话">→ 第 20 章</a></li>
           <li id="g-multimodal"><strong>多模态 multimodal</strong> — 图/音 patch→编码→投影,与文字拼序列进 Transformer。<a href="chapter-20.html">→ 第 20 章</a></li>
+          <li id="g-diffusion" data-aliases="扩散模型,Diffusion Model,diffusion,去噪,文生图,文生视频"><strong>扩散模型 Diffusion Model</strong> — 文生图/视频主流:训练学“去噪”,生成时从纯噪声反复去噪显影出图;文字用交叉注意力掌舵。<a href="chapter-20.html#反过来-文生图与文生视频扩散模型">→ 第 20 章</a></li>
           <li id="g-distill"><strong>知识蒸馏 distillation</strong> — 让小学生模型模仿大教师模型的输出分布。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-dumb"><strong>模型降智</strong> — 多因 INT 量化、MoE 压 k/缩专家、截断、小模型、对齐过猛等链路权衡。<a href="chapter-21.html">→ 第 21 章</a> · <a href="chapter-22.html">第 22 章</a></li>
           <li id="g-hallucination"><strong>幻觉 hallucination</strong> — 一本正经地生成通顺却编造的内容。<a href="chapter-20.html">→ 第 20 章</a></li>

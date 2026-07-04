@@ -35,10 +35,13 @@
     { num: "22", title: "用好大模型:提示、RAG 与 Agent", file: "chapter-22.html", part: "第五部分 · 通往大模型" },
     { num: "23", title: "MNIST 实战:第一、二部分", file: "chapter-23.html", part: "第六部分 · 代码实战" },
     { num: "24", title: "mini-LM 实战:第四、五部分", file: "chapter-24.html", part: "第六部分 · 代码实战" },
-    { num: "25", title: "井字棋 Q-learning 实战:强化学习", file: "chapter-25.html", part: "第六部分 · 代码实战" }
+    { num: "25", title: "井字棋 Q-learning 实战:强化学习", file: "chapter-25.html", part: "第六部分 · 代码实战" },
+    { num: "26", title: "无监督与自监督学习", file: "chapter-26.html", part: "第七部分 · 番外" },
+    { num: "27", title: "机器学习全景图", file: "chapter-27.html", part: "第七部分 · 番外" }
   ];
 
   var STORAGE_LAST = "dlbook:last";
+  var STORAGE_SEARCH = "dlbook:search";
   var REPO_URL = "https://github.com/chenxuan520/deeplearning";
 
   var store = {
@@ -448,6 +451,26 @@
   }
   function escapeRegExp(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 
+  function isMacPlatform() {
+    return /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
+  }
+
+  function searchShortcutHint() {
+    return isMacPlatform() ? "⌘K 或 /" : "Ctrl+K 或 /";
+  }
+
+  function persistSearchQuery(query) {
+    var q = (query || "").trim();
+    if (q) store.set(STORAGE_SEARCH, q);
+    else {
+      try { window.localStorage.removeItem(STORAGE_SEARCH); } catch (e) { /* ignore */ }
+    }
+  }
+
+  function loadSearchQuery() {
+    return store.get(STORAGE_SEARCH) || "";
+  }
+
   var SEARCH_ICON =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg>';
 
@@ -499,6 +522,7 @@
       '  <div class="book-search__bar">' +
       '    <span class="book-search__icon">' + SEARCH_ICON + '</span>' +
       '    <input type="search" name="book-search" class="book-search__input" placeholder="搜索全书:标题、正文、代码…" autocomplete="off" spellcheck="false" aria-label="搜索全书" />' +
+      '    <span class="book-search__kbd" data-search-kbd aria-hidden="true"></span>' +
       '    <button type="button" class="book-search__close" data-search-close aria-label="关闭搜索">Esc</button>' +
       '  </div>' +
       '  <div class="book-search__status" data-search-status></div>' +
@@ -507,11 +531,16 @@
     document.body.appendChild(overlay);
 
     var input = overlay.querySelector(".book-search__input");
+    var kbdEl = overlay.querySelector("[data-search-kbd]");
     var statusEl = overlay.querySelector("[data-search-status]");
     var resultsEl = overlay.querySelector("[data-search-results]");
     var INDEX = [];
     var indexReady = false, indexLoading = false, pending = null, debounce = null, activeIndex = -1;
-    var READY_HINT = "已索引全书 · 输入关键词开始搜索(↑↓ 选择,Enter 打开,Esc 关闭)";
+    var shortcutLabel = searchShortcutHint();
+    var READY_HINT = "已索引全书 · " + shortcutLabel + " 打开搜索 · ↑↓ 选择 · Enter 跳转 · Esc 关闭";
+
+    if (kbdEl) kbdEl.textContent = shortcutLabel;
+    input.setAttribute("placeholder", "搜索全书… (" + shortcutLabel + ")");
 
     function setStatus(t) { statusEl.textContent = t; }
 
@@ -557,6 +586,7 @@
     function runSearch(query) {
       var q = (query || "").trim().toLowerCase();
       activeIndex = -1;
+      persistSearchQuery(query);
       if (!q) { resultsEl.innerHTML = ""; if (indexReady) setStatus(READY_HINT); return; }
       if (!indexReady) { pending = query; return; }
       var terms = q.split(/\s+/).filter(Boolean);
@@ -603,18 +633,81 @@
     }
 
     function open() {
-      if (overlay.classList.contains("is-open")) return;
+      if (overlay.classList.contains("is-open")) {
+        input.focus();
+        return;
+      }
       overlay.classList.add("is-open");
       document.body.style.overflow = "hidden";
       ensureIndex();
-      setTimeout(function () { input.focus(); input.select(); }, 30);
+      var saved = loadSearchQuery();
+      if (saved) {
+        input.value = saved;
+        pending = saved;
+        if (indexReady) runSearch(saved);
+      }
+      setTimeout(function () {
+        input.focus();
+        if (saved) {
+          var len = saved.length;
+          input.setSelectionRange(len, len);
+        } else {
+          input.select();
+        }
+      }, 30);
     }
     function close() {
       overlay.classList.remove("is-open");
       document.body.style.overflow = "";
     }
 
+    function pageBaseName() {
+      var p = location.pathname || "";
+      var i = p.lastIndexOf("/");
+      return i >= 0 ? p.slice(i + 1) : p;
+    }
+
+    function followSearchResult(href) {
+      if (!href) return;
+      var hashIdx = href.indexOf("#");
+      var file = hashIdx >= 0 ? href.slice(0, hashIdx) : href;
+      var hash = hashIdx >= 0 ? href.slice(hashIdx + 1) : "";
+      var here = pageBaseName();
+
+      if (file && file !== here) {
+        window.location.href = href;
+        return;
+      }
+
+      close();
+      if (!hash) {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, "", here);
+        }
+        return;
+      }
+
+      var id = hash;
+      try { id = decodeURIComponent(hash); } catch (e) { /* keep raw */ }
+      var target = document.getElementById(id);
+      if (target) {
+        scrollHeadingIntoView(target, true);
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, "", "#" + hash);
+        }
+      } else {
+        window.location.hash = hash;
+      }
+    }
+
     overlay.querySelectorAll("[data-search-close]").forEach(function (n) { n.addEventListener("click", close); });
+    resultsEl.addEventListener("click", function (e) {
+      var link = e.target.closest(".book-search__result");
+      if (!link) return;
+      e.preventDefault();
+      followSearchResult(link.getAttribute("href"));
+    });
     input.addEventListener("input", function () {
       if (debounce) clearTimeout(debounce);
       var v = input.value;
@@ -626,18 +719,20 @@
       else if (e.key === "Enter") {
         var items = resultsEl.querySelectorAll(".book-search__result");
         var target = items[activeIndex >= 0 ? activeIndex : 0];
-        if (target) { e.preventDefault(); window.location.href = target.getAttribute("href"); }
+        if (target) { e.preventDefault(); followSearchResult(target.getAttribute("href")); }
       }
     });
     overlay.addEventListener("keydown", function (e) { if (e.key === "Escape") { e.preventDefault(); close(); } });
 
-    return { open: open, close: close };
+    return { open: open, close: close, preload: ensureIndex };
   }
 
   function makeSearchTrigger(search, cls, label, html) {
     var btn = el("button", cls, html);
     btn.type = "button";
-    btn.setAttribute("aria-label", label);
+    var hint = searchShortcutHint();
+    btn.setAttribute("aria-label", label + " (" + hint + ")");
+    btn.title = label + " · " + hint;
     btn.addEventListener("click", search.open);
     return btn;
   }
@@ -983,7 +1078,8 @@
     setupReveal();
     var actions = document.querySelector(".cover__actions");
     if (actions && search) {
-      actions.appendChild(makeSearchTrigger(search, "button button--ghost", "搜索全书", "搜索全书"));
+      var hint = searchShortcutHint();
+      actions.appendChild(makeSearchTrigger(search, "button button--ghost", "搜索全书", "搜索全书 · " + hint));
     }
     var last = store.get(STORAGE_LAST);
     var btn = document.querySelector("[data-continue]");
@@ -1006,6 +1102,7 @@
   function init() {
     var search = createSearch();
     setupSearchShortcut(search);
+    search.preload();
     if (document.body.hasAttribute("data-cover")) {
       setupCover(search);
       return;

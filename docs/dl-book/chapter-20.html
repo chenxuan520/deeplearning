@@ -296,6 +296,34 @@
           <strong>参数量、数据量、算力</strong>——模型的损失会沿着一条<strong>平滑、可预测</strong>的曲线持续下降。
           也就是说,“做得更大”能<em>可靠地</em>换来“做得更好”。这条规律是过去几年“军备竞赛”的底气:既然变大几乎稳赚,那就拼命变大。
         </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 620 260" role="img" aria-label="规模定律:测试损失随规模在对数坐标上近似直线下降">
+              <!-- 坐标轴 -->
+              <line x1="70" y1="30" x2="70" y2="210" stroke="#46587a" stroke-width="1.2" />
+              <line x1="70" y1="210" x2="580" y2="210" stroke="#46587a" stroke-width="1.2" />
+              <!-- 轴标签 -->
+              <text x="16" y="34" fill="#8499bd" font-size="11">损失</text>
+              <text x="16" y="48" fill="#8499bd" font-size="11">(越低越好)</text>
+              <text x="380" y="234" fill="#8499bd" font-size="11">规模(参数 / 数据 / 算力,对数轴)→</text>
+              <!-- 平滑下降曲线: 对数轴上近似直线, 缓慢趋于下界 -->
+              <polyline points="70,52 130,74 190,96 250,116 310,134 370,150 430,163 490,173 550,180"
+                        fill="none" stroke="#6ac3ff" stroke-width="2.8" />
+              <!-- 数据点 -->
+              <circle cx="130" cy="74" r="3.5" fill="#6ac3ff" />
+              <circle cx="250" cy="116" r="3.5" fill="#6ac3ff" />
+              <circle cx="370" cy="150" r="3.5" fill="#6ac3ff" />
+              <circle cx="490" cy="173" r="3.5" fill="#6ac3ff" />
+              <!-- 不可逾越的下界 (不可约损失) -->
+              <line x1="70" y1="196" x2="580" y2="196" stroke="#ff8fa3" stroke-width="1.4" stroke-dasharray="6 5" />
+              <text x="360" y="192" fill="#ff8fa3" font-size="10.5">数据自身的“噪声下界”(不可约损失)</text>
+              <!-- 外推箭头 -->
+              <text x="150" y="66" fill="#6ac3ff" font-size="11">平滑、可预测</text>
+              <text x="150" y="132" fill="#8499bd" font-size="10">→ 由小模型的点, 能外推大模型的损失</text>
+            </svg>
+          </div>
+          <p class="figure__cap">规模定律:横轴取<strong>对数</strong>后,测试损失沿一条近乎直线的曲线平滑下降,并逐渐逼近一个由数据本身决定的“下界”。正因为它<strong>可预测</strong>,才敢在真正砸钱训超大模型前,用几个小模型先把曲线画出来、外推投入产出。</p>
+        </div>
         <div class="callout callout--warn reveal">
           <span class="callout__title">注意:三样要一起涨,不能只堆参数</span>
           <p>
@@ -340,6 +368,55 @@
           <li><strong>遵循复杂指令</strong>:听懂并完成多步骤任务。</li>
         </ul>
         <p>这些能力没有被任何人“显式编程”进去,而是在“预测下一个 token”这个朴素目标 + 巨大规模下,自己长出来的。</p>
+
+        <h3>为什么会“量变到质变”?</h3>
+        <p>
+          第 5 节说损失是<strong>平滑</strong>下降的,这里怎么又变成<strong>突然</strong>出现?这看似矛盾,其实不冲突。涌现的成因目前学界<strong>还没有定论</strong>,但有几条被广泛接受的解释,拼起来能说清大半:
+        </p>
+        <p>
+          <strong>① 复合任务是多个子技能的“连乘”,像木桶效应。</strong> 很多高级能力(如多步推理)要<strong>好几个子能力同时到位</strong>,错一环整件事就失败。假设某任务需要 5 个子技能<strong>都</strong>答对,每个子技能的正确率随规模从 60% 平滑升到 90%:
+        </p>
+        <div class="mathblock reveal">
+          小模型:0.6<sup>5</sup> ≈ <strong>8%</strong>(几乎为零)&nbsp;&nbsp;→&nbsp;&nbsp;大模型:0.9<sup>5</sup> ≈ <strong>59%</strong>(突然能用)
+          <span class="label">每个子技能都是平滑提升(量变),但它们的<strong>乘积</strong>会呈现出拐点式跃升(质变)</span>
+        </div>
+        <p>
+          <strong>② 要越过一个“容量门槛”才够用。</strong> 有些能力需要模型内部长出足够精细的表征/电路;参数和数据不够时,模型根本腾不出“脑容量”去编码这些间接、罕见的模式,越过临界规模后才学得动。就像<strong>水一直加热(平滑),到 100°C 才沸腾(相变)</strong>。
+        </p>
+        <p>
+          <strong>③ 很可能有一部分是“度量方式”造成的错觉。</strong> 这是近年一个重要反驳:很多涌现是用<strong>“全对才算分”</strong>的严苛指标衡量的(比如多位数加法必须完全正确)——这种指标天生非线性,会把平滑进步<strong>放大</strong>成断崖式跳变。换成<strong>连续、宽容</strong>的指标(按 token 部分给分、看概率),同一批模型的曲线又变回平滑上升,拐点就消失了。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 620 250" role="img" aria-label="涌现:严苛指标下能力在越过门槛后突然跃升,宽容指标下则平滑上升">
+              <!-- 坐标轴 -->
+              <line x1="70" y1="30" x2="70" y2="205" stroke="#46587a" stroke-width="1.2" />
+              <line x1="70" y1="205" x2="580" y2="205" stroke="#46587a" stroke-width="1.2" />
+              <text x="18" y="34" fill="#8499bd" font-size="11">能力</text>
+              <text x="18" y="48" fill="#8499bd" font-size="11">/ 正确率</text>
+              <text x="360" y="230" fill="#8499bd" font-size="11">规模(对数轴)→</text>
+              <!-- 严苛指标: 长期贴地, 越过门槛陡升 (S形/门槛曲线) -->
+              <polyline points="70,190 160,189 240,187 300,183 340,172 370,140 400,92 440,60 500,50 560,47"
+                        fill="none" stroke="#ffcf72" stroke-width="2.8" />
+              <text x="452" y="44" fill="#ffcf72" font-size="11">严苛指标(全对才算分)</text>
+              <!-- 门槛竖虚线 -->
+              <line x1="370" y1="40" x2="370" y2="205" stroke="#ff8fa3" stroke-width="1.2" stroke-dasharray="5 5" />
+              <text x="300" y="224" fill="#ff8fa3" font-size="10.5">“涌现门槛”</text>
+              <!-- 宽容指标: 平滑上升 (与第5节呼应) -->
+              <polyline points="70,188 160,168 240,148 300,132 370,114 430,100 500,86 560,78"
+                        fill="none" stroke="#6ac3ff" stroke-width="2.5" stroke-dasharray="2 0" opacity="0.9" />
+              <text x="150" y="150" fill="#6ac3ff" font-size="11">宽容指标(部分给分)</text>
+              <text x="150" y="166" fill="#8499bd" font-size="10">→ 底层能力其实一直平滑变强</text>
+            </svg>
+          </div>
+          <p class="figure__cap">同一批模型,换一把“尺子”结果就不同:<strong>黄线</strong>(全对才算分)在门槛处陡然跃升,看着像“质变”;<strong>蓝线</strong>(部分给分)则平滑上升,和第 5 节的规模定律一致。所以“突然涌现”里,既有真实的门槛/连乘效应,也有度量放大的成分。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">一句话总结</span>
+          <p>
+            规模定律管的是“平均损失平滑下降”;涌现是这种平滑进步在<strong>复合任务 + 严苛指标</strong>下表现出的“看起来突然”的跃升。<strong>底层是量变</strong>(每个子能力平滑提升),<strong>表面上呈现质变</strong>(连乘 / 门槛 + 度量放大)。真正的成因至今仍是开放问题。
+          </p>
+        </div>
 
         <h2>7. 大模型是怎么炼成的:预训练 + 后训练</h2>
         <div class="figure reveal">
@@ -487,6 +564,24 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           <li><strong>只训练 <var>A</var>、<var>B</var></strong>:梯度只流到这两块新增矩阵,Adam 的状态也只为它们维护。</li>
           <li><strong>推理时可并回去</strong>:训练完后,把 <code>(α/r)BA</code> 加回 <var>W</var>,就又变回一层普通线性层。</li>
         </ul>
+
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">一个巧思:一开始 B=0,让起点恰好等于底座</span>
+          <p>
+            初始化时 <strong><var>A</var> 用小随机数、<var>B</var> 全设为 0</strong>。于是训练刚开始的一瞬 <code>BA = 0</code>,前向退回 <var>y</var> = <var>Wx</var>——
+            <strong>模型和原底座一字不差</strong>,不会因为凭空加了个随机补丁把好好的底座搞乱。训练启动后 <var>B</var> 才从 0 慢慢“长”出来,一点点学到这次微调需要的增量。
+          </p>
+        </div>
+
+        <p>
+          <strong>到底省多少?拿具体数字算一遍。</strong> 设某层 <var>d</var><sub>in</sub> = <var>d</var><sub>out</sub> = 4096、取 rank <var>r</var> = 8:
+        </p>
+        <div class="mathblock reveal">
+          全量:4096 × 4096 ≈ <strong>1678 万</strong> 个可训练参数<br />
+          LoRA:<var>A</var>(8×4096) + <var>B</var>(4096×8) = <strong>6.5 万</strong> 个 &nbsp;→&nbsp; 约 <strong>1/256</strong>
+          <span class="label">可训练参数缩到约 1/256;Adam 还要给每个可训练参数额外存 2 份动量状态,这块显存也跟着省同样的倍数——省显存往往比省参数更实惠</span>
+        </div>
+
         <div class="table-wrap reveal">
           <table class="calc-table calc-table--wrap">
             <thead><tr><th>做法</th><th>全量微调</th><th>LoRA</th></tr></thead>
@@ -503,6 +598,25 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           这也是为什么很多开源项目会写“7B 模型 + LoRA 微调”——本体还是 70 亿参数,只是训练时不再硬拧这 70 亿个旋钮,
           而是在若干层旁边外挂一些很小的“微调旋钮”。最常见的插入位置,就是 attention 里的 <var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub>/<var>W</var><sub>O</sub>
           和 FFN 的线性层。
+        </p>
+
+        <h4>那这些参数到底存在哪?</h4>
+        <p>
+          这是 LoRA 最容易被绕晕、也最实用的一点:<strong>底座和 LoRA 是两份完全分开的权重</strong>。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th></th><th>存什么</th><th>大小</th><th>微调时</th></tr></thead>
+            <tbody>
+              <tr><td><strong>底座权重 <var>W</var></strong></td><td>原始 7B / 70B 模型(那几十亿个旋钮)</td><td>几十 ~ 上百 GB</td><td><strong>冻结</strong>,只读不改</td></tr>
+              <tr><td><strong>LoRA 权重 <var>A</var>/<var>B</var></strong></td><td>每个挂了 LoRA 的层各一对小矩阵</td><td>通常几 MB ~ 几百 MB</td><td><strong>只训这个</strong></td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">微调跑完,只产出一个几 MB 的 LoRA 文件(常叫 <span class="term">adapter</span>);底座那几十 GB 一个字节都没动过。</p>
+        </div>
+        <p>
+          用的时候:<strong>加载底座 + 加载 adapter</strong>,前向按 <var>y</var> = <var>Wx</var> + (<var>α</var>/<var>r</var>)<var>BAx</var> 一起算(或先把 <code>(α/r)BA</code> 并回 <var>W</var> 再跑)。
+          正因为 adapter 这么小,你可以给<strong>同一个底座</strong>配好多套 LoRA——客服一套、写代码一套、翻译一套,每套才几 MB,要用哪个就挂哪个、随时<strong>热插拔</strong>,而不必为每个任务各存一份几十 GB 的完整模型。这也是开源社区能分享海量“XX 风格 LoRA”的原因。
         </p>
 
         <h3>③ RLHF:按人类的喜好“对齐”</h3>
@@ -629,6 +743,135 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           <p>
             名字不同,套路都是:<strong>编码 → 对齐维度 → 拼序列 → 注意力融合 → 预测下一个 token</strong>。
             LLaVA、Qwen-VL 等主流属于 patch 向量直接与文字 token <strong>早融合</strong>进一个 Transformer。
+          </p>
+        </div>
+
+        <h3>反过来:文生图与文生视频(扩散模型)</h3>
+        <p>
+          上面多模态讲的是“图/音进来 → 出文字”(理解)。反方向——<strong>“文字进来 → 出图/视频”(生成)</strong>——今天主流用的是另一套和“预测下一个 token”完全不同的技术:
+          <span class="term">扩散模型(Diffusion Model)</span>。它是这几年最漂亮的想法之一,先把它单独讲透,再看文生图 / 文生视频怎么用它。
+        </p>
+
+        <h4>① 扩散模型:先学“去噪”,再从噪声里“显影”</h4>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">“扩散”这名字从哪来?——借自物理里的墨水扩散</span>
+          <p>
+            往一杯清水里滴一滴墨水,墨分子会自发<strong>随机扩散</strong>开,直到整杯均匀混浊。这是物理里最典型的“有序 → 无序”过程,而且<strong>不可逆</strong>——你从没见过混浊的水自己聚回一滴墨。
+            对一张图<strong>一步步加噪</strong>直到变成均匀雪花,和墨水扩散<strong>数学上是同一回事</strong>:清晰结构(有序)散成随机噪声(无序)。模型这个名字就来自这里,而它要学的,正是把这个物理上“不可逆”的扩散<strong>硬生生倒放回去</strong>——从噪声逆扩散出图。
+          </p>
+        </div>
+        <p>
+          直接让模型“凭空画一张猫”太难——它要一次性决定几百万个像素,任何一步走偏都满盘皆输。扩散模型的聪明之处是<strong>把这件难事拆成很多步简单的事</strong>,而拆解的钥匙,是一个人人都懂的不对称现象:
+        </p>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">把画画反过来做:破坏很容易,那就学“逆着破坏”</span>
+          <p>
+            往一张清晰照片上<strong>撒噪点</strong>易如反掌,撒到最后变成一屏电视雪花;可反过来,从雪花<strong>还原</strong>出照片却难如登天。
+            扩散模型的核心一招就是:<strong>既然“加噪”这么简单、答案还自带,那我就专门训练一个网络去学它的逆操作——“去噪”。</strong>
+          </p>
+        </div>
+        <p>它分成正反两个方向:</p>
+        <ul>
+          <li><strong>正向 · 加噪(只为造训练题,不用学)</strong>:拿一张清晰图,<strong>分成很多步、每步掺一点高斯噪声</strong>,几百步后变成纯雪花。每一步的“加了多少噪”都是我们自己撒的,所以<strong>答案现成</strong>——这又是一种<a class="xref" href="chapter-20.html#7-大模型是怎么炼成的-预训练--后训练">自监督</a>,不需要人工标注。</li>
+          <li><strong>反向 · 去噪(这才是要训练的网络)</strong>:给网络一张<strong>带噪的图 + 当前是第几步 + 文字提示</strong>,让它预测“<strong>这一步掺进去的噪声长什么样</strong>”。预测对了,把噪声减掉,图就清晰了一点点。用<a class="xref" href="chapter-06.html">第 6 章</a>的反向传播 + <a class="xref" href="chapter-08.html">第 8 章</a>的优化器,在海量图上把这个“去噪器”练出来。</li>
+        </ul>
+        <p>
+          <strong>生成时把这个去噪器反复用几十步就行</strong>:从一张纯随机噪声出发 → 去噪器减掉一点噪 → 再减一点 → …… 一张清晰图像<strong>照片显影</strong>一样慢慢浮现。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 620 190" role="img" aria-label="扩散模型:正向加噪把清晰图变噪声, 反向去噪把噪声还原成图">
+              <!-- 三个状态方块 -->
+              <rect x="60" y="70" width="90" height="60" rx="8" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="1.6" />
+              <text x="105" y="96" text-anchor="middle" fill="#eef4ff" font-size="12">清晰图</text>
+              <text x="105" y="114" text-anchor="middle" fill="#8499bd" font-size="10">x₀</text>
+              <rect x="265" y="70" width="90" height="60" rx="8" fill="rgba(149,176,227,0.12)" stroke="#8499bd" stroke-width="1.6" />
+              <text x="310" y="96" text-anchor="middle" fill="#eef4ff" font-size="12">半噪图</text>
+              <text x="310" y="114" text-anchor="middle" fill="#8499bd" font-size="10">xₜ</text>
+              <rect x="470" y="70" width="90" height="60" rx="8" fill="rgba(255,143,163,0.12)" stroke="#ff8fa3" stroke-width="1.6" />
+              <text x="515" y="96" text-anchor="middle" fill="#eef4ff" font-size="12">纯噪声</text>
+              <text x="515" y="114" text-anchor="middle" fill="#8499bd" font-size="10">x_T</text>
+              <!-- 正向加噪箭头 (上, 灰) -->
+              <line x1="150" y1="82" x2="265" y2="82" stroke="#8499bd" stroke-width="1.8" marker-end="url(#df-fwd)" />
+              <line x1="355" y1="82" x2="470" y2="82" stroke="#8499bd" stroke-width="1.8" marker-end="url(#df-fwd)" />
+              <text x="310" y="52" text-anchor="middle" fill="#8499bd" font-size="11">正向:加噪(简单, 只为造题)→</text>
+              <!-- 反向去噪箭头 (下, 蓝) -->
+              <line x1="470" y1="120" x2="355" y2="120" stroke="#6ac3ff" stroke-width="2.2" marker-end="url(#df-bwd)" />
+              <line x1="265" y1="120" x2="150" y2="120" stroke="#6ac3ff" stroke-width="2.2" marker-end="url(#df-bwd)" />
+              <text x="310" y="152" text-anchor="middle" fill="#6ac3ff" font-size="11">← 反向:去噪(难, 要训练的网络)</text>
+              <defs>
+                <marker id="df-fwd" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8499bd" /></marker>
+                <marker id="df-bwd" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#6ac3ff" /></marker>
+              </defs>
+            </svg>
+          </div>
+          <p class="figure__cap">扩散 = 一条可逆的“加噪—去噪”链。加噪用来造训练题(答案自带),真正学的是那条反向的去噪路;生成时从最右的纯噪声一路去噪回最左的清晰图。</p>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">为什么非要分几十步,不一步到位?</span>
+          <p>
+            一步从雪花跳到成品,等于让网络一次猜中全部像素,太难、也容易糊。<strong>拆成几十步,每步只需去掉一点点噪、把图改好一丁点</strong>,每一步都是网络能学好的“小任务”,难度被摊薄了。这也是扩散图像又清晰又多样的原因——代价是<strong>生成要跑几十次网络</strong>,所以比“一次出结果”的模型慢(后来有各种加速采样把步数压到几步)。
+          </p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">和你学过的两种生成方式比一比</span>
+          <p>
+            <strong>自回归(GPT)</strong>:一个 token 一个 token 往后蹦,天生适合<strong>离散</strong>的文字;
+            <strong>GAN</strong>:让“生成器”和“鉴别器”对抗,一步出图但训练不稳、容易崩。
+            <strong>扩散</strong>:把生成拆成多步去噪,<strong>训练稳、质量高、多样性好</strong>,特别适合图像/视频这种<strong>连续</strong>信号,如今是文生图/视频的主流。
+          </p>
+        </div>
+
+        <h4>② 文生图:让文字给去噪“掌舵”</h4>
+        <p>
+          扩散本身只会“去出<em>一张</em>图”,可怎么保证去出来的正好是<strong>你要的那张</strong>?办法是在去噪的每一步都把<strong>文字提示喂进去</strong>,让它决定“噪声该往哪个方向减”。这一步靠的正是<a class="xref" href="chapter-17.html">第 17 章</a>的<strong>注意力</strong>:
+        </p>
+        <ul>
+          <li><strong>文字编码</strong>:先用一个文本编码器(常见是 CLIP)把提示词变成向量;</li>
+          <li><strong>交叉注意力掌舵</strong>:去噪网络的每一步,让正在生成的图像特征去“查询”这些文字向量,做<strong>交叉注意力</strong>,从而“词 → 像素”地对齐——“戴帽子的橘猫”里的“橘”“帽子”各自拉动对应区域。</li>
+        </ul>
+        <p>
+          还有个省算力的关键工程:主流的 <span class="term">Stable Diffusion</span> 不在原始像素上去噪(几百万像素太贵),而是先用一个<strong>自编码器</strong>(一个先把图压小、再还原回去的网络)把图压进小得多的<strong>潜空间(latent)</strong>里去噪,最后再解码回像素——这就是名字里 “Latent” 的由来。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">等等——“文字↔图片的对应”这么难,是怎么学出来的?</span>
+          <p>
+            直觉上这像个不可能的任务:难道要人一张张标“这句话对应图里哪些像素”?其实它靠三个巧劲<strong>绕开了</strong>人工标注:
+          </p>
+          <ul>
+            <li><strong>数据是现成的,不用标。</strong> 互联网上有<strong>几十亿张图天生自带配文</strong>——网页 <code>alt</code> 文本、图片标题、社交媒体配字、商品描述……(公开数据集 LAION 就有约 50 亿对)。爬下来就是“图 + 配文”训练对,和第 7 节预训练一样是<strong>自监督</strong>,无需人工对齐。</li>
+            <li><strong>不要求精确对齐每个词,只要求“文字能影响去噪”。</strong> 训练目标<strong>始终</strong>是那个简单的“预测这一步的噪声”,loss 还是均方误差。文字只是作为<strong>额外条件</strong>喂进去——因为“看着‘橘猫’去噪”比“啥都不看瞎猜”预测得更准,梯度下降自然就逼模型去<strong>利用</strong>文字。所以“词↔像素”的对齐,是它为把噪声预测得更准而<strong>顺带涌现</strong>的副产品,没人显式教。</li>
+            <li><strong>CLIP 已经先把图文对齐好了。</strong> 文本编码器常用的 CLIP,本身就是拿几亿“图+配文”对、用<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">对比学习</a>把配对的图文向量拉近、不配对的推远(见上文<a class="xref" href="chapter-20.html#多模态-不只吃文字">多模态</a>)。所以扩散拿到的文字向量,早就活在一个“和图像语义对齐好的空间”里——最难的对齐,CLIP 提前替它做了一大半。</li>
+          </ul>
+        </div>
+
+        <h4>③ 文生视频:在文生图上再管住“时间”</h4>
+        <p>
+          视频无非是<strong>一连串图像帧</strong>。所以文生视频大体是文生图的“扩展版”,但多了一个致命难点:<strong>帧与帧之间要连贯</strong>——同一个人不能下一帧突然换脸,物体运动要顺滑。逐帧独立生成必然“鬼畜闪烁”,所以关键动作是<strong>让模型同时看多帧、把时间也纳入注意力</strong>:
+        </p>
+        <ul>
+          <li><strong>时空注意力</strong>:去噪网络不只在一帧<em>内</em>做空间注意力,还在<strong>帧与帧<em>之间</em></strong>做时间注意力,让相邻帧互相“对齐”,保证同一物体连贯、运动平滑。</li>
+          <li><strong>3D 潜空间</strong>:把“一段视频”整体压进潜空间(多了时间这一维),对整段一起去噪,而不是一帧一帧各画各的。</li>
+          <li><strong>Diffusion + Transformer(DiT)</strong>:Sora 这类模型把视频切成<strong>时空小块(spacetime patch)</strong>当 token,用 Transformer 主干做去噪——等于把<a class="xref" href="chapter-18.html">第 18 章</a>的 Transformer 和扩散缝在一起,既吃得下长序列,又能 scale up。</li>
+        </ul>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">那“帧与帧的连续性”到底怎么学出来的?</span>
+          <p>
+            和图文对齐一样,连续性<strong>没人显式去教</strong>,而是被训练方式“逼”出来的,关键有两点:
+          </p>
+          <ul>
+            <li><strong>把整段视频当一个整体去噪,而不是一帧一帧分开画。</strong> 训练时对<strong>整段</strong>(比如 16 帧)一起加噪,再让网络一起去噪。于是网络在预测某一帧的噪声时,<strong>视野里同时有前后帧</strong>——想把这一帧的噪声猜准,就<strong>不得不参考</strong>相邻帧,连续自然成了“预测得准”的前提。</li>
+            <li><strong>时间注意力让每个位置直接“看”别的帧。</strong> 借<a class="xref" href="chapter-17.html">第 17 章</a>的注意力:同一个物体在第 3 帧的 patch,可以直接和它在第 2、4 帧的 patch 做注意力,把“我上一刻在哪、该往哪动”对齐起来。运动是否顺滑,就成了让噪声预测更准的一部分。</li>
+          </ul>
+          <p>
+            而“运动到底该长什么样”(重力、走路的姿态、水的流动……)这些常识,<strong>来自海量真实视频</strong>:真实视频里的运动本就是连贯的,模型在几百万段视频上学“去噪”,等于顺带把<strong>真实世界的动态规律</strong>吸收了进去——这也是为什么好的视频模型偶尔被说“像学到了一点物理直觉”。当然它并不真懂物理,数据不够时照样会穿模、鬼畜。
+          </p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">一句话抓住区别</span>
+          <p>
+            <strong>文字模型</strong>:预测下一个 <em>token</em>;<strong>文生图</strong>:从噪声里<em>去噪</em>出一张图,文字用交叉注意力掌舵;
+            <strong>文生视频</strong>:在文生图基础上,把<strong>时间</strong>也放进注意力,逼帧与帧连贯。三者主干都还是你学过的那套<strong>神经网络 + 注意力 + 梯度下降</strong>,只是“预测目标”换了。
           </p>
         </div>
 

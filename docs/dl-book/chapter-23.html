@@ -71,7 +71,7 @@
         </p>
         <p>
           标签也要变形。数字 <code>3</code> 不能直接当目标(否则模型会以为 3 比 1 “大三倍”),
-          而是写成<strong>独热(one-hot)</strong>向量——只有第 3 个位置是 1,其余是 0。这正好对上<a class="xref" href="chapter-04.html#3-分类任务-先把分数变成概率">第 4 章 softmax</a> + <a class="xref" href="chapter-04.html#4-用交叉熵衡量两个概率的差距">交叉熵</a>想要的目标形状。
+          而是写成<strong>独热(one-hot)</strong>向量——只有第 3 个位置是 1,其余是 0。这正好对上<a class="xref" href="chapter-04.html#31-softmax-先把分数变成概率">第 4 章 softmax</a> + <a class="xref" href="chapter-04.html#32-交叉熵-衡量两个概率的差距这才是损失">交叉熵</a>想要的目标形状。
         </p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/demo/mnist/main.cpp · 加载数据与构造 one-hot(精简)</figcaption>
@@ -88,7 +88,7 @@ for (int i = 0; i &lt; N_train; i++)
   train_target[i][ mnist_data.train_labels()[i] ] = 1.0;   <b class="cw-tag">2</b></code></pre>
           <ol class="code-walk__notes">
             <li>一次性把 6 万张训练图 + 1 万张测试图读进来。像素在 <code>mnist_data.h</code> 里就已经除以 255 归一化好了——这一步很重要,不然大数值会让训练很难收敛(<a class="xref" href="chapter-09.html">第 9 章</a>)。</li>
-            <li>把每个标签数字翻译成 10 维 one-hot。<code>train_target[i]</code> 就是第 <code>i</code> 张图的“正确答案分布”,交给<a class="xref" href="chapter-04.html#4-用交叉熵衡量两个概率的差距">第 4 章的交叉熵</a>去比对。</li>
+            <li>把每个标签数字翻译成 10 维 one-hot。<code>train_target[i]</code> 就是第 <code>i</code> 张图的“正确答案分布”,交给<a class="xref" href="chapter-04.html#32-交叉熵-衡量两个概率的差距这才是损失">第 4 章的交叉熵</a>去比对。</li>
           </ol>
         </figure>
 

@@ -66,9 +66,24 @@ double MSELoss::DerivLoss(double target, double output) {
           </ol>
         </figure>
 
-        <h2>3. 分类任务:先把分数变成“概率”</h2>
+        <h2>3. 分类任务:softmax + 交叉熵(两步一套)</h2>
         <p>
-          如果模型要从几个选项里<strong>选一个类别</strong>(比如这张图是 0–9 里的哪个数字),这叫<span class="term">分类</span>。
+          分类任务(从几个类别里选一个,比如判断图片是 0–9 里哪个数字)的损失,不是<strong>一个</strong>函数,而是<strong>两步搭配的一套方案</strong>,几乎总是一起出现:
+        </p>
+        <ol>
+          <li><strong>第一步 · softmax(准备,不是损失)</strong>:把网络输出的原始分数,先<strong>变成一组概率</strong>;</li>
+          <li><strong>第二步 · 交叉熵(这才是损失)</strong>:再<strong>衡量</strong>这组预测概率和正确答案差多少。</li>
+        </ol>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">先分清:softmax 不是损失函数</span>
+          <p>
+            这里容易懵,先点破:<strong>softmax 本身<em>不是</em>损失函数</strong>,它只是分类前的一步<strong>预处理</strong>——把分数归一化成概率。
+            真正衡量“错多少”、能和 MSE 相提并论的损失,是下面 3.2 的<strong>交叉熵</strong>。之所以把 softmax 放进本章,是因为它和交叉熵是<strong>捆绑</strong>使用的一对:softmax 负责“把分数变成概率”,交叉熵负责“评判这组概率”,合起来才是分类任务的完整损失方案。
+          </p>
+        </div>
+
+        <h3>3.1 softmax:先把分数变成“概率”</h3>
+        <p>
           网络最后一层会对每个类别输出一个分数(叫 <span class="term">logits</span>),但这些分数可能是任意实数,
           不能直接当“概率”。我们需要一个函数,把一组分数变成一组<strong>非负、且加起来等于 1</strong> 的概率——
           这就是 <span class="term">softmax</span>:
@@ -92,11 +107,11 @@ for (int i = 0; i &lt; input.size(); i++)
           </ol>
         </figure>
 
-        <h2>4. 用交叉熵衡量两个概率的差距</h2>
+        <h3>3.2 交叉熵:衡量两个概率的差距(这才是损失)</h3>
         <p>
-          现在模型给出了一组预测概率 <var>p</var>,而正确答案是一个“只有正确类是 1、其余是 0”的分布
+          softmax 出手后,现在模型给出了一组预测概率 <var>p</var>,而正确答案是一个“只有正确类是 1、其余是 0”的分布
           <var>t</var>(叫 <span class="term">one-hot</span>)。怎么衡量这两组概率差多少?用
-          <span class="term">交叉熵(cross-entropy)</span>:
+          <span class="term">交叉熵(cross-entropy)</span>——<strong>它才是这套方案里真正的“损失函数”</strong>:
         </p>
         <div class="mathblock reveal">
           <var>L</var> = − Σ<sub>i</sub> <var>t</var><sub>i</sub> log(<var>p</var><sub>i</sub>) = − log(<var>p</var><sub>正确类</sub>)
@@ -119,11 +134,11 @@ double CrossEntropyLoss::DerivLoss(double target, double output) {
 }</code></pre>
           <ol class="code-walk__notes">
             <li>当真实标签 <code>target</code> = 1,只剩前半项 <code>-log(output)</code>:输出越接近 1 损失越小;当 <code>target</code> = 0,只剩后半项 <code>-log(1-output)</code>:输出越接近 0 损失越小。</li>
-            <li>导数看起来有点吓人(分母里有 <code>output(1-output)</code>),但下一节你会看到,它和 Sigmoid/softmax 的导数<strong>正好抵消</strong>,变得无比清爽。</li>
+            <li>导数看起来有点吓人(分母里有 <code>output(1-output)</code>),但<strong>第 4 节</strong>你会看到,它和 Sigmoid/softmax 的导数<strong>正好抵消</strong>,变得无比清爽。</li>
           </ol>
         </figure>
 
-        <h2>5. 一个美妙的巧合:δ = 预测 − 答案</h2>
+        <h2>4. 一个美妙的巧合:δ = 预测 − 答案</h2>
         <p>
           单独看,交叉熵的导数和 softmax 的导数都挺丑。但当你把它们<strong>合在一起</strong>
           (softmax 算概率 + 交叉熵算损失),中间那些复杂的项会奇迹般地约掉,
@@ -149,7 +164,7 @@ double CrossEntropyLoss::DerivLoss(double target, double output) {
           </ol>
         </figure>
 
-        <h2>6. 一批样本的损失,取个平均</h2>
+        <h2>5. 一批样本的损失,取个平均</h2>
         <p>
           训练时我们一次看很多样本,把每个样本、每个输出的损失加起来再求平均,得到这一批的整体损失:
         </p>

@@ -1351,6 +1351,21 @@ hr {
   color: var(--text-dim);
 }
 
+.book-search__kbd {
+  flex: 0 0 auto;
+  padding: 0.22rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  user-select: none;
+}
+
 .book-search__close {
   flex: 0 0 auto;
   padding: 0.3rem 0.6rem;

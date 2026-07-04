@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 27 章 · 机器学习全景图 | 从神经元到大模型</title>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body data-chapter="27">
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">第 27 章 · 番外</p>
+        <h1>机器学习全景图</h1>
+
+        <p class="lead">
+          前面 26 章是沿着一条主线走:从一个神经元,一路搭到 Transformer、大模型和几个真实 C++ demo。
+          这一章换个视角,把地图摊开:机器学习到底有哪些分支?它和 AI、深度学习、生成式 AI 是什么关系?
+          从 1950 年代到 2026 年,这条路大概经历了哪些转折?今天的 AI 热潮,又处在什么位置?
+        </p>
+
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">读前须知:这是视野篇,不是新主线</span>
+          <p>
+            这一章不继续推公式,也不要求你写新代码。它的作用是帮你建立<strong>行业地图</strong>:
+            知道自己学过的东西在大图里放在哪,也知道新闻里那些新名词大概属于哪一支。
+            其中“现状”按<strong>2026 年 7 月</strong>附近的公开资料写,后面技术格局还会继续变。
+          </p>
+        </div>
+
+        <section class="objectives reveal">
+          <h2>读完这一章,你会明白</h2>
+          <ul>
+            <li>AI、机器学习、深度学习、生成式 AI、大模型之间到底是什么包含关系;</li>
+            <li>机器学习按“学习信号”可以分成监督、无监督/自监督、强化学习,按“任务”又有分类、回归、推荐、生成、控制等分支;</li>
+            <li>从符号 AI、感知机、反向传播、AlexNet、AlphaGo、Transformer 到 ChatGPT 的关键时间线;</li>
+            <li>2026 年附近 AI 的真实现状:能力在涨,应用在扩散,但评估、成本、可靠性和治理也在追赶;</li>
+            <li>以后看到一个新模型/新论文/新产品,该用哪几个问题快速定位它。</li>
+          </ul>
+        </section>
+
+        <h2>1. 先把几个圈分清</h2>
+        <p>
+          很多人第一次接触会把 <span class="term">AI</span>、<span class="term">机器学习</span>、<span class="term">深度学习</span>、<span class="term">大模型</span>混在一起。
+          其实最稳的记法是四个同心圈:
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 680 380" role="img" aria-label="AI、机器学习、深度学习、生成式 AI 与大模型的包含关系">
+              <rect x="44" y="36" width="592" height="302" rx="24" fill="rgba(106,195,255,0.08)" stroke="#6ac3ff" stroke-width="2.3" />
+              <text x="340" y="72" text-anchor="middle" fill="#6ac3ff" font-size="17" font-weight="700">AI 人工智能</text>
+              <text x="340" y="94" text-anchor="middle" fill="#b6c5e1" font-size="11">让机器表现出智能:搜索、规划、推理、感知、语言、控制...</text>
+
+              <rect x="104" y="116" width="472" height="182" rx="20" fill="rgba(142,240,209,0.09)" stroke="#8ef0d1" stroke-width="2.2" />
+              <text x="340" y="148" text-anchor="middle" fill="#8ef0d1" font-size="16" font-weight="700">机器学习 ML</text>
+              <text x="340" y="169" text-anchor="middle" fill="#b6c5e1" font-size="11">不把规则全写死,而是从数据里学规律</text>
+
+              <rect x="168" y="192" width="344" height="82" rx="17" fill="rgba(139,123,255,0.12)" stroke="#8b7bff" stroke-width="2.2" />
+              <text x="270" y="226" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">深度学习 DL</text>
+              <text x="270" y="247" text-anchor="middle" fill="#b6c5e1" font-size="10">用很多层神经网络学表示</text>
+
+              <rect x="356" y="204" width="130" height="56" rx="14" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" />
+              <text x="421" y="226" text-anchor="middle" fill="#ffcf72" font-size="12" font-weight="700">生成式 AI</text>
+              <text x="421" y="244" text-anchor="middle" fill="#b6c5e1" font-size="9">文本/图像/音频/代码</text>
+              <text x="421" y="258" text-anchor="middle" fill="#8ef0d1" font-size="9">大模型常在这里</text>
+
+              <g fill="#8499bd" font-size="10">
+                <text x="76" y="320">规则系统、搜索、专家系统等:属于 AI,但不一定靠机器学习</text>
+                <text x="124" y="288">决策树、SVM、随机森林等:属于 ML,但不一定是深度学习</text>
+              </g>
+            </svg>
+          </div>
+          <p class="figure__cap">AI 是最大目标;机器学习是实现 AI 的主流路线;深度学习是机器学习里用深层神经网络的路线;生成式 AI 和大模型主要是深度学习发展到大规模后的结果。</p>
+        </div>
+
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">一句话版本</span>
+          <p>
+            <strong>AI 是目标,机器学习是方法,深度学习是一类模型,大模型是深度学习规模化之后的一种形态。</strong>
+            这四个词不是并列关系,而是层层包含、互相交叉。
+          </p>
+        </div>
+
+        <h2>2. 按“学习信号”分:它靠什么学?</h2>
+        <p>
+          最常用的分法,不是看模型长什么样,而是看训练时<strong>靠什么信号来学</strong>。
+          这和<a class="xref" href="chapter-00.html#机器学习的三大学习范式">第 0 章</a>那张表一致,这里只把地图补完整一点:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>分支</th><th>训练信号</th><th>典型问题</th><th>本书对应</th></tr></thead>
+            <tbody>
+              <tr><td><strong>监督学习</strong></td><td>样本带标准答案</td><td>图片分类、房价预测、垃圾邮件识别</td><td>第 2–11 章、MNIST</td></tr>
+              <tr><td><strong>无监督学习</strong></td><td>没有人工标签,自己找结构</td><td>聚类、降维、异常检测、表示学习</td><td><a class="xref" href="chapter-26.html">第 26 章</a></td></tr>
+              <tr><td><strong>自监督学习</strong></td><td>从数据里自动造题和答案</td><td>预测下一个词、遮住一块图让模型补</td><td><a class="xref" href="chapter-19.html">第 19 章</a>、<a class="xref" href="chapter-20.html">第 20 章</a></td></tr>
+              <tr><td><strong>强化学习</strong></td><td>奖励/惩罚,靠试错改策略</td><td>下棋、机器人控制、推荐策略、RLHF</td><td><a class="xref" href="chapter-12.html">第 12 章</a>、<a class="xref" href="chapter-25.html">第 25 章</a></td></tr>
+              <tr><td><strong>半监督/主动学习</strong></td><td>少量标签 + 大量无标签,或主动挑样本请人标</td><td>标注很贵的医疗、工业质检、语音数据</td><td>本书只建立概念</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">注意:这些不是互斥阵营。一个真实系统常常会混用:先自监督预训练,再监督微调,最后用强化学习/偏好数据做对齐。</p>
+        </div>
+
+        <h2>3. 按“任务”分:它要帮你做什么?</h2>
+        <p>
+          另一种更贴近业务的分法,是看输出到底是什么。你以后看到一个 AI 项目,先问“它在输出什么”,通常就能定位七八成:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>任务族</th><th>输出</th><th>常见场景</th><th>常见模型</th></tr></thead>
+            <tbody>
+              <tr><td><strong>分类</strong></td><td>离散类别</td><td>猫/狗/人脸、垃圾邮件、故障类型</td><td>逻辑回归、树模型、CNN、Transformer</td></tr>
+              <tr><td><strong>回归</strong></td><td>连续数值</td><td>价格、销量、温度、风险分数</td><td>线性模型、GBDT、MLP</td></tr>
+              <tr><td><strong>排序/推荐/搜索</strong></td><td>一组候选的顺序</td><td>搜索结果、短视频推荐、广告排序</td><td>GBDT、双塔、召回+排序、强化学习</td></tr>
+              <tr><td><strong>序列预测</strong></td><td>下一个时间点/下一个 token</td><td>语言模型、时间序列、语音识别</td><td>RNN、Transformer、状态空间模型</td></tr>
+              <tr><td><strong>生成</strong></td><td>新内容</td><td>写文章、画图、生成代码、做视频</td><td>语言模型、扩散模型、多模态模型</td></tr>
+              <tr><td><strong>决策与控制</strong></td><td>动作/策略</td><td>游戏、机器人、调度、自动驾驶局部规划</td><td>强化学习、规划、模仿学习</td></tr>
+              <tr><td><strong>异常检测</strong></td><td>是否“不像正常样本”</td><td>风控、机器故障、入侵检测</td><td>统计模型、自编码器、孤立森林</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout--note reveal">
+          <span class="callout__title">为什么大模型看起来“什么都能做”?</span>
+          <p>
+            因为很多任务都可以被改写成“给一段上下文,预测接下来该输出什么”:
+            分类可以输出类别名,翻译可以输出目标语言句子,写代码可以输出代码,工具调用可以输出结构化参数。
+            这不是说传统分支消失了,而是语言模型把很多任务统一进了一个<strong>序列生成接口</strong>。
+          </p>
+        </div>
+
+        <h2>4. 按“模型家族”分:它用什么脑子?</h2>
+        <p>
+          学习信号和任务说的是“怎么学、做什么”;模型家族说的是“用什么结构承载规律”。历史上几条路线长期并存:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>家族</th><th>直觉</th><th>强项</th><th>短板</th></tr></thead>
+            <tbody>
+              <tr><td><strong>规则/符号系统</strong></td><td>专家把规则写进去</td><td>可解释、可控、适合明确流程</td><td>规则难覆盖真实世界长尾</td></tr>
+              <tr><td><strong>线性/广义线性模型</strong></td><td>特征加权求和</td><td>快、稳、好解释</td><td>表达力有限,依赖人工特征</td></tr>
+              <tr><td><strong>树模型/集成</strong></td><td>一堆 if-else 自动组合</td><td>表格数据非常强,工程成熟</td><td>不擅长原始图像/语音/长文本</td></tr>
+              <tr><td><strong>核方法/SVM</strong></td><td>把数据映到更高维再切开</td><td>小中型数据、理论漂亮</td><td>大规模数据和端到端表示学习不方便</td></tr>
+              <tr><td><strong>神经网络</strong></td><td>多层可学习变换</td><td>图像、语音、文本、多模态都能端到端学</td><td>吃数据和算力,解释难,调参多</td></tr>
+              <tr><td><strong>概率/因果模型</strong></td><td>显式建模不确定性和因果关系</td><td>科学、医疗、决策分析里很重要</td><td>建模假设难,和深度学习融合仍在发展</td></tr>
+              <tr><td><strong>基础模型/大模型</strong></td><td>先用海量数据预训练,再迁移到很多任务</td><td>通用、可交互、可作为平台</td><td>成本高、可靠性和治理挑战大</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">不要把“新”误解成“旧的没用了”。到 2026 年,金融风控、广告排序、工业质检里仍大量使用树模型、线性模型和规则系统;大模型更像新增了一层强大的通用接口。</p>
+        </div>
+
+        <h2>5. 一条时间线:机器学习怎么走到今天</h2>
+        <p>
+          这条时间线不求列全所有论文,只抓对今天影响最大的转折。你会发现,机器学习的发展并不是一路直线上升,
+          而是反复经历“想法超前 → 算力/数据不够 → 沉寂 → 条件成熟后爆发”。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>时间</th><th>节点</th><th>为什么重要</th></tr></thead>
+            <tbody>
+              <tr><td>1950</td><td>Turing 提出“机器能否思考”的检验框架</td><td>把智能机器从哲学问题拉进可操作讨论。</td></tr>
+              <tr><td>1956</td><td>Dartmouth 夏季研究项目</td><td>“人工智能”这个领域正式成形,早期研究集中在符号推理、搜索和语言。</td></tr>
+              <tr><td>1957–1958</td><td>Rosenblatt 感知机</td><td>早期神经网络路线出现,证明机器可以从样本中调权重。</td></tr>
+              <tr><td>1969</td><td>《Perceptrons》指出单层感知机限制</td><td>神经网络热度下降,进入漫长低潮的一部分原因。</td></tr>
+              <tr><td>1986</td><td>反向传播被系统推广</td><td>多层网络终于有了可用训练方法,也就是本书第 6 章的核心。</td></tr>
+              <tr><td>1997</td><td>Deep Blue 战胜国际象棋世界冠军</td><td>展示搜索、评估函数和专用工程在封闭规则游戏里的威力。</td></tr>
+              <tr><td>2006 前后</td><td>“深度学习”复兴</td><td>更大的数据、更好的初始化/训练技巧、更强 GPU,让深层网络重新可行。</td></tr>
+              <tr><td>2012</td><td>AlexNet 赢得 ImageNet</td><td>CNN + GPU + 大数据让视觉任务大幅跃迁,深度学习成为主流。</td></tr>
+              <tr><td>2014</td><td>GAN、seq2seq 等生成/序列模型兴起</td><td>生成模型和端到端序列建模开始快速发展。</td></tr>
+              <tr><td>2016</td><td>AlphaGo</td><td>深度网络 + 搜索 + 强化学习自我对弈,证明 AI 可在复杂决策任务上突破人类顶尖水平。</td></tr>
+              <tr><td>2017</td><td>Transformer</td><td>用注意力取代 RNN 的串行瓶颈,成为大模型时代的底座结构。</td></tr>
+              <tr><td>2018</td><td>BERT</td><td>“预训练 + 微调”成为 NLP 标配,自监督预训练走到舞台中央。</td></tr>
+              <tr><td>2020</td><td>GPT-3</td><td>规模化语言模型展示 few-shot/in-context learning,提示词开始成为交互接口。</td></tr>
+              <tr><td>2022</td><td>ChatGPT 发布</td><td>大模型从研究圈进入大众视野,对话式 AI 成为新的产品入口。</td></tr>
+              <tr><td>2023–2024</td><td>多模态、RAG、Agent、AI 治理加速</td><td>模型不只聊天,开始看图、听音频、调用工具;同时 NIST AI RMF、EU AI Act 等治理框架落地。</td></tr>
+              <tr><td>2025–2026</td><td>能力扩散到代码、科学、长上下文和工作流</td><td>前沿模型能力继续提升,但评估、成本、环境影响、透明度和可靠性成为更硬的瓶颈。</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>6. 2026 年附近的现状:热闹背后看五件事</h2>
+        <p>
+          截至 2026 年中,AI 已经不是单纯的“模型榜单竞争”。更准确地说,它正在从研究能力变成<strong>社会级基础设施</strong>。
+          但越是这样,越不能只看 demo,要同时看五条线。
+        </p>
+
+        <h3>6.1 能力:从单项任务,走向多模态和真实工作流</h3>
+        <p>
+          前沿模型已经不只是补全文本。它们能读图、听音频、写代码、查资料、调用工具,并在较长上下文里处理复杂任务。
+          Stanford AI Index 2026 的一个核心判断是:AI 能力并没有停滞,反而继续加速;尤其在代码、科学问题、多模态推理等任务上提升很快。
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">但“榜单变高”不等于“现实可靠”</span>
+          <p>
+            很多 benchmark 会被快速刷满,甚至被训练数据污染。真实使用里还会遇到幻觉、长尾错误、上下文遗漏、工具调用失败、权限边界不清等问题。
+            所以 2026 年的重点不是“模型会不会说”,而是<strong>它在真实流程里能不能稳定交付</strong>。
+          </p>
+        </div>
+
+        <h3>6.2 应用:从“试试看”,变成“嵌进工作”</h3>
+        <p>
+          现在 AI 的主要形态,不只是一个聊天网页,而是嵌进 IDE、办公软件、客服系统、数据分析、内容生产、医学研究和科学计算里。
+          许多组织已经从“做个 demo”走到“把 AI 放进流程”,但真正难的是权限、审计、数据安全、成本和人机分工。
+        </p>
+
+        <h3>6.3 基础设施:算力、数据和推理成本成为硬约束</h3>
+        <p>
+          大模型不是凭空聪明。它背后是数据、GPU/TPU、分布式训练、推理服务、缓存、量化和并行。
+          这也是为什么<a class="xref" href="chapter-21.html">第 21 章</a>要专门讲工程基础设施:
+          模型能不能落地,很大程度取决于<strong>能不能以可承受的成本稳定跑起来</strong>。
+        </p>
+
+        <h3>6.4 治理:规则开始追上技术</h3>
+        <p>
+          2023 年 NIST 发布 AI 风险管理框架,2024 年欧盟 AI Act 生效,说明 AI 已经从“技术问题”变成“社会系统问题”。
+          以后做 AI 不只要问“准不准”,还要问:数据从哪来?谁负责?能不能解释?出了错怎么追责?有没有隐私、版权、歧视和安全风险?
+        </p>
+
+        <h3>6.5 格局:开源、闭源、行业模型长期并存</h3>
+        <p>
+          大公司前沿闭源模型、开源/开放权重模型、行业专用模型会长期共存。
+          闭源模型通常能力强、产品完善;开放模型利于私有化、可控和二次开发;行业模型则更贴近具体数据和流程。
+          对学习者来说,最重要的不是押注某一家,而是把底层概念学稳:表示、损失、优化、注意力、检索、评估、安全。
+        </p>
+
+        <h2>7. 以后看到新名词,用这四个问题定位</h2>
+        <p>
+          AI 名词更新太快,硬背会很累。更好的办法是用四个问题给它“归档”:
+        </p>
+        <ol>
+          <li><strong>它学什么信号?</strong> 是监督、无监督、自监督、强化学习,还是混合?</li>
+          <li><strong>它输出什么?</strong> 类别、数值、排序、文本、图像、动作,还是工具调用?</li>
+          <li><strong>它靠什么结构?</strong> 树模型、CNN、RNN、Transformer、扩散模型、检索系统,还是多模型组合?</li>
+          <li><strong>它解决什么瓶颈?</strong> 能力、成本、速度、长上下文、可靠性、数据隐私、部署还是交互体验?</li>
+        </ol>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">真正的学习路线</span>
+          <p>
+            不要追着每个新缩写跑。先抓住<strong>任务、数据、模型、损失、优化、评估、部署</strong>这七个骨架。
+            新名词再花哨,通常也只是这七件事的某个组合或改良。
+          </p>
+        </div>
+
+        <h2>资料来源与延伸阅读</h2>
+        <p>
+          这一章的时间线和现状参考了几类权威资料,不要求逐篇读完;你以后想核对“现在 AI 到哪了”,这些比二手文章稳:
+        </p>
+        <ul>
+          <li><a class="xref" href="https://hai.stanford.edu/ai-index/2026-ai-index-report" target="_blank" rel="noopener">Stanford HAI · 2026 AI Index Report</a>:年度 AI 能力、产业、治理、社会影响综述。</li>
+          <li><a class="xref" href="https://home.dartmouth.edu/about/artificial-intelligence-ai-coined-dartmouth" target="_blank" rel="noopener">Dartmouth · AI 一词的诞生</a>:1956 年 Dartmouth 项目的背景。</li>
+          <li><a class="xref" href="https://www.nature.com/articles/323533a0" target="_blank" rel="noopener">Rumelhart, Hinton, Williams · Back-propagation</a>:反向传播经典论文。</li>
+          <li><a class="xref" href="https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks" target="_blank" rel="noopener">AlexNet · ImageNet 2012</a>:深度学习视觉浪潮的关键节点。</li>
+          <li><a class="xref" href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">Attention Is All You Need</a>:Transformer 原始论文。</li>
+          <li><a class="xref" href="https://openai.com/index/chatgpt/" target="_blank" rel="noopener">OpenAI · Introducing ChatGPT</a>:2022 年 ChatGPT 发布说明。</li>
+        </ul>
+
+        <section class="summary reveal">
+          <h2>小结</h2>
+          <ul>
+            <li><strong>AI ⊃ 机器学习 ⊃ 深度学习</strong>;生成式 AI 和大模型主要是深度学习规模化后的重要分支。</li>
+            <li>按学习信号看,有监督、无监督/自监督、强化学习;真实系统常常混合使用。</li>
+            <li>按任务看,有分类、回归、排序/推荐、序列预测、生成、决策控制、异常检测等。</li>
+            <li>模型家族长期并存:规则、线性模型、树模型、核方法、神经网络、概率/因果模型、大模型都各有位置。</li>
+            <li>关键时间线:1956 AI 命名,1957/58 感知机,1986 反向传播,2012 AlexNet,2016 AlphaGo,2017 Transformer,2022 ChatGPT,2025–2026 走向多模态、Agent、科学和真实工作流。</li>
+            <li>2026 年附近的核心现状:能力继续涨,应用深入流程,但成本、评估、可靠性、环境影响、透明度和治理成为更硬的问题。</li>
+          </ul>
+        </section>
+
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:AI、机器学习、深度学习、大模型是什么关系?</summary>
+            <div class="quiz__a">
+              <p>AI 是最大目标;机器学习是从数据里学规律的路线;深度学习是机器学习里用多层神经网络的路线;大模型是深度学习在海量数据、算力和自监督训练下形成的规模化模型。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:为什么说自监督是大模型时代的关键?</summary>
+            <div class="quiz__a">
+              <p>因为它能从无标注数据里自动造训练目标,比如“预测下一个 token”。这样模型就能利用海量文本、图像和代码,不必等人类逐条标注答案。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:传统机器学习在大模型时代还有用吗?</summary>
+            <div class="quiz__a">
+              <p>有。表格数据、风控、广告排序、工业规则、低成本部署等场景里,线性模型、树模型、规则系统仍然很强。大模型提供了新的通用接口,但不会把所有旧工具一夜清空。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:看到一个新 AI 名词,最该先问什么?</summary>
+            <div class="quiz__a">
+              <p>先问四件事:它靠什么学习信号?输出什么?用什么模型结构?解决什么瓶颈?这四个问题能把大多数新概念放回地图里。</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="summary reveal" style="text-align:center">
+          <h2>番外读完 · 地图终于展开</h2>
+          <p>
+            到这里,你不只知道神经网络怎么训练,也知道它在机器学习、AI 历史和今天产业格局里的位置。
+            后面再看到新模型、新论文、新产品,先别急着追名词,把它放回这张全景图里。
+          </p>
+          <p style="margin-top:1.4rem"><a class="button button--primary" href="index.html">返回目录 / 重读某章</a></p>
+        </div>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>

@@ -248,6 +248,52 @@ net.optimizer_function()-&gt;set_weight_decay(1e-4); <b class="cw-tag">2</b></co
             </tbody>
           </table>
         </div>
+
+        <h3>为什么是「按范数缩放」,而不是「一刀砍平」?</h3>
+        <p>
+          关键要先想清楚:<a class="xref" href="chapter-09.html#3-梯度消失与梯度爆炸">梯度爆炸</a>时,<strong>梯度的<em>方向</em>通常还是对的</strong>(它依然指向“损失下降最快”的那边),坏的只是偶尔某一步的<strong>长度</strong>突然冲到天上,一步就把参数推飞、损失变 NaN。所以我们想要的是——<strong>只把这一脚的“步子”收短,别改它的方向</strong>。
+        </p>
+        <p>
+          「按全局范数」正好做到这点。它把<strong>所有</strong>参数的梯度拼成<strong>一个</strong>大向量 <var>g</var>,算它的总长度(L2 范数)‖<var>g</var>‖;只有当 ‖<var>g</var>‖ 超过阈值 <var>c</var> 时,才整体乘一个<strong>小于 1 的同一个系数</strong>:
+        </p>
+        <div class="mathblock reveal">
+          若 ‖<var>g</var>‖ &gt; <var>c</var>:&nbsp;&nbsp; <var>g</var> ← <var>g</var> · <span class="frac"><span><var>c</var></span><span>‖<var>g</var>‖</span></span>
+          <span class="label">每个分量都乘同一个系数 <var>c</var>/‖<var>g</var>‖ &lt; 1 → 向量整体等比缩短,<strong>方向完全不变</strong>,新长度恰好 = <var>c</var></span>
+        </div>
+        <p>
+          因为<strong>每个分量乘的是同一个数</strong>,向量的“指向”丝毫不动,只是长度被拉回 <var>c</var>——这就是它和“把每个分量硬砍到 ±阈值”(按分量)最大的区别:后者会<strong>扭曲方向</strong>(不同分量砍的比例不同),前者不会。所以序列模型(RNN / Transformer)几乎都用按范数。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 620 200" role="img" aria-label="梯度按范数裁剪:超出阈值圆就沿同方向缩回圆上">
+              <!-- 阈值圆 (半径=c) -->
+              <circle cx="150" cy="105" r="70" fill="rgba(106,195,255,0.06)" stroke="#6ac3ff" stroke-width="1.4" stroke-dasharray="5 4" />
+              <text x="150" y="105" text-anchor="middle" fill="#6ac3ff" font-size="10">半径 = 阈值 c</text>
+              <!-- 原点 -->
+              <circle cx="150" cy="105" r="3" fill="#8499bd" />
+              <!-- 爆炸的长梯度 (超出圆) 指向右上 -->
+              <line x1="150" y1="105" x2="300" y2="30" stroke="#ff8fa3" stroke-width="2.4" marker-end="url(#clip-a)" />
+              <text x="306" y="28" fill="#ff8fa3" font-size="11">原始梯度 g(太长, 会把参数推飞)</text>
+              <!-- 裁剪后: 同方向缩到圆上 -->
+              <line x1="150" y1="105" x2="213" y2="73.5" stroke="#8ef0d1" stroke-width="3" marker-end="url(#clip-b)" />
+              <text x="150" y="165" text-anchor="middle" fill="#8ef0d1" font-size="11">裁剪后:同方向, 长度收回到 c</text>
+              <defs>
+                <marker id="clip-a" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ff8fa3" /></marker>
+                <marker id="clip-b" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" /></marker>
+              </defs>
+            </svg>
+          </div>
+          <p class="figure__cap">把阈值想成一个半径为 c 的圆:梯度没超出就原样用;一旦冲出圆(爆炸),就<strong>沿原方向</strong>拽回到圆边上——方向不变,只是不再“过冲”。</p>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">代入数字算一遍</span>
+          <p>
+            设阈值 <var>c</var> = 1.0,某一步所有梯度拼起来的总长度 ‖<var>g</var>‖ = 5.0(爆了)。那么缩放系数 = <var>c</var>/‖<var>g</var>‖ = 1.0/5.0 = <strong>0.2</strong>,
+            把<strong>每一个</strong>梯度分量都乘 0.2。于是新长度 = 5.0 × 0.2 = 1.0,正好压回阈值;而所有分量等比例缩小,<strong>方向一模一样</strong>。
+            反过来,如果某步 ‖<var>g</var>‖ = 0.3 &lt; 1.0(没爆),条件不满足,<strong>原样不动</strong>——裁剪只在“真的过大”时才出手,平时完全不干预。
+          </p>
+        </div>
+
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/neural_network.cpp · ClipGradients(by-norm,精简)</figcaption>
           <pre class="code-walk__code"><code>double norm = std::sqrt(sq_sum);                 <b class="cw-tag">1</b>
