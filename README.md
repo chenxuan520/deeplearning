@@ -2,12 +2,12 @@
 
 一个**从零手写**的 C++ 深度学习小库：不依赖 PyTorch / TensorFlow，用 `std::vector` 和三重循环把 MLP、CNN、RNN、训练栈、最小 Transformer / 字符级语言模型都跑通。
 
-配套一份中文交互电子书（26 章 + 术语表），每个概念都能在本仓库源码里找到对应实现。
+配套中文交互电子书《从神经元到大模型》（26 章 + 术语表），每个概念都能在本仓库源码里找到对应实现。
 
 <p align="center">
-  <img src="docs/dl-book/assets/cover-hero.png" alt="深度学习速查图:网络结构、基础公式与反向传播" width="480" />
+  <img src="docs/dl-book/assets/book-cover-wide.png" alt="《从神经元到大模型》横版封面:从神经元、MLP、CNN、RNN 到 Transformer 与 C++ 实现" width="860" />
 </p>
-<p align="center"><sub>配套速查图 · 结构 / 公式 / 反向传播</sub></p>
+<p align="center"><sub>《从神经元到大模型》· 用 C++ 从零写懂深度学习</sub></p>
 
 | | |
 |---|---|

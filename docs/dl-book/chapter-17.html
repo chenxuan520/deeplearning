@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 17 章 · 注意力机制 | 深度学习入门</title>
+    <title>第 17 章 · 注意力机制 | 从神经元到大模型</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -158,7 +158,7 @@
           <li><strong>打分(比相关性)</strong>:拿我的 Query,和<em>每个</em>词的 Key 做<strong>点积</strong>。点积越大 = 越“对得上” = 越相关。</li>
           <li><strong>缩放(除以 √<var>d</var>)</strong>:把每个分数除以 √<var>d</var>(<var>d</var> 是向量维度)。维度一大,点积容易冲得很大,缩放让它别太极端。</li>
           <li><strong>softmax(变成权重)</strong>:把一排分数压成一排<strong>加起来等于 1</strong> 的权重(<a class="xref" href="chapter-04.html">第 4 章</a>学过)。这就是那组“加权平均”的权重。</li>
-          <li><strong>加权求和(混合内容)</strong>:用这排权重,对所有词的 Value 做加权平均,得到当前词的<strong>新向量</strong>。</li>
+          <li><strong>加权求和(混合内容)</strong>:用这排权重,对<strong>句子里每个词各自的 Value</strong> 做加权平均,得到当前词的<strong>新向量</strong>。注意这里平均的是<strong>句中所有词(也包括当前词自己)的 Value</strong>,不是只取当前词那一个——相关性高的词,它的 Value 在这次平均里占的比重就大。</li>
         </ol>
         <div class="mathblock reveal">
           Attention(<var>Q</var>, <var>K</var>, <var>V</var>) = softmax( <span class="frac"><span><var>Q</var><var>K</var><sup>T</sup></span><span>√<var>d</var><sub>k</sub></span></span> ) <var>V</var>
@@ -307,7 +307,7 @@
         </p>
 
         <h3>第④步:加权求和,得到“它”的新向量</h3>
-        <p>用这排权重,对三个词的 <strong>Value</strong> 做加权平均(数值来自上表第 0 步):</p>
+        <p>用这排权重,对<strong>句子里三个词</strong>(猫、睡、它——全部词,含“它”自己)各自的 <strong>Value</strong> 做加权平均(数值来自上表第 0 步):</p>
         <div class="mathblock reveal">
           新“它” = 0.93 × [1.5, 0] + 0.01 × [0, 1.5] + 0.06 × [0.5, 0.5]
           <span class="label">= [1.40, 0] + [0, 0.015] + [0.03, 0.03] ≈ <strong>[1.43, 0.05]</strong></span>

@@ -305,6 +305,15 @@ var,
   font-style: normal;
 }
 
+/* 维度流水线里的箭头, 如 ──W₁──▸ */
+.dim-arrow {
+  font-family: var(--font-mono, monospace);
+  font-style: normal;
+  color: var(--text-dim);
+  white-space: nowrap;
+  margin: 0 0.1rem;
+}
+
 /* 分式 */
 .frac {
   display: inline-flex;

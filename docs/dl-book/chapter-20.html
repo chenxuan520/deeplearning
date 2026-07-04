@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 20 章 · 通往大模型:原理与训练 | 深度学习入门</title>
+    <title>第 20 章 · 通往大模型:原理与训练 | 从神经元到大模型</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -221,6 +221,32 @@
           <li><strong>太小</strong>:像拿着一年级生字本读专业书,啥都得拆成一堆碎片,表达力不足;</li>
           <li><strong>太大</strong>:每个词见得太少、学不充分,还白白撑大输出层。主流模型的词表通常在几万到十几万之间。</li>
         </ul>
+
+        <h3>只有 5 万词表,怎么支撑几十种语言?</h3>
+        <p>
+          这里有个一算就露馅的疑问:全世界的文字加起来远不止 5 万——光常用汉字就好几千,再加上日文、韩文、阿拉伯文、印地文、各种 emoji……几十万都打不住。
+          GPT-3 的词表才 <var>V</var>≈50 257,凭什么能读写这么多语言?答案藏在两个字里:<strong>碎片</strong>。
+        </p>
+        <p>
+          <strong>① 词表里装的不是“词”,是“子词碎片”。</strong> BPE 的规矩是高频的合成整体、低频的拆成碎片(见上文)。
+          所以词表不必囊括所有词,只要能把任意文本<strong>拼出来</strong>就行:常用词 <code>the</code> 占 1 个 token,生僻词
+          <code>antidisestablishment</code> 会被拆成 <code>anti</code>+<code>dis</code>+<code>establish</code>+<code>ment</code> 几块;实在没见过的,就一路拆到最小粒度兜底。
+        </p>
+        <p>
+          <strong>② 最小粒度是“字节”,所以永远拼得出、永不失败。</strong> GPT-2/3 用的是 <span class="term">字节级 BPE(byte-level BPE)</span>:
+          它不在“字符”上合并,而在 <strong>UTF-8 字节</strong>上合并。任何语言的任何字符,在计算机里都是 1~4 个 UTF-8 字节,而字节只有 <strong>256 种</strong>。
+          于是词表最底层永远躺着这 256 个“单字节 token”做兜底——<strong>任何字符都能用字节序列拼出来,再也不会遇到“词表里查不到”</strong>(即 <span class="term">OOV(out-of-vocabulary)</span>)的字。
+          所以 5 万 ≈ 256 个字节 + 约 5 万个“高频字节组合”,靠拆分与拼接覆盖一切语言。
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">代价:非英语更“费 token”</span>
+          <p>
+            能支持,不等于高效。GPT-3 的训练语料以英文为主,合并出的高频 token 大多是英文片段,于是:一个英文词常常 <strong>1 个 token</strong>,
+            而<strong>一个汉字往往要 2~3 个 token</strong>(它的 UTF-8 是 3 字节,又没被并成整体)。这就是为什么同样的意思,中文调 API 更烧钱、也更快顶到<a class="xref" href="chapter-20.html#更长的上下文">上下文长度</a>上限。
+            后来不少模型(如 GPT-4o)专门重做了 tokenizer、扩大词表,就是为了改善多语言的<strong>效率</strong>——而不是“能不能支持”,字节级早就保证了能支持。
+          </p>
+        </div>
+
         <div class="callout callout--tip reveal">
           <span class="callout__title">动手看一眼</span>
           <p>

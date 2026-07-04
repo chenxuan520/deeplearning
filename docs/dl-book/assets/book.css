@@ -1,5 +1,5 @@
 /*
- * book.css — 《深度学习入门》Web 书的框架与阅读排版
+ * book.css — 《从神经元到大模型》Web 书的框架与阅读排版
  * 纯静态零依赖。配色沿用项目讲解页的深色科技语言, 但针对"长时间阅读"做了优化:
  * 更大的正文字号、更松的行距、克制的阅读栏宽度。
  */
@@ -280,6 +280,16 @@ a:hover {
   background: rgba(106, 195, 255, 0.14);
   border-color: rgba(106, 195, 255, 0.4);
   color: var(--text);
+}
+
+.book-toc__core,
+.book-rail__core {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--primary);
+  font-size: 0.82rem;
+  line-height: 1;
+  opacity: 0.85;
 }
 
 .book-toc__num {
@@ -1161,6 +1171,40 @@ details[open] .quiz__q::after {
 .toc-card--appendix:hover {
   border-color: rgba(142, 240, 209, 0.35);
   background: rgba(142, 240, 209, 0.08);
+}
+
+/* 主线里程碑章节: 高亮边框 + 「核心」徽章 */
+.toc-card--core {
+  border-color: rgba(106, 195, 255, 0.5);
+  background: linear-gradient(
+    180deg,
+    rgba(106, 195, 255, 0.09),
+    var(--panel) 60%
+  );
+  box-shadow: 0 0 0 1px rgba(106, 195, 255, 0.18), var(--shadow);
+}
+
+.toc-card--core:hover {
+  border-color: rgba(106, 195, 255, 0.75);
+  background: linear-gradient(
+    180deg,
+    rgba(106, 195, 255, 0.14),
+    var(--panel-strong) 60%
+  );
+}
+
+.toc-card__badge {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.9rem;
+  padding: 0.12rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #0b1220;
+  background: var(--primary);
+  border-radius: 999px;
+  line-height: 1.6;
 }
 
 /* ============================================================= */

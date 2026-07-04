@@ -1,5 +1,5 @@
 /*
- * book.js — 《深度学习入门》Web 书的导航与阅读体验
+ * book.js — 《从神经元到大模型》Web 书的导航与阅读体验
  * 职责: 注入顶部 header、阅读进度条、侧边目录抽屉、上一章/下一章导航,
  *       处理键盘翻页、记忆"最后阅读章节"、滚动淡入。
  * 纯静态零依赖。章节页用 <body data-chapter="N"> 标识自己是第 N 章;
@@ -12,11 +12,11 @@
   var CHAPTERS = [
     { num: "0", title: "导论:这本书到底在讲什么", file: "chapter-00.html", part: "第一部分 · 打地基" },
     { num: "1", title: "数学预备:看懂公式的一点点数学", file: "chapter-01.html", part: "第一部分 · 打地基" },
-    { num: "2", title: "一个神经元", file: "chapter-02.html", part: "第一部分 · 打地基" },
+    { num: "2", title: "一个神经元", file: "chapter-02.html", part: "第一部分 · 打地基", core: true },
     { num: "3", title: "搭成网络:前向传播", file: "chapter-03.html", part: "第一部分 · 打地基" },
     { num: "4", title: "怎么衡量“错”:损失函数", file: "chapter-04.html", part: "第二部分 · 学习是怎么发生的" },
     { num: "5", title: "怎么变“好”:梯度下降", file: "chapter-05.html", part: "第二部分 · 学习是怎么发生的" },
-    { num: "6", title: "反向传播", file: "chapter-06.html", part: "第二部分 · 学习是怎么发生的" },
+    { num: "6", title: "反向传播", file: "chapter-06.html", part: "第二部分 · 学习是怎么发生的", core: true },
     { num: "7", title: "激活函数全家福", file: "chapter-07.html", part: "第二部分 · 学习是怎么发生的" },
     { num: "8", title: "优化器:从 SGD 到 Adam", file: "chapter-08.html", part: "第二部分 · 学习是怎么发生的" },
     { num: "9", title: "让它真的训得动", file: "chapter-09.html", part: "第二部分 · 学习是怎么发生的" },
@@ -27,10 +27,10 @@
     { num: "14", title: "RNN 与 LSTM", file: "chapter-14.html", part: "第三部分 · 经典网络结构" },
     { num: "15", title: "词嵌入与 word2vec", file: "chapter-15.html", part: "第三部分 · 经典网络结构" },
     { num: "16", title: "为什么需要注意力", file: "chapter-16.html", part: "第四部分 · 序列与 Transformer" },
-    { num: "17", title: "注意力机制", file: "chapter-17.html", part: "第四部分 · 序列与 Transformer" },
-    { num: "18", title: "Transformer 的完整结构", file: "chapter-18.html", part: "第四部分 · 序列与 Transformer" },
+    { num: "17", title: "注意力机制", file: "chapter-17.html", part: "第四部分 · 序列与 Transformer", core: true },
+    { num: "18", title: "Transformer 的完整结构", file: "chapter-18.html", part: "第四部分 · 序列与 Transformer", core: true },
     { num: "19", title: "字符级语言模型", file: "chapter-19.html", part: "第五部分 · 通往大模型" },
-    { num: "20", title: "通往大模型:原理与训练", file: "chapter-20.html", part: "第五部分 · 通往大模型" },
+    { num: "20", title: "通往大模型:原理与训练", file: "chapter-20.html", part: "第五部分 · 通往大模型", core: true },
     { num: "21", title: "大模型的工程与基础设施", file: "chapter-21.html", part: "第五部分 · 通往大模型" },
     { num: "22", title: "用好大模型:提示、RAG 与 Agent", file: "chapter-22.html", part: "第五部分 · 通往大模型" },
     { num: "23", title: "MNIST 实战:第一、二部分", file: "chapter-23.html", part: "第六部分 · 代码实战" },
@@ -92,6 +92,12 @@
       a.href = ch.file;
       a.appendChild(el("span", "book-rail__num", ch.num));
       a.appendChild(el("span", "book-rail__name", ch.title));
+      if (ch.core) {
+        var star = el("span", "book-rail__core", "★");
+        star.title = "核心章节";
+        a.appendChild(star);
+      }
+      if (i === currentIdx) aside._currentLink = a;
       li.appendChild(a);
       list.appendChild(li);
     });
@@ -106,6 +112,14 @@
     list.appendChild(gli);
     aside.appendChild(list);
     return aside;
+  }
+
+  // 把侧栏里的"当前章"滚动到可视区中间, 省得每次切章都要手动找。
+  function scrollRailToCurrent(scroller, link) {
+    if (!scroller || !link) return;
+    // 元素相对滚动容器的偏移 - 半个容器高 + 半个元素高 = 居中
+    var target = link.offsetTop - scroller.clientHeight / 2 + link.offsetHeight / 2;
+    scroller.scrollTop = Math.max(0, target);
   }
 
   // 给 inner 里的 h2/h3 赋 id 并返回条目列表。
@@ -215,14 +229,19 @@
 
     var layout = el("div", "book-layout");
     var main = el("div", "book-layout__main");
+    var chapterRail = buildChapterRail(currentIdx);
     var outline = buildOutlineRail(inner);
 
-    layout.appendChild(buildChapterRail(currentIdx));
+    layout.appendChild(chapterRail);
     layout.appendChild(main);
     layout.appendChild(outline.aside);
     chapter.insertBefore(layout, inner);
     main.appendChild(inner);
     setupOutlineSpy(outline.links);
+    // 进 DOM 后再滚: 此时 .book-rail 才有真实高度
+    requestAnimationFrame(function () {
+      scrollRailToCurrent(chapterRail, chapterRail._currentLink);
+    });
     return main;
   }
 
@@ -250,6 +269,12 @@
       a.href = ch.file;
       a.appendChild(el("span", "book-toc__num", ch.num));
       a.appendChild(el("span", "book-toc__name", ch.title));
+      if (ch.core) {
+        var tstar = el("span", "book-toc__core", "★");
+        tstar.title = "核心章节";
+        a.appendChild(tstar);
+      }
+      if (i === currentIdx) aside._currentLink = a;
       li.appendChild(a);
       list.appendChild(li);
     });
@@ -262,6 +287,8 @@
     function open() {
       aside.classList.add("is-open");
       backdrop.classList.add("is-open");
+      // 打开抽屉时把当前章滚到中间, 长目录不用手动翻
+      scrollRailToCurrent(aside, aside._currentLink);
     }
     backdrop.addEventListener("click", close);
     document.addEventListener("keydown", function (e) {
@@ -278,7 +305,7 @@
     var ch = CHAPTERS[currentIdx];
     var currentLabel = ch
       ? "第 " + ch.num + " 章 · " + ch.title
-      : ((document.querySelector(".chapter__inner h1") || {}).textContent || "深度学习入门");
+      : ((document.querySelector(".chapter__inner h1") || {}).textContent || "从神经元到大模型");
 
     var progress = el("div", "book-progress");
     progress.id = "bookProgress";
@@ -297,7 +324,7 @@
     home.setAttribute("aria-label", "在 GitHub 上查看源码");
     home.innerHTML =
       '<span class="book-header__home-icon">' + GITHUB_ICON + "</span>" +
-      '<span class="book-header__home-text">深度学习入门</span>';
+      '<span class="book-header__home-text">从神经元到大模型</span>';
 
     var current = el("span", "book-header__current", currentLabel);
     var pct = el("span", "book-header__pct");

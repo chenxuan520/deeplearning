@@ -3,11 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>深度学习入门 · 从一个神经元到大模型</title>
+    <title>从神经元到大模型 · 用 C++ 从零写懂深度学习</title>
     <meta
       name="description"
-      content="一本面向纯小白、循循善诱的中文深度学习入门电子书:从一个神经元讲到大模型原理,配图解、可交互实验与逐行 C++ 代码。"
+      content="一本面向纯小白、循循善诱的中文深度学习电子书:用 C++ 从零写懂从一个神经元到大模型的主线,配图解、可交互实验与逐行代码。"
     />
+    <meta property="og:title" content="从神经元到大模型" />
+    <meta
+      property="og:description"
+      content="用 C++ 从零写懂深度学习:从一个神经元讲到大模型,配图解、可交互实验与逐行代码。"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://chenxuan520.github.io/deeplearning/assets/book-cover-wide.png" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -35,8 +43,8 @@
     <header class="cover">
       <div class="cover__grid"></div>
       <div class="cover__inner">
-        <p class="cover__eyebrow">从零开始 · 对照真实 C++ 实现</p>
-        <h1>深度学习入门</h1>
+        <p class="cover__eyebrow">用 C++ 从零写懂深度学习</p>
+        <h1>从神经元到大模型</h1>
         <p class="cover__lead">
           一本写给「完全没接触过」的你的循循善诱小书。我们从<strong>一个神经元</strong>讲起,
           一路把它搭成能写字的<strong>语言模型</strong>,再聊聊<strong>大模型</strong>背后的道理。
@@ -75,7 +83,8 @@
           <span class="toc-card__title">数学预备:看懂公式的一点点数学</span>
           <span class="toc-card__desc">向量、点积、矩阵、导数、链式法则、概率——后面所有公式的最小地基。可跳读、随用随查。</span>
         </a>
-        <a class="toc-card reveal" href="chapter-02.html">
+        <a class="toc-card toc-card--core reveal" href="chapter-02.html">
+          <span class="toc-card__badge">核心</span>
           <span class="toc-card__num">第 2 章</span>
           <span class="toc-card__title">一个神经元</span>
           <span class="toc-card__desc">加权求和 + 偏置 + 激活函数。深度学习里最小的那块积木。配可拖动的实验台。</span>
@@ -99,7 +108,8 @@
           <span class="toc-card__title">怎么变「好」:梯度下降</span>
           <span class="toc-card__desc">像在雾里下山一样,顺着最陡的方向一步步把损失降下去。学习率是步长。</span>
         </a>
-        <a class="toc-card reveal" href="chapter-06.html">
+        <a class="toc-card toc-card--core reveal" href="chapter-06.html">
+          <span class="toc-card__badge">核心</span>
           <span class="toc-card__num">第 6 章</span>
           <span class="toc-card__title">反向传播</span>
           <span class="toc-card__desc">链式法则,把「错误」从输出层一路反着传回每一个参数。配前向/反向动画。</span>
@@ -162,12 +172,14 @@
           <span class="toc-card__title">为什么需要注意力</span>
           <span class="toc-card__desc">处理一句话这种「序列」,普通网络卡在哪?注意力到底要解决什么问题。</span>
         </a>
-        <a class="toc-card reveal" href="chapter-17.html">
+        <a class="toc-card toc-card--core reveal" href="chapter-17.html">
+          <span class="toc-card__badge">核心</span>
           <span class="toc-card__num">第 17 章</span>
           <span class="toc-card__title">注意力机制</span>
           <span class="toc-card__desc">用三个词、几个小数字手把手算一遍:Q/K/V、打分、softmax、加权平均、causal mask、多头。配可玩的实验台。</span>
         </a>
-        <a class="toc-card reveal" href="chapter-18.html">
+        <a class="toc-card toc-card--core reveal" href="chapter-18.html">
+          <span class="toc-card__badge">核心</span>
           <span class="toc-card__num">第 18 章</span>
           <span class="toc-card__title">Transformer 的完整结构</span>
           <span class="toc-card__desc">残差连接、LayerNorm、前馈网络、位置编码,拼成一块完整的 Transformer 积木,并读懂那张经典全图。</span>
@@ -181,7 +193,8 @@
           <span class="toc-card__title">字符级语言模型</span>
           <span class="toc-card__desc">tokenizer、embedding、预测下一个字、温度/top-k/top-p 采样、困惑度。配真实权重回放。</span>
         </a>
-        <a class="toc-card reveal" href="chapter-20.html">
+        <a class="toc-card toc-card--core reveal" href="chapter-20.html">
+          <span class="toc-card__badge">核心</span>
           <span class="toc-card__num">第 20 章</span>
           <span class="toc-card__title">通往大模型:原理与训练</span>
           <span class="toc-card__desc">分词/BPE、词嵌入与向量语义、规模定律与涌现、预训练/微调/RLHF/蒸馏,以及幻觉等局限。</span>

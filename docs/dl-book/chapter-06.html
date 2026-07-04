@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 6 章 · 反向传播 | 深度学习入门</title>
+    <title>第 6 章 · 反向传播 | 从神经元到大模型</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -26,6 +26,7 @@
             <li>链式法则的直觉:把“最终的错”一段段分配责任回去;</li>
             <li>反向传播的三步:从输出误差出发 → 逐层往回传 → 算出每个权重<strong>和偏置</strong>的梯度;</li>
             <li>怎么<strong>按真实计算顺序</strong>,把配套速查图里的公式(含 <var>w</var> 和 <var>b</var>)一条条现场推出来(而不是死记);</li>
+            <li>为什么<strong>一层前向其实就是一次矩阵乘法</strong>,<var>w</var> 是每层一整块矩阵(MNIST 摊开就是三次矩阵乘);</li>
             <li>为什么前向时要存下每层的 <var>z</var>(<a class="xref" href="chapter-03.html#5-逐行读懂前向传播">第 3 章那个伏笔</a>);</li>
             <li>逐行读懂真实的反向传播实现;</li>
             <li><strong>矩阵怎么求导</strong>:为什么 <code>∂L/∂W = Xᵀ·G</code>,以及它凭什么等于“一堆 MNIST 式标量求导打包成一次矩阵乘”——这是大模型梯度不爆炸的关键。</li>
@@ -314,6 +315,131 @@
           </p>
         </div>
 
+        <h3>退一步:w 其实是矩阵,一层前向就是一次矩阵乘法</h3>
+        <p>
+          第 1 步我们盯着<strong>一个</strong>神经元算
+          <var>net</var><sub>10</sub> = <var>out</var><sub>00</sub>·<var>w</var><sub>100</sub> + <var>out</var><sub>01</sub>·<var>w</var><sub>101</sub> + <var>b</var><sub>10</sub>。
+          现在退一步,把<strong>同一层的所有神经元</strong>一起看——你会发现刚才那一堆加权求和,其实是一次<strong>矩阵乘法</strong>,
+          而 <var>w</var> 根本不是零散的一根根线,而是<strong>一整块矩阵</strong>。
+        </p>
+        <p>
+          还是用<strong>速查图那个小网络</strong>。第 1 层有两个神经元(<var>b</var><sub>10</sub>、<var>b</var><sub>11</sub>),
+          上一层是两个输入(<var>out</var><sub>00</sub>、<var>out</var><sub>01</sub>)。第 1 步我们只写了 0 号神经元的 <var>net</var><sub>10</sub>,
+          现在把 1 号神经元 <var>net</var><sub>11</sub> = <var>out</var><sub>00</sub>·<var>w</var><sub>110</sub> + <var>out</var><sub>01</sub>·<var>w</var><sub>111</sub> + <var>b</var><sub>11</sub> 也<strong>并排写下来</strong>:
+        </p>
+        <div class="mathblock reveal">
+          <var>net</var><sub>10</sub> = <var>w</var><sub>100</sub>·<var>out</var><sub>00</sub> + <var>w</var><sub>101</sub>·<var>out</var><sub>01</sub> + <var>b</var><sub>10</sub><br />
+          <var>net</var><sub>11</sub> = <var>w</var><sub>110</sub>·<var>out</var><sub>00</sub> + <var>w</var><sub>111</sub>·<var>out</var><sub>01</sub> + <var>b</var><sub>11</sub>
+          <span class="label">两行长得一模一样,只是换了神经元下标——这种“同一个模板重复很多遍”正是矩阵乘法的信号</span>
+        </div>
+        <p>
+          把这两行“打包”:所有 <var>w</var> 排成一块 <strong>2×2 的矩阵</strong> <var>W</var><sub>1</sub>(第 <var>o</var> 行 = 第 <var>o</var> 号神经元的两根权重),
+          输入排成<strong>竖着的一列</strong> <code>[2×1]</code>,偏置也是一列。于是两行加权求和收成一个<strong>矩阵 × 向量</strong>:
+        </p>
+        <div class="mathblock reveal">
+          <span class="frac"><span>[ <var>net</var><sub>10</sub> ]</span><span>[ <var>net</var><sub>11</sub> ]</span></span>
+          =
+          <span class="frac"><span>[ <var>w</var><sub>100</sub>&nbsp;&nbsp;<var>w</var><sub>101</sub> ]</span><span>[ <var>w</var><sub>110</sub>&nbsp;&nbsp;<var>w</var><sub>111</sub> ]</span></span>
+          ·
+          <span class="frac"><span>[ <var>out</var><sub>00</sub> ]</span><span>[ <var>out</var><sub>01</sub> ]</span></span>
+          +
+          <span class="frac"><span>[ <var>b</var><sub>10</sub> ]</span><span>[ <var>b</var><sub>11</sub> ]</span></span>
+          <span class="label">形状 <strong>[2×2]·[2×1]=[2×1]</strong>,和<a class="xref" href="chapter-01.html#41-矩阵--向量--一堆点积">第 1 章 4.1</a> 那个例子一模一样;矩阵<strong>第 <var>o</var> 行</strong>点乘输入,正好还原第 1 步那个 <var>net</var><sub>1<var>o</var></sub></span>
+        </div>
+        <p>
+          验证一下矩阵<strong>第 1 行</strong>:<code>[w₁₀₀ w₁₀₁] · [out₀₀; out₀₁] = w₁₀₀·out₀₀ + w₁₀₁·out₀₁</code>,再加 <var>b</var><sub>10</sub>——
+          正是上面 <var>net</var><sub>10</sub> 那一行。<strong>矩阵乘法没算任何新东西,只是把“逐个神经元的加权求和”一次性摆平。</strong>
+          所以那块 <var>W</var><sub>1</sub> 就是仓库代码里的 <code>neuron_weight_[1]</code>,<code>neuron_weight_[1][o][i]</code> 就是它第 <var>o</var> 行第 <var>i</var> 列。写成通用形式:
+        </p>
+        <div class="mathblock reveal">
+          <var>net</var><sub><var>l</var></sub> = <var>W</var><sub><var>l</var></sub> · <var>out</var><sub><var>l</var>−1</sub> + <var>b</var><sub><var>l</var></sub>
+          &nbsp;&nbsp;&nbsp;&nbsp;
+          <var>out</var><sub><var>l</var></sub> = <var>f</var>(<var>net</var><sub><var>l</var></sub>)
+          <span class="label">一层 = 一次“矩阵 × 向量 + 偏置”,再逐元素过激活 <var>f</var>;<var>W</var><sub><var>l</var></sub> 形状 = <code>[本层神经元数 × 上一层神经元数]</code></span>
+        </div>
+        <p>
+          光看一层还不够。<strong>把这个小网络从输入一路乘到输出走一遍</strong>,你就能看清数据的“维度”是怎么被每层矩阵一步步改写的。
+          它的结构是 <code>2 → 2 → 2 → 1</code>:2 个输入,两个隐藏层各 2 个神经元,最后 1 个输出。每层都是“<strong>矩阵 × 上一层的列向量 + 偏置,再过激活</strong>”,前一层的输出<strong>正好插进</strong>后一层做输入:
+        </p>
+        <div class="mathblock reveal">
+          <strong>输入</strong>&nbsp; <var>out</var><sub>0</sub> =
+          <span class="frac"><span>[ <var>out</var><sub>00</sub> ]</span><span>[ <var>out</var><sub>01</sub> ]</span></span>
+        </div>
+        <div class="mathblock reveal">
+          <strong>第 1 层</strong>&nbsp;
+          <var>net</var><sub>1</sub> =
+          <span class="frac"><span>[ <var>w</var><sub>100</sub>&nbsp;&nbsp;<var>w</var><sub>101</sub> ]</span><span>[ <var>w</var><sub>110</sub>&nbsp;&nbsp;<var>w</var><sub>111</sub> ]</span></span>
+          ·
+          <span class="frac"><span>[ <var>out</var><sub>00</sub> ]</span><span>[ <var>out</var><sub>01</sub> ]</span></span>
+          + <var>b</var><sub>1</sub> =
+          <span class="frac"><span>[ <var>net</var><sub>10</sub> ]</span><span>[ <var>net</var><sub>11</sub> ]</span></span>
+          &nbsp;→&nbsp; <var>out</var><sub>1</sub> = <var>f</var>(<var>net</var><sub>1</sub>)
+          <span class="label"><strong>[2×2]·[2×1]=[2×1]</strong>:2 维输入 → 2 维隐藏输出。激活 <var>f</var> 逐元素作用,不改形状</span>
+        </div>
+        <div class="mathblock reveal">
+          <strong>第 2 层</strong>&nbsp;
+          <var>net</var><sub>2</sub> =
+          <span class="frac"><span>[ <var>w</var><sub>200</sub>&nbsp;&nbsp;<var>w</var><sub>201</sub> ]</span><span>[ <var>w</var><sub>210</sub>&nbsp;&nbsp;<var>w</var><sub>211</sub> ]</span></span>
+          ·
+          <span class="frac"><span>[ <var>out</var><sub>10</sub> ]</span><span>[ <var>out</var><sub>11</sub> ]</span></span>
+          + <var>b</var><sub>2</sub> =
+          <span class="frac"><span>[ <var>net</var><sub>20</sub> ]</span><span>[ <var>net</var><sub>21</sub> ]</span></span>
+          &nbsp;→&nbsp; <var>out</var><sub>2</sub> = <var>f</var>(<var>net</var><sub>2</sub>)
+          <span class="label"><strong>[2×2]·[2×1]=[2×1]</strong>:上一层的 <var>out</var><sub>1</sub> 原样插进来当输入,又是 2 维 → 2 维</span>
+        </div>
+        <div class="mathblock reveal">
+          <strong>输出层</strong>&nbsp;
+          <var>net</var><sub>3</sub> =
+          [ <var>w</var><sub>300</sub>&nbsp;&nbsp;<var>w</var><sub>301</sub> ]
+          ·
+          <span class="frac"><span>[ <var>out</var><sub>20</sub> ]</span><span>[ <var>out</var><sub>21</sub> ]</span></span>
+          + <var>b</var><sub>30</sub> = <var>net</var><sub>30</sub>
+          &nbsp;→&nbsp; <var>out</var><sub>30</sub> = <var>f</var>(<var>net</var><sub>30</sub>)
+          <span class="label"><strong>[1×2]·[2×1]=[1×1]</strong>:输出层只有 1 个神经元,所以 <var>W</var><sub>3</sub> 只剩 1 行,2 维被压成最终 1 个数</span>
+        </div>
+        <p>
+          把这四步接起来看,<strong>维度是一条被矩阵改写的流水线</strong>:
+          <code>[2×1]</code> <span class="dim-arrow">──<var>W</var><sub>1</sub>──▸</span> <code>[2×1]</code>
+          <span class="dim-arrow">──<var>W</var><sub>2</sub>──▸</span> <code>[2×1]</code>
+          <span class="dim-arrow">──<var>W</var><sub>3</sub>──▸</span> <code>[1×1]</code>。
+          每层 <var>W</var> 的<strong>行数 = 本层要输出几维</strong>、<strong>列数 = 上一层进来几维</strong>;
+          相邻两层“列对行”严丝合缝(前一层输出 2 维,后一层 <var>W</var> 就得有 2 列),这正是<a class="xref" href="chapter-01.html#43-形状-能不能乘乘出来多大看一眼就知道">第 1 章 4.3</a> 的形状规则“中间对齐、两头留下”在整张网络上的连锁体现。
+        </p>
+        <p>
+          小网络里每个 <var>W</var> 只是 2×2 或 1×2,换成仓库那个 MNIST 网络 <code>784→128→64→10</code>,<strong>公式一字不改</strong>,只是每层的行列数换成真实维度——同一条“维度流水线”变长、变宽而已:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>这一层</th><th>权重矩阵 <var>W</var></th><th>这一层的运算(矩阵 × 列向量)→ 输出</th></tr></thead>
+            <tbody>
+              <tr><td>输入</td><td>—</td><td>一张图拉直成 <code>[784×1]</code> 一列</td></tr>
+              <tr><td>第 1 层</td><td><var>W</var><sub>1</sub> <code>[128×784]</code></td><td><code>[128×784]·[784×1]=[128×1]</code>,过 ReLU</td></tr>
+              <tr><td>第 2 层</td><td><var>W</var><sub>2</sub> <code>[64×128]</code></td><td><code>[64×128]·[128×1]=[64×1]</code>,过 ReLU</td></tr>
+              <tr><td>输出层</td><td><var>W</var><sub>3</sub> <code>[10×64]</code></td><td><code>[10×64]·[64×1]=[10×1]</code>,再 softmax</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">和上面 2×2 那步<strong>形状规则完全一致</strong>(中间对齐、两头留下);784 维进、10 维概率出。</p>
+        </div>
+        <p>
+          再把<strong>一整批</strong>样本(<a class="xref" href="chapter-05.html">第 5 章</a>的 minibatch)按行堆成一个矩阵 <var>X</var> <code>[B×784]</code>,
+          那连“逐个样本”的循环都省了,一层前向直接是<strong>矩阵 × 矩阵</strong>:
+        </p>
+        <div class="mathblock reveal">
+          <var>Z</var><sub>1</sub> = <var>X</var> · <var>W</var><sub>1</sub><sup>T</sup> + <var>b</var><sub>1</sub>
+          &nbsp;→&nbsp;
+          <code>[B×784]·[784×128] = [B×128]</code>
+          <span class="label">一批 B 张图一次算完;这种“矩阵×矩阵”就是所谓 GEMM,也是 GPU 能大规模并行加速的根本(<a class="xref" href="chapter-20.html">第 20 章</a>)</span>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">代码里是 for 循环,数学骨架是矩阵乘</span>
+          <p>
+            仓库的 <code>ForwardPropagationBatch</code> 为了不依赖矩阵库,把这次矩阵乘<strong>拆成了三重 for 循环</strong>(逐样本、逐神经元、逐输入)一个个标量地累加——
+            但它算的东西,一字不差就是上面的 <var>W</var>·<var>out</var>。所以“深度学习本质是海量矩阵乘法”这句话,落到这个仓库就是那几行循环。
+            这也埋下一个悬念:<strong>前向是矩阵乘,那反向求梯度呢?</strong>往后到<a class="xref" href="chapter-06.html#6-从一个数到一整块-矩阵是怎么求导的">第 6 节</a>就会看到,
+            梯度 <code>∂L/∂W = Xᵀ·G</code> 同样是一次矩阵乘——前向、反向,从头到尾都是矩阵在动。
+          </p>
+        </div>
+
         <h2>4. 边看动画边回放一遍</h2>
         <p>
           公式一条条推完了,难免还是有点“只见树木”。<strong>再回过头看它整体动起来</strong>:还是那个动画(和<a class="xref" href="chapter-03.html#3-边看动画边理解">第 3 章前向</a>同一个),这次请点 <strong>“切到反向传播”</strong>,再一步步点 <strong>“下一步”</strong>。
@@ -517,6 +643,7 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
             <li>权重梯度 = <var>δ</var> × 上一层输入;<strong>偏置梯度 = <var>δ</var> 本身</strong>(因为 ∂<var>net</var>/∂<var>b</var> = 1)。</li>
             <li>配套速查图五块:struct 看结构,base/neuron 看前向,formula/example 看反向,最后 <var>w</var>⁺ 才是更新;按“前向→损失→反向→更新”的真实顺序读,而不是按区块。</li>
             <li>反向时要用前向存下的 <var>z</var>(<code>neuron_preact_</code>)来算激活导数。</li>
+            <li><strong>一层前向 = 一次矩阵乘</strong>:<var>w</var> 是每层一块矩阵(代码里的 <code>neuron_weight_[l]</code>),<var>net</var> = <var>W</var>·<var>out</var> + <var>b</var>;整张网络就是一串矩阵乘叠起来,一整批样本更是 <var>X</var>·<var>W</var><sup>T</sup> 的矩阵×矩阵。</li>
             <li><strong>矩阵求导 = 标量求导批发</strong>:<code>∂L/∂W</code> 和 <code>W</code> 同形状,每格是个标量偏导;线性层 <code>Y=X·W</code> 的梯度是 <code>∂L/∂W=Xᵀ·G</code>、<code>∂L/∂X=G·Wᵀ</code>,靠形状对齐就能记住。</li>
             <li>大模型算全部梯度只需约 <strong>2 倍前向</strong>(autograd 自动完成),真正的瓶颈是<strong>显存(激活)、数值稳定、多卡同步</strong>,不是计算量。</li>
             <li>前向 → 损失 → 反向 → 更新,四步一循环,反复多次即为训练。</li>
