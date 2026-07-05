@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 29 章 · 从沙子到 CPU/GPU | 从神经元到大模型</title>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body data-chapter="29">
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">第 29 章 · 番外</p>
+        <h1>从沙子到 CPU/GPU</h1>
+
+        <p class="lead">
+          你已经在这本书里见过很多矩阵乘法、梯度、Transformer 和大模型。但所有这些东西最后都要落到一块真实芯片上,
+          变成电流的通断、加法器的进位、寄存器的一拍一拍更新。
+          这一章不讲大模型怎么训练,只补一条更底层的链路:<strong>一粒沙子里的硅,到底怎么一路变成 CPU 和 GPU?</strong>
+        </p>
+
+        <div class="callout callout--note reveal">
+          <span class="callout__title">这一章和《从沙子到 Mythos》的关系</span>
+          <p>
+            <a class="xref" href="sand-to-mythos.html">《从沙子到 Mythos》</a>是视觉化时间线,负责把整段历史串成一条路。
+            本章是普通正文版,只拆硬件这半段:沙子、硅、半导体、二极管、三极管、逻辑门、加法器、存储、时钟、CPU、GPU。
+            后面的神经网络、大模型工程仍然回到第 1 章、第 21 章等主线章节里看。
+          </p>
+        </div>
+
+        <section class="objectives reveal">
+          <h2>读完这一章,你会明白</h2>
+          <ul>
+            <li>为什么偏偏是<strong>硅</strong>这种材料撑起了现代芯片;</li>
+            <li>半导体的关键不是“半导”,而是<strong>能被控制</strong>;</li>
+            <li>二极管为什么像电流单向阀,三极管为什么多一个“控制端”后就能做开关;</li>
+            <li>晶体管为什么可以看成一个由电信号控制的<strong>开关</strong>;</li>
+            <li>二极管网络、三极管反相器、NAND/NOR 门是怎么接起来的;</li>
+            <li>0/1、逻辑门、加法器、寄存器、时钟是怎么一层层堆成计算机的;</li>
+            <li>CPU 和 GPU 为什么走向两种完全不同的设计:一个追低延迟,一个追高吞吐。</li>
+          </ul>
+        </section>
+
+        <h2>1. 起点:沙子里有什么</h2>
+        <p>
+          沙子的主要成分之一是二氧化硅 SiO<sub>2</sub>。它不能直接拿来做芯片,但它提供了现代芯片最重要的元素:
+          <strong>硅</strong>。把二氧化硅还原、提纯、拉成单晶,再切成薄薄的晶圆,后面的电路才有地方生长。
+        </p>
+        <p>
+          硅之所以重要,不是因为它“天生会计算”,而是因为它刚好站在两个极端之间:
+          金属太容易导电,橡胶太不导电,它们都不方便做可控开关。硅是半导体,导电能力可以被杂质、电场和结构精细调节。
+          <strong>计算机需要的不是一根永远通电的线,而是一亿亿个听话的开关。</strong>
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 720 270" role="img" aria-label="从沙子到硅晶圆的流程图">
+              <rect x="46" y="72" width="130" height="86" rx="12" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="2" />
+              <text x="111" y="106" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">沙子</text>
+              <text x="111" y="130" text-anchor="middle" fill="#b6c5e1" font-size="12">SiO₂ 很多</text>
+
+              <rect x="236" y="72" width="130" height="86" rx="12" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="301" y="106" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">提纯硅</text>
+              <text x="301" y="130" text-anchor="middle" fill="#b6c5e1" font-size="12">杂质极少</text>
+
+              <rect x="426" y="72" width="130" height="86" rx="12" fill="rgba(106,195,255,0.13)" stroke="#6ac3ff" stroke-width="2" />
+              <text x="491" y="106" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">单晶硅棒</text>
+              <text x="491" y="130" text-anchor="middle" fill="#b6c5e1" font-size="12">原子排列整齐</text>
+
+              <rect x="606" y="72" width="86" height="86" rx="43" fill="rgba(139,123,255,0.13)" stroke="#8b7bff" stroke-width="2" />
+              <text x="649" y="106" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">晶圆</text>
+              <text x="649" y="130" text-anchor="middle" fill="#b6c5e1" font-size="12">芯片地基</text>
+
+              <g stroke="#8499bd" stroke-width="2" fill="none">
+                <path d="M176 115 H236" />
+                <path d="M366 115 H426" />
+                <path d="M556 115 H606" />
+              </g>
+              <g fill="#8499bd">
+                <polygon points="236,115 226,110 226,120" />
+                <polygon points="426,115 416,110 416,120" />
+                <polygon points="606,115 596,110 596,120" />
+              </g>
+              <text x="360" y="210" text-anchor="middle" fill="#8499bd" font-size="13">不是沙子直接变芯片,而是从沙子中得到高纯度、规则排列、可加工的硅晶圆</text>
+            </svg>
+          </div>
+          <p class="figure__cap">芯片的地基不是普通沙粒,而是经过提纯、拉晶、切片后的高纯单晶硅晶圆。</p>
+        </div>
+
+        <h3>1.1 晶圆上怎么“长出”电路</h3>
+        <p>
+          晶圆本身只是一片很干净、很平整的硅。要让它变成芯片,还要反复做几类工艺:
+          覆一层材料、涂光刻胶、用掩膜曝光、显影、蚀刻、掺杂、再覆下一层。每一轮只做一小层,
+          最后几十上百层叠起来,才形成金属线、晶体管、缓存、计算单元。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 320" role="img" aria-label="光刻把图案转移到晶圆上的过程">
+              <defs>
+                <linearGradient id="waferGlow29" x1="0" x2="1" y1="0" y2="1">
+                  <stop offset="0" stop-color="#6ac3ff" stop-opacity="0.32" />
+                  <stop offset="1" stop-color="#8b7bff" stop-opacity="0.18" />
+                </linearGradient>
+              </defs>
+              <g transform="translate(28 44)">
+                <text x="90" y="0" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">1. 涂胶</text>
+                <rect x="16" y="42" width="148" height="24" rx="6" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.6" />
+                <rect x="16" y="68" width="148" height="34" rx="8" fill="url(#waferGlow29)" stroke="#6ac3ff" stroke-width="1.6" />
+                <text x="90" y="125" text-anchor="middle" fill="#8499bd" font-size="11">硅片上盖一层光刻胶</text>
+              </g>
+              <g transform="translate(214 44)">
+                <text x="90" y="0" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">2. 曝光</text>
+                <rect x="30" y="20" width="120" height="22" rx="5" fill="rgba(15,23,42,0.72)" stroke="#8499bd" stroke-width="1.3" />
+                <rect x="48" y="20" width="18" height="22" fill="#ffcf72" opacity="0.9" />
+                <rect x="92" y="20" width="28" height="22" fill="#ffcf72" opacity="0.9" />
+                <g stroke="#ffcf72" stroke-width="1.3" opacity="0.8">
+                  <line x1="57" y1="42" x2="57" y2="70" /><line x1="106" y1="42" x2="106" y2="70" />
+                </g>
+                <rect x="16" y="70" width="148" height="24" rx="6" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.6" />
+                <rect x="16" y="96" width="148" height="34" rx="8" fill="url(#waferGlow29)" stroke="#6ac3ff" stroke-width="1.6" />
+                <text x="90" y="153" text-anchor="middle" fill="#8499bd" font-size="11">掩膜像模板,只让部分区域见光</text>
+              </g>
+              <g transform="translate(400 44)">
+                <text x="90" y="0" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">3. 显影/蚀刻</text>
+                <rect x="16" y="60" width="148" height="24" rx="6" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.6" />
+                <rect x="64" y="60" width="24" height="24" fill="#0f172a" opacity="0.95" />
+                <rect x="116" y="60" width="22" height="24" fill="#0f172a" opacity="0.95" />
+                <rect x="16" y="86" width="148" height="34" rx="8" fill="url(#waferGlow29)" stroke="#6ac3ff" stroke-width="1.6" />
+                <path d="M64 86 v34 M88 86 v34 M116 86 v34 M138 86 v34" stroke="#6ac3ff" stroke-width="1.1" opacity="0.7" />
+                <text x="90" y="145" text-anchor="middle" fill="#8499bd" font-size="11">露出的地方被洗掉或刻掉</text>
+              </g>
+              <g transform="translate(586 44)">
+                <text x="90" y="0" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">4. 叠很多层</text>
+                <rect x="16" y="40" width="148" height="18" rx="5" fill="rgba(142,240,209,0.20)" stroke="#8ef0d1" stroke-width="1.4" />
+                <rect x="16" y="62" width="148" height="18" rx="5" fill="rgba(255,207,114,0.22)" stroke="#ffcf72" stroke-width="1.4" />
+                <rect x="16" y="84" width="148" height="18" rx="5" fill="rgba(106,195,255,0.18)" stroke="#6ac3ff" stroke-width="1.4" />
+                <rect x="16" y="106" width="148" height="18" rx="5" fill="rgba(139,123,255,0.22)" stroke="#8b7bff" stroke-width="1.4" />
+                <g stroke="#eef4ff" stroke-width="1.1" opacity="0.75">
+                  <path d="M42 40 v84 M82 40 v84 M122 40 v84" />
+                </g>
+                <text x="90" y="149" text-anchor="middle" fill="#8499bd" font-size="11">晶体管和金属连线一层层堆起来</text>
+              </g>
+              <text x="380" y="280" text-anchor="middle" fill="#8499bd" font-size="13">光刻不是“画一张图”就完事,而是把极小的图案一层层转移到晶圆上</text>
+            </svg>
+          </div>
+          <p class="figure__cap">光刻的直觉:用光和模板把图案投到晶圆表面,再通过显影、蚀刻、掺杂等步骤把图案变成真实结构。</p>
+        </div>
+
+        <h2>2. 半导体:关键是“可控制”</h2>
+        <p>
+          纯硅每个原子最外层有 4 个电子,喜欢和周围硅原子形成稳定的共价键。这样一来,电子不太自由,纯硅本身并不是好导体。
+          但只要往硅里掺入极少量其他元素,情况就变了。
+        </p>
+        <ul>
+          <li><strong>掺磷</strong>:磷比硅多一个价电子,多出来的电子容易流动,形成 N 型半导体。</li>
+          <li><strong>掺硼</strong>:硼比硅少一个价电子,晶格里像多了一个“空位”,形成 P 型半导体。</li>
+        </ul>
+        <p>
+          这叫<strong>掺杂</strong>。掺杂不是把硅弄脏,而是有意给它一点“性格”:有的区域更愿意给出电子,有的区域更愿意接收电子。
+          把这些区域按特定结构排起来,电流就不再是随便流,而是可以被我们设计的规则控制。
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 330" role="img" aria-label="纯硅、N 型硅和 P 型硅的掺杂对比">
+              <g transform="translate(34 48)">
+                <text x="105" y="-14" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">纯硅</text>
+                <rect x="0" y="0" width="210" height="180" rx="14" fill="rgba(106,195,255,0.08)" stroke="#6ac3ff" stroke-width="1.8" />
+                <g fill="rgba(106,195,255,0.22)" stroke="#6ac3ff" stroke-width="1.4">
+                  <circle cx="50" cy="45" r="17" /><circle cx="105" cy="45" r="17" /><circle cx="160" cy="45" r="17" />
+                  <circle cx="50" cy="90" r="17" /><circle cx="105" cy="90" r="17" /><circle cx="160" cy="90" r="17" />
+                  <circle cx="50" cy="135" r="17" /><circle cx="105" cy="135" r="17" /><circle cx="160" cy="135" r="17" />
+                </g>
+                <g fill="#dce9ff" font-size="12" text-anchor="middle">
+                  <text x="50" y="49">Si</text><text x="105" y="49">Si</text><text x="160" y="49">Si</text>
+                  <text x="50" y="94">Si</text><text x="105" y="94">Si</text><text x="160" y="94">Si</text>
+                  <text x="50" y="139">Si</text><text x="105" y="139">Si</text><text x="160" y="139">Si</text>
+                </g>
+                <text x="105" y="218" text-anchor="middle" fill="#8499bd" font-size="12">电子被共价键“绑住”,不太自由</text>
+              </g>
+              <g transform="translate(274 48)">
+                <text x="105" y="-14" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">N 型:多一个电子</text>
+                <rect x="0" y="0" width="210" height="180" rx="14" fill="rgba(142,240,209,0.08)" stroke="#8ef0d1" stroke-width="1.8" />
+                <g fill="rgba(106,195,255,0.18)" stroke="#6ac3ff" stroke-width="1.2">
+                  <circle cx="50" cy="45" r="17" /><circle cx="105" cy="45" r="17" /><circle cx="160" cy="45" r="17" />
+                  <circle cx="50" cy="90" r="17" /><circle cx="160" cy="90" r="17" />
+                  <circle cx="50" cy="135" r="17" /><circle cx="105" cy="135" r="17" /><circle cx="160" cy="135" r="17" />
+                </g>
+                <circle cx="105" cy="90" r="20" fill="rgba(142,240,209,0.26)" stroke="#8ef0d1" stroke-width="1.8" />
+                <text x="105" y="95" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">P</text>
+                <circle cx="138" cy="72" r="8" fill="#ffcf72" />
+                <text x="138" y="76" text-anchor="middle" fill="#0f172a" font-size="11" font-weight="700">e</text>
+                <path d="M138 72 C166 58 180 86 158 106" fill="none" stroke="#ffcf72" stroke-width="1.8" stroke-dasharray="4 4" />
+                <text x="105" y="218" text-anchor="middle" fill="#8499bd" font-size="12">磷多出一个电子,更容易导电</text>
+              </g>
+              <g transform="translate(514 48)">
+                <text x="105" y="-14" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">P 型:多一个空位</text>
+                <rect x="0" y="0" width="210" height="180" rx="14" fill="rgba(255,143,163,0.08)" stroke="#ff8fa3" stroke-width="1.8" />
+                <g fill="rgba(106,195,255,0.18)" stroke="#6ac3ff" stroke-width="1.2">
+                  <circle cx="50" cy="45" r="17" /><circle cx="105" cy="45" r="17" /><circle cx="160" cy="45" r="17" />
+                  <circle cx="50" cy="90" r="17" /><circle cx="160" cy="90" r="17" />
+                  <circle cx="50" cy="135" r="17" /><circle cx="105" cy="135" r="17" /><circle cx="160" cy="135" r="17" />
+                </g>
+                <circle cx="105" cy="90" r="20" fill="rgba(255,143,163,0.20)" stroke="#ff8fa3" stroke-width="1.8" />
+                <text x="105" y="95" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">B</text>
+                <circle cx="138" cy="72" r="9" fill="none" stroke="#ff8fa3" stroke-width="2.2" />
+                <path d="M158 104 C178 90 166 66 138 72" fill="none" stroke="#ff8fa3" stroke-width="1.8" stroke-dasharray="4 4" />
+                <text x="105" y="218" text-anchor="middle" fill="#8499bd" font-size="12">硼少一个电子,像留下一个“空位”</text>
+              </g>
+            </svg>
+          </div>
+          <p class="figure__cap">掺杂的直觉:只换掉极少数硅原子,就能让局部区域偏向“多电子”或“多空位”,从而变得可设计、可控制。</p>
+        </div>
+
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">半导体不是“导一半电”</span>
+          <p>
+            “半导体”这个名字容易误导。它真正厉害的地方不是导电能力卡在中间,而是<strong>导电能力可以被改变</strong>。
+            可改变,才可控制;可控制,才可做开关;可做开关,才可做数字电路。
+          </p>
+        </div>
+
+        <h2>3. 二极管:先做出电流的单向阀</h2>
+        <p>
+          有了 P 型和 N 型半导体,第一件自然的事是把它们贴在一起。这条边界叫 <strong>PN 结</strong>。
+          PN 结很特别:它不是一根普通导线,而像一个电流单向阀。电压方向合适时,电子和空位被推向交界处,
+          电流容易通过;电压方向反过来时,交界处的“耗尽层”变宽,电流很难通过。
+        </p>
+        <p>
+          这就是<strong>二极管</strong>的核心:两个端子,只偏向让电流朝一个方向走。它已经能做整流、保护、简单逻辑,
+          但还不够成为计算机的核心开关。原因也很简单:二极管只有两个端子,电流能不能过主要取决于自己两端电压,
+          <strong>缺一个独立的“控制端”</strong>。
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 320" role="img" aria-label="PN 结二极管正向导通和反向截止">
+              <text x="190" y="34" text-anchor="middle" fill="#eef4ff" font-size="16" font-weight="700">正向偏置:容易导通</text>
+              <text x="570" y="34" text-anchor="middle" fill="#eef4ff" font-size="16" font-weight="700">反向偏置:很难通过</text>
+
+              <g transform="translate(50 70)">
+                <rect x="0" y="0" width="140" height="90" rx="12" fill="rgba(255,143,163,0.13)" stroke="#ff8fa3" stroke-width="2" />
+                <rect x="140" y="0" width="140" height="90" rx="12" fill="rgba(142,240,209,0.13)" stroke="#8ef0d1" stroke-width="2" />
+                <rect x="126" y="0" width="28" height="90" fill="rgba(255,207,114,0.18)" stroke="#ffcf72" stroke-width="1.4" />
+                <text x="70" y="50" text-anchor="middle" fill="#eef4ff" font-size="20" font-weight="700">P</text>
+                <text x="210" y="50" text-anchor="middle" fill="#eef4ff" font-size="20" font-weight="700">N</text>
+                <text x="140" y="116" text-anchor="middle" fill="#8499bd" font-size="12">耗尽层较窄</text>
+                <path d="M36 150 H244" stroke="#8ef0d1" stroke-width="3" />
+                <polygon points="244,150 230,143 230,157" fill="#8ef0d1" />
+                <text x="140" y="184" text-anchor="middle" fill="#8ef0d1" font-size="13">电流能过</text>
+              </g>
+
+              <g transform="translate(430 70)">
+                <rect x="0" y="0" width="140" height="90" rx="12" fill="rgba(255,143,163,0.13)" stroke="#ff8fa3" stroke-width="2" />
+                <rect x="140" y="0" width="140" height="90" rx="12" fill="rgba(142,240,209,0.13)" stroke="#8ef0d1" stroke-width="2" />
+                <rect x="104" y="0" width="72" height="90" fill="rgba(255,207,114,0.18)" stroke="#ffcf72" stroke-width="1.4" />
+                <text x="70" y="50" text-anchor="middle" fill="#eef4ff" font-size="20" font-weight="700">P</text>
+                <text x="210" y="50" text-anchor="middle" fill="#eef4ff" font-size="20" font-weight="700">N</text>
+                <text x="140" y="116" text-anchor="middle" fill="#8499bd" font-size="12">耗尽层变宽</text>
+                <path d="M36 150 H112" stroke="#ff8fa3" stroke-width="3" />
+                <line x1="128" y1="136" x2="154" y2="164" stroke="#ff8fa3" stroke-width="3" />
+                <line x1="154" y1="136" x2="128" y2="164" stroke="#ff8fa3" stroke-width="3" />
+                <text x="140" y="184" text-anchor="middle" fill="#ff8fa3" font-size="13">电流被挡住</text>
+              </g>
+
+              <text x="380" y="280" text-anchor="middle" fill="#8499bd" font-size="13">PN 结让“方向”有了意义:同一块半导体结构,正着推和反着推的结果完全不同</text>
+            </svg>
+          </div>
+          <p class="figure__cap">二极管的直觉:PN 结像单向阀,正向容易导通,反向大多截止。</p>
+        </div>
+
+        <h2>4. 三极管:多一个控制端,电路才会“听话”</h2>
+        <p>
+          二极管能控制方向,但不能用一个独立信号去控制另一条电流。真正的跃迁来自<strong>三端器件</strong>。
+          早期电子时代常讲<strong>三极管</strong>(BJT),它有发射极、基极、集电极。直觉上:
+          <strong>基极一股很小的电流,可以控制集电极到发射极之间一股大得多的电流。</strong>
+        </p>
+        <p>
+          这件事非常关键。因为有了“控制端”,电路就能做两件事:一是<strong>放大</strong>(小信号控制大信号),
+          二是<strong>开关</strong>(基极没有信号就关,有足够信号就开)。数字计算主要吃第二个能力。
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 330" role="img" aria-label="NPN 三极管用基极小电流控制大电流">
+              <text x="380" y="34" text-anchor="middle" fill="#eef4ff" font-size="17" font-weight="700">三极管:用小信号控制大电流</text>
+              <g transform="translate(80 70)">
+                <rect x="80" y="20" width="86" height="62" rx="12" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="2" />
+                <rect x="80" y="82" width="86" height="34" rx="8" fill="rgba(255,143,163,0.14)" stroke="#ff8fa3" stroke-width="2" />
+                <rect x="80" y="116" width="86" height="62" rx="12" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="2" />
+                <text x="123" y="57" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">N</text>
+                <text x="123" y="105" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">P</text>
+                <text x="123" y="153" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">N</text>
+                <text x="205" y="44" fill="#8ef0d1" font-size="13">集电极 C</text>
+                <text x="205" y="104" fill="#ff8fa3" font-size="13">基极 B</text>
+                <text x="205" y="166" fill="#8ef0d1" font-size="13">发射极 E</text>
+                <line x1="166" y1="51" x2="198" y2="51" stroke="#8ef0d1" stroke-width="2" />
+                <line x1="166" y1="99" x2="198" y2="99" stroke="#ff8fa3" stroke-width="2" />
+                <line x1="166" y1="147" x2="198" y2="147" stroke="#8ef0d1" stroke-width="2" />
+              </g>
+              <g transform="translate(420 82)">
+                <path d="M84 0 V170" stroke="#8ef0d1" stroke-width="5" />
+                <polygon points="84,170 72,150 96,150" fill="#8ef0d1" />
+                <text x="112" y="46" fill="#8ef0d1" font-size="13">大电流</text>
+                <path d="M0 92 H76" stroke="#ffcf72" stroke-width="3" />
+                <polygon points="76,92 62,85 62,99" fill="#ffcf72" />
+                <text x="0" y="78" fill="#ffcf72" font-size="13">小基极电流</text>
+                <circle cx="84" cy="92" r="22" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="2" />
+                <text x="84" y="97" text-anchor="middle" fill="#eef4ff" font-size="12">控制</text>
+              </g>
+              <text x="380" y="282" text-anchor="middle" fill="#8499bd" font-size="13">三极管比二极管多出的不是“又一个脚”这么简单,而是多了一个能控制电流通断的入口</text>
+            </svg>
+          </div>
+          <p class="figure__cap">BJT 三极管的直觉:基极的小信号决定主通道的大电流能不能流。</p>
+        </div>
+
+        <div class="callout callout--note reveal">
+          <span class="callout__title">那 MOSFET 和三极管是什么关系?</span>
+          <p>
+            传统教材里“二极管、三极管”常指 PN 结二极管和 BJT 三极管。现代 CPU/GPU 里的主角则是 MOSFET,
+            也是三端器件:源极、漏极、栅极。它不用基极电流控制,而是用<strong>栅极电压</strong>控制源漏之间是否导通。
+            所以本章接下来会把“三端可控开关”的直觉落到 MOSFET 上,因为真实数字芯片主要靠 CMOS MOSFET 搭出来。
+          </p>
+        </div>
+
+        <h2>5. MOSFET:现代芯片里的主力开关</h2>
+        <p>
+          芯片里最关键的积木是<strong>晶体管</strong>。早期电子学常讲三极管,现代数字芯片里更常见的是 MOSFET。
+          名字可以先放一边,核心直觉一样:<strong>用一个小信号,控制另一条电流通不通。</strong>
+        </p>
+        <p>
+          你可以把 MOSFET 想成一条水渠。源极和漏极之间本来不一定通,栅极像水闸的控制杆。
+          给栅极一个合适电压,下面就形成一条可通电的“沟道”;撤掉这个电压,沟道消失,电流被切断。
+          于是一个晶体管就有了两种稳定姿态:
+        </p>
+        <div class="calc-table reveal">
+          <table>
+            <thead><tr><th>栅极信号</th><th>源极到漏极</th><th>数字抽象</th></tr></thead>
+            <tbody>
+              <tr><td>低电压</td><td>不导通</td><td>0</td></tr>
+              <tr><td>高电压</td><td>导通</td><td>1</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">真实电路比这复杂,但入门时先记住这一层:晶体管就是可以被电压控制的开关。</p>
+        </div>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 720 270" role="img" aria-label="MOSFET 晶体管开关示意">
+              <rect x="76" y="154" width="220" height="34" rx="10" fill="rgba(106,195,255,0.11)" stroke="#6ac3ff" stroke-width="2" />
+              <rect x="106" y="118" width="50" height="36" rx="6" fill="rgba(142,240,209,0.18)" stroke="#8ef0d1" stroke-width="2" />
+              <rect x="216" y="118" width="50" height="36" rx="6" fill="rgba(142,240,209,0.18)" stroke="#8ef0d1" stroke-width="2" />
+              <rect x="161" y="66" width="50" height="34" rx="6" fill="rgba(255,207,114,0.18)" stroke="#ffcf72" stroke-width="2" />
+              <line x1="186" y1="100" x2="186" y2="130" stroke="#ffcf72" stroke-width="2" stroke-dasharray="4 4" />
+              <text x="131" y="142" text-anchor="middle" fill="#eef4ff" font-size="12">源极</text>
+              <text x="241" y="142" text-anchor="middle" fill="#eef4ff" font-size="12">漏极</text>
+              <text x="186" y="88" text-anchor="middle" fill="#eef4ff" font-size="12">栅极</text>
+              <text x="186" y="222" text-anchor="middle" fill="#8499bd" font-size="12">栅极没给足电压:沟道断开,不导通</text>
+
+              <rect x="424" y="154" width="220" height="34" rx="10" fill="rgba(106,195,255,0.11)" stroke="#6ac3ff" stroke-width="2" />
+              <rect x="454" y="118" width="50" height="36" rx="6" fill="rgba(142,240,209,0.18)" stroke="#8ef0d1" stroke-width="2" />
+              <rect x="564" y="118" width="50" height="36" rx="6" fill="rgba(142,240,209,0.18)" stroke="#8ef0d1" stroke-width="2" />
+              <rect x="509" y="66" width="50" height="34" rx="6" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="2" />
+              <rect x="504" y="166" width="66" height="10" rx="5" fill="#ffcf72" opacity="0.78" />
+              <path d="M504 136 H564" stroke="#ffcf72" stroke-width="3" />
+              <polygon points="564,136 552,130 552,142" fill="#ffcf72" />
+              <line x1="534" y1="100" x2="534" y2="130" stroke="#ffcf72" stroke-width="2" />
+              <text x="479" y="142" text-anchor="middle" fill="#eef4ff" font-size="12">源极</text>
+              <text x="589" y="142" text-anchor="middle" fill="#eef4ff" font-size="12">漏极</text>
+              <text x="534" y="88" text-anchor="middle" fill="#eef4ff" font-size="12">栅极</text>
+              <text x="534" y="222" text-anchor="middle" fill="#8499bd" font-size="12">栅极给足电压:形成沟道,电流可以通过</text>
+            </svg>
+          </div>
+          <p class="figure__cap">MOSFET 的入门直觉:栅极电压像闸门,决定源极到漏极之间是否形成通路。</p>
+        </div>
+
+        <h2>6. 0 和 1:从电压到数字</h2>
+        <p>
+          计算机里的 0 和 1 并不是某种神秘符号,在电路底层通常就是两个电压范围。
+          低于某个范围,电路把它当作 0;高于某个范围,电路把它当作 1。中间留出一段灰区,是为了抗噪声:
+          真实电压会抖动,线路会受干扰,但只要还落在安全范围内,数字意义就不变。
+        </p>
+        <p>
+          为什么不用 0 到 9 十种电压来表示十进制?因为区分十档电压太容易被噪声打乱。
+          二进制只有两档,容错空间大,电路简单,可以堆得极深、跑得极快。
+          <strong>数字计算的强大,很大一部分来自“把模糊的连续电压,硬切成稳定的两种状态”。</strong>
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 740 260" role="img" aria-label="数字电路把连续电压切分成 0 和 1 的安全区间">
+              <line x1="70" y1="168" x2="670" y2="168" stroke="#8499bd" stroke-width="2" />
+              <polygon points="670,168 658,162 658,174" fill="#8499bd" />
+              <text x="680" y="173" fill="#8499bd" font-size="12">电压</text>
+              <rect x="96" y="104" width="190" height="64" rx="12" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="2" />
+              <rect x="454" y="104" width="190" height="64" rx="12" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="2" />
+              <rect x="304" y="104" width="132" height="64" rx="12" fill="rgba(255,207,114,0.10)" stroke="#ffcf72" stroke-width="1.6" stroke-dasharray="5 5" />
+              <text x="191" y="140" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">安全的 0</text>
+              <text x="370" y="140" text-anchor="middle" fill="#ffcf72" font-size="14">灰区</text>
+              <text x="549" y="140" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">安全的 1</text>
+              <line x1="304" y1="82" x2="304" y2="190" stroke="#ffcf72" stroke-width="1.5" stroke-dasharray="4 4" />
+              <line x1="436" y1="82" x2="436" y2="190" stroke="#ffcf72" stroke-width="1.5" stroke-dasharray="4 4" />
+              <text x="304" y="70" text-anchor="middle" fill="#8499bd" font-size="11">低阈值</text>
+              <text x="436" y="70" text-anchor="middle" fill="#8499bd" font-size="11">高阈值</text>
+              <path d="M115 196 C150 180 178 183 210 193 S280 210 322 188 S398 164 442 184 S520 216 628 190" fill="none" stroke="#ff8fa3" stroke-width="2" />
+              <text x="372" y="226" text-anchor="middle" fill="#8499bd" font-size="12">真实电压会抖动,但只要还在安全区,数字含义就不会变</text>
+            </svg>
+          </div>
+          <p class="figure__cap">二进制抗噪声:电压不是精确等于 0V 或某个固定高电压,而是落在“安全区间”里就算 0 或 1。</p>
+        </div>
+
+        <h2>7. 逻辑门:开关组合成判断</h2>
+        <p>
+          一个晶体管只能控制通断,但多个晶体管连起来,就能做逻辑。
+          最基本的逻辑门有三类:NOT、AND、OR。
+        </p>
+        <div class="calc-table reveal">
+          <table>
+            <thead><tr><th>逻辑门</th><th>输入和输出关系</th><th>直觉</th></tr></thead>
+            <tbody>
+              <tr><td>NOT</td><td>输入 0 输出 1,输入 1 输出 0</td><td>反过来</td></tr>
+              <tr><td>AND</td><td>两个输入都为 1 才输出 1</td><td>两个条件都满足</td></tr>
+              <tr><td>OR</td><td>任一输入为 1 就输出 1</td><td>有一个条件满足</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">逻辑门接收 0/1,输出也是 0/1。复杂判断都能拆成这些简单门的组合。</p>
+        </div>
+        <p>
+          这一步很关键:晶体管本来只是物理开关,逻辑门让它第一次有了“判断”的味道。
+          只要能做判断,就能把判断继续组合成算术、存储、控制和程序。
+        </p>
+
+        <h3>7.1 二极管和三极管怎样拼出门电路</h3>
+        <p>
+          历史上真的存在过“二极管-三极管逻辑”(DTL)。它的思路可以这样理解:
+          <strong>二极管负责把多个输入先合并成一个逻辑条件,三极管负责把这个条件放大、反相、拉成干净的 0/1 输出。</strong>
+          二极管像几道单向阀,三极管像最后的电控闸门。
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 780 360" role="img" aria-label="二极管三极管逻辑门的直觉">
+              <text x="390" y="34" text-anchor="middle" fill="#eef4ff" font-size="17" font-weight="700">从器件到门:二极管合并输入,三极管整理输出</text>
+              <g transform="translate(50 78)">
+                <text x="132" y="-18" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">二极管网络</text>
+                <line x1="0" y1="48" x2="74" y2="48" stroke="#8499bd" stroke-width="2" />
+                <line x1="0" y1="112" x2="74" y2="112" stroke="#8499bd" stroke-width="2" />
+                <text x="-10" y="52" text-anchor="end" fill="#eef4ff" font-size="13">A</text>
+                <text x="-10" y="116" text-anchor="end" fill="#eef4ff" font-size="13">B</text>
+                <polygon points="74,32 74,64 104,48" fill="rgba(142,240,209,0.20)" stroke="#8ef0d1" stroke-width="2" />
+                <line x1="108" y1="30" x2="108" y2="66" stroke="#8ef0d1" stroke-width="2" />
+                <polygon points="74,96 74,128 104,112" fill="rgba(142,240,209,0.20)" stroke="#8ef0d1" stroke-width="2" />
+                <line x1="108" y1="94" x2="108" y2="130" stroke="#8ef0d1" stroke-width="2" />
+                <path d="M108 48 H158 M108 112 H158 M158 48 V112 M158 80 H228" stroke="#8499bd" stroke-width="2" fill="none" />
+                <text x="114" y="158" text-anchor="middle" fill="#8499bd" font-size="12">输入先经过二极管“汇合”</text>
+              </g>
+              <g transform="translate(340 78)">
+                <text x="108" y="-18" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">三极管/晶体管级</text>
+                <line x1="0" y1="80" x2="70" y2="80" stroke="#8499bd" stroke-width="2" />
+                <circle cx="110" cy="80" r="32" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" />
+                <line x1="110" y1="18" x2="110" y2="48" stroke="#8ef0d1" stroke-width="3" />
+                <line x1="110" y1="112" x2="110" y2="148" stroke="#8ef0d1" stroke-width="3" />
+                <line x1="70" y1="80" x2="92" y2="80" stroke="#ffcf72" stroke-width="3" />
+                <text x="110" y="85" text-anchor="middle" fill="#eef4ff" font-size="12">开关</text>
+                <text x="108" y="180" text-anchor="middle" fill="#8499bd" font-size="12">负责放大、反相、拉成干净输出</text>
+              </g>
+              <g transform="translate(602 78)">
+                <text x="64" y="-18" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">输出</text>
+                <rect x="0" y="54" width="128" height="54" rx="12" fill="rgba(139,123,255,0.16)" stroke="#8b7bff" stroke-width="2" />
+                <text x="64" y="86" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">0 或 1</text>
+                <line x1="-84" y1="80" x2="0" y2="80" stroke="#8499bd" stroke-width="2" />
+                <polygon points="0,80 -12,74 -12,86" fill="#8499bd" />
+                <text x="64" y="144" text-anchor="middle" fill="#8499bd" font-size="12">给下一级门继续使用</text>
+              </g>
+              <text x="390" y="310" text-anchor="middle" fill="#8499bd" font-size="13">门电路不是抽象表格凭空出现,而是由“单向阀 + 可控开关 + 电阻/电源”这些器件接出来的</text>
+            </svg>
+          </div>
+          <p class="figure__cap">DTL 的直觉链路:二极管处理多个输入的方向和组合,三极管/晶体管把结果整理成稳定输出。现代芯片则主要用 CMOS 直接用 MOSFET 拼门。</p>
+        </div>
+
+        <h3>7.2 现代芯片更常用 CMOS:用两个 MOSFET 造反相器</h3>
+        <p>
+          今天的 CPU/GPU 不会主要靠二极管和 BJT 三极管搭逻辑门,而是用 CMOS。最小的 CMOS 门是<strong>反相器</strong>:
+          上面一个 PMOS 负责把输出拉到高电压,下面一个 NMOS 负责把输出拉到低电压。输入为 0 时,上面的 PMOS 打开、下面的 NMOS 关闭,
+          输出被拉高;输入为 1 时正好相反,输出被拉低。于是它实现了 NOT。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 340" role="img" aria-label="CMOS 反相器输入 0 输出 1 输入 1 输出 0">
+              <text x="380" y="34" text-anchor="middle" fill="#eef4ff" font-size="17" font-weight="700">CMOS 反相器:现代数字电路的最小门之一</text>
+              <g transform="translate(92 72)">
+                <text x="140" y="-18" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">输入 0 → 输出 1</text>
+                <line x1="140" y1="0" x2="140" y2="34" stroke="#8ef0d1" stroke-width="3" />
+                <text x="150" y="16" fill="#8ef0d1" font-size="12">Vdd</text>
+                <rect x="92" y="34" width="96" height="44" rx="10" fill="rgba(142,240,209,0.16)" stroke="#8ef0d1" stroke-width="2" />
+                <text x="140" y="62" text-anchor="middle" fill="#eef4ff" font-size="12">PMOS 开</text>
+                <rect x="92" y="126" width="96" height="44" rx="10" fill="rgba(255,143,163,0.10)" stroke="#ff8fa3" stroke-width="2" stroke-dasharray="5 4" />
+                <text x="140" y="154" text-anchor="middle" fill="#eef4ff" font-size="12">NMOS 关</text>
+                <line x1="140" y1="78" x2="140" y2="126" stroke="#8ef0d1" stroke-width="3" />
+                <line x1="140" y1="170" x2="140" y2="206" stroke="#8499bd" stroke-width="2" stroke-dasharray="4 4" />
+                <line x1="188" y1="102" x2="242" y2="102" stroke="#8ef0d1" stroke-width="3" />
+                <text x="252" y="106" fill="#8ef0d1" font-size="13">输出高</text>
+                <line x1="32" y1="102" x2="92" y2="102" stroke="#ffcf72" stroke-width="2" />
+                <text x="22" y="106" text-anchor="end" fill="#ffcf72" font-size="13">输入 0</text>
+              </g>
+              <g transform="translate(452 72)">
+                <text x="140" y="-18" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">输入 1 → 输出 0</text>
+                <line x1="140" y1="0" x2="140" y2="34" stroke="#8499bd" stroke-width="2" stroke-dasharray="4 4" />
+                <text x="150" y="16" fill="#8499bd" font-size="12">Vdd</text>
+                <rect x="92" y="34" width="96" height="44" rx="10" fill="rgba(142,240,209,0.10)" stroke="#8ef0d1" stroke-width="2" stroke-dasharray="5 4" />
+                <text x="140" y="62" text-anchor="middle" fill="#eef4ff" font-size="12">PMOS 关</text>
+                <rect x="92" y="126" width="96" height="44" rx="10" fill="rgba(255,143,163,0.16)" stroke="#ff8fa3" stroke-width="2" />
+                <text x="140" y="154" text-anchor="middle" fill="#eef4ff" font-size="12">NMOS 开</text>
+                <line x1="140" y1="78" x2="140" y2="126" stroke="#8499bd" stroke-width="2" stroke-dasharray="4 4" />
+                <line x1="140" y1="170" x2="140" y2="206" stroke="#ff8fa3" stroke-width="3" />
+                <line x1="188" y1="102" x2="242" y2="102" stroke="#ff8fa3" stroke-width="3" />
+                <text x="252" y="106" fill="#ff8fa3" font-size="13">输出低</text>
+                <line x1="32" y1="102" x2="92" y2="102" stroke="#ffcf72" stroke-width="2" />
+                <text x="22" y="106" text-anchor="end" fill="#ffcf72" font-size="13">输入 1</text>
+              </g>
+              <text x="380" y="304" text-anchor="middle" fill="#8499bd" font-size="13">NOT 门就是这样来的:一个输入信号,控制上下两条通路谁打开,输出自然变成相反值</text>
+            </svg>
+          </div>
+          <p class="figure__cap">CMOS 反相器把“可控开关”变成 NOT 门。NAND、NOR 等门也是把 PMOS/NMOS 网络按不同方式串并联。</p>
+        </div>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 300" role="img" aria-label="NOT、AND、OR 三种逻辑门的符号和直觉">
+              <g transform="translate(64 56)">
+                <text x="82" y="-18" text-anchor="middle" fill="#eef4ff" font-size="16" font-weight="700">NOT</text>
+                <polygon points="30,40 30,120 110,80" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="2" />
+                <circle cx="122" cy="80" r="10" fill="rgba(15,23,42,0.95)" stroke="#6ac3ff" stroke-width="2" />
+                <line x1="0" y1="80" x2="30" y2="80" stroke="#8499bd" stroke-width="2" />
+                <line x1="132" y1="80" x2="164" y2="80" stroke="#8499bd" stroke-width="2" />
+                <text x="82" y="160" text-anchor="middle" fill="#8499bd" font-size="12">取反:0→1,1→0</text>
+              </g>
+              <g transform="translate(296 56)">
+                <text x="82" y="-18" text-anchor="middle" fill="#eef4ff" font-size="16" font-weight="700">AND</text>
+                <path d="M30 40 H78 A40 40 0 0 1 78 120 H30 Z" fill="rgba(142,240,209,0.12)" stroke="#8ef0d1" stroke-width="2" />
+                <line x1="0" y1="60" x2="30" y2="60" stroke="#8499bd" stroke-width="2" />
+                <line x1="0" y1="100" x2="30" y2="100" stroke="#8499bd" stroke-width="2" />
+                <line x1="118" y1="80" x2="164" y2="80" stroke="#8499bd" stroke-width="2" />
+                <text x="82" y="160" text-anchor="middle" fill="#8499bd" font-size="12">全都满足才输出 1</text>
+              </g>
+              <g transform="translate(528 56)">
+                <text x="82" y="-18" text-anchor="middle" fill="#eef4ff" font-size="16" font-weight="700">OR</text>
+                <path d="M30 40 C55 62 55 98 30 120 C76 120 115 105 132 80 C115 55 76 40 30 40 Z" fill="rgba(255,207,114,0.12)" stroke="#ffcf72" stroke-width="2" />
+                <line x1="0" y1="60" x2="40" y2="60" stroke="#8499bd" stroke-width="2" />
+                <line x1="0" y1="100" x2="40" y2="100" stroke="#8499bd" stroke-width="2" />
+                <line x1="132" y1="80" x2="164" y2="80" stroke="#8499bd" stroke-width="2" />
+                <text x="82" y="160" text-anchor="middle" fill="#8499bd" font-size="12">有一个满足就输出 1</text>
+              </g>
+              <text x="380" y="264" text-anchor="middle" fill="#8499bd" font-size="13">门电路像电路里的“语法”:每个门都很简单,但组合起来可以表达任意复杂判断</text>
+            </svg>
+          </div>
+          <p class="figure__cap">逻辑门符号不必死背。先抓住含义:NOT 取反,AND 要全部满足,OR 只要一个满足。</p>
+        </div>
+
+        <h2>8. 加法器:判断组合成算术</h2>
+        <p>
+          计算机里的加法也不是魔法。先看一位二进制加法:
+        </p>
+        <div class="calc-table reveal">
+          <table>
+            <thead><tr><th>A</th><th>B</th><th>本位结果 S</th><th>进位 C</th></tr></thead>
+            <tbody>
+              <tr><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+              <tr><td>0</td><td>1</td><td>1</td><td>0</td></tr>
+              <tr><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+              <tr><td>1</td><td>1</td><td>0</td><td>1</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">1 + 1 在二进制里写成 10,所以本位是 0,向高位进 1。</p>
+        </div>
+        <p>
+          这张表可以用逻辑门实现:本位结果 S 是 XOR,进位 C 是 AND。把许多一位加法器串起来,就能加多位二进制数。
+          乘法也可以拆成“移位 + 多次加法”。于是从逻辑门出发,机器就长出了算术能力。
+        </p>
+        <p>
+          CPU 里的 ALU,也就是算术逻辑单元,本质上就是把这些加法、位运算、比较等电路组织起来。
+          当你在 C++ 里写 <code>a + b</code> 时,最后一定会落到这类硬件结构上。
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 780 340" role="img" aria-label="半加器和多位加法器示意">
+              <g transform="translate(42 52)">
+                <text x="170" y="-18" text-anchor="middle" fill="#eef4ff" font-size="16" font-weight="700">半加器:一位加法</text>
+                <line x1="0" y1="56" x2="84" y2="56" stroke="#8499bd" stroke-width="2" />
+                <line x1="0" y1="126" x2="84" y2="126" stroke="#8499bd" stroke-width="2" />
+                <text x="-10" y="60" text-anchor="end" fill="#eef4ff" font-size="13">A</text>
+                <text x="-10" y="130" text-anchor="end" fill="#eef4ff" font-size="13">B</text>
+                <rect x="84" y="36" width="86" height="44" rx="10" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="2" />
+                <text x="127" y="64" text-anchor="middle" fill="#eef4ff" font-size="13">XOR</text>
+                <rect x="84" y="106" width="86" height="44" rx="10" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="2" />
+                <text x="127" y="134" text-anchor="middle" fill="#eef4ff" font-size="13">AND</text>
+                <line x1="170" y1="58" x2="270" y2="58" stroke="#8499bd" stroke-width="2" />
+                <line x1="170" y1="128" x2="270" y2="128" stroke="#8499bd" stroke-width="2" />
+                <text x="286" y="62" fill="#ffcf72" font-size="13">本位 S</text>
+                <text x="286" y="132" fill="#ffcf72" font-size="13">进位 C</text>
+                <text x="170" y="198" text-anchor="middle" fill="#8499bd" font-size="12">S=A XOR B, C=A AND B</text>
+              </g>
+              <g transform="translate(430 52)">
+                <text x="150" y="-18" text-anchor="middle" fill="#eef4ff" font-size="16" font-weight="700">串起来:多位加法</text>
+                <rect x="0" y="56" width="86" height="70" rx="12" fill="rgba(255,207,114,0.12)" stroke="#ffcf72" stroke-width="2" />
+                <rect x="118" y="56" width="86" height="70" rx="12" fill="rgba(255,207,114,0.12)" stroke="#ffcf72" stroke-width="2" />
+                <rect x="236" y="56" width="86" height="70" rx="12" fill="rgba(255,207,114,0.12)" stroke="#ffcf72" stroke-width="2" />
+                <text x="43" y="96" text-anchor="middle" fill="#eef4ff" font-size="13">第 0 位</text>
+                <text x="161" y="96" text-anchor="middle" fill="#eef4ff" font-size="13">第 1 位</text>
+                <text x="279" y="96" text-anchor="middle" fill="#eef4ff" font-size="13">第 2 位</text>
+                <path d="M86 91 H118 M204 91 H236" stroke="#8ef0d1" stroke-width="2.2" />
+                <polygon points="118,91 108,86 108,96" fill="#8ef0d1" />
+                <polygon points="236,91 226,86 226,96" fill="#8ef0d1" />
+                <text x="103" y="78" text-anchor="middle" fill="#8ef0d1" font-size="11">进位</text>
+                <text x="221" y="78" text-anchor="middle" fill="#8ef0d1" font-size="11">进位</text>
+                <text x="161" y="198" text-anchor="middle" fill="#8499bd" font-size="12">低位算出的进位,交给高位继续加</text>
+              </g>
+            </svg>
+          </div>
+          <p class="figure__cap">加法器的关键不是复杂公式,而是把“一位的和”和“进位”都用逻辑门算出来,再把进位一级级传下去。</p>
+        </div>
+
+        <h2>9. 存储和时钟:机器有了状态</h2>
+        <p>
+          只会算还不够。没有存储,机器每一步算完就忘,无法执行连续程序。
+          所以电路还需要“记住一位”的结构:锁存器、触发器、寄存器。
+        </p>
+        <p>
+          一个直觉是:把逻辑门的输出绕回输入,形成反馈,电路就可能稳定在 0 或 1 的某个状态。
+          再给它加上控制信号,它就能在指定时刻接收新值,平时保持旧值。这就是触发器和寄存器的基本思想。
+        </p>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">时钟像全芯片的节拍器</span>
+          <p>
+            如果所有电路都随时乱改状态,信号会互相追不上,结果很容易乱。时钟把时间切成一格一格:
+            第一个节拍取指令,第二个节拍译码,第三个节拍执行,后面再写回结果。
+            芯片不是一团电路自由发挥,而是一支按节拍行动的队伍。
+          </p>
+        </div>
+        <p>
+          有了逻辑门,机器会判断;有了加法器,机器会算数;有了寄存器和时钟,机器会记住并按步骤推进。
+          到这里,计算机最核心的骨架已经出现。
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 360" role="img" aria-label="锁存器、触发器、寄存器和时钟的关系">
+              <g transform="translate(44 46)">
+                <text x="130" y="-16" text-anchor="middle" fill="#eef4ff" font-size="16" font-weight="700">反馈让电路能记住</text>
+                <rect x="52" y="28" width="94" height="42" rx="10" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="2" />
+                <rect x="52" y="116" width="94" height="42" rx="10" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="2" />
+                <text x="99" y="54" text-anchor="middle" fill="#eef4ff" font-size="13">NOR</text>
+                <text x="99" y="142" text-anchor="middle" fill="#eef4ff" font-size="13">NOR</text>
+                <path d="M146 49 H218 V137 H146" stroke="#8499bd" stroke-width="2" fill="none" />
+                <path d="M146 137 H188 V49 H146" stroke="#8499bd" stroke-width="2" fill="none" />
+                <polygon points="146,49 158,43 158,55" fill="#8499bd" />
+                <polygon points="146,137 158,131 158,143" fill="#8499bd" />
+                <text x="136" y="216" text-anchor="middle" fill="#8499bd" font-size="12">输出绕回输入,状态就能保持</text>
+              </g>
+              <g transform="translate(340 46)">
+                <text x="160" y="-16" text-anchor="middle" fill="#eef4ff" font-size="16" font-weight="700">时钟决定什么时候更新</text>
+                <rect x="26" y="48" width="124" height="92" rx="14" fill="rgba(255,207,114,0.12)" stroke="#ffcf72" stroke-width="2" />
+                <text x="88" y="98" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">D 触发器</text>
+                <line x1="0" y1="76" x2="26" y2="76" stroke="#8499bd" stroke-width="2" />
+                <line x1="0" y1="118" x2="26" y2="118" stroke="#8499bd" stroke-width="2" />
+                <text x="-10" y="80" text-anchor="end" fill="#eef4ff" font-size="12">D</text>
+                <text x="-10" y="122" text-anchor="end" fill="#eef4ff" font-size="12">CLK</text>
+                <line x1="150" y1="94" x2="190" y2="94" stroke="#8499bd" stroke-width="2" />
+                <text x="202" y="98" fill="#eef4ff" font-size="12">Q</text>
+                <path d="M248 130 h22 v-54 h34 v54 h34 v-54 h34 v54 h34" stroke="#8ef0d1" stroke-width="2.5" fill="none" />
+                <line x1="270" y1="66" x2="270" y2="142" stroke="#8ef0d1" stroke-width="1.2" stroke-dasharray="3 3" />
+                <line x1="338" y1="66" x2="338" y2="142" stroke="#8ef0d1" stroke-width="1.2" stroke-dasharray="3 3" />
+                <text x="338" y="166" text-anchor="middle" fill="#8499bd" font-size="12">只在边沿那一刻采样</text>
+              </g>
+              <g transform="translate(126 284)">
+                <rect x="0" y="0" width="90" height="34" rx="8" fill="rgba(139,123,255,0.13)" stroke="#8b7bff" stroke-width="1.6" />
+                <rect x="118" y="0" width="90" height="34" rx="8" fill="rgba(139,123,255,0.13)" stroke="#8b7bff" stroke-width="1.6" />
+                <rect x="236" y="0" width="90" height="34" rx="8" fill="rgba(139,123,255,0.13)" stroke="#8b7bff" stroke-width="1.6" />
+                <rect x="354" y="0" width="90" height="34" rx="8" fill="rgba(139,123,255,0.13)" stroke="#8b7bff" stroke-width="1.6" />
+                <text x="45" y="22" text-anchor="middle" fill="#eef4ff" font-size="12">取指</text>
+                <text x="163" y="22" text-anchor="middle" fill="#eef4ff" font-size="12">译码</text>
+                <text x="281" y="22" text-anchor="middle" fill="#eef4ff" font-size="12">执行</text>
+                <text x="399" y="22" text-anchor="middle" fill="#eef4ff" font-size="12">写回</text>
+                <path d="M90 17 H118 M208 17 H236 M326 17 H354" stroke="#8499bd" stroke-width="2" />
+                <text x="222" y="68" text-anchor="middle" fill="#8499bd" font-size="12">CPU 指令流也是按时钟一步步推进</text>
+              </g>
+            </svg>
+          </div>
+          <p class="figure__cap">存储和时钟让“组合逻辑”变成“时序机器”:不只是算出结果,还能在正确节拍保存结果、推进下一步。</p>
+        </div>
+
+        <h2>10. 这些零件怎么一步步拼成 CPU</h2>
+        <p>
+          到这里我们有了几块关键积木:逻辑门能判断,加法器能算数,触发器能记一位,时钟能让状态按节拍更新。
+          但 CPU 不是把这些零件随便堆在一起,而是把它们组织成几个明确模块:
+        </p>
+        <div class="calc-table reveal">
+          <table>
+            <thead><tr><th>底层电路</th><th>组合后的模块</th><th>它在 CPU 里负责什么</th></tr></thead>
+            <tbody>
+              <tr><td>逻辑门 + 加法器 + 比较器</td><td><strong>ALU</strong></td><td>做加减、比较、位运算等真正的计算</td></tr>
+              <tr><td>很多触发器并排</td><td><strong>寄存器组</strong></td><td>临时放操作数和结果,离 ALU 最近</td></tr>
+              <tr><td>计数器 + 寄存器</td><td><strong>PC 程序计数器</strong></td><td>记住下一条指令在内存的哪个地址</td></tr>
+              <tr><td>译码逻辑</td><td><strong>控制单元</strong></td><td>看懂指令,发出“读寄存器/让 ALU 加/写回”等控制信号</td></tr>
+              <tr><td>锁存器阵列 / SRAM / DRAM</td><td><strong>缓存和内存</strong></td><td>存放程序指令和数据</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">CPU 不是一个更神秘的新东西,而是把“会算、会记、会按节拍行动”的电路组织成可执行指令的机器。</p>
+        </div>
+
+        <p>
+          关键转折是<strong>指令</strong>。人类不再直接拨开关,而是把“要做什么”编码成一串 0/1,放进内存。
+          比如某条机器指令可以表示“把寄存器 R2 和 R3 里的数相加,结果写回 R1”。CPU 每个时钟周期附近反复做同一个循环:
+        </p>
+        <ol>
+          <li><strong>取指</strong>:PC 指向内存地址,CPU 把那里的指令读进来。</li>
+          <li><strong>译码</strong>:控制单元拆开这串 0/1,看出它是加法、访存、跳转,还是别的操作。</li>
+          <li><strong>读数</strong>:从寄存器组或内存里取出需要的输入。</li>
+          <li><strong>执行</strong>:ALU 做加法、比较等操作;如果是访存指令,就去读写内存;如果是跳转指令,就改 PC。</li>
+          <li><strong>写回</strong>:把结果写回寄存器或内存,PC 指到下一条指令。</li>
+        </ol>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 800 430" role="img" aria-label="CPU 由程序计数器、指令译码器、寄存器组、ALU、缓存和内存组成">
+              <text x="400" y="34" text-anchor="middle" fill="#eef4ff" font-size="17" font-weight="700">最小 CPU 的骨架:取指 → 译码 → 执行 → 写回</text>
+
+              <rect x="42" y="86" width="150" height="220" rx="18" fill="rgba(106,195,255,0.08)" stroke="#6ac3ff" stroke-width="2" />
+              <text x="117" y="116" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">内存</text>
+              <rect x="68" y="142" width="98" height="28" rx="7" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.4" />
+              <text x="117" y="161" text-anchor="middle" fill="#b6c5e1" font-size="11">指令 0</text>
+              <rect x="68" y="178" width="98" height="28" rx="7" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="1.4" />
+              <text x="117" y="197" text-anchor="middle" fill="#eef4ff" font-size="11">指令 1</text>
+              <rect x="68" y="214" width="98" height="28" rx="7" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.4" />
+              <text x="117" y="233" text-anchor="middle" fill="#b6c5e1" font-size="11">数据</text>
+
+              <rect x="260" y="72" width="118" height="58" rx="14" fill="rgba(139,123,255,0.14)" stroke="#8b7bff" stroke-width="2" />
+              <text x="319" y="96" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">PC</text>
+              <text x="319" y="116" text-anchor="middle" fill="#b6c5e1" font-size="11">下一条地址</text>
+
+              <rect x="258" y="162" width="124" height="64" rx="14" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" />
+              <text x="320" y="189" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">指令寄存器</text>
+              <text x="320" y="210" text-anchor="middle" fill="#b6c5e1" font-size="11">刚取来的指令</text>
+
+              <rect x="258" y="258" width="124" height="64" rx="14" fill="rgba(142,240,209,0.13)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="320" y="285" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">控制单元</text>
+              <text x="320" y="306" text-anchor="middle" fill="#b6c5e1" font-size="11">译码并发信号</text>
+
+              <rect x="470" y="92" width="128" height="106" rx="16" fill="rgba(106,195,255,0.08)" stroke="#6ac3ff" stroke-width="2" />
+              <text x="534" y="121" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">寄存器组</text>
+              <g fill="rgba(106,195,255,0.18)" stroke="#6ac3ff" stroke-width="1.2">
+                <rect x="496" y="138" width="76" height="20" rx="5" />
+                <rect x="496" y="164" width="76" height="20" rx="5" />
+              </g>
+              <text x="534" y="153" text-anchor="middle" fill="#b6c5e1" font-size="10">R2</text>
+              <text x="534" y="179" text-anchor="middle" fill="#b6c5e1" font-size="10">R3</text>
+
+              <rect x="468" y="246" width="132" height="82" rx="16" fill="rgba(255,143,163,0.12)" stroke="#ff8fa3" stroke-width="2" />
+              <text x="534" y="279" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">ALU</text>
+              <text x="534" y="302" text-anchor="middle" fill="#b6c5e1" font-size="11">加 / 减 / 比较 / 与或非</text>
+
+              <rect x="656" y="148" width="98" height="118" rx="18" fill="rgba(142,240,209,0.10)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="705" y="181" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">写回</text>
+              <text x="705" y="204" text-anchor="middle" fill="#b6c5e1" font-size="11">结果 → R1</text>
+              <text x="705" y="226" text-anchor="middle" fill="#b6c5e1" font-size="11">或写回内存</text>
+
+              <path d="M192 192 H258" stroke="#8499bd" stroke-width="2" />
+              <polygon points="258,192 246,186 246,198" fill="#8499bd" />
+              <text x="224" y="178" text-anchor="middle" fill="#8499bd" font-size="11">取指</text>
+
+              <path d="M320 130 V162" stroke="#8499bd" stroke-width="2" />
+              <polygon points="320,162 314,150 326,150" fill="#8499bd" />
+              <path d="M320 226 V258" stroke="#8499bd" stroke-width="2" />
+              <polygon points="320,258 314,246 326,246" fill="#8499bd" />
+
+              <path d="M382 290 H468" stroke="#8499bd" stroke-width="2" />
+              <polygon points="468,290 456,284 456,296" fill="#8499bd" />
+              <text x="424" y="276" text-anchor="middle" fill="#8499bd" font-size="11">控制信号</text>
+
+              <path d="M534 198 V246" stroke="#8499bd" stroke-width="2" />
+              <polygon points="534,246 528,234 540,234" fill="#8499bd" />
+              <path d="M600 287 H656" stroke="#8499bd" stroke-width="2" />
+              <polygon points="656,287 644,281 644,293" fill="#8499bd" />
+              <path d="M656 204 H598" stroke="#8ef0d1" stroke-width="2" stroke-dasharray="4 4" />
+              <polygon points="598,204 610,198 610,210" fill="#8ef0d1" />
+              <text x="628" y="194" text-anchor="middle" fill="#8ef0d1" font-size="11">写回寄存器</text>
+
+              <path d="M260 101 H192" stroke="#8b7bff" stroke-width="2" stroke-dasharray="5 4" />
+              <polygon points="192,101 204,95 204,107" fill="#8b7bff" />
+              <text x="226" y="88" text-anchor="middle" fill="#8b7bff" font-size="11">PC 给地址</text>
+
+              <text x="400" y="382" text-anchor="middle" fill="#8499bd" font-size="13">程序 = 内存里的一串指令;CPU = 按时钟不断取出一条、看懂一条、执行一条的机器</text>
+            </svg>
+          </div>
+          <p class="figure__cap">这就是“从电路到 CPU”的关键拼装:能算的 ALU、能暂存的寄存器、能找下一条指令的 PC、能发控制信号的译码器,再加上内存和时钟。</p>
+        </div>
+
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">用一句伪机器指令串起来</span>
+          <p>
+            假设内存里有一条 <code>ADD R1, R2, R3</code>。CPU 先用 PC 找到它,把它取进指令寄存器;
+            控制单元译码出“这是加法”;寄存器组读出 R2 和 R3;ALU 把两个数相加;结果写回 R1;PC 再指向下一条指令。
+            这就是你写的高级代码最终会变成的底层节奏。
+          </p>
+        </div>
+
+        <h2>11. CPU:为通用程序而生</h2>
+        <p>
+          CPU 的任务很杂:运行操作系统、调度进程、处理文件、响应鼠标键盘、跑浏览器、编译代码、执行各种业务逻辑。
+          这些任务有大量分支和依赖,经常是“上一步结果决定下一步走哪条路”。
+        </p>
+        <p>
+          所以 CPU 的设计目标不是“把同一种小计算复制一万份”,而是<strong>把一条复杂指令流尽量快、尽量稳地跑完</strong>。
+          它会把很多晶体管花在这些地方:
+        </p>
+        <ul>
+          <li><strong>复杂控制单元</strong>:取指、译码、调度、处理分支。</li>
+          <li><strong>大缓存</strong>:尽量把马上要用的数据放在离核心很近的地方。</li>
+          <li><strong>分支预测</strong>:提前猜 if-else 会走哪边,猜对就省时间。</li>
+          <li><strong>乱序执行</strong>:当前指令在等数据时,先把不依赖它的其他指令做掉。</li>
+        </ul>
+        <p>
+          这些结构不直接做加法乘法,但能让少数几个强核心在复杂任务上跑得很快。
+          所以 CPU 像一个很强的通用指挥中心:人不多,但每个人装备精良、能处理复杂局面。
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 780 360" role="img" aria-label="CPU 为复杂指令流服务的内部结构示意">
+              <rect x="42" y="58" width="696" height="224" rx="20" fill="rgba(139,123,255,0.07)" stroke="#8b7bff" stroke-width="2" />
+              <text x="390" y="34" text-anchor="middle" fill="#eef4ff" font-size="17" font-weight="700">CPU 要把一条复杂指令流尽量跑快</text>
+              <g transform="translate(72 98)">
+                <rect x="0" y="0" width="116" height="72" rx="12" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="2" />
+                <text x="58" y="31" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">取指</text>
+                <text x="58" y="52" text-anchor="middle" fill="#b6c5e1" font-size="11">下一条在哪</text>
+              </g>
+              <g transform="translate(220 98)">
+                <rect x="0" y="0" width="116" height="72" rx="12" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="2" />
+                <text x="58" y="31" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">译码</text>
+                <text x="58" y="52" text-anchor="middle" fill="#b6c5e1" font-size="11">这条要干嘛</text>
+              </g>
+              <g transform="translate(368 98)">
+                <rect x="0" y="0" width="116" height="72" rx="12" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="2" />
+                <text x="58" y="31" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">调度</text>
+                <text x="58" y="52" text-anchor="middle" fill="#b6c5e1" font-size="11">谁先执行</text>
+              </g>
+              <g transform="translate(516 98)">
+                <rect x="0" y="0" width="150" height="72" rx="12" fill="rgba(255,143,163,0.13)" stroke="#ff8fa3" stroke-width="2" />
+                <text x="75" y="31" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">执行单元</text>
+                <text x="75" y="52" text-anchor="middle" fill="#b6c5e1" font-size="11">ALU / FPU / load-store</text>
+              </g>
+              <path d="M188 134 H220 M336 134 H368 M484 134 H516" stroke="#8499bd" stroke-width="2" />
+              <g fill="#8499bd">
+                <polygon points="220,134 210,129 210,139" />
+                <polygon points="368,134 358,129 358,139" />
+                <polygon points="516,134 506,129 506,139" />
+              </g>
+
+              <g transform="translate(92 206)">
+                <rect x="0" y="0" width="142" height="42" rx="10" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="1.6" />
+                <text x="71" y="26" text-anchor="middle" fill="#eef4ff" font-size="12">分支预测</text>
+              </g>
+              <g transform="translate(256 206)">
+                <rect x="0" y="0" width="142" height="42" rx="10" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="1.6" />
+                <text x="71" y="26" text-anchor="middle" fill="#eef4ff" font-size="12">乱序执行</text>
+              </g>
+              <g transform="translate(420 206)">
+                <rect x="0" y="0" width="142" height="42" rx="10" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="1.6" />
+                <text x="71" y="26" text-anchor="middle" fill="#eef4ff" font-size="12">L1 / L2 / L3 缓存</text>
+              </g>
+              <g transform="translate(584 206)">
+                <rect x="0" y="0" width="96" height="42" rx="10" fill="rgba(142,240,209,0.13)" stroke="#8ef0d1" stroke-width="1.6" />
+                <text x="48" y="26" text-anchor="middle" fill="#eef4ff" font-size="12">寄存器</text>
+              </g>
+              <text x="390" y="322" text-anchor="middle" fill="#8499bd" font-size="13">CPU 的大量面积不是直接“算”,而是在猜路、排队、搬数据、避免等待</text>
+            </svg>
+          </div>
+          <p class="figure__cap">CPU 的复杂来自通用性:程序下一步可能跳到任何地方,数据可能在内存深处,所以它需要很多控制和缓存电路来服务少数强核心。</p>
+        </div>
+
+        <h2>12. GPU:为海量并行而生</h2>
+        <p>
+          GPU 最早服务于图形渲染。屏幕上有成千上万个像素,每个像素都要做相似的计算:
+          光照、颜色、纹理、深度。它们之间大多互不依赖,非常适合同时算。
+        </p>
+        <p>
+          于是 GPU 走了和 CPU 相反的路线:少做复杂控制,少放大缓存,把更多面积塞进大量简单计算单元。
+          单个 GPU 核心没有 CPU 核心聪明,但数量极多,总体吞吐非常高。
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 720 320" role="img" aria-label="CPU 与 GPU 设计取向对比">
+              <text x="180" y="34" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">CPU</text>
+              <rect x="50" y="58" width="260" height="190" rx="16" fill="rgba(139,123,255,0.08)" stroke="#8b7bff" stroke-width="2" />
+              <rect x="80" y="88" width="76" height="70" rx="10" fill="rgba(255,207,114,0.22)" stroke="#ffcf72" stroke-width="2" />
+              <rect x="174" y="88" width="76" height="70" rx="10" fill="rgba(255,207,114,0.22)" stroke="#ffcf72" stroke-width="2" />
+              <text x="118" y="128" text-anchor="middle" fill="#eef4ff" font-size="13">强核</text>
+              <text x="212" y="128" text-anchor="middle" fill="#eef4ff" font-size="13">强核</text>
+              <rect x="80" y="178" width="200" height="24" rx="6" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="1.4" />
+              <text x="180" y="195" text-anchor="middle" fill="#dce9ff" font-size="11">大缓存</text>
+              <rect x="80" y="210" width="200" height="24" rx="6" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="1.4" />
+              <text x="180" y="227" text-anchor="middle" fill="#dce9ff" font-size="11">复杂控制</text>
+              <text x="180" y="282" text-anchor="middle" fill="#8499bd" font-size="13">擅长复杂分支、低延迟响应</text>
+
+              <text x="540" y="34" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">GPU</text>
+              <rect x="410" y="58" width="260" height="190" rx="16" fill="rgba(139,123,255,0.08)" stroke="#8b7bff" stroke-width="2" />
+              <g fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1">
+                <rect x="438" y="84" width="22" height="22" rx="4" /><rect x="470" y="84" width="22" height="22" rx="4" /><rect x="502" y="84" width="22" height="22" rx="4" /><rect x="534" y="84" width="22" height="22" rx="4" /><rect x="566" y="84" width="22" height="22" rx="4" /><rect x="598" y="84" width="22" height="22" rx="4" />
+                <rect x="438" y="118" width="22" height="22" rx="4" /><rect x="470" y="118" width="22" height="22" rx="4" /><rect x="502" y="118" width="22" height="22" rx="4" /><rect x="534" y="118" width="22" height="22" rx="4" /><rect x="566" y="118" width="22" height="22" rx="4" /><rect x="598" y="118" width="22" height="22" rx="4" />
+                <rect x="438" y="152" width="22" height="22" rx="4" /><rect x="470" y="152" width="22" height="22" rx="4" /><rect x="502" y="152" width="22" height="22" rx="4" /><rect x="534" y="152" width="22" height="22" rx="4" /><rect x="566" y="152" width="22" height="22" rx="4" /><rect x="598" y="152" width="22" height="22" rx="4" />
+                <rect x="438" y="186" width="22" height="22" rx="4" /><rect x="470" y="186" width="22" height="22" rx="4" /><rect x="502" y="186" width="22" height="22" rx="4" /><rect x="534" y="186" width="22" height="22" rx="4" /><rect x="566" y="186" width="22" height="22" rx="4" /><rect x="598" y="186" width="22" height="22" rx="4" />
+              </g>
+              <text x="540" y="235" text-anchor="middle" fill="#dce9ff" font-size="11">大量简单计算单元</text>
+              <text x="540" y="282" text-anchor="middle" fill="#8499bd" font-size="13">擅长同一操作铺到海量数据上</text>
+            </svg>
+          </div>
+          <p class="figure__cap">CPU 把晶体管花在“少数强核 + 缓存 + 控制”;GPU 把晶体管花在“大量计算单元”。这不是谁高级谁低级,而是服务的任务不同。</p>
+        </div>
+
+        <p>
+          后来 CUDA 等通用计算平台出现,程序员不必再把数据伪装成图像,可以直接让 GPU 做通用并行计算。
+          这就是 GPU 从“显卡”变成“深度学习算力底座”的关键转折。
+        </p>
+
+        <h3>12.1 GPU 的诀窍:一条指令,很多数据一起走</h3>
+        <p>
+          GPU 为了省控制电路,不会给每个小核心都配一套完整“指挥系统”。它常把一组线程绑在一起,
+          让它们执行同一条指令,只是处理不同的数据。这个思想常叫 SIMD / SIMT。
+          好处是控制电路省下来了,可以塞更多计算单元;坏处是很怕分支:如果同一组线程里有人要走 if 的左边、有人要走右边,
+          它们往往只能分批走,效率会掉。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 330" role="img" aria-label="GPU SIMT 一条指令处理很多数据">
+              <text x="380" y="34" text-anchor="middle" fill="#eef4ff" font-size="17" font-weight="700">GPU 喜欢这样的任务:同一条指令,铺到很多数据上</text>
+              <rect x="76" y="74" width="150" height="62" rx="14" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="2" />
+              <text x="151" y="101" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">同一条指令</text>
+              <text x="151" y="122" text-anchor="middle" fill="#b6c5e1" font-size="11">x = x × 2 + 1</text>
+              <path d="M226 105 H310" stroke="#8499bd" stroke-width="2" />
+              <polygon points="310,105 298,99 298,111" fill="#8499bd" />
+              <rect x="310" y="58" width="360" height="96" rx="18" fill="rgba(106,195,255,0.08)" stroke="#6ac3ff" stroke-width="2" />
+              <g fill="rgba(142,240,209,0.18)" stroke="#8ef0d1" stroke-width="1.3">
+                <rect x="334" y="82" width="42" height="42" rx="8" /><rect x="390" y="82" width="42" height="42" rx="8" /><rect x="446" y="82" width="42" height="42" rx="8" /><rect x="502" y="82" width="42" height="42" rx="8" /><rect x="558" y="82" width="42" height="42" rx="8" /><rect x="614" y="82" width="42" height="42" rx="8" />
+              </g>
+              <g fill="#eef4ff" font-size="12" text-anchor="middle">
+                <text x="355" y="108">d₀</text><text x="411" y="108">d₁</text><text x="467" y="108">d₂</text><text x="523" y="108">d₃</text><text x="579" y="108">d₄</text><text x="635" y="108">d₅</text>
+              </g>
+              <text x="490" y="182" text-anchor="middle" fill="#8499bd" font-size="12">每个小格处理不同数据,但执行同一种操作</text>
+
+              <rect x="120" y="222" width="210" height="48" rx="12" fill="rgba(142,240,209,0.12)" stroke="#8ef0d1" stroke-width="1.7" />
+              <text x="225" y="252" text-anchor="middle" fill="#eef4ff" font-size="13">矩阵乘法 / 图像像素 / 向量加法</text>
+              <text x="225" y="292" text-anchor="middle" fill="#8ef0d1" font-size="12">适合:大家路线一样</text>
+              <rect x="430" y="222" width="210" height="48" rx="12" fill="rgba(255,143,163,0.12)" stroke="#ff8fa3" stroke-width="1.7" />
+              <text x="535" y="252" text-anchor="middle" fill="#eef4ff" font-size="13">大量 if-else / 指针跳转</text>
+              <text x="535" y="292" text-anchor="middle" fill="#ff8fa3" font-size="12">不适合:大家路线不同</text>
+            </svg>
+          </div>
+          <p class="figure__cap">GPU 的吞吐来自“齐步走”:同一批线程最好执行同一条指令,只处理不同数据。矩阵乘法正好符合这个形状。</p>
+        </div>
+
+        <h2>13. 为什么 GPU 后来接住了神经网络</h2>
+        <p>
+          神经网络的核心计算,恰好是 GPU 最擅长的形状。比如第 3 章里的全连接层:
+        </p>
+        <div class="mathblock reveal">
+          H = XW + b
+          <span class="label">一批输入 X 乘上一整块权重 W,得到一批输出 H</span>
+        </div>
+        <p>
+          矩阵乘法里的很多位置可以并行计算:输出矩阵里的每个格子,基本都是“一行乘一列再加起来”。
+          这些乘加数量巨大、规则统一、分支很少,正好能喂给 GPU 的大量计算单元。
+        </p>
+        <p>
+          所以 CPU/GPU 的区别不只是“GPU 更快”这么简单。更准确地说:
+          <strong>CPU 适合复杂、串行、分支多的通用程序;GPU 适合规则、批量、可并行的数值计算。</strong>
+          深度学习刚好属于后者,于是从 2012 年 AlexNet 开始,GPU 成了深度学习爆发的重要底座。
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 420" role="img" aria-label="矩阵乘法的每个输出格子可以并行计算">
+              <text x="380" y="34" text-anchor="middle" fill="#eef4ff" font-size="17" font-weight="700">矩阵乘法为什么能喂饱 GPU</text>
+              <g transform="translate(52 80)">
+                <text x="64" y="-18" text-anchor="middle" fill="#8499bd" font-size="12">输入 X</text>
+                <g fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="1.4">
+                  <rect x="0" y="0" width="42" height="34" /><rect x="42" y="0" width="42" height="34" /><rect x="84" y="0" width="42" height="34" />
+                  <rect x="0" y="34" width="42" height="34" /><rect x="42" y="34" width="42" height="34" /><rect x="84" y="34" width="42" height="34" />
+                  <rect x="0" y="68" width="42" height="34" /><rect x="42" y="68" width="42" height="34" /><rect x="84" y="68" width="42" height="34" />
+                </g>
+                <rect x="0" y="34" width="126" height="34" fill="rgba(255,207,114,0.22)" stroke="#ffcf72" stroke-width="2.2" />
+              </g>
+              <text x="218" y="142" text-anchor="middle" fill="#eef4ff" font-size="20">×</text>
+              <g transform="translate(268 80)">
+                <text x="84" y="-18" text-anchor="middle" fill="#8499bd" font-size="12">权重 W</text>
+                <g fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="1.4">
+                  <rect x="0" y="0" width="42" height="34" /><rect x="42" y="0" width="42" height="34" /><rect x="84" y="0" width="42" height="34" /><rect x="126" y="0" width="42" height="34" />
+                  <rect x="0" y="34" width="42" height="34" /><rect x="42" y="34" width="42" height="34" /><rect x="84" y="34" width="42" height="34" /><rect x="126" y="34" width="42" height="34" />
+                  <rect x="0" y="68" width="42" height="34" /><rect x="42" y="68" width="42" height="34" /><rect x="84" y="68" width="42" height="34" /><rect x="126" y="68" width="42" height="34" />
+                </g>
+                <rect x="84" y="0" width="42" height="102" fill="rgba(255,207,114,0.22)" stroke="#ffcf72" stroke-width="2.2" />
+              </g>
+              <text x="486" y="142" text-anchor="middle" fill="#eef4ff" font-size="20">=</text>
+              <g transform="translate(542 80)">
+                <text x="84" y="-18" text-anchor="middle" fill="#8499bd" font-size="12">输出 H</text>
+                <g fill="rgba(139,123,255,0.15)" stroke="#8b7bff" stroke-width="1.4">
+                  <rect x="0" y="0" width="42" height="34" /><rect x="42" y="0" width="42" height="34" /><rect x="84" y="0" width="42" height="34" /><rect x="126" y="0" width="42" height="34" />
+                  <rect x="0" y="34" width="42" height="34" /><rect x="42" y="34" width="42" height="34" /><rect x="84" y="34" width="42" height="34" /><rect x="126" y="34" width="42" height="34" />
+                  <rect x="0" y="68" width="42" height="34" /><rect x="42" y="68" width="42" height="34" /><rect x="84" y="68" width="42" height="34" /><rect x="126" y="68" width="42" height="34" />
+                </g>
+                <rect x="84" y="34" width="42" height="34" fill="rgba(255,207,114,0.35)" stroke="#ffcf72" stroke-width="2.4" />
+              </g>
+              <path d="M115 194 C210 242 482 242 627 194" fill="none" stroke="#ffcf72" stroke-width="2" stroke-dasharray="5 5" />
+              <text x="380" y="260" text-anchor="middle" fill="#ffcf72" font-size="13">一个输出格子 = X 的一行 · W 的一列</text>
+              <g transform="translate(104 306)">
+                <rect x="0" y="0" width="78" height="42" rx="10" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="1.6" />
+                <rect x="96" y="0" width="78" height="42" rx="10" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="1.6" />
+                <rect x="192" y="0" width="78" height="42" rx="10" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="1.6" />
+                <rect x="288" y="0" width="78" height="42" rx="10" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="1.6" />
+                <rect x="384" y="0" width="78" height="42" rx="10" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="1.6" />
+                <rect x="480" y="0" width="78" height="42" rx="10" fill="rgba(255,207,114,0.16)" stroke="#ffcf72" stroke-width="1.6" />
+                <text x="39" y="26" text-anchor="middle" fill="#eef4ff" font-size="12">格子 1</text>
+                <text x="135" y="26" text-anchor="middle" fill="#eef4ff" font-size="12">格子 2</text>
+                <text x="231" y="26" text-anchor="middle" fill="#eef4ff" font-size="12">格子 3</text>
+                <text x="327" y="26" text-anchor="middle" fill="#eef4ff" font-size="12">格子 4</text>
+                <text x="423" y="26" text-anchor="middle" fill="#eef4ff" font-size="12">格子 5</text>
+                <text x="519" y="26" text-anchor="middle" fill="#eef4ff" font-size="12">...</text>
+              </g>
+              <text x="380" y="390" text-anchor="middle" fill="#8499bd" font-size="13">输出矩阵有很多格子,每个格子都能分配给不同线程/线程块并行算</text>
+            </svg>
+          </div>
+          <p class="figure__cap">神经网络层里的 <var>XW</var> 不是“一步神秘运算”,而是一堆互不太依赖的点积。GPU 正是靠并行计算这些格子获得高吞吐。</p>
+        </div>
+
+        <div class="summary reveal">
+          <h2>小结:从物质到计算</h2>
+          <ul>
+            <li>沙子提供硅,高纯单晶硅晶圆提供芯片地基。</li>
+            <li>硅是半导体,关键在于导电能力能被掺杂和电场控制。</li>
+            <li>晶体管把“电压控制电流”变成稳定开关,再抽象成 0 和 1。</li>
+            <li>逻辑门让开关能判断,加法器让判断能算数,寄存器和时钟让机器能记住并按步骤推进。</li>
+            <li>CPU 追求复杂通用任务的低延迟,GPU 追求海量相似任务的高吞吐。</li>
+            <li>神经网络大量使用矩阵乘法,刚好踩在 GPU 的强项上。</li>
+          </ul>
+        </div>
+
+        <div class="quiz reveal">
+          <h2>动手与思考</h2>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:为什么芯片喜欢用硅,而不是随便找一种导体?</summary>
+            <div class="quiz__a">
+              <p>导体永远容易导电,不好做可控开关。硅是半导体,导电能力可以通过掺杂、电场和结构控制;再加上硅资源丰富、氧化层稳定、工艺成熟,才适合大规模制造晶体管。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:一个晶体管为什么能表示 0/1?</summary>
+            <div class="quiz__a">
+              <p>因为它可以被控制在导通或不导通两种状态。电路把低电压范围解释成 0,高电压范围解释成 1。真实电压是连续的,但数字电路把它切成两个稳定区间。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:CPU 和 GPU 最大区别是什么?</summary>
+            <div class="quiz__a">
+              <p>CPU 把大量晶体管花在复杂控制、大缓存、分支预测和少数强核心上,适合复杂串行任务;GPU 把更多晶体管花在大量简单计算单元上,适合把同一种计算铺到海量数据上。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:为什么神经网络特别适合 GPU?</summary>
+            <div class="quiz__a">
+              <p>因为神经网络的核心是矩阵乘法和向量运算,它们包含大量规则、相似、互相独立的乘加。GPU 不擅长复杂判断,但特别擅长把这种小计算并行做完。</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="summary reveal" style="text-align:center">
+          <h2>番外收束 · 从算法回到机器</h2>
+          <p>
+            到这里,第七部分的四块拼图也补齐了:你先有了机器学习全景图,再看过无监督/自监督、经典树模型,
+            最后把所有算法落回真实硬件——硅、晶体管、门电路、CPU 和 GPU。
+            这本书真正想串起来的,就是从一个神经元到大模型、再从大模型落回机器本身的整条链路。
+          </p>
+          <p style="margin-top:1.4rem"><a class="button button--primary" href="index.html">返回目录 / 重读某章</a></p>
+        </div>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>

@@ -8,7 +8,7 @@
     <meta property="og:title" content="从沙子到 Mythos" />
     <meta property="og:description" content="从沙子里的硅,到 Claude Mythos:一部把每一步原理都讲清、画出来的技术编年史。" />
     <meta property="og:type" content="website" />
-    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="icon" href="assets/mythos-favicon.svg" />
     <link rel="stylesheet" href="assets/mythos.css" />
   </head>
   <body>
@@ -16,7 +16,7 @@
     <div class="bar bar--top" aria-hidden="true"></div>
     <div class="bar bar--bottom" aria-hidden="true"></div>
     <div class="reel" aria-hidden="true">
-      <span class="reel__title">SAND → MYTHOS · 物质如何长出智能</span>
+      <span class="reel__title">SAND → MYTHOS · 计算机神话: 物质如何长出智能</span>
       <span class="reel__code" id="reel-code">00 / 00</span>
     </div>
     <div class="deck-progress" aria-hidden="true"></div>
@@ -51,8 +51,8 @@
           <div class="overview__grid">
             <div class="ov-act act-1"><p class="ov-act__name">一 · 物质变成开关</p><p class="ov-act__era">数十亿年前 – 1947</p><ul class="ov-act__list"><li>沙子 · 半导体</li><li>掺杂 · 二极管</li><li>三极管 · 0/1</li></ul></div>
             <div class="ov-act act-2"><p class="ov-act__name">二 · 开关变成机器</p><p class="ov-act__era">1950s – 1971</p><ul class="ov-act__list"><li>门电路 · 加法器</li><li>锁存器 · 触发器 · 时钟</li><li>流水线 · 冯诺依曼 · 芯片</li></ul></div>
-            <div class="ov-act act-3"><p class="ov-act__name">三 · 机器变成算力</p><p class="ov-act__era">1980s – 2012</p><ul class="ov-act__list"><li>CPU · GPU</li><li>CUDA · AlexNet</li><li>矩阵</li></ul></div>
-            <div class="ov-act act-6"><p class="ov-act__name">四 · 算力变成学习</p><p class="ov-act__era">1943 – 2016</p><ul class="ov-act__list"><li>神经元 · 反向传播</li><li>MNIST · 词嵌入</li><li>序列模型</li></ul></div>
+            <div class="ov-act act-3"><p class="ov-act__name">三 · 机器变成算力</p><p class="ov-act__era">1980s – 2012</p><ul class="ov-act__list"><li>CPU · GPU</li><li>CUDA</li><li>矩阵</li></ul></div>
+            <div class="ov-act act-6"><p class="ov-act__name">四 · 算力变成学习</p><p class="ov-act__era">1943 – 2016</p><ul class="ov-act__list"><li>神经元 · 反向传播</li><li>MNIST · AlexNet</li><li>词嵌入 · 序列模型</li></ul></div>
             <div class="ov-act act-4"><p class="ov-act__name">五 · 学习变成语言</p><p class="ov-act__era">2017 – 2026</p><ul class="ov-act__list"><li>注意力 · Transformer</li><li>语言模型 · Scaling Law</li><li>训练 · 工程 · Mythos</li></ul></div>
           </div>
         </div>
@@ -446,7 +446,7 @@
             <div class="facet"><span class="facet__k">原理</span><span class="facet__v">CPU:<strong>少数强核</strong> + 大缓存,擅长复杂串行逻辑、低延迟决策。GPU:<strong>上万个简单核</strong>,擅长海量互不依赖的乘加同时算。</span></div>
             <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">神经网络要的不是一条聪明路径,而是<strong>矩阵洪流</strong>。GPU 天生对口——这是后来一切的算力前提。</span></div>
           </div>
-          <a class="slide__xref" href="chapter-21.html#2-gpu-为并行而生" target="_blank" rel="noopener">第 21 章 · GPU 为并行而生</a>
+          <a class="slide__xref" href="chapter-29.html#12-gpu-为海量并行而生" target="_blank" rel="noopener">第 29 章 · 从沙子到 CPU/GPU</a>
         </div>
         <div class="slide__stage">
           <div class="stage-2">
@@ -912,19 +912,20 @@
           <h2 class="hero__title"><span class="accent">Mythos</span></h2>
           <p class="slide__lead">
             2026 年 4 月,Anthropic 发布 <strong>Claude Mythos</strong>——迄今最强的通用大模型。
-            名字跳出了 Haiku / Sonnet / Opus 的文学体裁,取希腊语的<strong>"神话"</strong>。
+            名字取希腊语的<strong>"神话"</strong>。
           </p>
           <p class="finale__note">
             它的底层,仍是这一路走来的那块 <strong>Transformer</strong> 积木——只是规模、训练与评估被推到极致,
             能力出现质变:SWE-bench Verified <strong>93.9%</strong>、USAMO 数学 <strong>97.6%</strong>,
             七周内自主发现 <strong>2000+</strong> 未知漏洞,还能把弱点<strong>链成可用 exploit</strong>。
-            强到 Anthropic 不敢公开,只通过 Project Glasswing 面向安全伙伴。
-            <br /><br />从一粒沙里的硅,到会讲述世界的语言——这段旅程,收束在它这里。
+            <br /><br />从一粒沙,到一个会思考的模型,人类把物质一层层驯化成计算,
+            又把计算一层层推向语言与推理。这一路终于像它的名字一样,几乎成了神话。
           </p>
           <div class="button-row">
             <a class="mbtn mbtn--primary" href="index.html">走进《从神经元到大模型》</a>
             <a class="mbtn" href="#slide-sand">再看一遍</a>
           </div>
+          <p class="finale__credit">written with Mythos</p>
         </div>
       </section>
     </main>
@@ -935,7 +936,6 @@
       <div class="dial__needle" aria-hidden="true"></div>
       <div class="dial__hub" aria-hidden="true"></div>
       <div class="dial__track" id="dial-track"></div>
-      <a class="dial__corner dial__top" href="#slide-hero">↑ 回到开头</a>
       <a class="dial__corner dial__home" href="index.html">← 回到电子书</a>
     </nav>
 

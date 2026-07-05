@@ -279,6 +279,15 @@ a { color: var(--amber); text-decoration: none; }
 .hero__title .accent { color: var(--amber); font-style: italic; }
 .finale__note { font-size: 0.96rem; line-height: 1.85; color: var(--paper-faint); max-width: 40rem; margin: 0 auto; }
 .finale__note strong { color: var(--paper); }
+.finale__credit {
+  margin: 1rem auto 0;
+  color: var(--paper-faint);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  opacity: 0.42;
+  text-transform: uppercase;
+}
 
 .hero__hint {
   margin-top: 2.4rem; font-family: var(--font-mono); font-size: 0.7rem;
@@ -474,10 +483,12 @@ a { color: var(--amber); text-decoration: none; }
     text-align: left;
   }
   .mobile-jump__item:active { background: rgba(239,231,214,0.08); }
+  .mobile-jump__item--no-era { grid-template-columns: 1fr; }
   .mobile-jump__era {
     justify-self: end;
     font-family: var(--font-mono); font-size: 0.68rem; color: var(--paper-faint);
   }
+  .mobile-jump__item--no-era .mobile-jump__era { display: none; }
   .mobile-jump__label {
     color: var(--c, var(--amber)); font-weight: 700; font-size: 0.95rem;
   }

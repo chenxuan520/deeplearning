@@ -125,6 +125,13 @@
     }
     layout(i);
   }
+  function scrollToSlide(slide, behavior) {
+    var idx = slides.indexOf(slide);
+    if (idx < 0) return;
+    setActive(idx);
+    lockActiveUntilScrollStops(idx);
+    deck.scrollTo({ top: slide.offsetTop, behavior: behavior || "smooth" });
+  }
   function lockActiveUntilScrollStops(i) {
     programmaticTargetIdx = i;
     clearTimeout(programmaticUnlockTimer);
@@ -171,15 +178,15 @@
   // ---------- 键盘翻页 ----------
   function go(delta) {
     var n = Math.min(slides.length - 1, Math.max(0, currentIdx + delta));
-    slides[n].scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToSlide(slides[n], "smooth");
   }
   document.addEventListener("keydown", function (e) {
     if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     var k = e.key;
     if (k === "ArrowDown" || k === "ArrowRight" || k === "PageDown" || k === "j" || k === "l") { e.preventDefault(); go(1); }
     else if (k === "ArrowUp" || k === "ArrowLeft" || k === "PageUp" || k === "k" || k === "h") { e.preventDefault(); go(-1); }
-    else if (k === "Home") { e.preventDefault(); slides[0].scrollIntoView({ behavior: "smooth", block: "start" }); }
-    else if (k === "End") { e.preventDefault(); slides[slides.length - 1].scrollIntoView({ behavior: "smooth", block: "start" }); }
+    else if (k === "Home") { e.preventDefault(); scrollToSlide(slides[0], "smooth"); }
+    else if (k === "End") { e.preventDefault(); scrollToSlide(slides[slides.length - 1], "smooth"); }
   });
 
   // ---------- 左侧时间线滚动 ----------
@@ -197,7 +204,7 @@
     clearTimeout(dialScrollTimer);
     dialScrollTimer = setTimeout(function () {
       dialScrolling = false;
-      slides[dialTargetIdx].scrollIntoView({ behavior: "smooth", block: "start" });
+      scrollToSlide(slides[dialTargetIdx], "smooth");
     }, 180);
   }
   track.addEventListener("wheel", function (e) {
@@ -242,12 +249,15 @@
       item.className = "mobile-jump__item " + actClassOf(slide);
       var era = slide.getAttribute("data-era") || "";
       var label = slide.getAttribute("data-label") || slide.id;
+      if (slide.classList.contains("slide--act")) era = "";
+      if (/^(序|全景)$/.test(era)) era = "";
+      if (!era) item.classList.add("mobile-jump__item--no-era");
       item.innerHTML =
         '<span class="mobile-jump__era">' + era + '</span>' +
         '<span class="mobile-jump__label">' + label + '</span>';
       item.addEventListener("click", function () {
         close();
-        slide.scrollIntoView({ behavior: "smooth", block: "start" });
+        scrollToSlide(slide, "smooth");
       });
       list.appendChild(item);
     });
@@ -282,7 +292,7 @@
       var ti = t ? slides.indexOf(t) : -1;
       if (ti >= 0) startIdx = ti;
     }
-    if (startIdx > 0) slides[startIdx].scrollIntoView({ block: "start" });
+    if (startIdx > 0) deck.scrollTo({ top: slides[startIdx].offsetTop, behavior: "auto" });
     setActive(startIdx);
     updateProgress();
   }

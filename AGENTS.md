@@ -355,10 +355,12 @@
 
 ## 7) 交互式电子书 (`docs/dl-book/`)
 
-配套深度学习入门电子书，静态站点位于 `docs/dl-book/`，共 **29 章**(第 0–25 章正文 + 第 26–28 章「第七部分 · 番外」)+ 术语表，含交互示意图与实验台。番外三章分别是:第 26 章「机器学习全景图」、第 27 章「无监督与自监督学习」、第 28 章「经典机器学习:决策树与随机森林」。
+配套深度学习入门电子书，静态站点位于 `docs/dl-book/`，共 **30 章**(第 0–25 章正文/代码实战 + 第 26–29 章「第七部分 · 番外」)+ 术语表，含交互示意图与实验台。番外四章分别是:第 26 章「机器学习全景图」、第 27 章「无监督与自监督学习」、第 28 章「经典机器学习:决策树与随机森林」、第 29 章「从沙子到 CPU/GPU」。
+作者、来源、转载要求、电子书内容许可与代码 MIT License 说明见 `docs/dl-book/about.html`；根目录 `LICENSE` 是项目代码许可，`src/third_party/` 下第三方依赖遵循各自许可证。
 
 ### 链接
-- **在线阅读 (GitHub Pages)**: https://chenxuan520.github.io/deeplearning/
+- **在线阅读**: https://deeplearning.011203.xyz/
+- **GitHub Pages 备用地址**: https://chenxuan520.github.io/deeplearning/
 - **GitHub 仓库**: https://github.com/chenxuan520/deeplearning
 - **Gitee 仓库** (`origin`): https://gitee.com/chenxuan520/deeplearning
 

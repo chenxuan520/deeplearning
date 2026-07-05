@@ -2,7 +2,7 @@
 
 一个**从零手写**的 C++ 深度学习小库：不依赖 PyTorch / TensorFlow，用 `std::vector` 和三重循环把 MLP、CNN、RNN、训练栈、最小 Transformer / 字符级语言模型都跑通。
 
-配套中文交互电子书《从神经元到大模型》（26 章 + 术语表），每个概念都能在本仓库源码里找到对应实现。
+配套中文交互电子书《从神经元到大模型》（30 章 + 术语表），每个概念都能在本仓库源码里找到对应实现。
 
 <p align="center">
   <img src="docs/dl-book/assets/book-cover-wide.png" alt="《从神经元到大模型》横版封面:从神经元、MLP、CNN、RNN 到 Transformer 与 C++ 实现" width="860" />
@@ -11,7 +11,8 @@
 
 | | |
 |---|---|
-| **在线阅读** | [**chenxuan520.github.io/deeplearning**](https://chenxuan520.github.io/deeplearning/) |
+| **在线阅读** | [**deeplearning.011203.xyz**](https://deeplearning.011203.xyz/) |
+| **GitHub Pages** | [chenxuan520.github.io/deeplearning](https://chenxuan520.github.io/deeplearning/) |
 | **GitHub** | [github.com/chenxuan520/deeplearning](https://github.com/chenxuan520/deeplearning) |
 | **Gitee** | [gitee.com/chenxuan520/deeplearning](https://gitee.com/chenxuan520/deeplearning) |
 
@@ -19,7 +20,7 @@
 
 ## 推荐阅读路径
 
-1. 打开 **[交互电子书](https://chenxuan520.github.io/deeplearning/)** — 从「一个神经元」讲到 Transformer 与大模型，带图解、可动手实验和逐行代码导读。
+1. 打开 **[交互电子书](https://deeplearning.011203.xyz/)** — 从「一个神经元」讲到 Transformer 与大模型，带图解、可动手实验和逐行代码导读。
 2. 跟着第三部分 / 书末 demo 跑 `cnn_mnist`、`rnn_char`、`mnist`、`transformer_char`、`rl_tictactoe`，把概念和源码对上号。
 
 ---
@@ -105,8 +106,9 @@ cd src/build && cmake .. && make && sudo make install
 ## 交互电子书
 
 - **源码目录**：[`docs/dl-book/`](./docs/dl-book/)
-- **线上地址**：<https://chenxuan520.github.io/deeplearning/>
-- **结构**：6 大部分、26 章 + 术语表；含神经元 / 传播 / 注意力等交互实验，章节间可点击跳转到对应小节。
+- **线上地址**：<https://deeplearning.011203.xyz/>（备用：<https://chenxuan520.github.io/deeplearning/>）
+- **结构**：7 大部分、30 章 + 术语表；含神经元 / 传播 / 注意力等交互实验，章节间可点击跳转到对应小节。
+- **作者与版权**：见 [`docs/dl-book/about.html`](./docs/dl-book/about.html)；电子书内容采用 CC BY-NC-SA 4.0 授权，代码按根目录 [`LICENSE`](./LICENSE) 的 MIT License 开源。
 
 ### 本地预览
 

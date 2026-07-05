@@ -38,7 +38,8 @@
     { num: "25", title: "井字棋 Q-learning 实战:强化学习", file: "chapter-25.html", part: "第六部分 · 代码实战" },
     { num: "26", title: "机器学习全景图", file: "chapter-26.html", part: "第七部分 · 番外" },
     { num: "27", title: "无监督与自监督学习", file: "chapter-27.html", part: "第七部分 · 番外" },
-    { num: "28", title: "决策树与随机森林", file: "chapter-28.html", part: "第七部分 · 番外" }
+    { num: "28", title: "决策树与随机森林", file: "chapter-28.html", part: "第七部分 · 番外" },
+    { num: "29", title: "从沙子到 CPU/GPU", file: "chapter-29.html", part: "第七部分 · 番外" }
   ];
 
   var STORAGE_LAST = "dlbook:last";
@@ -120,6 +121,14 @@
     ga.appendChild(el("span", "book-rail__name", "术语表"));
     gli.appendChild(ga);
     list.appendChild(gli);
+    var isAbout = /about\.html$/.test(location.pathname);
+    var ali = el("li");
+    var aa = el("a", "book-rail__link" + (isAbout ? " is-current" : ""));
+    aa.href = "about.html";
+    aa.appendChild(el("span", "book-rail__num", "©"));
+    aa.appendChild(el("span", "book-rail__name", "关于作者与版权"));
+    ali.appendChild(aa);
+    list.appendChild(ali);
     aside.appendChild(list);
     return aside;
   }
@@ -287,6 +296,23 @@
       if (i === currentIdx) aside._currentLink = a;
       li.appendChild(a);
       list.appendChild(li);
+    });
+    var appendixLi = el("li");
+    appendixLi.appendChild(el("div", "book-toc__title", "附录"));
+    appendixLi.firstChild.style.marginTop = "1rem";
+    list.appendChild(appendixLi);
+    [
+      { num: "★", title: "术语表", file: "glossary.html" },
+      { num: "©", title: "关于作者与版权", file: "about.html" }
+    ].forEach(function (item) {
+      var li = el("li");
+      var a = el("a", "book-toc__link" + (pageBaseName() === item.file ? " is-current" : ""));
+      a.href = item.file;
+      a.appendChild(el("span", "book-toc__num", item.num));
+      a.appendChild(el("span", "book-toc__name", item.title));
+      li.appendChild(a);
+      list.appendChild(li);
+      if (pageBaseName() === item.file) aside._currentLink = a;
     });
     aside.appendChild(list);
 

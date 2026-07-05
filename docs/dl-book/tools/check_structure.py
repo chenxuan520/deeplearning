@@ -78,7 +78,7 @@ def check_file(path):
 
 def main():
     os.chdir(BASE_DIR)
-    files = sorted(glob.glob("chapter-*.html")) + ["glossary.html", "index.html"]
+    files = sorted(glob.glob("chapter-*.html")) + ["glossary.html", "about.html", "index.html"]
     bad = 0
     for path in files:
         if not os.path.exists(path):
