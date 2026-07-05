@@ -19,14 +19,16 @@
   --sun: #f0cd83;
   --sage: #a6b489;
   --violet: #9a8bff;
+  --teal: #6fbec9;
   --line: rgba(239, 231, 214, 0.14);
   --line-strong: rgba(239, 231, 214, 0.3);
   --dial-width: clamp(120px, 15vw, 190px); /* 左侧转盘窄带宽度 */
   --dial-tip: clamp(96px, 12vw, 150px);    /* 弧尖(当前项)横坐标 */
   --bar-height: clamp(30px, 5.5vh, 66px);   /* 电影黑边 */
-  --font-serif: "Songti SC", "Noto Serif SC", "Source Han Serif SC", "STSong",
-    Georgia, "Times New Roman", serif;
+  --font-serif: "Songti SC", "STSong", "Source Han Serif SC", "Noto Serif CJK SC",
+    "Noto Serif SC", Georgia, "Times New Roman", serif;
   --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Source Han Sans SC", "Noto Sans CJK SC", "Noto Sans SC",
     ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
   /* 每幕主色(用 act-N 挑) */
@@ -35,6 +37,7 @@
   --c3: var(--sage);
   --c4: var(--sun);
   --c5: var(--violet);
+  --c6: var(--teal);
 }
 
 * { box-sizing: border-box; }
@@ -44,6 +47,7 @@
 .act-3 { --c: var(--c3); }
 .act-4 { --c: var(--c4); }
 .act-5 { --c: var(--c5); }
+.act-6 { --c: var(--c6); }
 
 html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
@@ -133,6 +137,8 @@ a { color: var(--amber); text-decoration: none; }
 .slide.act-3::before { background-image: radial-gradient(rgba(200,220,200,0.10) 1px, transparent 1.4px); background-size: 24px 24px; -webkit-mask-image: radial-gradient(120% 100% at 55% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 55% 50%, #000 45%, transparent); }
 .slide.act-4 { background: radial-gradient(110% 90% at 52% 42%, rgba(240,205,131,0.10), transparent 54%), linear-gradient(180deg,#0e0d12,#0a090e); }
 .slide.act-4::before { background-image: radial-gradient(rgba(240,205,131,0.10) 1px, transparent 1.4px); background-size: 26px 26px; -webkit-mask-image: radial-gradient(120% 100% at 52% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 52% 50%, #000 45%, transparent); }
+.slide.act-6 { background: radial-gradient(112% 90% at 53% 43%, rgba(111,190,201,0.10), transparent 53%), linear-gradient(180deg,#0a1113,#07100f); }
+.slide.act-6::before { background-image: radial-gradient(rgba(111,190,201,0.11) 1px, transparent 1.4px); background-size: 25px 25px; -webkit-mask-image: radial-gradient(120% 100% at 53% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 53% 50%, #000 45%, transparent); }
 .slide.act-5 { background: radial-gradient(85% 75% at 48% 42%, rgba(230,169,92,0.18), transparent 55%), radial-gradient(70% 90% at 78% 72%, rgba(154,139,255,0.16), transparent 60%), linear-gradient(180deg,#0b0a14,#08070d); }
 .slide.act-5::before { background: repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 4px); opacity: 0.5; }
 
@@ -323,9 +329,7 @@ a { color: var(--amber); text-decoration: none; }
 .dial__hub { display: none; }
 /* 弧尖指示线 (当前项停靠处) */
 .dial__needle {
-  position: absolute; top: 50%; left: calc(var(--dial-tip) - 4px);
-  width: 20px; height: 2px; background: var(--amber);
-  transform: translateY(-50%); box-shadow: 0 0 10px var(--amber);
+  display: none;
 }
 
 .dial__track {
@@ -335,65 +339,146 @@ a { color: var(--amber); text-decoration: none; }
 .dial-item {
   position: absolute; left: 0; top: 50%;
   transform-origin: left center;
-  display: flex; align-items: center; gap: 0.5rem;
+  width: 0; height: 0;
   cursor: pointer; white-space: nowrap;
   color: var(--paper-faint);
   transition: color 200ms ease, opacity 200ms ease;
   opacity: 0.5;
 }
 .dial-item__dot {
+  position: absolute; left: 0; top: 0;
+  transform: translate(-50%, -50%);
   width: 9px; height: 9px; border-radius: 50%;
   background: var(--ink); border: 1.5px solid var(--line-strong);
-  flex: 0 0 auto; transition: all 200ms ease;
+  transition: all 200ms ease;
 }
-.dial-item__txt { display: flex; flex-direction: column; line-height: 1.15; }
-.dial-item__era { font-family: var(--font-mono); font-size: 0.58rem; opacity: 0.8; }
-.dial-item__label { font-size: 0.76rem; font-weight: 600; }
+.dial-item__era {
+  position: absolute; right: 0.7rem; top: 50%; transform: translateY(-50%);
+  font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.05em;
+  opacity: 0.82;
+}
+.dial-item__label {
+  position: absolute; left: 0.78rem; top: 50%; transform: translateY(-50%);
+  font-size: 0.9rem; font-weight: 700;
+}
+.dial-item--no-era .dial-item__era { display: none; }
 .dial-item:hover { color: var(--paper-dim); opacity: 0.85; }
 .dial-item.is-active {
   color: var(--paper); opacity: 1;
 }
 .dial-item.is-active .dial-item__dot {
   background: var(--c, var(--amber)); border-color: var(--c, var(--amber));
-  box-shadow: 0 0 12px var(--c, var(--amber)); transform: scale(1.5);
+  box-shadow: 0 0 12px var(--c, var(--amber)); transform: translate(-50%, -50%) scale(1.5);
 }
-.dial-item.is-active .dial-item__label { color: var(--c, var(--amber)); font-size: 0.92rem; }
+.dial-item.is-active .dial-item__era { color: var(--paper-dim); }
+.dial-item.is-active .dial-item__label { color: var(--c, var(--amber)); font-size: 1.16rem; }
 .dial-item.is-near { opacity: 0.85; }
 
-.dial__home {
-  position: absolute; bottom: calc(var(--bar-height) + 0.8rem); left: 0.9rem;
+.dial__corner {
+  position: absolute; left: 0.9rem;
   pointer-events: auto;
   padding: 0.45rem 0.7rem; border: 1px solid var(--line); border-radius: 2px;
   color: var(--paper-dim); font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.04em;
   transition: border-color 140ms ease, color 140ms ease;
 }
-.dial__home:hover { border-color: var(--amber); color: var(--paper); }
+.dial__top { top: calc(var(--bar-height) + 0.8rem); }
+.dial__home { bottom: calc(var(--bar-height) + 0.8rem); }
+.dial__corner:hover { border-color: var(--amber); color: var(--paper); }
 
 /* ============================================================= */
-/* 移动端: 转盘退化为顶部当前节点条                                */
+/* 移动端跳转面板                                                 */
+/* ============================================================= */
+
+.mobile-jump { display: none; }
+
+.mobile-jump__btn,
+.mobile-jump__close,
+.mobile-jump__item {
+  font: inherit;
+}
+
+/* ============================================================= */
+/* 移动端: 不展示时间线,避免窄屏把左侧转盘挤成顶部怪异横条          */
 /* ============================================================= */
 
 @media (max-width: 920px) {
   :root { --dial-width: 0px; }
   .slide {
     grid-template-columns: 1fr; justify-items: start; gap: 1.5rem;
-    padding: calc(var(--bar-height) + 3.4rem) 1.5rem calc(var(--bar-height) + 2.2rem);
+    padding: calc(var(--bar-height) + 2rem) 1.5rem calc(var(--bar-height) + 2.2rem);
   }
   .slide--act, .slide--hero, .slide--finale { padding-left: 1.5rem; justify-items: center; }
   .slide__stage { order: 2; width: 100%; }
-  .dial__arc, .dial__needle, .dial__hub { display: none; }
-  .dial {
-    top: var(--bar-height); bottom: auto; left: 0; right: 0; width: 100%;
-    height: 2.4rem; background: rgba(8,7,5,0.9); border-bottom: 1px solid var(--line);
-    pointer-events: auto; overflow: hidden;
+  .dial { display: none; }
+
+  .mobile-jump {
+    display: block;
+    position: fixed; inset: 0;
+    z-index: 86; pointer-events: none;
   }
-  .dial__track { position: relative; inset: auto; height: 100%; }
-  .dial-item {
-    top: 50% !important; left: 50% !important;
-    transform: translate(-50%,-50%) !important;
-    opacity: 0; pointer-events: none;
+  .mobile-jump__btn {
+    position: absolute; right: 1rem; bottom: calc(var(--bar-height) + 0.9rem);
+    pointer-events: auto;
+    border: 1px solid var(--line-strong); border-radius: 999px;
+    background: rgba(11,9,6,0.82); color: var(--paper);
+    padding: 0.58rem 0.9rem;
+    font-family: var(--font-mono); font-size: 0.76rem; letter-spacing: 0.08em;
+    box-shadow: 0 14px 34px rgba(0,0,0,0.44);
+    backdrop-filter: blur(10px);
   }
-  .dial-item.is-active { opacity: 1; }
-  .dial-item.is-active .dial-item__label { font-size: 0.82rem; }
-  .dial__home { display: none; }
+  .mobile-jump__backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.42);
+    opacity: 0; transition: opacity 160ms ease;
+  }
+  .mobile-jump__panel {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    max-height: min(72vh, 34rem);
+    padding: 1rem 1rem calc(var(--bar-height) + 1rem);
+    border-top: 1px solid var(--line-strong);
+    background: rgba(11,9,6,0.96);
+    box-shadow: 0 -24px 70px rgba(0,0,0,0.55);
+    transform: translateY(105%);
+    transition: transform 180ms ease;
+    pointer-events: auto;
+  }
+  .mobile-jump.is-open { pointer-events: auto; }
+  .mobile-jump.is-open .mobile-jump__backdrop { opacity: 1; pointer-events: auto; }
+  .mobile-jump.is-open .mobile-jump__panel { transform: translateY(0); }
+  .mobile-jump__head {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    margin: 0 0 0.7rem;
+    color: var(--paper);
+  }
+  .mobile-jump__head strong {
+    font-family: var(--font-serif); font-size: 1.05rem;
+  }
+  .mobile-jump__close {
+    border: 1px solid var(--line); border-radius: 999px;
+    background: transparent; color: var(--paper-faint);
+    padding: 0.34rem 0.58rem;
+    font-family: var(--font-mono); font-size: 0.66rem;
+  }
+  .mobile-jump__list {
+    display: grid; gap: 0.42rem;
+    max-height: calc(min(72vh, 34rem) - 6rem);
+    overflow: auto;
+    padding-right: 0.2rem;
+  }
+  .mobile-jump__item {
+    display: grid; grid-template-columns: 4.4rem 1fr; align-items: baseline; gap: 0.72rem;
+    width: 100%;
+    border: 1px solid var(--line); border-radius: 2px;
+    background: rgba(239,231,214,0.035); color: var(--paper-dim);
+    padding: 0.72rem 0.78rem;
+    text-align: left;
+  }
+  .mobile-jump__item:active { background: rgba(239,231,214,0.08); }
+  .mobile-jump__era {
+    justify-self: end;
+    font-family: var(--font-mono); font-size: 0.68rem; color: var(--paper-faint);
+  }
+  .mobile-jump__label {
+    color: var(--c, var(--amber)); font-weight: 700; font-size: 0.95rem;
+  }
 }

@@ -24,7 +24,7 @@
     <main class="deck" id="deck">
 
       <!-- ══════════════ 封面 ══════════════ -->
-      <section class="slide slide--hero act-1" data-era="序" data-label="序幕">
+      <section class="slide slide--hero act-1" id="slide-hero" data-era="序" data-label="序幕">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">一部编年史</span><span class="slide__era">物质 → 智能</span></div>
           <h1 class="hero__title">从沙子到 <span class="accent">Mythos</span></h1>
@@ -34,8 +34,7 @@
             最后成为 2026 年那个最强的大模型——<strong>Claude Mythos</strong>。
           </p>
           <div class="button-row">
-            <a class="mbtn mbtn--primary" href="#slide-sand">▸ 从第一粒沙开始</a>
-            <a class="mbtn" href="#slide-overview">先看整条时间线</a>
+            <a class="mbtn mbtn--primary" href="#slide-overview">开始旅程</a>
           </div>
           <p class="hero__hint">向下滚动 ↓</p>
         </div>
@@ -47,21 +46,20 @@
           <div class="slide__meta"><span class="slide__act">全景</span><span class="slide__era">五幕跃迁</span></div>
           <h2 class="slide__title">五次<span class="accent">跃迁</span></h2>
           <p class="slide__lead" style="max-width:46rem">
-            每一幕都是一次"从做不到到做得到"的跳变。左侧转盘会随你滚动一直转;画面也会随时代
-            从<strong>老胶片</strong>渐变到<strong>未来</strong>。
+            每一幕都是一次"从做不到到做得到"的跳变:上一幕的成果,成了下一幕的地基。
           </p>
           <div class="overview__grid">
             <div class="ov-act act-1"><p class="ov-act__name">一 · 物质变成开关</p><p class="ov-act__era">数十亿年前 – 1947</p><ul class="ov-act__list"><li>沙子 · 半导体</li><li>掺杂 · 二极管</li><li>三极管 · 0/1</li></ul></div>
             <div class="ov-act act-2"><p class="ov-act__name">二 · 开关变成机器</p><p class="ov-act__era">1950s – 1971</p><ul class="ov-act__list"><li>门电路 · 加法器</li><li>锁存器 · 触发器 · 时钟</li><li>流水线 · 冯诺依曼 · 芯片</li></ul></div>
             <div class="ov-act act-3"><p class="ov-act__name">三 · 机器变成算力</p><p class="ov-act__era">1980s – 2012</p><ul class="ov-act__list"><li>CPU · GPU</li><li>CUDA · AlexNet</li><li>矩阵</li></ul></div>
-            <div class="ov-act act-3"><p class="ov-act__name">四 · 算力变成学习</p><p class="ov-act__era">1943 – 2016</p><ul class="ov-act__list"><li>神经元 · 反向传播</li><li>MNIST · 词嵌入</li><li>序列模型</li></ul></div>
+            <div class="ov-act act-6"><p class="ov-act__name">四 · 算力变成学习</p><p class="ov-act__era">1943 – 2016</p><ul class="ov-act__list"><li>神经元 · 反向传播</li><li>MNIST · 词嵌入</li><li>序列模型</li></ul></div>
             <div class="ov-act act-4"><p class="ov-act__name">五 · 学习变成语言</p><p class="ov-act__era">2017 – 2026</p><ul class="ov-act__list"><li>注意力 · Transformer</li><li>语言模型 · Scaling Law</li><li>训练 · 工程 · Mythos</li></ul></div>
           </div>
         </div>
       </section>
 
       <!-- ══════════════ 第一幕 分幕卡 ══════════════ -->
-      <section class="slide slide--act act-1" data-era="第一幕" data-label="第一幕 · 物质">
+      <section class="slide slide--act act-1" id="slide-act-1" data-era="第一幕" data-label="第一幕 · 物质">
         <div class="actcard">
           <p class="actcard__no">第 一 幕</p>
           <h2 class="actcard__title">物质,变成<span class="accent">开关</span></h2>
@@ -98,7 +96,7 @@
       </section>
 
       <!-- 2 半导体 -->
-      <section class="slide act-1" data-era="19 世纪" data-label="半导体">
+      <section class="slide act-1" id="slide-semiconductor" data-era="19 世纪" data-label="半导体">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第一幕 · 物质</span><span class="slide__era">19 世纪 · 法拉第等</span></div>
           <h2 class="slide__title">半导体:关键是<span class="accent">可变</span></h2>
@@ -123,7 +121,7 @@
       </section>
 
       <!-- 3 掺杂 -->
-      <section class="slide act-1" data-era="20 世纪初" data-label="掺杂">
+      <section class="slide act-1" id="slide-doping" data-era="20 世纪初" data-label="掺杂">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第一幕 · 物质</span><span class="slide__era">20 世纪初</span></div>
           <h2 class="slide__title">掺杂:给硅一个<span class="accent">倾向</span></h2>
@@ -149,7 +147,7 @@
       </section>
 
       <!-- 4 二极管 -->
-      <section class="slide act-1" data-era="1904" data-label="二极管">
+      <section class="slide act-1" id="slide-diode" data-era="1904" data-label="二极管">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第一幕 · 物质</span><span class="slide__era">1904 · 弗莱明</span></div>
           <h2 class="slide__title">二极管:电流只走<span class="accent">一个方向</span></h2>
@@ -174,7 +172,7 @@
       </section>
 
       <!-- 5 三极管 -->
-      <section class="slide act-1" data-era="1947 · 贝尔实验室" data-label="三极管">
+      <section class="slide act-1" id="slide-transistor" data-era="1947 · 贝尔实验室" data-label="三极管">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第一幕 · 物质</span><span class="slide__era">1947 · 贝尔实验室</span></div>
           <h2 class="slide__title">三极管:用电流<span class="accent">控制</span>电流</h2>
@@ -200,7 +198,7 @@
       </section>
 
       <!-- 6 0与1 -->
-      <section class="slide act-1" data-era="抽象层" data-label="0 与 1">
+      <section class="slide act-1" id="slide-binary" data-era="抽象层" data-label="0 与 1">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第一幕 → 第二幕</span><span class="slide__era">抽象层</span></div>
           <h2 class="slide__title">0 和 1:开关的<span class="accent">两种姿态</span></h2>
@@ -224,7 +222,7 @@
       </section>
 
       <!-- ══════════════ 第二幕 分幕卡 ══════════════ -->
-      <section class="slide slide--act act-2" data-era="第二幕" data-label="第二幕 · 机器">
+      <section class="slide slide--act act-2" id="slide-act-2" data-era="第二幕" data-label="第二幕 · 机器">
         <div class="actcard">
           <p class="actcard__no">第 二 幕</p>
           <h2 class="actcard__title">开关,变成<span class="accent">机器</span></h2>
@@ -234,7 +232,7 @@
       </section>
 
       <!-- 7 门电路 -->
-      <section class="slide act-2" data-era="1930s–1950s" data-label="门电路">
+      <section class="slide act-2" id="slide-logic-gate" data-era="1930s–1950s" data-label="门电路">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第二幕 · 机器</span><span class="slide__era">1930s–1950s</span></div>
           <h2 class="slide__title">门电路:开关学会<span class="accent">判断</span></h2>
@@ -259,7 +257,7 @@
       </section>
 
       <!-- 8 加法器 -->
-      <section class="slide act-2" data-era="1950s" data-label="加法器">
+      <section class="slide act-2" id="slide-adder" data-era="1950s" data-label="加法器">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第二幕 · 机器</span><span class="slide__era">1950s</span></div>
           <h2 class="slide__title">加法器:逻辑开始<span class="accent">算术</span></h2>
@@ -287,7 +285,7 @@
       </section>
 
       <!-- 9 锁存器 -->
-      <section class="slide act-2" data-era="1950s" data-label="锁存器">
+      <section class="slide act-2" id="slide-latch" data-era="1950s" data-label="锁存器">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第二幕 · 机器</span><span class="slide__era">1950s</span></div>
           <h2 class="slide__title">锁存器:电路第一次<span class="accent">记住</span></h2>
@@ -313,7 +311,7 @@
       </section>
 
       <!-- 10 触发器 + 时钟 (双图) -->
-      <section class="slide act-2" data-era="1950s–1960s" data-label="触发器 · 时钟">
+      <section class="slide act-2" id="slide-flip-flop" data-era="1950s–1960s" data-label="触发器 · 时钟">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第二幕 · 机器</span><span class="slide__era">1950s–1960s</span></div>
           <h2 class="slide__title">触发器与<span class="accent">时钟</span></h2>
@@ -349,7 +347,7 @@
       </section>
 
       <!-- 11 流水线 -->
-      <section class="slide act-2" data-era="1960s–1980s" data-label="流水线">
+      <section class="slide act-2" id="slide-pipeline" data-era="1960s–1980s" data-label="流水线">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第二幕 · 机器</span><span class="slide__era">1960s–1980s</span></div>
           <h2 class="slide__title">流水线:五步<span class="accent">接力</span></h2>
@@ -376,7 +374,7 @@
       </section>
 
       <!-- 12 冯诺依曼 -->
-      <section class="slide act-2" data-era="1945 起" data-label="冯诺依曼">
+      <section class="slide act-2" id="slide-von-neumann" data-era="1945 起" data-label="冯诺依曼">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第二幕 · 机器</span><span class="slide__era">1945 起</span></div>
           <h2 class="slide__title">冯诺依曼:<span class="accent">程序也是数据</span></h2>
@@ -403,7 +401,7 @@
       </section>
 
       <!-- 13 芯片 -->
-      <section class="slide act-2" data-era="1971 · Intel 4004" data-label="芯片">
+      <section class="slide act-2" id="slide-chip" data-era="1971 · Intel 4004" data-label="芯片">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第二幕 · 收束</span><span class="slide__era">1971 · Intel 4004</span></div>
           <h2 class="slide__title">芯片:硅上长出<span class="accent">一座城</span></h2>
@@ -428,7 +426,7 @@
       </section>
 
       <!-- ══════════════ 第三幕 分幕卡 ══════════════ -->
-      <section class="slide slide--act act-3" data-era="第三幕" data-label="第三幕 · 算力">
+      <section class="slide slide--act act-3" id="slide-act-3" data-era="第三幕" data-label="第三幕 · 算力">
         <div class="actcard">
           <p class="actcard__no">第 三 幕</p>
           <h2 class="actcard__title">机器,变成<span class="accent">算力</span></h2>
@@ -438,7 +436,7 @@
       </section>
 
       <!-- 14 CPU vs GPU (双图) -->
-      <section class="slide act-3" data-era="1980s–2000s" data-label="CPU 与 GPU">
+      <section class="slide act-3" id="slide-cpu-gpu" data-era="1980s–2000s" data-label="CPU 与 GPU">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第三幕 · 算力</span><span class="slide__era">1980s–2000s</span></div>
           <h2 class="slide__title">CPU 与 <span class="accent">GPU</span></h2>
@@ -477,7 +475,7 @@
       </section>
 
       <!-- 15 CUDA -->
-      <section class="slide act-3" data-era="2006 · CUDA" data-label="CUDA">
+      <section class="slide act-3" id="slide-cuda" data-era="2006 · CUDA" data-label="CUDA">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第三幕 · 算力</span><span class="slide__era">2006 · NVIDIA CUDA</span></div>
           <h2 class="slide__title">CUDA:让显卡<span class="accent">不止渲染画面</span></h2>
@@ -504,7 +502,7 @@
       </section>
 
       <!-- 16 矩阵 -->
-      <section class="slide act-3" data-era="贯穿始终" data-label="矩阵">
+      <section class="slide act-3" id="slide-matrix" data-era="贯穿始终" data-label="矩阵">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第三幕 → 第四幕</span><span class="slide__era">表示层</span></div>
           <h2 class="slide__title">矩阵:一切都变成<span class="accent">一张表</span></h2>
@@ -533,7 +531,7 @@
       </section>
 
       <!-- ══════════════ 第四幕 分幕卡 ══════════════ -->
-      <section class="slide slide--act act-3" data-era="第四幕" data-label="第四幕 · 学习">
+      <section class="slide slide--act act-6" id="slide-act-4" data-era="第四幕" data-label="第四幕 · 学习">
         <div class="actcard">
           <p class="actcard__no">第 四 幕</p>
           <h2 class="actcard__title">算力,变成<span class="accent">学习</span></h2>
@@ -543,7 +541,7 @@
       </section>
 
       <!-- 18 神经元 -->
-      <section class="slide act-3" data-era="1943 / 1958" data-label="神经元">
+      <section class="slide act-6" id="slide-neuron" data-era="1943 / 1958" data-label="神经元">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">1943 / 1958</span></div>
           <h2 class="slide__title">神经元:数字有了<span class="accent">倾向</span></h2>
@@ -572,7 +570,7 @@
       </section>
 
       <!-- 19 反向传播 -->
-      <section class="slide act-3" data-era="1986" data-label="反向传播">
+      <section class="slide act-6" id="slide-backprop" data-era="1986" data-label="反向传播">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">1986 · Rumelhart 等</span></div>
           <h2 class="slide__title">反向传播:让错误<span class="accent">回流</span></h2>
@@ -598,9 +596,9 @@
       </section>
 
       <!-- 20 MNIST -->
-      <section class="slide act-3" data-era="1998 / 至今" data-label="MNIST">
+      <section class="slide act-6" id="slide-mnist" data-era="1998" data-label="MNIST">
         <div class="slide__text">
-          <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">1998 / 至今</span></div>
+          <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">1998</span></div>
           <h2 class="slide__title">MNIST:让训练<span class="accent">看得见</span></h2>
           <p class="slide__lead">抽象的"学习",在这个任务里第一次能亲手跑通。</p>
           <div class="facets">
@@ -626,7 +624,7 @@
       </section>
 
       <!-- 21 AlexNet · 深度学习引爆 -->
-      <section class="slide act-3" data-era="2012 · AlexNet" data-label="AlexNet">
+      <section class="slide act-6" id="slide-alexnet" data-era="2012 · AlexNet" data-label="AlexNet">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">2012 · ImageNet</span></div>
           <h2 class="slide__title">AlexNet:深度学习<span class="accent">引爆</span></h2>
@@ -651,7 +649,7 @@
       </section>
 
       <!-- 22 词嵌入 -->
-      <section class="slide act-3" data-era="2013 · word2vec" data-label="词嵌入">
+      <section class="slide act-6" id="slide-word2vec" data-era="2013 · word2vec" data-label="词嵌入">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">2013 · word2vec</span></div>
           <h2 class="slide__title">词嵌入:词有了<span class="accent">坐标</span></h2>
@@ -680,7 +678,7 @@
       </section>
 
       <!-- 22 序列模型 -->
-      <section class="slide act-3" data-era="1997 / 2014" data-label="序列模型">
+      <section class="slide act-6" id="slide-rnn" data-era="1997 / 2014" data-label="序列模型">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第四幕 → 第五幕</span><span class="slide__era">1997 · LSTM / 2014</span></div>
           <h2 class="slide__title">序列模型:按<span class="accent">时间</span>读句子</h2>
@@ -706,7 +704,7 @@
       </section>
 
       <!-- ══════════════ 第五幕 分幕卡 ══════════════ -->
-      <section class="slide slide--act act-4" data-era="第五幕" data-label="第五幕 · 语言">
+      <section class="slide slide--act act-4" id="slide-act-5" data-era="第五幕" data-label="第五幕 · 语言">
         <div class="actcard">
           <p class="actcard__no">第 五 幕</p>
           <h2 class="actcard__title">学习,变成<span class="accent">语言</span></h2>
@@ -716,7 +714,7 @@
       </section>
 
       <!-- 23 注意力 -->
-      <section class="slide act-4" data-era="2017 · Attention" data-label="注意力">
+      <section class="slide act-4" id="slide-attention" data-era="2017 · Attention" data-label="注意力">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2017 · Attention Is All You Need</span></div>
           <h2 class="slide__title">注意力:意义来自<span class="accent">关系</span></h2>
@@ -746,7 +744,7 @@
       </section>
 
       <!-- 24 Transformer -->
-      <section class="slide act-4" data-era="2017" data-label="Transformer">
+      <section class="slide act-4" id="slide-transformer" data-era="2017" data-label="Transformer">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2017</span></div>
           <h2 class="slide__title">Transformer:可堆叠的<span class="accent">积木</span></h2>
@@ -773,7 +771,7 @@
       </section>
 
       <!-- 25 语言模型 -->
-      <section class="slide act-4" data-era="2018–2019" data-label="语言模型">
+      <section class="slide act-4" id="slide-language-model" data-era="2018–2019" data-label="语言模型">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2018–2019 · GPT / BERT</span></div>
           <h2 class="slide__title">语言模型:预测<span class="accent">下一个词</span></h2>
@@ -800,7 +798,7 @@
       </section>
 
       <!-- 26 GPT 横空出世 -->
-      <section class="slide act-4" data-era="2018 → 2022" data-label="GPT">
+      <section class="slide act-4" id="slide-gpt" data-era="2018 → 2022" data-label="GPT">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2018 → 2022 · OpenAI</span></div>
           <h2 class="slide__title">GPT:把这条路<span class="accent">推到底</span></h2>
@@ -828,7 +826,7 @@
       </section>
 
       <!-- 27 Scaling Law -->
-      <section class="slide act-4" data-era="2020 · Scaling Law" data-label="规模定律">
+      <section class="slide act-4" id="slide-scaling-law" data-era="2020 · Scaling Law" data-label="规模定律">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2020 · Kaplan / Chinchilla</span></div>
           <h2 class="slide__title">规模定律:大力<span class="accent">真的出奇迹</span></h2>
@@ -855,13 +853,13 @@
       </section>
 
       <!-- 27 大规模训练 -->
-      <section class="slide act-4" data-era="2020s" data-label="大规模训练">
+      <section class="slide act-4" id="slide-training" data-era="2022 起" data-label="大规模训练">
         <div class="slide__text">
-          <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2020s</span></div>
+          <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2022 起</span></div>
           <h2 class="slide__title">大规模训练:模型是<span class="accent">"炼"出来的</span></h2>
           <p class="slide__lead">一个可用的大模型,要分好几个阶段"炼"。</p>
           <div class="facets">
-            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">2020s 起,"预训练 + 后训练"成为大模型标准流程。</span></div>
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">2022 年 ChatGPT 之后,"预训练 + 后训练"成为大模型产品的标准流程。</span></div>
             <div class="facet"><span class="facet__k">原理</span><span class="facet__v"><strong>预训练</strong>读遍海量文本学通用能力;<strong>SFT</strong> 用指令数据教它听话;<strong>RLHF</strong> 按人类偏好对齐;必要时再<strong>蒸馏</strong>成小模型。</span></div>
             <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">预训练决定"底子"(最烧钱),后训练决定"好不好用"。分阶段,才能既博学又听话。</span></div>
           </div>
@@ -882,13 +880,13 @@
       </section>
 
       <!-- 28 工程 -->
-      <section class="slide act-4" data-era="2020s" data-label="大模型工程">
+      <section class="slide act-4" id="slide-infra" data-era="2023 起" data-label="大模型工程">
         <div class="slide__text">
-          <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2020s</span></div>
+          <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2023 起</span></div>
           <h2 class="slide__title">工程:让它真的<span class="accent">跑得起来</span></h2>
           <p class="slide__lead">模型一大,难题就从"怎么算"变成"放不放得下"。</p>
           <div class="facets">
-            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">与超大模型同步演进的一整套系统工程。</span></div>
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">2023 年大模型应用爆发后,支撑高并发、低延迟服务的一整套系统工程变成主战场。</span></div>
             <div class="facet"><span class="facet__k">原理</span><span class="facet__v">单卡装不下,就把模型<strong>切到多卡</strong>(数据/张量/流水线并行),靠高速互联同步;推理用 <strong>KV cache、连续批处理</strong>提速。</span></div>
             <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">显存、通信、吞吐,任何一环卡住,再好的模型也<strong>服务不了亿级用户</strong>。工程决定它能否落地。</span></div>
           </div>
@@ -908,7 +906,7 @@
       </section>
 
       <!-- ══════════════ 终点 Mythos ══════════════ -->
-      <section class="slide slide--finale act-5" data-era="2026 · Anthropic" data-label="Mythos">
+      <section class="slide slide--finale act-5" id="slide-mythos" data-era="2026 · Anthropic" data-label="Mythos">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">终点 · Claude Mythos</span><span class="slide__era">2026 · Anthropic</span></div>
           <h2 class="hero__title"><span class="accent">Mythos</span></h2>
@@ -937,7 +935,8 @@
       <div class="dial__needle" aria-hidden="true"></div>
       <div class="dial__hub" aria-hidden="true"></div>
       <div class="dial__track" id="dial-track"></div>
-      <a class="dial__home" href="index.html">← 回到电子书</a>
+      <a class="dial__corner dial__top" href="#slide-hero">↑ 回到开头</a>
+      <a class="dial__corner dial__home" href="index.html">← 回到电子书</a>
     </nav>
 
     <script src="assets/mythos.js"></script>

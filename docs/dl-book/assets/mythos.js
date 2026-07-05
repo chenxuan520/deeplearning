@@ -28,6 +28,13 @@
     return m ? m[0] : "act-1";
   }
 
+  function dialEraOf(slide) {
+    var raw = slide.getAttribute("data-dial-era") || slide.getAttribute("data-era") || "";
+    raw = raw.trim();
+    if (/^(序|全景|第[一二三四五六七八九十]+幕|抽象层|贯穿始终)$/.test(raw)) return "";
+    return raw.split("·")[0].trim();
+  }
+
   slides.forEach(function (s, i) { if (!s.id) s.id = "slide-n-" + i; });
 
   // 读取转盘几何: 与 mythos.css 的装饰弧严格对齐。
@@ -35,8 +42,13 @@
   //   这里读同样的值, 节点才会正好贴在那条弧上。
   var TIP_X = 130;
   function readGeom() {
-    var cs = getComputedStyle(document.documentElement);
-    var tip = parseFloat(cs.getPropertyValue("--dial-tip"));
+    var probe = document.createElement("div");
+    probe.style.position = "absolute";
+    probe.style.left = "var(--dial-tip)";
+    probe.style.visibility = "hidden";
+    document.body.appendChild(probe);
+    var tip = probe.getBoundingClientRect().left;
+    probe.remove();
     TIP_X = isNaN(tip) ? 130 : tip;
     RADIUS = window.innerHeight * 0.95; // = CSS 190vh 圆的半径
   }
@@ -47,22 +59,19 @@
     a.className = "dial-item " + actClassOf(slide);
     a.href = "#" + slide.id;
 
-    var dot = document.createElement("span");
-    dot.className = "dial-item__dot";
-
-    var txt = document.createElement("span");
-    txt.className = "dial-item__txt";
     var era = document.createElement("span");
     era.className = "dial-item__era";
-    era.textContent = slide.getAttribute("data-era") || "";
+    era.textContent = dialEraOf(slide);
+    if (!era.textContent) a.classList.add("dial-item--no-era");
+    var dot = document.createElement("span");
+    dot.className = "dial-item__dot";
     var label = document.createElement("span");
     label.className = "dial-item__label";
     label.textContent = slide.getAttribute("data-label") || slide.id;
-    txt.appendChild(era);
-    txt.appendChild(label);
 
+    a.appendChild(era);
     a.appendChild(dot);
-    a.appendChild(txt);
+    a.appendChild(label);
     a.addEventListener("click", function (ev) {
       ev.preventDefault();
       slide.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -97,13 +106,32 @@
 
   // ---------- 当前屏 + 时间码 ----------
   var currentIdx = -1;
+  var programmaticTargetIdx = -1;
+  var programmaticUnlockTimer = 0;
+  // 滚动到某屏时, 把地址栏 #hash 换成该屏 id: 用 replaceState, 不触发跳转、不灌历史。
+  // 第一屏(封面)清掉 hash, 保持首屏 URL 干净。
+  function updateHash(i) {
+    var id = slides[i] && slides[i].id;
+    if (!id) return;
+    var url = i === 0 ? location.pathname + location.search : "#" + id;
+    try { history.replaceState(null, "", url); } catch (e) {}
+  }
   function setActive(i) {
     if (i < 0 || i >= items.length) return;
     if (i !== currentIdx) {
       currentIdx = i;
       if (reelCode) reelCode.textContent = String(i + 1).padStart(2, "0") + " / " + total;
+      updateHash(i);
     }
     layout(i);
+  }
+  function lockActiveUntilScrollStops(i) {
+    programmaticTargetIdx = i;
+    clearTimeout(programmaticUnlockTimer);
+    programmaticUnlockTimer = setTimeout(function () {
+      setActive(programmaticTargetIdx);
+      programmaticTargetIdx = -1;
+    }, 1800);
   }
 
   // ---------- 进屏淡入 + 高亮 ----------
@@ -112,7 +140,7 @@
       entries.forEach(function (e) {
         if (e.isIntersecting) {
           e.target.classList.add("is-in");
-          if (e.intersectionRatio >= 0.55) setActive(slides.indexOf(e.target));
+          if (e.intersectionRatio >= 0.55 && programmaticTargetIdx < 0) setActive(slides.indexOf(e.target));
         }
       });
     }, { root: deck, threshold: [0.2, 0.55, 0.85] });
@@ -120,6 +148,7 @@
   } else {
     slides.forEach(function (s) { s.classList.add("is-in"); });
     deck.addEventListener("scroll", function () {
+      if (programmaticTargetIdx >= 0) return;
       setActive(Math.round(deck.scrollTop / deck.clientHeight));
     });
   }
@@ -128,6 +157,14 @@
   function updateProgress() {
     var max = deck.scrollHeight - deck.clientHeight;
     if (progress) progress.style.width = (max > 0 ? (deck.scrollTop / max) * 100 : 0).toFixed(2) + "%";
+    if (programmaticTargetIdx >= 0) {
+      var targetTop = slides[programmaticTargetIdx].offsetTop;
+      if (Math.abs(deck.scrollTop - targetTop) < 3) {
+        setActive(programmaticTargetIdx);
+        programmaticTargetIdx = -1;
+        clearTimeout(programmaticUnlockTimer);
+      }
+    }
   }
   deck.addEventListener("scroll", updateProgress, { passive: true });
 
@@ -145,18 +182,111 @@
     else if (k === "End") { e.preventDefault(); slides[slides.length - 1].scrollIntoView({ behavior: "smooth", block: "start" }); }
   });
 
+  // ---------- 左侧时间线滚动 ----------
+  var dialTargetIdx = 0;
+  var dialScrollTimer = 0;
+  var dialScrollAcc = 0;
+  var dialScrolling = false;
+  var DIAL_WHEEL_STEP = 28;
+  function scrollDialTo(idx) {
+    idx = Math.min(slides.length - 1, Math.max(0, idx));
+    dialTargetIdx = idx;
+    dialScrolling = true;
+    setActive(idx);
+    lockActiveUntilScrollStops(idx);
+    clearTimeout(dialScrollTimer);
+    dialScrollTimer = setTimeout(function () {
+      dialScrolling = false;
+      slides[dialTargetIdx].scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 180);
+  }
+  track.addEventListener("wheel", function (e) {
+    if (window.matchMedia("(max-width: 920px)").matches) return;
+    e.preventDefault();
+    dialScrollAcc += e.deltaY || e.deltaX || 0;
+    if (Math.abs(dialScrollAcc) < DIAL_WHEEL_STEP) return;
+    var step = dialScrollAcc > 0 ? 1 : -1;
+    dialScrollAcc = 0;
+    scrollDialTo((dialScrolling ? dialTargetIdx : (currentIdx < 0 ? 0 : currentIdx)) + step);
+  }, { passive: false });
+
+  // ---------- 移动端跳转 ----------
+  function buildMobileJump() {
+    var targets = slides.filter(function (s, i) {
+      return i === 0 ||
+        s.id === "slide-overview" ||
+        s.classList.contains("slide--act") ||
+        s.classList.contains("slide--finale");
+    });
+    if (!targets.length) return;
+
+    var wrap = document.createElement("div");
+    wrap.className = "mobile-jump";
+    wrap.innerHTML =
+      '<button type="button" class="mobile-jump__btn" aria-expanded="false" aria-controls="mobile-jump-panel">跳转</button>' +
+      '<div class="mobile-jump__backdrop" data-mobile-jump-close></div>' +
+      '<div class="mobile-jump__panel" id="mobile-jump-panel" role="dialog" aria-modal="true" aria-label="跳转到某一幕">' +
+      '  <div class="mobile-jump__head">' +
+      '    <strong>跳转到某一幕</strong>' +
+      '    <button type="button" class="mobile-jump__close" data-mobile-jump-close aria-label="关闭">Esc</button>' +
+      '  </div>' +
+      '  <div class="mobile-jump__list"></div>' +
+      '</div>';
+    document.body.appendChild(wrap);
+
+    var btn = wrap.querySelector(".mobile-jump__btn");
+    var list = wrap.querySelector(".mobile-jump__list");
+    targets.forEach(function (slide) {
+      var item = document.createElement("button");
+      item.type = "button";
+      item.className = "mobile-jump__item " + actClassOf(slide);
+      var era = slide.getAttribute("data-era") || "";
+      var label = slide.getAttribute("data-label") || slide.id;
+      item.innerHTML =
+        '<span class="mobile-jump__era">' + era + '</span>' +
+        '<span class="mobile-jump__label">' + label + '</span>';
+      item.addEventListener("click", function () {
+        close();
+        slide.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      list.appendChild(item);
+    });
+
+    function open() {
+      wrap.classList.add("is-open");
+      btn.setAttribute("aria-expanded", "true");
+    }
+    function close() {
+      wrap.classList.remove("is-open");
+      btn.setAttribute("aria-expanded", "false");
+    }
+    btn.addEventListener("click", function () {
+      wrap.classList.contains("is-open") ? close() : open();
+    });
+    wrap.querySelectorAll("[data-mobile-jump-close]").forEach(function (n) {
+      n.addEventListener("click", close);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && wrap.classList.contains("is-open")) close();
+    });
+  }
+
   // ---------- 初始化 & 重排 ----------
+  // 带 #hash 进来时: 定位到对应屏并高亮; 否则从封面开始。
+  var initialHash = location.hash ? location.hash.slice(1) : "";
   function boot() {
     readGeom();
-    setActive(currentIdx < 0 ? 0 : currentIdx);
+    var startIdx = 0;
+    if (initialHash) {
+      var t = document.getElementById(initialHash);
+      var ti = t ? slides.indexOf(t) : -1;
+      if (ti >= 0) startIdx = ti;
+    }
+    if (startIdx > 0) slides[startIdx].scrollIntoView({ block: "start" });
+    setActive(startIdx);
     updateProgress();
   }
   window.addEventListener("resize", function () { readGeom(); layout(currentIdx < 0 ? 0 : currentIdx); });
+  buildMobileJump();
   requestAnimationFrame(boot);
-
-  // ---------- hash 定位 ----------
-  if (location.hash) {
-    var t = document.getElementById(location.hash.slice(1));
-    if (t && deck.contains(t)) requestAnimationFrame(function () { t.scrollIntoView({ block: "start" }); });
-  }
 })();
