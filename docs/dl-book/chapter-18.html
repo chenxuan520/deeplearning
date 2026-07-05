@@ -615,6 +615,15 @@ encoding[pos][i + 1] = std::cos(angle);
           <li><span class="pill">Decoder-only</span>只留右塔(并去掉交叉注意力),带 causal mask 专心<strong>生成</strong>。代表:<strong>GPT</strong> 系列——今天的大模型几乎都是这一派。</li>
           <li><span class="pill">Encoder-Decoder</span>两塔都要,适合“输入 → 输出”的转换任务,如翻译、摘要。代表:<strong>T5</strong>、原始 Transformer。</li>
         </ul>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">BERT 不是新积木,而是 encoder-only 的代表</span>
+          <p>
+            <strong>BERT</strong> 全名是 <em>Bidirectional Encoder Representations from Transformers</em>:底层仍是本章这些 Transformer Block,只是<strong>只保留编码器左塔</strong>。它不加 causal mask,所以每个词能同时看左边和右边,特别适合“理解一句话”的任务,比如文本分类、检索、重排、实体抽取、抽取式问答。
+          </p>
+          <p>
+            BERT 的经典训练方式不是 GPT 那种“预测下一个 token”,而是 <span class="term">MLM</span>(Masked Language Modeling):把句子里一部分词遮成 <code>[MASK]</code>,让模型根据左右上下文把它猜回来。这样练出来的模型很会理解上下文,但它没有按从左到右续写的生成习惯,所以不适合直接拿来做聊天生成;聊天大模型通常走下面的 decoder-only 路线。
+          </p>
+        </div>
         <div class="callout callout--note reveal">
           <span class="callout__title">为什么如今大模型多是 decoder-only?</span>
           <p>

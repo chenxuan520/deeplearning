@@ -1,0 +1,399 @@
+/*
+ * mythos.css — 专题页《从沙子到 Mythos》
+ * 目标: 电影/史诗质感。一屏一页 scroll-snap;
+ *   每一幕先来一张黑场"分幕卡";内容屏讲清「何时 · 原理 · 为什么」,图文并重;
+ *   视觉随时代推进: 胶片 → 蓝图 → 数字 → 未来;
+ *   左侧常驻"半圆转盘"时间轴,当前节点转到弧尖放大高亮。
+ * 纯静态零依赖, 不复用 book.css。
+ */
+
+:root {
+  --ink: #0b0906;
+  --ink-2: #16110b;
+  --paper: #efe7d6;
+  --paper-dim: #bcb09a;
+  --paper-faint: #8b8070;
+  --amber: #e6a95c;
+  --amber-soft: #d0a56d;
+  --rust: #c05f36;
+  --sun: #f0cd83;
+  --sage: #a6b489;
+  --violet: #9a8bff;
+  --line: rgba(239, 231, 214, 0.14);
+  --line-strong: rgba(239, 231, 214, 0.3);
+  --dial-width: clamp(120px, 15vw, 190px); /* 左侧转盘窄带宽度 */
+  --dial-tip: clamp(96px, 12vw, 150px);    /* 弧尖(当前项)横坐标 */
+  --bar-height: clamp(30px, 5.5vh, 66px);   /* 电影黑边 */
+  --font-serif: "Songti SC", "Noto Serif SC", "Source Han Serif SC", "STSong",
+    Georgia, "Times New Roman", serif;
+  --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+  /* 每幕主色(用 act-N 挑) */
+  --c1: var(--amber);
+  --c2: var(--rust);
+  --c3: var(--sage);
+  --c4: var(--sun);
+  --c5: var(--violet);
+}
+
+* { box-sizing: border-box; }
+
+.act-1 { --c: var(--c1); }
+.act-2 { --c: var(--c2); }
+.act-3 { --c: var(--c3); }
+.act-4 { --c: var(--c4); }
+.act-5 { --c: var(--c5); }
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  color: var(--paper);
+  font-family: var(--font-sans);
+  background: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+a { color: var(--amber); text-decoration: none; }
+
+/* ============================================================= */
+/* 胶片氛围: 颗粒 + 上下黑边 + 片名/时间码                        */
+/* ============================================================= */
+
+.grain {
+  position: fixed; inset: 0; z-index: 90; pointer-events: none;
+  opacity: 0.05; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain 900ms steps(4) infinite;
+}
+@keyframes grain {
+  0% { transform: translate(0,0); } 25% { transform: translate(-3%,2%); }
+  50% { transform: translate(2%,-3%); } 75% { transform: translate(-2%,-2%); }
+  100% { transform: translate(3%,3%); }
+}
+@media (prefers-reduced-motion: reduce) { .grain { animation: none; } }
+
+.bar {
+  position: fixed; left: 0; right: 0; height: var(--bar-height);
+  background: #000; z-index: 80; pointer-events: none;
+}
+.bar--top { top: 0; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+.bar--bottom { bottom: 0; box-shadow: 0 -10px 30px rgba(0,0,0,0.6); }
+
+.reel {
+  position: fixed; top: 0; left: 0; right: 0; height: var(--bar-height);
+  z-index: 82; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 clamp(0.9rem, 3vw, 2.4rem);
+  font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.16em;
+  color: var(--paper-faint); pointer-events: none;
+}
+.reel__title { text-transform: uppercase; }
+.reel__code { color: var(--amber-soft); }
+
+.deck-progress {
+  position: fixed; top: var(--bar-height); left: 0; z-index: 82;
+  height: 2px; width: 0%;
+  background: linear-gradient(90deg, var(--amber), var(--rust));
+  transition: width 140ms linear;
+}
+
+/* ============================================================= */
+/* 滚动容器 + 一屏一页                                            */
+/* ============================================================= */
+
+.deck {
+  height: 100vh; height: 100dvh;
+  overflow-y: scroll; scroll-snap-type: y mandatory; scroll-behavior: smooth;
+  scrollbar-width: none;
+  perspective: 1px; /* 备用: 视差 */
+}
+.deck::-webkit-scrollbar { width: 0; height: 0; }
+
+.slide {
+  position: relative;
+  min-height: 100vh; min-height: 100dvh;
+  scroll-snap-align: start; scroll-snap-stop: always;
+  display: grid; align-items: center;
+  gap: clamp(1.6rem, 4vw, 4.5rem);
+  grid-template-columns: 1.02fr 0.98fr;
+  padding: calc(var(--bar-height) + 2.6rem) clamp(1.6rem, 5vw, 6rem)
+           calc(var(--bar-height) + 2.6rem) calc(var(--dial-tip) + clamp(9rem, 12vw, 14rem));
+  overflow: hidden;
+}
+
+/* 每幕氛围: 胶片 → 蓝图 → 数字 → 未来 */
+.slide::before { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.slide.act-1 { background: radial-gradient(120% 95% at 40% 42%, rgba(230,169,92,0.11), transparent 55%), linear-gradient(180deg,#1b130b,#100b06); }
+.slide.act-1::before { background: repeating-linear-gradient(90deg, transparent 0 38px, rgba(0,0,0,0.15) 38px 39px), radial-gradient(130% 110% at 50% 45%, transparent 46%, rgba(0,0,0,0.66)); }
+.slide.act-2 { background: radial-gradient(120% 95% at 58% 45%, rgba(120,150,170,0.08), transparent 55%), linear-gradient(180deg,#0d1210,#0a0e0c); }
+.slide.act-2::before { background-image: linear-gradient(rgba(150,175,150,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(150,175,150,0.06) 1px, transparent 1px); background-size: 30px 30px; -webkit-mask-image: radial-gradient(120% 100% at 58% 50%, #000 55%, transparent); mask-image: radial-gradient(120% 100% at 58% 50%, #000 55%, transparent); }
+.slide.act-3 { background: radial-gradient(120% 95% at 55% 45%, rgba(166,180,137,0.08), transparent 52%), linear-gradient(180deg,#0d100e,#090c0b); }
+.slide.act-3::before { background-image: radial-gradient(rgba(200,220,200,0.10) 1px, transparent 1.4px); background-size: 24px 24px; -webkit-mask-image: radial-gradient(120% 100% at 55% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 55% 50%, #000 45%, transparent); }
+.slide.act-4 { background: radial-gradient(110% 90% at 52% 42%, rgba(240,205,131,0.10), transparent 54%), linear-gradient(180deg,#0e0d12,#0a090e); }
+.slide.act-4::before { background-image: radial-gradient(rgba(240,205,131,0.10) 1px, transparent 1.4px); background-size: 26px 26px; -webkit-mask-image: radial-gradient(120% 100% at 52% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 52% 50%, #000 45%, transparent); }
+.slide.act-5 { background: radial-gradient(85% 75% at 48% 42%, rgba(230,169,92,0.18), transparent 55%), radial-gradient(70% 90% at 78% 72%, rgba(154,139,255,0.16), transparent 60%), linear-gradient(180deg,#0b0a14,#08070d); }
+.slide.act-5::before { background: repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 4px); opacity: 0.5; }
+
+/* 进屏淡入 */
+.slide__text > *, .slide__stage { opacity: 0; transform: translateY(22px); transition: opacity 900ms ease, transform 900ms ease; }
+.slide.is-in .slide__text > * { opacity: 1; transform: none; }
+.slide.is-in .slide__text > *:nth-child(2) { transition-delay: 90ms; }
+.slide.is-in .slide__text > *:nth-child(3) { transition-delay: 170ms; }
+.slide.is-in .slide__text > *:nth-child(4) { transition-delay: 250ms; }
+.slide.is-in .slide__text > *:nth-child(5) { transition-delay: 330ms; }
+.slide.is-in .slide__stage { opacity: 1; transform: none; transition-delay: 220ms; }
+@media (prefers-reduced-motion: reduce) {
+  .slide__text > *, .slide__stage { opacity: 1; transform: none; }
+}
+
+.slide__text { position: relative; z-index: 2; }
+.slide__stage { position: relative; z-index: 2; display: grid; gap: 0.9rem; align-content: center; }
+
+/* 幕次 + 年代:时间码风 */
+.slide__meta {
+  display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.14em;
+  color: var(--paper-faint); margin-bottom: 1.1rem; text-transform: uppercase;
+}
+.slide__act { color: var(--c, var(--amber)); font-weight: 700; }
+.slide__era { padding-left: 0.7rem; border-left: 1px solid var(--line-strong); }
+
+.slide__title {
+  font-family: var(--font-serif); font-weight: 700;
+  font-size: clamp(2.2rem, 5.2vw, 3.7rem); line-height: 1.12;
+  letter-spacing: 0.01em; margin: 0 0 1.1rem; color: var(--paper);
+}
+.slide__title .accent { color: var(--c, var(--amber)); font-style: italic; }
+
+.slide__lead {
+  font-size: clamp(1.02rem, 1.7vw, 1.22rem); line-height: 1.85;
+  color: var(--paper-dim); margin: 0 0 1.2rem; max-width: 36rem;
+}
+.slide__lead strong { color: var(--paper); font-weight: 600; }
+
+/* 何时 / 原理 / 为什么 三段块 */
+/* 正文: 三段顺读叙事(原 何时/原理/为什么 标签隐藏, 只留自然段落流) */
+.facets { display: block; margin: 0 0 0.4rem; max-width: 37rem; }
+.facet {
+  display: block;
+  margin: 0 0 0.85rem;
+  padding: 0;
+  position: relative;
+  padding-left: 1rem;
+}
+/* 段首一个小竖条代替标签, 用幕色, 低调但有节奏感 */
+.facet::before {
+  content: ""; position: absolute; left: 0; top: 0.5em;
+  width: 3px; height: 1.05em; border-radius: 2px;
+  background: var(--c, var(--amber)); opacity: 0.55;
+}
+.facet__k { display: none; }
+.facet__v { font-size: 1rem; line-height: 1.82; color: var(--paper-dim); }
+.facet__v strong { color: var(--paper); font-weight: 600; }
+
+.slide__xref {
+  display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 1.2rem;
+  padding-bottom: 0.15rem; border-bottom: 1px solid var(--line-strong);
+  color: var(--paper-dim); font-size: 0.84rem; font-family: var(--font-mono); letter-spacing: 0.04em;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.slide__xref::before { content: "▸ "; color: var(--c, var(--amber)); }
+.slide__xref:hover { color: var(--paper); border-color: var(--c, var(--amber)); }
+
+/* 右侧图舞台: 可放多张 */
+.frame {
+  border: 1px solid var(--line); border-radius: 2px;
+  background: linear-gradient(180deg, rgba(239,231,214,0.03), transparent), var(--ink-2);
+  box-shadow: 0 26px 66px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(0,0,0,0.3);
+  padding: 0.5rem;
+}
+.frame svg { display: block; width: 100%; height: auto; }
+.frame__cap {
+  margin: 0.5rem 0.2rem 0.15rem; font-family: var(--font-mono); font-size: 0.66rem;
+  letter-spacing: 0.05em; color: var(--paper-faint); text-align: center;
+}
+.stage-2 { grid-template-columns: 1fr 1fr; display: grid; gap: 0.9rem; }
+.stage-2 .frame__cap { font-size: 0.6rem; }
+
+/* SVG 语义类 */
+.s-stroke { stroke: var(--line-strong); fill: none; }
+.s-c { stroke: var(--c, var(--amber)); fill: none; }
+.s-cf { fill: var(--c, var(--amber)); }
+.s-paper { fill: var(--paper); }
+.s-dim { fill: var(--paper-faint); }
+.s-t { fill: var(--paper-dim); font-family: var(--font-mono); font-size: 12px; }
+.s-tc { fill: var(--c, var(--amber)); font-family: var(--font-mono); font-size: 12px; }
+
+/* ============================================================= */
+/* 分幕黑场卡                                                     */
+/* ============================================================= */
+
+.slide--act {
+  grid-template-columns: 1fr; justify-items: center; text-align: center;
+  padding-left: calc(var(--dial-width) + clamp(1rem, 2.5vw, 3rem));
+}
+/* 分幕卡不再纯黑, 保留所属幕的底色, 只额外压暗做"暗场仪式感", 让前后过渡顺滑 */
+.slide--act::before {
+  background: radial-gradient(70% 60% at 50% 45%, transparent 30%, rgba(0,0,0,0.78));
+  -webkit-mask-image: none; mask-image: none;
+  opacity: 1;
+}
+.actcard { max-width: 44rem; }
+.actcard__no {
+  font-family: var(--font-mono); font-size: 0.8rem; letter-spacing: 0.5em;
+  color: var(--c, var(--amber)); text-transform: uppercase; margin: 0 0 1.4rem;
+}
+.actcard__title {
+  font-family: var(--font-serif); font-weight: 700;
+  font-size: clamp(2.6rem, 7vw, 5rem); line-height: 1.08; margin: 0 0 1.4rem; color: var(--paper);
+}
+.actcard__title .accent { color: var(--c, var(--amber)); font-style: italic; }
+.actcard__line { font-size: clamp(1rem, 1.9vw, 1.28rem); line-height: 1.8; color: var(--paper-dim); max-width: 34rem; margin: 0 auto; }
+.actcard__rule { width: 60px; height: 2px; background: var(--c, var(--amber)); margin: 1.8rem auto 0; }
+
+/* ============================================================= */
+/* 封面 & 终点                                                    */
+/* ============================================================= */
+
+.slide--hero, .slide--finale {
+  grid-template-columns: 1fr; justify-items: center; text-align: center;
+  padding-left: calc(var(--dial-width) + clamp(1rem, 2.5vw, 3rem));
+}
+.slide--hero .slide__text, .slide--finale .slide__text { max-width: 48rem; }
+.slide--hero .slide__lead, .slide--finale .slide__lead { margin-left: auto; margin-right: auto; }
+.slide--hero .slide__meta, .slide--finale .slide__meta { justify-content: center; }
+
+.hero__title {
+  font-family: var(--font-serif); font-weight: 700;
+  font-size: clamp(3rem, 9vw, 6rem); line-height: 1.02; margin: 0 0 1.5rem;
+  color: var(--paper); letter-spacing: 0.01em;
+}
+.hero__title .accent { color: var(--amber); font-style: italic; }
+.finale__note { font-size: 0.96rem; line-height: 1.85; color: var(--paper-faint); max-width: 40rem; margin: 0 auto; }
+.finale__note strong { color: var(--paper); }
+
+.hero__hint {
+  margin-top: 2.4rem; font-family: var(--font-mono); font-size: 0.7rem;
+  letter-spacing: 0.16em; color: var(--paper-faint); animation: bob 2.6s ease-in-out infinite;
+}
+@keyframes bob { 0%,100%{transform:translateY(0);} 50%{transform:translateY(6px);} }
+@media (prefers-reduced-motion: reduce) { .hero__hint { animation: none; } }
+
+.button-row { display: flex; gap: 0.7rem; flex-wrap: wrap; justify-content: center; margin-top: 2rem; }
+.mbtn {
+  display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.68rem 1.5rem;
+  border: 1px solid var(--line-strong); border-radius: 2px; font-family: var(--font-mono);
+  font-size: 0.8rem; letter-spacing: 0.06em; color: var(--paper);
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+.mbtn--primary { background: var(--amber); color: var(--ink); border-color: var(--amber); font-weight: 700; }
+.mbtn:hover { transform: translateY(-1px); border-color: var(--amber); }
+
+/* 总览 */
+.slide--overview { grid-template-columns: 1fr; justify-items: center; }
+.slide--overview .slide__text { max-width: 58rem; width: 100%; }
+.overview__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem,1fr)); gap: 0.7rem; margin-top: 1.4rem; }
+.ov-act { border: 1px solid var(--line); border-top: 2px solid var(--c, var(--amber)); border-radius: 2px; padding: 0.85rem 0.9rem 0.95rem; background: var(--ink-2); }
+.ov-act__name { font-family: var(--font-serif); font-weight: 700; font-size: 0.98rem; color: var(--c, var(--amber)); margin: 0 0 0.15rem; }
+.ov-act__era { font-family: var(--font-mono); font-size: 0.66rem; color: var(--paper-faint); margin: 0 0 0.5rem; }
+.ov-act__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.2rem; }
+.ov-act__list li { font-size: 0.8rem; color: var(--paper-dim); line-height: 1.5; }
+
+/* ============================================================= */
+/* 左侧半圆转盘时间轴                                             */
+/* ============================================================= */
+
+.dial {
+  position: fixed; top: 0; bottom: 0; left: 0; z-index: 70;
+  width: var(--dial-width); pointer-events: none;
+}
+/* 装饰弧: 一个大圆, 圆心在屏幕左外侧, 右缘(弧尖)刚好落在 --dial-tip 处。
+   直径 = 2×半径; 半径 ≈ 0.95×视口高, 与 mythos.js 的 RADIUS 对齐。
+   left 让圆的最右点 = --dial-tip: left = tip - 2R = tip - 1.9×100vh。 */
+.dial__arc {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 190vh; height: 190vh;
+  left: calc(var(--dial-tip) - 190vh);
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: radial-gradient(circle at right center, rgba(0,0,0,0.5), transparent 30%);
+}
+.dial__hub { display: none; }
+/* 弧尖指示线 (当前项停靠处) */
+.dial__needle {
+  position: absolute; top: 50%; left: calc(var(--dial-tip) - 4px);
+  width: 20px; height: 2px; background: var(--amber);
+  transform: translateY(-50%); box-shadow: 0 0 10px var(--amber);
+}
+
+.dial__track {
+  position: absolute; inset: 0; pointer-events: auto;
+}
+/* 每个节点绝对定位, 由 JS 按角度摆到弧上 */
+.dial-item {
+  position: absolute; left: 0; top: 50%;
+  transform-origin: left center;
+  display: flex; align-items: center; gap: 0.5rem;
+  cursor: pointer; white-space: nowrap;
+  color: var(--paper-faint);
+  transition: color 200ms ease, opacity 200ms ease;
+  opacity: 0.5;
+}
+.dial-item__dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--ink); border: 1.5px solid var(--line-strong);
+  flex: 0 0 auto; transition: all 200ms ease;
+}
+.dial-item__txt { display: flex; flex-direction: column; line-height: 1.15; }
+.dial-item__era { font-family: var(--font-mono); font-size: 0.58rem; opacity: 0.8; }
+.dial-item__label { font-size: 0.76rem; font-weight: 600; }
+.dial-item:hover { color: var(--paper-dim); opacity: 0.85; }
+.dial-item.is-active {
+  color: var(--paper); opacity: 1;
+}
+.dial-item.is-active .dial-item__dot {
+  background: var(--c, var(--amber)); border-color: var(--c, var(--amber));
+  box-shadow: 0 0 12px var(--c, var(--amber)); transform: scale(1.5);
+}
+.dial-item.is-active .dial-item__label { color: var(--c, var(--amber)); font-size: 0.92rem; }
+.dial-item.is-near { opacity: 0.85; }
+
+.dial__home {
+  position: absolute; bottom: calc(var(--bar-height) + 0.8rem); left: 0.9rem;
+  pointer-events: auto;
+  padding: 0.45rem 0.7rem; border: 1px solid var(--line); border-radius: 2px;
+  color: var(--paper-dim); font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.04em;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+.dial__home:hover { border-color: var(--amber); color: var(--paper); }
+
+/* ============================================================= */
+/* 移动端: 转盘退化为顶部当前节点条                                */
+/* ============================================================= */
+
+@media (max-width: 920px) {
+  :root { --dial-width: 0px; }
+  .slide {
+    grid-template-columns: 1fr; justify-items: start; gap: 1.5rem;
+    padding: calc(var(--bar-height) + 3.4rem) 1.5rem calc(var(--bar-height) + 2.2rem);
+  }
+  .slide--act, .slide--hero, .slide--finale { padding-left: 1.5rem; justify-items: center; }
+  .slide__stage { order: 2; width: 100%; }
+  .dial__arc, .dial__needle, .dial__hub { display: none; }
+  .dial {
+    top: var(--bar-height); bottom: auto; left: 0; right: 0; width: 100%;
+    height: 2.4rem; background: rgba(8,7,5,0.9); border-bottom: 1px solid var(--line);
+    pointer-events: auto; overflow: hidden;
+  }
+  .dial__track { position: relative; inset: auto; height: 100%; }
+  .dial-item {
+    top: 50% !important; left: 50% !important;
+    transform: translate(-50%,-50%) !important;
+    opacity: 0; pointer-events: none;
+  }
+  .dial-item.is-active { opacity: 1; }
+  .dial-item.is-active .dial-item__label { font-size: 0.82rem; }
+  .dial__home { display: none; }
+}

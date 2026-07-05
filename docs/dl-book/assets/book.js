@@ -1159,11 +1159,6 @@
   // ---------- 封面: 继续阅读 ----------
   function setupCover(search) {
     setupReveal();
-    var actions = document.querySelector(".cover__actions");
-    if (actions && search) {
-      var hint = searchShortcutHint();
-      actions.appendChild(makeSearchTrigger(search, "button button--ghost", "搜索全书", "搜索全书 · " + hint));
-    }
     var last = store.get(STORAGE_LAST);
     var btn = document.querySelector("[data-continue]");
     if (!btn) return;

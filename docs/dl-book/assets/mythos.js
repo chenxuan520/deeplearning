@@ -1,0 +1,162 @@
+/*
+ * mythos.js — 专题页《从沙子到 Mythos》
+ * 左侧"半圆转盘"时间轴: 节点沿左侧圆弧分布, 当前屏对应节点转到弧尖(3 点方向)、
+ * 放大高亮, 邻近节点次亮, 其余淡出。滚动即转盘旋转。
+ * 另含: 进屏淡入(is-in)、顶部时间码与进度条、键盘翻页、hash 定位。
+ * 纯静态零依赖, 滚动容器是 .deck。
+ */
+(function () {
+  "use strict";
+
+  var deck = document.getElementById("deck");
+  var track = document.getElementById("dial-track");
+  var progress = document.querySelector(".deck-progress");
+  var reelCode = document.getElementById("reel-code");
+  if (!deck || !track) return;
+
+  var slides = [].slice.call(deck.querySelectorAll(".slide"));
+  var total = slides.length;
+
+  // 转盘几何: 节点绕"屏幕左外侧"的圆心排布, 弧向右鼓。
+  // 当前项停在 0°(弧尖=正右, 与指针对齐); 上方为负角、下方为正角。
+  var RADIUS = 360;
+  var STEP_DEG = 4.6;    // 相邻节点角度差(半径≈0.95vh, 保证竖直间距适中)
+  var VISIBLE = 9;       // 单侧最多显示几个(超出淡到 0)
+
+  function actClassOf(slide) {
+    var m = (slide.className || "").match(/\bact-\d\b/);
+    return m ? m[0] : "act-1";
+  }
+
+  slides.forEach(function (s, i) { if (!s.id) s.id = "slide-n-" + i; });
+
+  // 读取转盘几何: 与 mythos.css 的装饰弧严格对齐。
+  //   CSS 弧: 直径 190vh → 半径 = 0.95 × 视口高; 弧尖(右缘)落在 --dial-tip。
+  //   这里读同样的值, 节点才会正好贴在那条弧上。
+  var TIP_X = 130;
+  function readGeom() {
+    var cs = getComputedStyle(document.documentElement);
+    var tip = parseFloat(cs.getPropertyValue("--dial-tip"));
+    TIP_X = isNaN(tip) ? 130 : tip;
+    RADIUS = window.innerHeight * 0.95; // = CSS 190vh 圆的半径
+  }
+
+  // ---------- 生成节点 ----------
+  var items = slides.map(function (slide, i) {
+    var a = document.createElement("a");
+    a.className = "dial-item " + actClassOf(slide);
+    a.href = "#" + slide.id;
+
+    var dot = document.createElement("span");
+    dot.className = "dial-item__dot";
+
+    var txt = document.createElement("span");
+    txt.className = "dial-item__txt";
+    var era = document.createElement("span");
+    era.className = "dial-item__era";
+    era.textContent = slide.getAttribute("data-era") || "";
+    var label = document.createElement("span");
+    label.className = "dial-item__label";
+    label.textContent = slide.getAttribute("data-label") || slide.id;
+    txt.appendChild(era);
+    txt.appendChild(label);
+
+    a.appendChild(dot);
+    a.appendChild(txt);
+    a.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      slide.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    track.appendChild(a);
+    return a;
+  });
+
+  // ---------- 把节点摆到弧上 (相对当前项 active) ----------
+  // 圆心在屏幕左外侧 (tipX - R, cy); 当前项角度 0° → 落在弧尖(最右, x=tipX)。
+  // 角度向上为负、向下为正。节点用 translate(-50%,-50%) 居中, 文字不旋转。
+  function layout(active) {
+    var tipX = TIP_X;                // 弧尖横坐标(与 needle 对齐, 在窄带内)
+    var cy = track.clientHeight / 2; // 弧尖纵坐标 = 竖直中线
+    var cx = tipX - RADIUS;          // 圆心(屏幕左外)
+    items.forEach(function (a, i) {
+      var d = i - active;
+      var deg = d * STEP_DEG;                 // 当前项 0°
+      var rad = (deg * Math.PI) / 180;
+      var x = cx + Math.cos(rad) * RADIUS;    // 0° → cx+R = tipX
+      var y = cy + Math.sin(rad) * RADIUS;
+      var away = Math.abs(d);
+      var opacity = away === 0 ? 1 : Math.max(0, 1 - away / VISIBLE);
+      a.style.left = x.toFixed(1) + "px";
+      a.style.top = y.toFixed(1) + "px";
+      a.style.opacity = opacity.toFixed(2);
+      a.style.pointerEvents = opacity < 0.12 ? "none" : "auto";
+      a.classList.toggle("is-active", d === 0);
+      a.classList.toggle("is-near", away === 1);
+    });
+  }
+
+  // ---------- 当前屏 + 时间码 ----------
+  var currentIdx = -1;
+  function setActive(i) {
+    if (i < 0 || i >= items.length) return;
+    if (i !== currentIdx) {
+      currentIdx = i;
+      if (reelCode) reelCode.textContent = String(i + 1).padStart(2, "0") + " / " + total;
+    }
+    layout(i);
+  }
+
+  // ---------- 进屏淡入 + 高亮 ----------
+  if ("IntersectionObserver" in window) {
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          e.target.classList.add("is-in");
+          if (e.intersectionRatio >= 0.55) setActive(slides.indexOf(e.target));
+        }
+      });
+    }, { root: deck, threshold: [0.2, 0.55, 0.85] });
+    slides.forEach(function (s) { obs.observe(s); });
+  } else {
+    slides.forEach(function (s) { s.classList.add("is-in"); });
+    deck.addEventListener("scroll", function () {
+      setActive(Math.round(deck.scrollTop / deck.clientHeight));
+    });
+  }
+
+  // ---------- 进度条 ----------
+  function updateProgress() {
+    var max = deck.scrollHeight - deck.clientHeight;
+    if (progress) progress.style.width = (max > 0 ? (deck.scrollTop / max) * 100 : 0).toFixed(2) + "%";
+  }
+  deck.addEventListener("scroll", updateProgress, { passive: true });
+
+  // ---------- 键盘翻页 ----------
+  function go(delta) {
+    var n = Math.min(slides.length - 1, Math.max(0, currentIdx + delta));
+    slides[n].scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    var k = e.key;
+    if (k === "ArrowDown" || k === "ArrowRight" || k === "PageDown" || k === "j" || k === "l") { e.preventDefault(); go(1); }
+    else if (k === "ArrowUp" || k === "ArrowLeft" || k === "PageUp" || k === "k" || k === "h") { e.preventDefault(); go(-1); }
+    else if (k === "Home") { e.preventDefault(); slides[0].scrollIntoView({ behavior: "smooth", block: "start" }); }
+    else if (k === "End") { e.preventDefault(); slides[slides.length - 1].scrollIntoView({ behavior: "smooth", block: "start" }); }
+  });
+
+  // ---------- 初始化 & 重排 ----------
+  function boot() {
+    readGeom();
+    setActive(currentIdx < 0 ? 0 : currentIdx);
+    updateProgress();
+  }
+  window.addEventListener("resize", function () { readGeom(); layout(currentIdx < 0 ? 0 : currentIdx); });
+  requestAnimationFrame(boot);
+
+  // ---------- hash 定位 ----------
+  if (location.hash) {
+    var t = document.getElementById(location.hash.slice(1));
+    if (t && deck.contains(t)) requestAnimationFrame(function () { t.scrollIntoView({ block: "start" }); });
+  }
+})();

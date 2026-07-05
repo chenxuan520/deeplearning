@@ -83,6 +83,7 @@
           <li id="g-posenc" data-aliases="positional encoding,位置编码"><strong>位置编码</strong> — 给每个位置一个独特指纹,让模型知道词序。<a href="chapter-18.html">→ 第 18 章</a></li>
           <li id="g-transformer" data-aliases="Transformer Block,transformer block"><strong>Transformer</strong> — 注意力+残差+LayerNorm+FFN 拼成的可堆叠积木,大模型的地基。<a href="chapter-18.html">→ 第 18 章</a></li>
           <li id="g-cross" data-aliases="cross-attention,cross attention"><strong>cross-attention 交叉注意力</strong> — Q 来自解码器、K/V 来自编码器,解码时“查阅原文”。<a href="chapter-18.html">→ 第 18 章</a></li>
+          <li id="g-bert" data-aliases="BERT,bert,encoder-only,encoder only,MLM,Masked Language Modeling,[MASK]"><strong>BERT / encoder-only</strong> — 只保留 Transformer 编码器左塔,双向看全句;经典训练是遮住词再猜回来的 MLM,擅长理解、分类、检索、抽取。<a href="chapter-18.html#三种家族-后来的模型只取半张图">→ 第 18 章</a></li>
           <li id="g-decoder-only" data-aliases="decoder-only,decoder only"><strong>decoder-only</strong> — 只保留生成侧 Transformer 塔、带 causal mask;GPT 系列属此类。<a href="chapter-18.html">→ 第 18 章</a></li>
         </ul>
 

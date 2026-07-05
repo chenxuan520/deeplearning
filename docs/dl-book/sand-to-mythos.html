@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>从沙子到 Mythos · 一部从物质到智能的编年史</title>
+    <meta name="description" content="从一粒沙子里的硅,一路走到 Anthropic 的 Claude Mythos。每一屏讲清:这件事何时发生、底层原理是什么、为什么非得这样。配图、分幕、可滚动的技术史诗。" />
+    <meta property="og:title" content="从沙子到 Mythos" />
+    <meta property="og:description" content="从沙子里的硅,到 Claude Mythos:一部把每一步原理都讲清、画出来的技术编年史。" />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/mythos.css" />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <div class="bar bar--top" aria-hidden="true"></div>
+    <div class="bar bar--bottom" aria-hidden="true"></div>
+    <div class="reel" aria-hidden="true">
+      <span class="reel__title">SAND → MYTHOS · 物质如何长出智能</span>
+      <span class="reel__code" id="reel-code">00 / 00</span>
+    </div>
+    <div class="deck-progress" aria-hidden="true"></div>
+
+    <main class="deck" id="deck">
+
+      <!-- ══════════════ 封面 ══════════════ -->
+      <section class="slide slide--hero act-1" data-era="序" data-label="序幕">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">一部编年史</span><span class="slide__era">物质 → 智能</span></div>
+          <h1 class="hero__title">从沙子到 <span class="accent">Mythos</span></h1>
+          <p class="slide__lead">
+            智能不是凭空出现的。它从一粒最普通的<strong>沙子</strong>里,一步一步长出来:
+            先是可控的<strong>开关</strong>,然后是会记忆的<strong>机器</strong>,再是会学习的<strong>网络</strong>,
+            最后成为 2026 年那个最强的大模型——<strong>Claude Mythos</strong>。
+          </p>
+          <div class="button-row">
+            <a class="mbtn mbtn--primary" href="#slide-sand">▸ 从第一粒沙开始</a>
+            <a class="mbtn" href="#slide-overview">先看整条时间线</a>
+          </div>
+          <p class="hero__hint">向下滚动 ↓</p>
+        </div>
+      </section>
+
+      <!-- ══════════════ 总览 ══════════════ -->
+      <section class="slide slide--overview act-1" id="slide-overview" data-era="全景" data-label="整条时间线">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">全景</span><span class="slide__era">五幕跃迁</span></div>
+          <h2 class="slide__title">五次<span class="accent">跃迁</span></h2>
+          <p class="slide__lead" style="max-width:46rem">
+            每一幕都是一次"从做不到到做得到"的跳变。左侧转盘会随你滚动一直转;画面也会随时代
+            从<strong>老胶片</strong>渐变到<strong>未来</strong>。
+          </p>
+          <div class="overview__grid">
+            <div class="ov-act act-1"><p class="ov-act__name">一 · 物质变成开关</p><p class="ov-act__era">数十亿年前 – 1947</p><ul class="ov-act__list"><li>沙子 · 半导体</li><li>掺杂 · 二极管</li><li>三极管 · 0/1</li></ul></div>
+            <div class="ov-act act-2"><p class="ov-act__name">二 · 开关变成机器</p><p class="ov-act__era">1950s – 1971</p><ul class="ov-act__list"><li>门电路 · 加法器</li><li>锁存器 · 触发器 · 时钟</li><li>流水线 · 冯诺依曼 · 芯片</li></ul></div>
+            <div class="ov-act act-3"><p class="ov-act__name">三 · 机器变成算力</p><p class="ov-act__era">1980s – 2012</p><ul class="ov-act__list"><li>CPU · GPU</li><li>CUDA · AlexNet</li><li>矩阵</li></ul></div>
+            <div class="ov-act act-3"><p class="ov-act__name">四 · 算力变成学习</p><p class="ov-act__era">1943 – 2016</p><ul class="ov-act__list"><li>神经元 · 反向传播</li><li>MNIST · 词嵌入</li><li>序列模型</li></ul></div>
+            <div class="ov-act act-4"><p class="ov-act__name">五 · 学习变成语言</p><p class="ov-act__era">2017 – 2026</p><ul class="ov-act__list"><li>注意力 · Transformer</li><li>语言模型 · Scaling Law</li><li>训练 · 工程 · Mythos</li></ul></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════ 第一幕 分幕卡 ══════════════ -->
+      <section class="slide slide--act act-1" data-era="第一幕" data-label="第一幕 · 物质">
+        <div class="actcard">
+          <p class="actcard__no">第 一 幕</p>
+          <h2 class="actcard__title">物质,变成<span class="accent">开关</span></h2>
+          <p class="actcard__line">一块石头凭什么能算数?因为人类学会了让一小片硅,在"通"与"断"之间听话地切换。</p>
+          <div class="actcard__rule"></div>
+        </div>
+      </section>
+
+      <!-- 1 沙子 -->
+      <section class="slide act-1" id="slide-sand" data-era="约数十亿年前" data-label="沙子">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第一幕 · 物质</span><span class="slide__era">约数十亿年前</span></div>
+          <h2 class="slide__title">一粒<span class="accent">沙子</span></h2>
+          <p class="slide__lead">故事的起点,是海滩上最不起眼的东西:沙。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">地壳形成以来,硅就是地表含量第二高的元素,大量以<strong>二氧化硅(SiO₂)</strong>的形式躺在沙子里。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">沙的主要成分是硅和氧牢牢锁成的晶体。提纯后的<strong>单晶硅</strong>,原子排列整齐、性质稳定,是天然的"计算基材"。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">芯片、神经网络、大模型,追到最底层都要有一种<strong>又便宜又可控</strong>的材料——硅正好是。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 210" role="img" aria-label="SiO2 晶体">
+              <g class="s-stroke" opacity="0.4"><circle cx="180" cy="105" r="66"/></g>
+              <line x1="128" y1="78" x2="180" y2="105" class="s-c" stroke-width="2"/><line x1="232" y1="78" x2="180" y2="105" class="s-c" stroke-width="2"/>
+              <line x1="128" y1="132" x2="180" y2="105" class="s-c" stroke-width="2"/><line x1="232" y1="132" x2="180" y2="105" class="s-c" stroke-width="2"/>
+              <circle cx="180" cy="105" r="15" class="s-cf"/><text x="180" y="109" text-anchor="middle" fill="#0b0906" style="font-size:10px;font-family:monospace">Si</text>
+              <g class="s-dim"><circle cx="128" cy="78" r="8"/><circle cx="232" cy="78" r="8"/><circle cx="128" cy="132" r="8"/><circle cx="232" cy="132" r="8"/></g>
+              <text x="180" y="190" text-anchor="middle" class="s-t">一个硅原子 · 四个氧原子</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.01 — 硅,藏在每一粒沙里</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 2 半导体 -->
+      <section class="slide act-1" data-era="19 世纪" data-label="半导体">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第一幕 · 物质</span><span class="slide__era">19 世纪 · 法拉第等</span></div>
+          <h2 class="slide__title">半导体:关键是<span class="accent">可变</span></h2>
+          <p class="slide__lead">硅的价值不在"能导电",而在它能被<strong>操控</strong>导不导电。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">19 世纪起,人们陆续发现某些材料的导电性会随温度、光照、杂质剧烈变化——"半导体"由此得名。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">纯硅每个原子有 4 个价电子,刚好互相锁死,几乎不导电;但只要外界<strong>轻轻一推</strong>(电场、杂质),它就能翻面变导体。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">金属永远导电、橡胶永远绝缘,都没法"控制"。只有能在<strong>通/断之间切换</strong>的材料,才能拿来做开关、做计算。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 210" role="img" aria-label="导体半导体绝缘体">
+              <rect x="30" y="70" width="80" height="55" rx="3" class="s-stroke"/><text x="70" y="60" text-anchor="middle" class="s-t">导体</text><text x="70" y="103" text-anchor="middle" class="s-paper" style="font-size:11px">永远通</text>
+              <rect x="140" y="70" width="80" height="55" rx="3" class="s-c" stroke-width="2"/><text x="180" y="60" text-anchor="middle" class="s-tc">半导体</text><text x="180" y="103" text-anchor="middle" class="s-cf" style="font-size:15px">通 ⇄ 断</text>
+              <rect x="250" y="70" width="80" height="55" rx="3" class="s-stroke"/><text x="290" y="60" text-anchor="middle" class="s-t">绝缘体</text><text x="290" y="103" text-anchor="middle" class="s-paper" style="font-size:11px">永远断</text>
+              <text x="180" y="165" text-anchor="middle" class="s-t">能切换的,才能拿来计算</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.02 — 可切换 = 一切的前提</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 3 掺杂 -->
+      <section class="slide act-1" data-era="20 世纪初" data-label="掺杂">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第一幕 · 物质</span><span class="slide__era">20 世纪初</span></div>
+          <h2 class="slide__title">掺杂:给硅一个<span class="accent">倾向</span></h2>
+          <p class="slide__lead">纯硅太"中立"。人为掺入杂质,才让它有了性格。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">20 世纪初半导体物理成熟后,"掺杂"成为可控工艺,为后来的二极管、三极管铺路。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">掺入磷 → 多出自由电子,成 <strong>N 型</strong>(带负载流子);掺入硼 → 多出空位,成 <strong>P 型</strong>(带正载流子)。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">要"控制"电流,先得有<strong>不对称</strong>:一边想给电子、一边想要电子。把两者贴一起,才有可操纵的边界。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 210" role="img" aria-label="N型P型">
+              <rect x="40" y="65" width="120" height="75" rx="3" class="s-c" stroke-width="2"/><text x="100" y="55" text-anchor="middle" class="s-tc">N 型 · 多电子</text>
+              <g class="s-cf"><circle cx="70" cy="95" r="6"/><circle cx="105" cy="115" r="6"/><circle cx="135" cy="90" r="6"/></g>
+              <rect x="200" y="65" width="120" height="75" rx="3" class="s-stroke" stroke-width="2"/><text x="260" y="55" text-anchor="middle" class="s-t">P 型 · 多空位</text>
+              <g class="s-stroke"><circle cx="230" cy="95" r="6"/><circle cx="265" cy="115" r="6"/><circle cx="295" cy="90" r="6"/></g>
+              <text x="180" y="175" text-anchor="middle" class="s-t">同样的硅,掺出相反的倾向</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.03 — N 型给电子,P 型收电子</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 4 二极管 -->
+      <section class="slide act-1" data-era="1904" data-label="二极管">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第一幕 · 物质</span><span class="slide__era">1904 · 弗莱明</span></div>
+          <h2 class="slide__title">二极管:电流只走<span class="accent">一个方向</span></h2>
+          <p class="slide__lead">把 N 和 P 贴在一起,交界处诞生了第一个"规则"。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">1904 年真空管二极管问世;后来半导体 PN 结二极管取而代之,更小更省电。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">PN 交界形成"内建电场"。外加电压方向与它一致 → <strong>导通</strong>;相反 → <strong>阻断</strong>。这就是"正向通、反向断"。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">电流第一次被物理规则"驯服"成单行道。但它只会认死方向,<strong>不能被外部信号控制</strong>——还差一只"手"。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 210" role="img" aria-label="二极管单向">
+              <line x1="40" y1="70" x2="320" y2="70" class="s-c" stroke-width="2"/><polygon points="150,55 150,85 180,70" class="s-cf"/><line x1="180" y1="53" x2="180" y2="87" class="s-c" stroke-width="2"/>
+              <polygon points="60,70 78,64 78,76" class="s-cf"/><text x="180" y="45" text-anchor="middle" class="s-tc">正向 · 通 ✓</text>
+              <line x1="40" y1="150" x2="320" y2="150" class="s-stroke" stroke-width="2"/><polygon points="150,135 150,165 180,150" class="s-stroke"/><line x1="180" y1="133" x2="180" y2="167" class="s-stroke" stroke-width="2"/>
+              <line x1="205" y1="142" x2="220" y2="158" class="s-dim" stroke-width="2"/><line x1="220" y1="142" x2="205" y2="158" class="s-dim" stroke-width="2"/><text x="180" y="190" text-anchor="middle" class="s-t">反向 · 断 ✕</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.04 — 电流的单行道</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 5 三极管 -->
+      <section class="slide act-1" data-era="1947 · 贝尔实验室" data-label="三极管">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第一幕 · 物质</span><span class="slide__era">1947 · 贝尔实验室</span></div>
+          <h2 class="slide__title">三极管:用电流<span class="accent">控制</span>电流</h2>
+          <p class="slide__lead">整段历史里最关键的一次发明,就发生在这一年。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">1947 年冬,贝尔实验室做出第一只晶体管,三位发明者后来拿了诺贝尔物理学奖。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">三层掺杂(NPN)。<strong>基极</strong>一点微小电流,就能控制<strong>集电极</strong>大得多的电流——像用细水管的阀门,控制主管道的洪流。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">它同时是<strong>放大器</strong>和<strong>可被信号控制的开关</strong>。可控开关 = 现代计算的最小积木,一切从这里起。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 210" role="img" aria-label="三极管开关">
+              <line x1="185" y1="30" x2="185" y2="85" class="s-c" stroke-width="3"/><text x="196" y="45" class="s-tc" style="font-size:11px">大电流</text>
+              <line x1="55" y1="120" x2="150" y2="120" class="s-stroke" stroke-width="2"/><text x="55" y="110" class="s-t" style="font-size:10px">基极(控制)</text>
+              <polygon points="150,92 150,148 185,120" class="s-c" stroke-width="2"/><line x1="185" y1="92" x2="185" y2="148" class="s-c" stroke-width="3"/><line x1="185" y1="120" x2="185" y2="180" class="s-c" stroke-width="3"/>
+              <circle cx="105" cy="120" r="10" class="s-cf"/><text x="105" y="124" text-anchor="middle" fill="#0b0906" style="font-size:9px;font-family:monospace">iB</text>
+              <text x="180" y="200" text-anchor="middle" class="s-t">小信号 → 开/关一条大电流</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.05 — 可被控制的开关</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 6 0与1 -->
+      <section class="slide act-1" data-era="抽象层" data-label="0 与 1">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第一幕 → 第二幕</span><span class="slide__era">抽象层</span></div>
+          <h2 class="slide__title">0 和 1:开关的<span class="accent">两种姿态</span></h2>
+          <p class="slide__lead">从物理到信息,只差最后这一步抽象。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">与晶体管普及同步——1940s 起,布尔代数与二进制成为数字电路的通用语言。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">规定:低电压 = <strong>0</strong>,高电压 = <strong>1</strong>。一个晶体管的"断/通",就是一个<strong>比特</strong>。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">用两个离散值(而非连续电压)最<strong>抗噪、可堆叠</strong>。从此文字、图像、声音,原则上都能写成一长串 0 和 1。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 210" role="img" aria-label="开关映射0和1">
+              <rect x="55" y="60" width="90" height="70" rx="4" class="s-stroke"/><text x="100" y="50" text-anchor="middle" class="s-t">断 / 低电压</text><text x="100" y="112" text-anchor="middle" class="s-paper" style="font-size:34px;font-family:monospace">0</text>
+              <rect x="215" y="60" width="90" height="70" rx="4" class="s-c" stroke-width="2"/><text x="260" y="50" text-anchor="middle" class="s-tc">通 / 高电压</text><text x="260" y="114" text-anchor="middle" class="s-cf" style="font-size:34px;font-family:monospace">1</text>
+              <text x="180" y="170" text-anchor="middle" class="s-t">一个开关 = 一个比特</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.06 — 物理电压 → 抽象比特</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ══════════════ 第二幕 分幕卡 ══════════════ -->
+      <section class="slide slide--act act-2" data-era="第二幕" data-label="第二幕 · 机器">
+        <div class="actcard">
+          <p class="actcard__no">第 二 幕</p>
+          <h2 class="actcard__title">开关,变成<span class="accent">机器</span></h2>
+          <p class="actcard__line">单个开关什么也不是。可当亿万个开关按规则连起来、还学会了记忆和节拍,它们就成了一台会执行指令的计算机。</p>
+          <div class="actcard__rule"></div>
+        </div>
+      </section>
+
+      <!-- 7 门电路 -->
+      <section class="slide act-2" data-era="1930s–1950s" data-label="门电路">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第二幕 · 机器</span><span class="slide__era">1930s–1950s</span></div>
+          <h2 class="slide__title">门电路:开关学会<span class="accent">判断</span></h2>
+          <p class="slide__lead">几个晶体管一组合,就能表达"逻辑"。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">1930s 香农指出布尔逻辑可用开关电路实现;1950s 晶体管门电路成为造计算机的标准砖块。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">用晶体管搭出<strong>与(AND)、或(OR)、非(NOT)</strong>:输入是 0/1,输出也是 0/1,对应"且、或、取反"。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">任何复杂逻辑都能拆成这三种门的组合。它们是数字世界的<strong>原子</strong>。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 200" role="img" aria-label="与或非门">
+              <path d="M55 55 h26 a26 26 0 0 1 0 52 h-26 z" class="s-c" stroke-width="2"/><line x1="38" y1="68" x2="55" y2="68" class="s-stroke"/><line x1="38" y1="94" x2="55" y2="94" class="s-stroke"/><line x1="107" y1="81" x2="126" y2="81" class="s-stroke"/><text x="80" y="130" text-anchor="middle" class="s-tc" style="font-size:11px">AND</text>
+              <path d="M150 55 q22 26 0 52 q32 0 50 -26 q-18 -26 -50 -26 z" class="s-c" stroke-width="2"/><line x1="200" y1="81" x2="220" y2="81" class="s-stroke"/><text x="178" y="130" text-anchor="middle" class="s-tc" style="font-size:11px">OR</text>
+              <polygon points="248,55 248,107 296,81" class="s-c" stroke-width="2"/><circle cx="302" cy="81" r="5" class="s-c" stroke-width="2"/><line x1="307" y1="81" x2="326" y2="81" class="s-stroke"/><text x="276" y="130" text-anchor="middle" class="s-tc" style="font-size:11px">NOT</text>
+              <text x="180" y="175" text-anchor="middle" class="s-t">三种门 = 一切逻辑的原子</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.07 — 与 / 或 / 非</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 8 加法器 -->
+      <section class="slide act-2" data-era="1950s" data-label="加法器">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第二幕 · 机器</span><span class="slide__era">1950s</span></div>
+          <h2 class="slide__title">加法器:逻辑开始<span class="accent">算术</span></h2>
+          <p class="slide__lead">门电路一接,"计算"就冒出来了。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">随门电路成熟,半加器/全加器成为运算单元(ALU)的核心零件。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">一位加法:<strong>XOR</strong> 算出本位和,<strong>AND</strong> 算出进位。串起多位,就能做任意大数相加。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">加减乘除最终都能归约为<strong>加法 + 移位</strong>。机器的"算"能力,就是从这几个门里长出来的。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 200" role="img" aria-label="半加器">
+              <line x1="40" y1="70" x2="120" y2="70" class="s-stroke"/><text x="32" y="74" text-anchor="end" class="s-t">A</text>
+              <line x1="40" y1="120" x2="120" y2="120" class="s-stroke"/><text x="32" y="124" text-anchor="end" class="s-t">B</text>
+              <rect x="120" y="52" width="66" height="36" rx="3" class="s-c" stroke-width="2"/><text x="153" y="75" text-anchor="middle" class="s-tc" style="font-size:11px">XOR</text>
+              <rect x="120" y="102" width="66" height="36" rx="3" class="s-c" stroke-width="2"/><text x="153" y="125" text-anchor="middle" class="s-tc" style="font-size:11px">AND</text>
+              <line x1="186" y1="70" x2="300" y2="70" class="s-stroke"/><text x="308" y="74" class="s-cf">和 S</text>
+              <line x1="186" y1="120" x2="300" y2="120" class="s-stroke"/><text x="308" y="124" class="s-cf">进位 C</text>
+              <text x="180" y="180" text-anchor="middle" class="s-t">1 + 1 = 10:和 0,进位 1</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.08 — 半加器:门 → 算术</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 9 锁存器 -->
+      <section class="slide act-2" data-era="1950s" data-label="锁存器">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第二幕 · 机器</span><span class="slide__era">1950s</span></div>
+          <h2 class="slide__title">锁存器:电路第一次<span class="accent">记住</span></h2>
+          <p class="slide__lead">会算还不够,机器还得会"记住刚才"。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">与门电路同期成熟,是寄存器、内存的最小记忆单元。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">把两个门<strong>首尾相接成反馈环</strong>,输出绕回输入,电路就会"咬住"当前这一位——输入撤走也不忘。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">有记忆,才谈得上"状态"。<strong>会记住 = 从计算器迈向计算机</strong>的分水岭。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 200" role="img" aria-label="锁存器反馈">
+              <rect x="95" y="55" width="66" height="36" rx="3" class="s-c" stroke-width="2"/><rect x="95" y="110" width="66" height="36" rx="3" class="s-c" stroke-width="2"/>
+              <path d="M161 73 h55 v52 h-55" class="s-stroke" fill="none"/><path d="M161 128 h28 v-52 h-28" class="s-stroke" fill="none"/>
+              <polygon points="161,69 173,73 161,77" class="s-dim"/><polygon points="161,124 173,128 161,132" class="s-dim"/>
+              <text x="128" y="77" text-anchor="middle" class="s-tc" style="font-size:9px">NOR</text><text x="128" y="132" text-anchor="middle" class="s-tc" style="font-size:9px">NOR</text><text x="250" y="104" class="s-cf">Q</text>
+              <text x="180" y="180" text-anchor="middle" class="s-t">输出绕回输入 = 状态被"锁"住</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.09 — 反馈 = 记忆</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 10 触发器 + 时钟 (双图) -->
+      <section class="slide act-2" data-era="1950s–1960s" data-label="触发器 · 时钟">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第二幕 · 机器</span><span class="slide__era">1950s–1960s</span></div>
+          <h2 class="slide__title">触发器与<span class="accent">时钟</span></h2>
+          <p class="slide__lead">让亿万个记忆单元<strong>整齐划一地</strong>前进,靠的是一个节拍。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">触发器在 1950s–60s 成为时序电路标准件;晶振时钟同期成为同步电路的心跳。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">触发器 = 带"闸门"的锁存器,<strong>只在时钟跳变的那一瞬</strong>才采样输入、更新输出;晶振把时间切成等长的一格格。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">若各单元各改各的,信号会乱套。统一节拍让全芯片<strong>同步推进一步</strong>;周期越短越快,但发热越大——这就是"主频"。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <div class="stage-2">
+            <figure class="frame">
+              <svg viewBox="0 0 200 150" role="img" aria-label="D触发器">
+                <rect x="55" y="40" width="90" height="70" rx="3" class="s-c" stroke-width="2"/>
+                <text x="42" y="62" text-anchor="end" class="s-t" style="font-size:10px">D</text><line x1="45" y1="58" x2="55" y2="58" class="s-stroke"/>
+                <text x="42" y="100" text-anchor="end" class="s-t" style="font-size:10px">CLK</text><line x1="45" y1="96" x2="55" y2="96" class="s-stroke"/><polygon points="55,90 65,96 55,102" class="s-cf"/>
+                <text x="158" y="62" class="s-cf">Q</text><line x1="145" y1="58" x2="155" y2="58" class="s-stroke"/>
+                <text x="100" y="80" text-anchor="middle" class="s-tc" style="font-size:10px">D-FF</text>
+              </svg>
+              <figcaption class="frame__cap">时钟↑瞬间: Q ← D</figcaption>
+            </figure>
+            <figure class="frame">
+              <svg viewBox="0 0 200 150" role="img" aria-label="时钟方波">
+                <path d="M18 105 h22 v-45 h30 v45 h30 v-45 h30 v45 h30 v-45 h12" class="s-c" stroke-width="2.5" fill="none"/>
+                <line x1="40" y1="45" x2="40" y2="120" class="s-stroke" stroke-dasharray="3 3"/><line x1="100" y1="45" x2="100" y2="120" class="s-stroke" stroke-dasharray="3 3"/>
+                <text x="70" y="40" text-anchor="middle" class="s-t" style="font-size:9px">一个周期</text>
+              </svg>
+              <figcaption class="frame__cap">时钟:机器的心跳</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <!-- 11 流水线 -->
+      <section class="slide act-2" data-era="1960s–1980s" data-label="流水线">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第二幕 · 机器</span><span class="slide__era">1960s–1980s</span></div>
+          <h2 class="slide__title">流水线:五步<span class="accent">接力</span></h2>
+          <p class="slide__lead">让一条指令分几步走,还能同时处理好几条。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">1960s 大型机引入流水线,1980s 起成为几乎所有 CPU 的标配。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">一条指令拆成<strong>取指→译码→执行→访存→写回</strong>,各阶段用触发器隔开、按时钟推进,像工厂流水线。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">前一条还在"执行",后一条已经在"取指"。五个工位同时忙,<strong>吞吐大幅提升</strong>——不必等一条走完再开始下一条。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 180" role="img" aria-label="五级流水线">
+              <g class="s-c" stroke-width="1.5" fill="none">
+                <rect x="16" y="70" width="60" height="34" rx="2"/><rect x="84" y="70" width="60" height="34" rx="2"/><rect x="152" y="70" width="60" height="34" rx="2"/><rect x="220" y="70" width="60" height="34" rx="2"/><rect x="288" y="70" width="60" height="34" rx="2"/>
+              </g>
+              <g class="s-tc" style="font-size:9px" text-anchor="middle"><text x="46" y="91">取指</text><text x="114" y="91">译码</text><text x="182" y="91">执行</text><text x="250" y="91">访存</text><text x="318" y="91">写回</text></g>
+              <g class="s-dim"><polygon points="84,87 76,83 76,91"/><polygon points="152,87 144,83 144,91"/><polygon points="220,87 212,83 212,91"/><polygon points="288,87 280,83 280,91"/></g>
+              <text x="182" y="140" text-anchor="middle" class="s-t">同一时刻,五条指令各处一站</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.10 — 指令流水线</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 12 冯诺依曼 -->
+      <section class="slide act-2" data-era="1945 起" data-label="冯诺依曼">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第二幕 · 机器</span><span class="slide__era">1945 起</span></div>
+          <h2 class="slide__title">冯诺依曼:<span class="accent">程序也是数据</span></h2>
+          <p class="slide__lead">为什么一台电脑能装任何软件?答案在 1945 年的一份草稿里。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">1945 年,冯·诺依曼在 EDVAC 报告里提出"存储程序"结构,沿用至今。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">CPU + 内存 + 输入输出。关键是<strong>指令和数据放在同一片内存</strong>里,CPU 按地址取指令、执行。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">程序本身也是数据,就能被<strong>加载、替换、生成</strong>。机器不再为单一任务焊死——通用计算机由此诞生。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 190" role="img" aria-label="冯诺依曼结构">
+              <rect x="35" y="70" width="90" height="45" rx="3" class="s-c" stroke-width="2"/><text x="80" y="97" text-anchor="middle" class="s-tc" style="font-size:11px">CPU</text>
+              <rect x="230" y="45" width="95" height="38" rx="3" class="s-stroke"/><text x="277" y="69" text-anchor="middle" class="s-t" style="font-size:10px">指令</text>
+              <rect x="230" y="100" width="95" height="38" rx="3" class="s-stroke"/><text x="277" y="124" text-anchor="middle" class="s-t" style="font-size:10px">数据</text>
+              <text x="277" y="35" text-anchor="middle" class="s-t" style="font-size:9px">同一片内存</text>
+              <line x1="125" y1="88" x2="230" y2="64" class="s-c"/><line x1="125" y1="92" x2="230" y2="119" class="s-c"/>
+              <text x="180" y="170" text-anchor="middle" class="s-t">一条总线,存取指令与数据</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.11 — 存储程序 = 可编程</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 13 芯片 -->
+      <section class="slide act-2" data-era="1971 · Intel 4004" data-label="芯片">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第二幕 · 收束</span><span class="slide__era">1971 · Intel 4004</span></div>
+          <h2 class="slide__title">芯片:硅上长出<span class="accent">一座城</span></h2>
+          <p class="slide__lead">所有这些,最终被压进指甲盖大的一块硅。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">1971 年 Intel 4004 面世,第一枚商用微处理器,2300 个晶体管。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">光刻工艺把门电路、寄存器、流水线全部集成到一片硅上,取指-译码-执行装进<strong>单枚芯片</strong>。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">集成度越高,越小、越快、越便宜(摩尔定律)。开关终于长成了机器——接下来,该谈<strong>算力</strong>了。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 190" role="img" aria-label="芯片版图">
+              <rect x="75" y="35" width="210" height="120" rx="4" class="s-c" stroke-width="2"/>
+              <g class="s-stroke" stroke-width="1"><line x1="75" y1="70" x2="285" y2="70"/><line x1="75" y1="110" x2="285" y2="110"/><line x1="145" y1="35" x2="145" y2="155"/><line x1="215" y1="35" x2="215" y2="155"/></g>
+              <g class="s-cf"><rect x="100" y="80" width="9" height="9"/><rect x="230" y="120" width="9" height="9"/><rect x="160" y="50" width="9" height="9"/><rect x="255" y="55" width="9" height="9"/></g>
+              <text x="180" y="180" text-anchor="middle" class="s-t">上万晶体管,一块硅</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.12 — 微处理器诞生</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ══════════════ 第三幕 分幕卡 ══════════════ -->
+      <section class="slide slide--act act-3" data-era="第三幕" data-label="第三幕 · 算力">
+        <div class="actcard">
+          <p class="actcard__no">第 三 幕</p>
+          <h2 class="actcard__title">机器,变成<span class="accent">算力</span></h2>
+          <p class="actcard__line">CPU 擅长一步步地"想"。可有一天人们发现:让智能长出来,需要的不是一个聪明大脑,而是同时算完千万道乘法的蛮力。</p>
+          <div class="actcard__rule"></div>
+        </div>
+      </section>
+
+      <!-- 14 CPU vs GPU (双图) -->
+      <section class="slide act-3" data-era="1980s–2000s" data-label="CPU 与 GPU">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第三幕 · 算力</span><span class="slide__era">1980s–2000s</span></div>
+          <h2 class="slide__title">CPU 与 <span class="accent">GPU</span></h2>
+          <p class="slide__lead">两种芯片,两种哲学:一个求快,一个求多。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">CPU 在 1980s–90s 走向多核与高主频;GPU 于 1999 年前后从图形加速卡演化而来。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">CPU:<strong>少数强核</strong> + 大缓存,擅长复杂串行逻辑、低延迟决策。GPU:<strong>上万个简单核</strong>,擅长海量互不依赖的乘加同时算。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">神经网络要的不是一条聪明路径,而是<strong>矩阵洪流</strong>。GPU 天生对口——这是后来一切的算力前提。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-21.html#2-gpu-为并行而生" target="_blank" rel="noopener">第 21 章 · GPU 为并行而生</a>
+        </div>
+        <div class="slide__stage">
+          <div class="stage-2">
+            <figure class="frame">
+              <svg viewBox="0 0 200 150" role="img" aria-label="CPU少核">
+                <rect x="25" y="30" width="150" height="90" rx="3" class="s-stroke"/>
+                <rect x="40" y="45" width="55" height="60" rx="2" class="s-c" stroke-width="2"/><rect x="105" y="45" width="55" height="60" rx="2" class="s-c" stroke-width="2"/>
+                <text x="100" y="140" text-anchor="middle" class="s-t" style="font-size:10px">CPU · 少数强核</text>
+              </svg>
+              <figcaption class="frame__cap">擅长串行 · 低延迟</figcaption>
+            </figure>
+            <figure class="frame">
+              <svg viewBox="0 0 200 150" role="img" aria-label="GPU众核">
+                <rect x="20" y="26" width="160" height="98" rx="3" class="s-stroke"/>
+                <g class="s-cf">
+                  <rect x="34" y="38" width="11" height="11"/><rect x="55" y="38" width="11" height="11"/><rect x="76" y="38" width="11" height="11"/><rect x="97" y="38" width="11" height="11"/><rect x="118" y="38" width="11" height="11"/><rect x="139" y="38" width="11" height="11"/>
+                  <rect x="34" y="59" width="11" height="11"/><rect x="55" y="59" width="11" height="11"/><rect x="76" y="59" width="11" height="11"/><rect x="97" y="59" width="11" height="11"/><rect x="118" y="59" width="11" height="11"/><rect x="139" y="59" width="11" height="11"/>
+                  <rect x="34" y="80" width="11" height="11"/><rect x="55" y="80" width="11" height="11"/><rect x="76" y="80" width="11" height="11"/><rect x="97" y="80" width="11" height="11"/><rect x="118" y="80" width="11" height="11"/><rect x="139" y="80" width="11" height="11"/>
+                </g>
+                <text x="100" y="140" text-anchor="middle" class="s-t" style="font-size:10px">GPU · 上万弱核</text>
+              </svg>
+              <figcaption class="frame__cap">擅长并行 · 高吞吐</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <!-- 15 CUDA -->
+      <section class="slide act-3" data-era="2006 · CUDA" data-label="CUDA">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第三幕 · 算力</span><span class="slide__era">2006 · NVIDIA CUDA</span></div>
+          <h2 class="slide__title">CUDA:让显卡<span class="accent">不止渲染画面</span></h2>
+          <p class="slide__lead">GPU 本是<strong>显卡</strong>——生来只为渲染游戏和 3D 画面。CUDA 把这身蛮力,交到了所有程序员手里。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">2006 年 NVIDIA 发布 CUDA。在此之前,想用 GPU 算别的,得<strong>把数据伪装成图像、借渲染管线偷偷算</strong>,极其别扭。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">CUDA 提供一套通用编程模型,让你直接把成千上万个线程<strong>铺到 GPU 核心上做并行计算</strong>,不必再假装在画图。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">于是 GPU 从"游戏显卡"变成"通用算力机"。深度学习一直缺的最后一块拼图——<strong>便宜、海量、可编程的并行算力</strong>——就位了。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 170" role="img" aria-label="CUDA通用">
+              <rect x="35" y="65" width="90" height="45" rx="3" class="s-stroke"/><text x="80" y="92" text-anchor="middle" class="s-t" style="font-size:11px">你的代码</text>
+              <rect x="150" y="65" width="60" height="45" rx="3" class="s-c" stroke-width="2"/><text x="180" y="92" text-anchor="middle" class="s-tc" style="font-size:11px">CUDA</text>
+              <rect x="235" y="65" width="90" height="45" rx="3" class="s-stroke"/><text x="280" y="92" text-anchor="middle" class="s-t" style="font-size:11px">GPU 万核</text>
+              <line x1="125" y1="88" x2="150" y2="88" class="s-c"/><polygon points="150,88 142,84 142,92" class="s-cf"/>
+              <line x1="210" y1="88" x2="235" y2="88" class="s-c"/><polygon points="235,88 227,84 227,92" class="s-cf"/>
+              <text x="180" y="150" text-anchor="middle" class="s-t">通用计算,直达万核</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.13 — 算力民主化</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 16 矩阵 -->
+      <section class="slide act-3" data-era="贯穿始终" data-label="矩阵">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第三幕 → 第四幕</span><span class="slide__era">表示层</span></div>
+          <h2 class="slide__title">矩阵:一切都变成<span class="accent">一张表</span></h2>
+          <p class="slide__lead">GPU 擅长的"洪流",到底是什么形状?</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">从第一个神经网络起,矩阵乘法就是核心运算,GPU 时代更被推到极致。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">图像、文字、声音先被编码成<strong>数字阵列</strong>;网络每一层做的,就是<strong>矩阵 × 矩阵</strong> 再加激活。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">矩阵乘 = 海量、规整、互不依赖的乘加,正是 GPU 的主场。<strong>算法与算力在此合流</strong>。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-01.html" target="_blank" rel="noopener">第 1 章 · 向量与矩阵</a>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 180" role="img" aria-label="矩阵乘法">
+              <rect x="40" y="55" width="34" height="80" class="s-c" stroke-width="1.5" fill="none"/><text x="57" y="48" text-anchor="middle" class="s-t" style="font-size:10px">输入</text>
+              <text x="95" y="100" text-anchor="middle" class="s-tc" style="font-size:20px">×</text>
+              <rect x="120" y="55" width="80" height="80" class="s-c" stroke-width="1.5" fill="none"/><text x="160" y="48" text-anchor="middle" class="s-t" style="font-size:10px">权重 W</text>
+              <g class="s-stroke"><line x1="147" y1="55" x2="147" y2="135"/><line x1="174" y1="55" x2="174" y2="135"/><line x1="120" y1="82" x2="200" y2="82"/><line x1="120" y1="108" x2="200" y2="108"/></g>
+              <text x="222" y="100" text-anchor="middle" class="s-tc" style="font-size:20px">=</text>
+              <rect x="245" y="55" width="30" height="80" class="s-cf" opacity="0.5"/>
+              <text x="180" y="165" text-anchor="middle" class="s-t">深度学习 = 一连串矩阵乘</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.14 — 计算的通用形状</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ══════════════ 第四幕 分幕卡 ══════════════ -->
+      <section class="slide slide--act act-3" data-era="第四幕" data-label="第四幕 · 学习">
+        <div class="actcard">
+          <p class="actcard__no">第 四 幕</p>
+          <h2 class="actcard__title">算力,变成<span class="accent">学习</span></h2>
+          <p class="actcard__line">有了海量算力,还要有一种机制:不靠人写死规则,而是让机器自己从错误里,把亿万个参数一点点调对。</p>
+          <div class="actcard__rule"></div>
+        </div>
+      </section>
+
+      <!-- 18 神经元 -->
+      <section class="slide act-3" data-era="1943 / 1958" data-label="神经元">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">1943 / 1958</span></div>
+          <h2 class="slide__title">神经元:数字有了<span class="accent">倾向</span></h2>
+          <p class="slide__lead">最小的"会判断"的单元,只是一道加权求和。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">1943 年 McCulloch-Pitts 提出人工神经元;1958 年 Rosenblatt 的感知机让它能被训练。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">把输入按<strong>权重</strong>加起来、加个偏置,再过一道<strong>激活函数</strong>决定"点亮多少"。就这么简单。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">权重可调,意味着这颗单元的"判断倾向"能被<strong>学习</strong>。它是从"算数"跨到"智能"的第一块积木。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-02.html" target="_blank" rel="noopener">第 2 章 · 一个神经元</a>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 180" role="img" aria-label="神经元">
+              <g class="s-dim"><circle cx="55" cy="55" r="8"/><circle cx="55" cy="95" r="8"/><circle cx="55" cy="135" r="8"/></g>
+              <text x="38" y="59" text-anchor="end" class="s-t" style="font-size:10px">x₁</text><text x="38" y="99" text-anchor="end" class="s-t" style="font-size:10px">x₂</text><text x="38" y="139" text-anchor="end" class="s-t" style="font-size:10px">x₃</text>
+              <line x1="63" y1="55" x2="180" y2="95" class="s-c"/><line x1="63" y1="95" x2="180" y2="95" class="s-c"/><line x1="63" y1="135" x2="180" y2="95" class="s-c"/>
+              <text x="115" y="68" class="s-tc" style="font-size:9px">×w</text>
+              <circle cx="205" cy="95" r="24" class="s-c" stroke-width="2"/><text x="205" y="92" text-anchor="middle" class="s-tc" style="font-size:11px">Σ</text><text x="205" y="107" text-anchor="middle" class="s-tc" style="font-size:9px">f</text>
+              <line x1="229" y1="95" x2="305" y2="95" class="s-c"/><polygon points="305,95 297,91 297,99" class="s-cf"/><text x="312" y="99" class="s-cf">y</text>
+              <text x="180" y="165" text-anchor="middle" class="s-t">Σ(w·x)+b → 激活 → 输出</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.15 — 最小的积木</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 19 反向传播 -->
+      <section class="slide act-3" data-era="1986" data-label="反向传播">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">1986 · Rumelhart 等</span></div>
+          <h2 class="slide__title">反向传播:让错误<span class="accent">回流</span></h2>
+          <p class="slide__lead">网络怎么知道每个权重该往哪调?让误差自己走回去。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">1986 年论文让反向传播广为人知,成为训练多层网络的标准算法。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">先前向算出预测与答案的差距(损失),再用<strong>链式法则</strong>把这个差距逐层反传,得到每个权重的"该调多少"。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">这让学习变成一件<strong>自动、可规模化</strong>的事:不用人设计规则,喂数据、算误差、反传、微调,重复亿万次。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-06.html" target="_blank" rel="noopener">第 6 章 · 反向传播</a>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 180" role="img" aria-label="前向反向">
+              <g class="s-dim"><circle cx="55" cy="95" r="9"/><circle cx="160" cy="65" r="9"/><circle cx="160" cy="125" r="9"/><circle cx="270" cy="95" r="9"/></g>
+              <g class="s-stroke"><line x1="64" y1="95" x2="151" y2="65"/><line x1="64" y1="95" x2="151" y2="125"/><line x1="169" y1="65" x2="261" y2="95"/><line x1="169" y1="125" x2="261" y2="95"/></g>
+              <line x1="55" y1="45" x2="270" y2="45" class="s-stroke" stroke-dasharray="4 3"/><polygon points="270,45 262,41 262,49" class="s-dim"/><text x="160" y="35" text-anchor="middle" class="s-t" style="font-size:10px">前向:算出预测</text>
+              <line x1="270" y1="150" x2="55" y2="150" class="s-c" stroke-width="2"/><polygon points="55,150 63,146 63,154" class="s-cf"/><text x="162" y="172" text-anchor="middle" class="s-tc" style="font-size:10px">反向:误差回传,调每个权重</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.16 — 网络自己学</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 20 MNIST -->
+      <section class="slide act-3" data-era="1998 / 至今" data-label="MNIST">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">1998 / 至今</span></div>
+          <h2 class="slide__title">MNIST:让训练<span class="accent">看得见</span></h2>
+          <p class="slide__lead">抽象的"学习",在这个任务里第一次能亲手跑通。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">1998 年 LeCun 整理出 MNIST 手写数字集,至今仍是入门第一课。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">一张 28×28 的图 → 展平成向量 → 过几层网络 → 输出 10 个数字的概率 → 反传训练。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">它把"数据→建网→训练→评估"这条<strong>完整闭环</strong>压到最小,让人看清网络是怎么一步步学对的。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-23.html" target="_blank" rel="noopener">第 23 章 · MNIST 实战</a>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 180" role="img" aria-label="MNIST流程">
+              <rect x="35" y="65" width="58" height="58" rx="3" class="s-stroke"/><text x="64" y="107" text-anchor="middle" class="s-paper" style="font-size:32px;font-family:serif">7</text>
+              <g class="s-dim"><circle cx="145" cy="70" r="7"/><circle cx="145" cy="100" r="7"/><circle cx="145" cy="130" r="7"/><circle cx="205" cy="85" r="7"/><circle cx="205" cy="115" r="7"/></g>
+              <g class="s-stroke"><line x1="112" y1="94" x2="138" y2="70"/><line x1="112" y1="94" x2="138" y2="130"/><line x1="152" y1="70" x2="198" y2="85"/><line x1="152" y1="130" x2="198" y2="115"/></g>
+              <rect x="265" y="78" width="55" height="42" rx="3" class="s-c" stroke-width="2"/><text x="292" y="106" text-anchor="middle" class="s-tc" style="font-size:20px">7</text>
+              <line x1="222" y1="100" x2="265" y2="99" class="s-c"/><polygon points="265,99 257,95 257,103" class="s-cf"/>
+              <text x="180" y="165" text-anchor="middle" class="s-t">像素 → 网络 → 类别</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.17 — 训练的闭环</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 21 AlexNet · 深度学习引爆 -->
+      <section class="slide act-3" data-era="2012 · AlexNet" data-label="AlexNet">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">2012 · ImageNet</span></div>
+          <h2 class="slide__title">AlexNet:深度学习<span class="accent">引爆</span></h2>
+          <p class="slide__lead">神经元、反向传播、闭环都有了——就差一次让全世界相信的胜利。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">2012 年,AlexNet 在 ImageNet 图像识别竞赛上把错误率断崖式拉低,一举夺冠。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">还是<strong>神经元 + 反向传播</strong>那一套,只是网络更深、跑在两块 GPU 上、喂了上百万张标注图——<strong>算法 + 算力 + 数据</strong>三合一。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">它证明了:只要算力和数据够,"让机器自己学特征"能碾压人工设计。<strong>这一枪,点燃了通往大模型的整条路</strong>。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 180" role="img" aria-label="错误率骤降">
+              <line x1="50" y1="30" x2="50" y2="150" class="s-stroke"/><line x1="50" y1="150" x2="325" y2="150" class="s-stroke"/>
+              <polyline points="70,60 130,68 190,80 220,86" class="s-stroke" stroke-width="2" fill="none"/><text x="145" y="52" class="s-t" style="font-size:10px">传统方法</text>
+              <polyline points="220,86 255,128" class="s-c" stroke-width="2.5" fill="none" stroke-dasharray="4 3"/><circle cx="255" cy="128" r="6" class="s-cf"/><text x="263" y="128" class="s-tc" style="font-size:10px">AlexNet</text>
+              <text x="185" y="175" text-anchor="middle" class="s-t">ImageNet 错误率 · 断崖下跌</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.18 — 深度学习引爆</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 22 词嵌入 -->
+      <section class="slide act-3" data-era="2013 · word2vec" data-label="词嵌入">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">2013 · word2vec</span></div>
+          <h2 class="slide__title">词嵌入:词有了<span class="accent">坐标</span></h2>
+          <p class="slide__lead">图能被计算,那"词"呢?先把词变成向量。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">2013 年 word2vec 让"词向量"变得实用、流行。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">用"上下文预测词"来训练,把每个词压成一个<strong>稠密向量</strong>。意思相近的词,向量也相近。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">语言得先变成数字,网络才能算。而且向量能做运算:<strong>国王 − 男人 + 女人 ≈ 女王</strong>——语义有了方向。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-15.html" target="_blank" rel="noopener">第 15 章 · 词嵌入与 word2vec</a>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 180" role="img" aria-label="词向量空间">
+              <line x1="40" y1="150" x2="325" y2="150" class="s-stroke"/><line x1="60" y1="30" x2="60" y2="165" class="s-stroke"/>
+              <circle cx="115" cy="65" r="5" class="s-cf"/><text x="123" y="63" class="s-tc" style="font-size:10px">国王</text>
+              <circle cx="160" cy="55" r="5" class="s-cf"/><text x="168" y="53" class="s-tc" style="font-size:10px">女王</text>
+              <circle cx="125" cy="120" r="5" class="s-dim"/><text x="133" y="118" class="s-t" style="font-size:10px">男人</text>
+              <circle cx="170" cy="110" r="5" class="s-dim"/><text x="178" y="108" class="s-t" style="font-size:10px">女人</text>
+              <line x1="125" y1="120" x2="115" y2="65" class="s-c" stroke-dasharray="3 2"/><line x1="170" y1="110" x2="160" y2="55" class="s-c" stroke-dasharray="3 2"/>
+              <text x="180" y="175" text-anchor="middle" class="s-t">意思近,则坐标近;差向量 = 语义</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.19 — 语义坐标系</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 22 序列模型 -->
+      <section class="slide act-3" data-era="1997 / 2014" data-label="序列模型">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第四幕 → 第五幕</span><span class="slide__era">1997 · LSTM / 2014</span></div>
+          <h2 class="slide__title">序列模型:按<span class="accent">时间</span>读句子</h2>
+          <p class="slide__lead">一句话有先后顺序。怎么让机器"边读边记"?</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">RNN 上世纪就有,1997 年 LSTM 缓解遗忘;2014 年前后成为机器翻译主力。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">维护一个<strong>隐藏状态</strong>,每读一个词就更新它、再传给下一步——像滚雪球一样带着上下文往前走。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">但它<strong>串行、且会遗忘</strong>:读到句尾,句首的信息常常稀释殆尽。长距离依赖,成了必须翻过的墙。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-14.html" target="_blank" rel="noopener">第 14 章 · RNN 与 LSTM</a>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 170" role="img" aria-label="RNN展开">
+              <g class="s-c" stroke-width="1.5" fill="none"><rect x="35" y="70" width="42" height="42" rx="3"/><rect x="120" y="70" width="42" height="42" rx="3"/><rect x="205" y="70" width="42" height="42" rx="3"/><rect x="290" y="70" width="42" height="42" rx="3"/></g>
+              <g class="s-stroke"><line x1="77" y1="91" x2="120" y2="91"/><line x1="162" y1="91" x2="205" y2="91"/><line x1="247" y1="91" x2="290" y2="91"/></g>
+              <g class="s-dim" text-anchor="middle" style="font-size:11px"><text x="56" y="135">今</text><text x="141" y="135">天</text><text x="226" y="135">天</text><text x="311" y="135">气</text></g>
+              <text x="185" y="45" text-anchor="middle" class="s-t">隐藏状态一路传,但越传越淡</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.20 — 串行,且会遗忘</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ══════════════ 第五幕 分幕卡 ══════════════ -->
+      <section class="slide slide--act act-4" data-era="第五幕" data-label="第五幕 · 语言">
+        <div class="actcard">
+          <p class="actcard__no">第 五 幕</p>
+          <h2 class="actcard__title">学习,变成<span class="accent">语言</span></h2>
+          <p class="actcard__line">2017 年一个想法改变了一切:让每个词直接看向所有词。从此规模、数据、算力叠加起来,机器开始像懂了语言。</p>
+          <div class="actcard__rule"></div>
+        </div>
+      </section>
+
+      <!-- 23 注意力 -->
+      <section class="slide act-4" data-era="2017 · Attention" data-label="注意力">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2017 · Attention Is All You Need</span></div>
+          <h2 class="slide__title">注意力:意义来自<span class="accent">关系</span></h2>
+          <p class="slide__lead">与其一个字一个字顺着记,不如让每个词直接看向全句。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">2017 年论文《Attention Is All You Need》提出自注意力,一举甩开 RNN。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">每个词生成 Query/Key/Value,和句中所有词<strong>算相关性打分</strong>,再按分数加权汇总信息。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">远近不再是障碍——任意两词一步直连,还能<strong>并行</strong>计算。这解决了 RNN 的遗忘和串行两大痛点。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-17.html" target="_blank" rel="noopener">第 17 章 · 注意力机制</a>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 180" role="img" aria-label="注意力连线">
+              <g style="font-size:11px" text-anchor="middle">
+                <circle cx="75" cy="100" r="15" class="s-c" fill="none" stroke-width="1.5"/><text x="75" y="104" class="s-paper">它</text>
+                <circle cx="170" cy="100" r="15" class="s-stroke" fill="none"/><text x="170" y="104" class="s-dim">猫</text>
+                <circle cx="265" cy="100" r="15" class="s-stroke" fill="none"/><text x="265" y="104" class="s-dim">累</text>
+              </g>
+              <path d="M88 92 Q125 45 156 92" class="s-c" fill="none" stroke-width="2.5"/><text x="122" y="42" class="s-tc" style="font-size:9px">强</text>
+              <path d="M88 108 Q170 160 252 108" class="s-c" fill="none" stroke-width="1" opacity="0.5"/><text x="215" y="150" class="s-dim" style="font-size:9px">弱</text>
+              <text x="180" y="176" text-anchor="middle" class="s-t">"它"回头看"猫":关系被算出来</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.21 — 每个词看全句</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 24 Transformer -->
+      <section class="slide act-4" data-era="2017" data-label="Transformer">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2017</span></div>
+          <h2 class="slide__title">Transformer:可堆叠的<span class="accent">积木</span></h2>
+          <p class="slide__lead">把注意力包成一块标准件,就能无限往上摞。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">2017 年同一篇论文提出 Transformer,成为此后所有大模型的骨架。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">一块 = 注意力 + <strong>残差连接</strong> + <strong>LayerNorm</strong> + 前馈网络。残差和归一化让深层<strong>可训练不发散</strong>。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">结构统一、可无限堆叠、天然并行——这正是"<strong>越大越强</strong>"能成立的工程前提。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-18.html" target="_blank" rel="noopener">第 18 章 · Transformer 的完整结构</a>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 190" role="img" aria-label="Transformer堆叠">
+              <g class="s-c" stroke-width="1.5" fill="none"><rect x="115" y="120" width="130" height="30" rx="3"/><rect x="115" y="82" width="130" height="30" rx="3"/><rect x="115" y="44" width="130" height="30" rx="3"/></g>
+              <g class="s-tc" text-anchor="middle" style="font-size:9px"><text x="180" y="139">Attention + FFN</text><text x="180" y="101">Attention + FFN</text><text x="180" y="63">Attention + FFN</text></g>
+              <line x1="180" y1="170" x2="180" y2="150" class="s-stroke"/><polygon points="180,120 176,128 184,128" class="s-dim"/>
+              <line x1="180" y1="44" x2="180" y2="26" class="s-stroke"/><polygon points="180,26 176,34 184,34" class="s-dim"/>
+              <text x="180" y="185" text-anchor="middle" class="s-t">同一积木,堆 N 层</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.22 — 可无限堆叠</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 25 语言模型 -->
+      <section class="slide act-4" data-era="2018–2019" data-label="语言模型">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2018–2019 · GPT / BERT</span></div>
+          <h2 class="slide__title">语言模型:预测<span class="accent">下一个词</span></h2>
+          <p class="slide__lead">目标简单到近乎朴素,能力却从中长了出来。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">2018–2019 年,GPT、BERT 等把 Transformer 用于大规模语言建模。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">给定前文,<strong>预测下一个 token 的概率分布</strong>,用交叉熵训练。答案就藏在文本本身(自监督)。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">答案免费,就能拿<strong>整个互联网</strong>来训。在海量文本上练"猜下一个词",通用语言能力竟自己浮现。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-19.html" target="_blank" rel="noopener">第 19 章 · 字符级语言模型</a>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 170" role="img" aria-label="预测下一个词">
+              <g class="s-dim" style="font-size:13px"><text x="40" y="95">今天</text><text x="95" y="95">天气</text><text x="150" y="95">真</text></g>
+              <rect x="185" y="76" width="46" height="30" rx="3" class="s-c" stroke-width="2" fill="none"/><text x="208" y="96" text-anchor="middle" class="s-tc" style="font-size:11px">LM</text>
+              <line x1="231" y1="91" x2="255" y2="91" class="s-c"/><polygon points="255,91 247,87 247,95" class="s-cf"/>
+              <text x="288" y="76" class="s-cf" style="font-size:12px">好 · 0.7</text><text x="288" y="97" class="s-t" style="font-size:11px">冷 · 0.2</text><text x="288" y="118" class="s-t" style="font-size:11px">热 · 0.1</text>
+              <text x="180" y="155" text-anchor="middle" class="s-t">给前文,输出下一个词的概率</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.23 — 朴素目标,涌现能力</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 26 GPT 横空出世 -->
+      <section class="slide act-4" data-era="2018 → 2022" data-label="GPT">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2018 → 2022 · OpenAI</span></div>
+          <h2 class="slide__title">GPT:把这条路<span class="accent">推到底</span></h2>
+          <p class="slide__lead">同样是"预测下一个词",OpenAI 只做一件事——把它<strong>拼命做大</strong>。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">2018 年 GPT-1,2019 年 GPT-2,2020 年 <strong>GPT-3(1750 亿参数)</strong>;2022 年底 <strong>ChatGPT</strong> 让全世界第一次亲手用上大模型。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">只保留 Transformer 的<strong>解码器</strong>(decoder-only)、带因果掩码,一路自回归地预测下一个 token;参数、数据、算力逐代<strong>指数级</strong>放大。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">它用最直接的方式证明:<strong>不换算法,只堆规模</strong>,模型就能从"续写"长出对话、推理、写代码的能力。大模型时代由此进入公众视野。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-20.html" target="_blank" rel="noopener">第 20 章 · 通往大模型</a>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 180" role="img" aria-label="GPT 逐代规模跃升">
+              <line x1="45" y1="150" x2="330" y2="150" class="s-stroke"/>
+              <rect x="60" y="144" width="34" height="6" class="s-dim"/><text x="77" y="166" text-anchor="middle" class="s-t" style="font-size:9px">GPT-1</text><text x="77" y="136" text-anchor="middle" class="s-dim" style="font-size:8px">1.2 亿</text>
+              <rect x="120" y="132" width="34" height="18" class="s-dim"/><text x="137" y="166" text-anchor="middle" class="s-t" style="font-size:9px">GPT-2</text><text x="137" y="124" text-anchor="middle" class="s-dim" style="font-size:8px">15 亿</text>
+              <rect x="180" y="70" width="34" height="80" class="s-cf"/><text x="197" y="166" text-anchor="middle" class="s-tc" style="font-size:9px">GPT-3</text><text x="197" y="62" text-anchor="middle" class="s-tc" style="font-size:8px">1750 亿</text>
+              <rect x="240" y="52" width="34" height="98" class="s-c" stroke-width="2" fill="none"/><text x="257" y="166" text-anchor="middle" class="s-tc" style="font-size:9px">ChatGPT</text><text x="257" y="44" text-anchor="middle" class="s-tc" style="font-size:8px">全民引爆</text>
+              <text x="300" y="90" class="s-dim" style="font-size:9px">规模↑</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.24 — 逐代把规模推到底</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 27 Scaling Law -->
+      <section class="slide act-4" data-era="2020 · Scaling Law" data-label="规模定律">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2020 · Kaplan / Chinchilla</span></div>
+          <h2 class="slide__title">规模定律:大力<span class="accent">真的出奇迹</span></h2>
+          <p class="slide__lead">"堆大"不是蛮干,它背后有一条可预测的曲线。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">2020 年起,一系列研究(含 Chinchilla)量化了规模与效果的关系。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">同时放大<strong>参数、数据、算力</strong>,测试损失沿一条平滑曲线持续下降;越过门槛,新能力还会<strong>涌现</strong>。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">正因为可预测,才敢在砸下千万美元前,用小模型把曲线画出来外推——这把"炼大模型"变成了工程决策。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-20.html#5-规模化scaling-law-大力真的出奇迹" target="_blank" rel="noopener">第 20 章 · 规模化</a>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 170" role="img" aria-label="规模定律曲线">
+              <line x1="50" y1="30" x2="50" y2="140" class="s-stroke"/><line x1="50" y1="140" x2="325" y2="140" class="s-stroke"/>
+              <path d="M68 55 C130 90 220 122 315 132" class="s-c" stroke-width="2.5" fill="none"/>
+              <line x1="50" y1="130" x2="325" y2="130" class="s-dim" stroke-dasharray="4 3"/><text x="250" y="123" class="s-t" style="font-size:9px">不可约下界</text>
+              <text x="36" y="88" text-anchor="middle" class="s-t" style="font-size:9px" transform="rotate(-90 36 88)">损失</text>
+              <text x="185" y="162" text-anchor="middle" class="s-t">规模(对数) → 损失平滑下降</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.25 — 可预测的提升</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 27 大规模训练 -->
+      <section class="slide act-4" data-era="2020s" data-label="大规模训练">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2020s</span></div>
+          <h2 class="slide__title">大规模训练:模型是<span class="accent">"炼"出来的</span></h2>
+          <p class="slide__lead">一个可用的大模型,要分好几个阶段"炼"。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">2020s 起,"预训练 + 后训练"成为大模型标准流程。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v"><strong>预训练</strong>读遍海量文本学通用能力;<strong>SFT</strong> 用指令数据教它听话;<strong>RLHF</strong> 按人类偏好对齐;必要时再<strong>蒸馏</strong>成小模型。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">预训练决定"底子"(最烧钱),后训练决定"好不好用"。分阶段,才能既博学又听话。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-20.html#7-大模型是怎么炼成的-预训练--后训练" target="_blank" rel="noopener">第 20 章 · 预训练 + 后训练</a>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 170" role="img" aria-label="训练四阶段">
+              <g class="s-c" stroke-width="1.5" fill="none"><rect x="24" y="72" width="70" height="40" rx="3"/><rect x="110" y="72" width="64" height="40" rx="3"/><rect x="190" y="72" width="66" height="40" rx="3"/><rect x="272" y="72" width="66" height="40" rx="3"/></g>
+              <g class="s-tc" text-anchor="middle" style="font-size:9px"><text x="59" y="96">预训练</text><text x="142" y="96">SFT</text><text x="223" y="96">RLHF</text><text x="305" y="96">蒸馏</text></g>
+              <g class="s-dim"><polygon points="106,92 94,88 94,96"/><polygon points="186,92 174,88 174,96"/><polygon points="268,92 256,88 256,96"/></g>
+              <text x="59" y="130" text-anchor="middle" class="s-t" style="font-size:8px">最烧钱</text>
+              <text x="180" y="155" text-anchor="middle" class="s-t">底座 → 一步步调成"助手"</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.26 — 预训练 + 后训练</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 28 工程 -->
+      <section class="slide act-4" data-era="2020s" data-label="大模型工程">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2020s</span></div>
+          <h2 class="slide__title">工程:让它真的<span class="accent">跑得起来</span></h2>
+          <p class="slide__lead">模型一大,难题就从"怎么算"变成"放不放得下"。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">与超大模型同步演进的一整套系统工程。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">单卡装不下,就把模型<strong>切到多卡</strong>(数据/张量/流水线并行),靠高速互联同步;推理用 <strong>KV cache、连续批处理</strong>提速。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">显存、通信、吞吐,任何一环卡住,再好的模型也<strong>服务不了亿级用户</strong>。工程决定它能否落地。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-21.html" target="_blank" rel="noopener">第 21 章 · 工程与基础设施</a>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 170" role="img" aria-label="多卡并行">
+              <g class="s-c" stroke-width="1.5" fill="none"><rect x="40" y="45" width="58" height="42" rx="3"/><rect x="150" y="45" width="58" height="42" rx="3"/><rect x="260" y="45" width="58" height="42" rx="3"/><rect x="40" y="105" width="58" height="42" rx="3"/><rect x="150" y="105" width="58" height="42" rx="3"/><rect x="260" y="105" width="58" height="42" rx="3"/></g>
+              <g class="s-tc" text-anchor="middle" style="font-size:9px"><text x="69" y="70">GPU</text><text x="179" y="70">GPU</text><text x="289" y="70">GPU</text><text x="69" y="130">GPU</text><text x="179" y="130">GPU</text><text x="289" y="130">GPU</text></g>
+              <g class="s-stroke"><line x1="98" y1="66" x2="150" y2="66"/><line x1="208" y1="66" x2="260" y2="66"/><line x1="69" y1="87" x2="69" y2="105"/><line x1="179" y1="87" x2="179" y2="105"/><line x1="289" y1="87" x2="289" y2="105"/></g>
+              <text x="180" y="165" text-anchor="middle" class="s-t">切开模型 + 高速互联</text>
+            </svg>
+            <figcaption class="frame__cap">FIG.27 — 撑起庞然大物</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ══════════════ 终点 Mythos ══════════════ -->
+      <section class="slide slide--finale act-5" data-era="2026 · Anthropic" data-label="Mythos">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">终点 · Claude Mythos</span><span class="slide__era">2026 · Anthropic</span></div>
+          <h2 class="hero__title"><span class="accent">Mythos</span></h2>
+          <p class="slide__lead">
+            2026 年 4 月,Anthropic 发布 <strong>Claude Mythos</strong>——迄今最强的通用大模型。
+            名字跳出了 Haiku / Sonnet / Opus 的文学体裁,取希腊语的<strong>"神话"</strong>。
+          </p>
+          <p class="finale__note">
+            它的底层,仍是这一路走来的那块 <strong>Transformer</strong> 积木——只是规模、训练与评估被推到极致,
+            能力出现质变:SWE-bench Verified <strong>93.9%</strong>、USAMO 数学 <strong>97.6%</strong>,
+            七周内自主发现 <strong>2000+</strong> 未知漏洞,还能把弱点<strong>链成可用 exploit</strong>。
+            强到 Anthropic 不敢公开,只通过 Project Glasswing 面向安全伙伴。
+            <br /><br />从一粒沙里的硅,到会讲述世界的语言——这段旅程,收束在它这里。
+          </p>
+          <div class="button-row">
+            <a class="mbtn mbtn--primary" href="index.html">走进《从神经元到大模型》</a>
+            <a class="mbtn" href="#slide-sand">再看一遍</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- ══════════════ 左侧半圆转盘时间轴 ══════════════ -->
+    <nav class="dial" id="dial" aria-label="时间线">
+      <div class="dial__arc" aria-hidden="true"></div>
+      <div class="dial__needle" aria-hidden="true"></div>
+      <div class="dial__hub" aria-hidden="true"></div>
+      <div class="dial__track" id="dial-track"></div>
+      <a class="dial__home" href="index.html">← 回到电子书</a>
+    </nav>
+
+    <script src="assets/mythos.js"></script>
+  </body>
+</html>

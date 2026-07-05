@@ -711,6 +711,43 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           </table>
         </div>
 
+        <h3>那 Flash / Pro 这种区别是什么?</h3>
+        <p>
+          很多产品还会在<strong>同一代模型</strong>里分出不同档位,名字可能叫 <code>Pro</code>、<code>Flash</code>、<code>Mini</code>、<code>Lite</code>、<code>Turbo</code>。这通常不是“GPT-4 → GPT-5”那种<strong>代际升级</strong>,而是同一产品线里按<strong>能力、速度、价格、上下文长度</strong>做的工程取舍。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>档位</th><th>通常怎么来的</th><th>优点</th><th>代价</th><th>适合场景</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Pro / Max</strong></td>
+                <td>更大的底座、更完整的后训练,或推理时给更多计算预算</td>
+                <td>复杂推理、长文理解、代码、多轮稳健性更强</td>
+                <td>更慢、更贵、吞吐低</td>
+                <td>难题、重要决策、长文档深分析</td>
+              </tr>
+              <tr>
+                <td><strong>Flash / Turbo</strong></td>
+                <td>更小模型、蒸馏版、量化版、MoE 少激活专家,或推理服务做了更激进的加速</td>
+                <td>响应快、便宜、并发能力强</td>
+                <td>复杂题可能更容易浅答、漏细节或出错</td>
+                <td>客服、摘要、批量分类、实时交互</td>
+              </tr>
+              <tr>
+                <td><strong>Mini / Lite</strong></td>
+                <td>用大模型当老师<a class="xref" href="chapter-20.html#④-知识蒸馏-让小模型拜大模型为师">蒸馏</a>出来的小学生模型</td>
+                <td>成本低、部署灵活,甚至能跑在端侧</td>
+                <td>能力上限更低,长尾知识和复杂推理更容易丢</td>
+                <td>固定流程、低成本大规模调用、隐私端侧场景</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">这些名字不是严格学术分类,不同厂商含义会变;但底层取舍差不多:把同一代能力切成“更强但更贵”和“更快但更省”的服务档位。</p>
+        </div>
+        <p>
+          所以选模型时不要只看名字像不像“新一代”。更实用的判断是:<strong>这件事是要一次答得最稳,还是要大量、便宜、低延迟地完成?</strong> 前者偏向 Pro,后者偏向 Flash / Mini。它们的关系更像“同一车系的性能版和省油版”,不是“上一代车和下一代车”。
+        </p>
+
         <h3>为什么大版本非得“从头再来”?</h3>
         <p>
           既然后训练那么省,为什么大版本不能在旧模型上“接着训”?因为一次真正的代际提升,往往<strong>三样东西同时变了</strong>,旧权重根本接不上:
