@@ -110,12 +110,19 @@
           </p>
         </div>
 
-        <h2>4. 不必每次都看完所有数据:mini-batch SGD</h2>
+        <h2>4. 不必每步都看完所有数据:mini-batch SGD</h2>
         <p>
           严格说,要算“真正的梯度”,得把<strong>所有</strong>训练样本都过一遍。但数据量动辄百万,
           每走一步都全看一遍太慢了。实践中我们用一个聪明的折中:每次只<strong>随机抓一小批(mini-batch)</strong>
           样本,用这一小批估算梯度,就更新一次。这叫<span class="term">小批量随机梯度下降(mini-batch SGD)</span>。
         </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">和第 4 章那次“平均”不是一回事</span>
+          <p>
+            <a class="xref" href="chapter-04.html#4-多个输出的损失合成一个数">第 4 章</a>讲的是:一条样本有多个输出维度时,loss 怎么压成一个标量。
+            这里讲的是:一次参数更新要抽多少条样本来估计梯度。前者是<strong>损失的形状</strong>,后者是<strong>训练的取样策略</strong>。
+          </p>
+        </div>
         <p>看看训练主循环是怎么做的(精简自 <code>Train</code>):</p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/neural_network.cpp · Train(精简)</figcaption>
@@ -229,6 +236,62 @@ w_row[i] -= w_change;                               <b class="cw-tag">3</b></cod
             但好消息是:在深度学习里,绝大多数局部谷底的效果都已经足够好,
             而且后面<a class="xref" href="chapter-08.html#3-momentum-给下山加惯性">第 8 章的动量</a>、<a class="xref" href="chapter-08.html#5-adam-把两者合体默认之选">Adam</a> 等技巧,能帮我们更稳地走下去。
           </p>
+        </div>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 720 360" role="img" aria-label="局部谷底和全局谷底的区别">
+              <defs>
+                <marker id="local-min-arrow" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+                  <path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" />
+                </marker>
+                <linearGradient id="loss-curve-gradient" x1="70" y1="0" x2="660" y2="0" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#6ac3ff" />
+                  <stop offset="0.55" stop-color="#8b7bff" />
+                  <stop offset="1" stop-color="#8ef0d1" />
+                </linearGradient>
+              </defs>
+
+              <line x1="64" y1="306" x2="668" y2="306" stroke="#46587a" stroke-width="1.5" />
+              <line x1="64" y1="42" x2="64" y2="306" stroke="#46587a" stroke-width="1.5" />
+              <text x="668" y="328" text-anchor="end" fill="#8499bd" font-size="13">参数 w</text>
+              <text x="34" y="54" fill="#8499bd" font-size="13">损失 L</text>
+
+              <path
+                d="M88 82 C128 180 164 244 218 246 C274 248 300 114 360 118 C430 122 426 292 516 292 C584 292 604 168 650 152"
+                fill="none"
+                stroke="url(#loss-curve-gradient)"
+                stroke-width="4"
+                stroke-linecap="round"
+              />
+
+              <path d="M122 130 C150 178 176 218 210 241" fill="none" stroke="#8ef0d1" stroke-width="2.2" marker-end="url(#local-min-arrow)" />
+              <path d="M300 126 C318 116 338 114 355 118" fill="none" stroke="#8ef0d1" stroke-width="2" marker-end="url(#local-min-arrow)" opacity="0.75" />
+              <circle cx="116" cy="124" r="8" fill="#ffcf72" />
+              <text x="118" y="102" text-anchor="middle" fill="#ffcf72" font-size="13">从这里出发</text>
+
+              <circle cx="218" cy="246" r="9" fill="#ffcf72" />
+              <line x1="218" y1="246" x2="218" y2="172" stroke="#ffcf72" stroke-width="1.5" stroke-dasharray="5 5" />
+              <rect x="126" y="116" width="184" height="56" rx="12" fill="rgba(255, 207, 114, 0.1)" stroke="#ffcf72" stroke-width="1.5" />
+              <text x="218" y="139" text-anchor="middle" fill="#ffcf72" font-size="15" font-weight="700">局部谷底</text>
+              <text x="218" y="158" text-anchor="middle" fill="#b6c5e1" font-size="11">附近最低,但不是全局最低</text>
+
+              <circle cx="360" cy="118" r="7" fill="#ff7aa2" />
+              <line x1="360" y1="118" x2="360" y2="82" stroke="#ff7aa2" stroke-width="1.4" stroke-dasharray="4 5" />
+              <text x="360" y="72" text-anchor="middle" fill="#ff7aa2" font-size="13">中间山脊</text>
+              <text x="360" y="96" text-anchor="middle" fill="#8499bd" font-size="10">要跨过去才会继续下降</text>
+
+              <circle cx="516" cy="292" r="10" fill="#8ef0d1" />
+              <line x1="516" y1="292" x2="516" y2="206" stroke="#8ef0d1" stroke-width="1.5" stroke-dasharray="5 5" />
+              <rect x="426" y="150" width="180" height="58" rx="12" fill="rgba(142, 240, 209, 0.1)" stroke="#8ef0d1" stroke-width="1.5" />
+              <text x="516" y="174" text-anchor="middle" fill="#8ef0d1" font-size="15" font-weight="700">全局谷底</text>
+              <text x="516" y="193" text-anchor="middle" fill="#b6c5e1" font-size="11">整条曲线里最低的位置</text>
+
+              <path d="M222 278 H516" stroke="#5b6f93" stroke-width="1.2" stroke-dasharray="6 6" />
+              <text x="370" y="300" text-anchor="middle" fill="#8499bd" font-size="12">局部谷底的 loss 仍高于全局谷底</text>
+            </svg>
+          </div>
+          <p class="figure__cap">“局部谷底”指的是:站在它附近往左往右都更高,所以梯度会接近 0、训练容易停住;但从全局看,旁边可能还有更深的谷。随机 mini-batch 的噪声、Momentum/Adam 等优化器技巧,有时能帮模型越过较差的局部谷底。</p>
         </div>
 
         <div class="figure reveal">

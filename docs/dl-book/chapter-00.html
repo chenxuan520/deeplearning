@@ -37,6 +37,7 @@
             <li>“让机器学习”和“我们平时写程序”到底有什么本质区别;</li>
             <li>一个“模型”说白了是什么东西,“参数”又是什么;</li>
             <li>“训练”这件事,其实就是一个不断试错、不断微调的循环;</li>
+            <li>神经网络的想法其实很老,为什么直到<strong>最近十几年</strong>才真正爆发(数据、算力、GPU);</li>
             <li>这本书会用什么顺序,带你从一个神经元走到大模型;</li>
             <li>配套的 C++ 代码仓库长什么样,书里每个概念在代码里的“真身”在哪。</li>
           </ul>
@@ -179,11 +180,11 @@
             <thead><tr><th>范式</th><th>靠什么学</th><th>一句话例子</th><th>本书</th></tr></thead>
             <tbody>
               <tr><td><strong>监督学习</strong><br />supervised</td><td>每条数据都<strong>带标准答案</strong>(标签)</td><td>给“图片 + 这是猫”,学会认猫</td><td><strong>主线</strong>(第 2–11 章)</td></tr>
-              <tr><td><strong>无监督学习</strong><br />unsupervised</td><td><strong>只有数据、没有答案</strong>,自己找结构</td><td>把一堆用户<strong>自动聚成</strong>几群;压缩、降维</td><td><a class="xref" href="chapter-26.html#1-没有标签能学什么">番外·第 26 章</a></td></tr>
+              <tr><td><strong>无监督学习</strong><br />unsupervised</td><td><strong>只有数据、没有答案</strong>,自己找结构</td><td>把一堆用户<strong>自动聚成</strong>几群;压缩、降维</td><td><a class="xref" href="chapter-27.html#1-没有标签能学什么">番外·第 27 章</a></td></tr>
               <tr><td><strong>强化学习</strong><br />reinforcement</td><td>没有标准答案,靠<strong>奖励/惩罚</strong>试错</td><td>下棋赢了给分,自己摸索策略</td><td><a class="xref" href="chapter-12.html">第 12 章</a></td></tr>
             </tbody>
           </table>
-          <p class="calc-table__cap">监督学习和强化学习是本书主线;“无监督”(自己发现结构)放在<a class="xref" href="chapter-26.html">番外第 26 章</a>专门展开,完整分支地图和时间线放在<a class="xref" href="chapter-27.html">第 27 章</a>。你也会在<a class="xref" href="chapter-15.html">词嵌入</a>、大模型<a class="xref" href="chapter-20.html#7-大模型是怎么炼成的-预训练--后训练">预训练</a>里见到它的影子。</p>
+          <p class="calc-table__cap">监督学习和强化学习是本书主线;“无监督”(自己发现结构)完整分支地图和时间线放在<a class="xref" href="chapter-26.html">番外第 26 章</a>,那支“没有标签也能学”的范式放在<a class="xref" href="chapter-27.html">第 27 章</a>专门展开。你也会在<a class="xref" href="chapter-15.html">词嵌入</a>、大模型<a class="xref" href="chapter-20.html#7-大模型是怎么炼成的-预训练--后训练">预训练</a>里见到它的影子。</p>
         </div>
         <div class="callout callout--note reveal">
           <span class="callout__title">插一句:自监督——大模型为什么能吃下整个互联网</span>
@@ -216,7 +217,37 @@
           这正是它比“手写规则”强大的地方。
         </p>
 
-        <h2>6. 这本书会怎么带你走</h2>
+        <h2>6. 为什么是最近十几年才爆发?</h2>
+        <p>
+          有件事可能会让你意外:<strong>神经网络这个想法一点都不新</strong>——它的核心思路早在几十年前就被提出来了。
+          那为什么直到最近十几年,深度学习才突然“行”了、火遍全世界?答案是<strong>三样东西终于同时凑齐了</strong>:
+        </p>
+        <ul>
+          <li><strong>算法</strong>:让多层网络真能训起来的一整套方法(比如后面要讲的<a class="xref" href="chapter-06.html">反向传播</a>、各种激活函数和优化器)逐步成熟;</li>
+          <li><strong>数据</strong>:互联网带来了<strong>海量的例子</strong>——图片、文字、点击记录……机器要“从例子里找规律”,先得有堆积如山的例子可看;</li>
+          <li><strong>算力</strong>:出现了一种硬件,能把训练需要的<strong>海量简单计算</strong>快到离谱地算完——这就是 <strong>GPU</strong>(显卡)。</li>
+        </ul>
+        <p>
+          前两样比较好理解,这里重点说说第三样,因为它最常被忽略,却往往是压垮骆驼的“最后一根稻草”。
+        </p>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">CPU 像几个博士,GPU 像几千个小学生</span>
+          <p>
+            你会在后面章节看到:神经网络算来算去,骨子里就是<strong>一大堆乘法和加法</strong>——数量极大,但每一笔都极简单,而且彼此<strong>互不依赖</strong>(谁也不用等谁的结果)。
+          </p>
+          <p>
+            <strong>CPU</strong>(平时跑程序的那颗芯片)像<strong>几个博士</strong>:每个都很聪明、能处理复杂逻辑,但人少,只能一件件串着做。
+            <strong>GPU</strong> 则像<strong>几千个小学生</strong>:每个只会算简单的加减乘除,可胜在人多——把一万道口算题同时发下去,他们一瞬间就并行做完了。
+            神经网络那种“海量、简单、互不依赖”的计算,正好是 GPU 的主场。
+          </p>
+        </div>
+        <p>
+          所以并不是深度学习“特意挑了” GPU,而是它的计算形态和 GPU 的硬件结构<strong>恰好完美契合</strong>——
+          这也是这几年“买卡”“囤显卡”成大新闻的原因。至于显存为什么不够用、成千上万张卡又怎么协同,
+          属于工程细节,我们放到 <a class="xref" href="chapter-21.html">第 21 章</a> 钻进机房再细看。
+        </p>
+
+        <h2>7. 这本书会怎么带你走</h2>
         <p>我们会严格按照“从简单到复杂”的顺序,每一步都踩在上一步的肩膀上:</p>
         <ul>
           <li><strong>第一部分 · 打地基(第 1–3 章)</strong>:先补齐<em>看懂公式的一点点数学</em>,再看懂<em>一个神经元</em>,把它堆成网络、让数据向前流动。</li>
@@ -227,7 +258,7 @@
           <li><strong>第六部分 · 代码实战(第 23–25 章)</strong>:对照仓库里三份真实的 C++ 程序(MNIST、字符级语言模型、井字棋 Q-learning),把监督学习、生成式模型与强化学习在代码里对一遍号。</li>
         </ul>
 
-        <h2>7. 配套代码仓库:每个概念都有“真身”</h2>
+        <h2>8. 配套代码仓库:每个概念都有“真身”</h2>
         <p>
           这本书最特别的地方是:它<strong>对照一份从零手写的 C++ 实现</strong>,不依赖 PyTorch、TensorFlow 这类大框架。
           这意味着书里讲的每一个概念——神经元、激活函数、反向传播、注意力——你都能在代码里翻到它<strong>真正是怎么算的</strong>,

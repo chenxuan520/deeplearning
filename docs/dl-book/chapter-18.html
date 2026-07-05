@@ -309,6 +309,19 @@ for (int i = 0; i &lt; feature_dim_; i++)
           之所以要“先升维、再降维”,是因为把每个 token 摊到更宽的空间里,ReLU 才能切出更多“分段”、拟合更复杂的非线性变换,
           加工完再压回原维度,好和残差相加、继续往下堆。
         </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">那停在 <code>ReLU(x·W₁+b₁)</code> 一层不行吗?</span>
+          <p>
+            不行,有两个都绕不过的理由:
+          </p>
+          <ul>
+            <li><strong>维度对不上。</strong> <code>W₁</code> 把 token 从 <var>d</var> 维(比如 512)升到了 <var>d</var><sub>ff</sub> 维(比如 2048)。可 Transformer 是一层层堆的,每块的进出都得是 <var>d</var> 维,残差 <code>x + FFN(x)</code> 才加得起来、下一块才接得上。停在这一层,你手里是个 2048 维向量,<strong>既没法和 512 维的 <var>x</var> 相加,也喂不进下一块</strong>——所以必须有 <code>W₂</code> 把它压回 512。</li>
+            <li><strong>没有中间那步 ReLU,两层会“塌成一层”。</strong> 你可能想:那让 <code>W₁</code> 直接输出 <var>d</var> 维,一层不就够了?但真正给 FFN 表达力的,是<strong>升维之后那个 ReLU</strong>。如果去掉它、直接 <code>(x·W₁)·W₂</code>,数学上等于 <code>x·(W₁W₂)</code>——两个矩阵相乘还是<strong>一个</strong>矩阵,白堆了。正是中间的 ReLU 让这两层没法合并,“升维→非线性→降维”才真的比单层线性强。</li>
+          </ul>
+          <p>
+            一句话:<strong><code>W₁</code> 负责“想得宽”,ReLU 负责“非线性地挑”,<code>W₂</code> 负责“收敛回原宽度好接着传”</strong>——三者缺一不可。这也是<a class="xref" href="chapter-02.html">第 2 章</a>那句“没有激活函数,再多层也会塌成一层”在 FFN 上的具体体现。
+          </p>
+        </div>
 
         <h2>4. 把它们拼成一块 Block</h2>
         <p>一块标准 Transformer Block,就是“注意力 + 残差 + 归一化”和“FFN + 残差 + 归一化”这两段串起来:</p>

@@ -134,11 +134,11 @@ double CrossEntropyLoss::DerivLoss(double target, double output) {
 }</code></pre>
           <ol class="code-walk__notes">
             <li>当真实标签 <code>target</code> = 1,只剩前半项 <code>-log(output)</code>:输出越接近 1 损失越小;当 <code>target</code> = 0,只剩后半项 <code>-log(1-output)</code>:输出越接近 0 损失越小。</li>
-            <li>导数看起来有点吓人(分母里有 <code>output(1-output)</code>),但<strong>第 4 节</strong>你会看到,它和 Sigmoid/softmax 的导数<strong>正好抵消</strong>,变得无比清爽。</li>
+            <li>导数看起来有点吓人(分母里有 <code>output(1-output)</code>),但<strong>3.3 节</strong>你会看到,它和 Sigmoid/softmax 的导数<strong>正好抵消</strong>,变得无比清爽。</li>
           </ol>
         </figure>
 
-        <h2>4. 一个美妙的巧合:δ = 预测 − 答案</h2>
+        <h3>3.3 一个美妙的巧合:δ = 预测 − 答案</h3>
         <p>
           单独看,交叉熵的导数和 softmax 的导数都挺丑。但当你把它们<strong>合在一起</strong>
           (softmax 算概率 + 交叉熵算损失),中间那些复杂的项会奇迹般地约掉,
@@ -147,6 +147,42 @@ double CrossEntropyLoss::DerivLoss(double target, double output) {
         <div class="mathblock reveal">
           <var>δ</var> = <var>p</var> − <var>t</var>
           <span class="label">预测概率 减去 真实答案。就这么简单</span>
+        </div>
+        <p>
+          它不是魔法,可以用一条很短的链式法则推出来。设最后一层还没过 softmax 的原始分数是 <var>z</var>,
+          softmax 后概率是 <var>p</var>,one-hot 答案是 <var>t</var>。我们真正想反传的是“损失对每个 logit 的导数”:
+          <var>δ</var><sub>k</sub> = ∂<var>L</var>/∂<var>z</var><sub>k</sub>。
+        </p>
+        <div class="mathblock reveal">
+          log(<var>p</var><sub>i</sub>) = <var>z</var><sub>i</sub> − log(Σ<sub>j</sub> e<sup><var>z</var><sub>j</sub></sup>)
+          <span class="label">把 softmax 取 log 后,分母会变成一个 log-sum-exp 项</span>
+        </div>
+        <div class="mathblock reveal">
+          <var>L</var> = −Σ<sub>i</sub><var>t</var><sub>i</sub>log(<var>p</var><sub>i</sub>)
+          = −Σ<sub>i</sub><var>t</var><sub>i</sub><var>z</var><sub>i</sub>
+          + log(Σ<sub>j</sub>e<sup><var>z</var><sub>j</sub></sup>)
+          <span class="label">因为 one-hot 的 t 加起来等于 1,所以 log-sum-exp 只剩一份</span>
+        </div>
+        <p>
+          现在对某个分数 <var>z</var><sub>k</sub> 求导:第一项
+          <code>−Σ t_i z_i</code> 只留下 <code>−t_k</code>;
+          第二项 <code>log(Σ exp(z_j))</code> 的导数正好是
+          <code>exp(z_k) / Σ exp(z_j)</code>,也就是 softmax 概率 <var>p</var><sub>k</sub>。
+          两项一加:
+        </p>
+        <div class="mathblock reveal">
+          <span class="frac"><span>∂<var>L</var></span><span>∂<var>z</var><sub>k</sub></span></span>
+          = <var>p</var><sub>k</sub> − <var>t</var><sub>k</sub>
+          <span class="label">对每个类别 k 都成立,所以向量形式就是 δ = p − t</span>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">二分类 sigmoid + 交叉熵也是同一个味道</span>
+          <p>
+            项目里的 <code>CrossEntropyLoss</code> 写的是二分类版本:
+            <code>dL/do = (o − t) / (o(1 − o))</code>。而 sigmoid 的导数是
+            <code>do/dz = o(1 − o)</code>。链式法则一乘,分母正好约掉:
+            <code>dL/dz = o − t</code>。多分类 softmax 和二分类 sigmoid 最后都落到“预测 − 答案”。
+          </p>
         </div>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/softmax/std_softmax.cpp · CalcDelta</figcaption>
@@ -164,9 +200,22 @@ double CrossEntropyLoss::DerivLoss(double target, double output) {
           </ol>
         </figure>
 
-        <h2>5. 一批样本的损失,取个平均</h2>
+        <h2>4. 多个输出的损失,合成一个数</h2>
         <p>
-          训练时我们一次看很多样本,把每个样本、每个输出的损失加起来再求平均,得到这一批的整体损失:
+          如果一个样本有多个输出(比如 MNIST 有 10 个类别概率),每个输出维度都能算一个损失。
+          但训练/评估时我们需要的是<strong>一个标量</strong>,所以要把这些输出维度的损失加起来再取平均:
+        </p>
+        <p>
+          为什么非要合成一个数?因为梯度下降要优化的是一个<strong>总目标</strong>。
+          同一个参数往往会同时影响多个输出,如果 10 个输出各自都有一个损失,
+          它们可能会给出 10 个不完全一样的修改意见。最后真正更新参数时,程序需要的是一个统一方向:
+          <strong>让整体损失变小</strong>。把各维度的损失合成一个标量,就是在告诉网络:
+          “这条样本总体上错了多少,请朝让这个总分下降的方向改参数。”
+        </p>
+        <p>
+          做法也很直接:先把每个输出维度的损失加起来,再除以输出维度数。这里取<strong>平均</strong>而不是只求和,
+          主要是为了让损失的尺度更稳定。输出维度从 2 变成 10 时,
+          如果只求和,数值会天然变大很多;取平均后,不同输出维度数量的任务更容易比较,学习率也不用因为维度数变化而大幅重调。
         </p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/loss/loss_base.cpp · AverageLoss</figcaption>
@@ -179,10 +228,18 @@ double CrossEntropyLoss::DerivLoss(double target, double output) {
   return result;
 }</code></pre>
           <ol class="code-walk__notes">
-            <li>把每个输出维度的损失累加起来。</li>
-            <li>除以个数得到平均损失。整个训练的目标,就是让这个平均损失尽可能小。</li>
+            <li>把<strong>同一个样本</strong>里每个输出维度的损失累加起来。</li>
+            <li>除以输出维度数,得到这个样本的平均损失。整个训练的目标,就是让这些损失尽可能小。</li>
           </ol>
         </figure>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">别和 mini-batch 混在一起</span>
+          <p>
+            这一节只回答“<strong>一条样本有多个输出时,loss 怎么合成一个数</strong>”。
+            下一章的 mini-batch SGD 回答的是另一个问题:训练时每一步要拿<strong>多少条样本</strong>来估计梯度、更新参数。
+            真正评估一堆样本时,代码会再在 <code>CalcLoss</code> 里对多条样本的 loss 求平均。
+          </p>
+        </div>
 
         <section class="summary reveal">
           <h2>小结</h2>

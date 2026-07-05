@@ -1,7 +1,7 @@
 /*
  * book.js — 《从神经元到大模型》Web 书的导航与阅读体验
  * 职责: 注入顶部 header、阅读进度条、侧边目录抽屉、上一章/下一章导航,
- *       处理键盘翻页、记忆"最后阅读章节"、滚动淡入。
+ *       处理键盘翻页(Vim: j/k 滚动, h/l 与方向键切章)、记忆"最后阅读章节"、滚动淡入。
  * 纯静态零依赖。章节页用 <body data-chapter="N"> 标识自己是第 N 章;
  * 封面页用 <body data-cover>。
  */
@@ -36,8 +36,9 @@
     { num: "23", title: "MNIST 实战:第一、二部分", file: "chapter-23.html", part: "第六部分 · 代码实战" },
     { num: "24", title: "mini-LM 实战:第四、五部分", file: "chapter-24.html", part: "第六部分 · 代码实战" },
     { num: "25", title: "井字棋 Q-learning 实战:强化学习", file: "chapter-25.html", part: "第六部分 · 代码实战" },
-    { num: "26", title: "无监督与自监督学习", file: "chapter-26.html", part: "第七部分 · 番外" },
-    { num: "27", title: "机器学习全景图", file: "chapter-27.html", part: "第七部分 · 番外" }
+    { num: "26", title: "机器学习全景图", file: "chapter-26.html", part: "第七部分 · 番外" },
+    { num: "27", title: "无监督与自监督学习", file: "chapter-27.html", part: "第七部分 · 番外" },
+    { num: "28", title: "决策树与随机森林", file: "chapter-28.html", part: "第七部分 · 番外" }
   ];
 
   var STORAGE_LAST = "dlbook:last";
@@ -65,6 +66,12 @@
     if (v == null || v === "") return -1;
     var n = Number(v);
     return isNaN(n) ? -1 : n;
+  }
+
+  function pageBaseName() {
+    var p = location.pathname || "";
+    var i = p.lastIndexOf("/");
+    return i >= 0 ? p.slice(i + 1) : p;
   }
 
   function slugify(text, index) {
@@ -408,18 +415,61 @@
     update();
   }
 
-  // ---------- 键盘左右翻页 ----------
-  function setupKeyboard(currentIdx) {
+  // ---------- 键盘: Vim j/k 滚动, h/l 与方向键切章 ----------
+  var VIM_SCROLL_RATIO = 0.72;
+
+  function goPrevChapter(chapterIdx) {
+    if (chapterIdx > 0) {
+      window.location.href = CHAPTERS[chapterIdx - 1].file;
+    } else if (chapterIdx === 0) {
+      window.location.href = "index.html";
+    } else if (/glossary\.html$/i.test(pageBaseName())) {
+      window.location.href = CHAPTERS[CHAPTERS.length - 1].file;
+    }
+  }
+
+  function goNextChapter(chapterIdx) {
+    if (chapterIdx >= 0 && chapterIdx < CHAPTERS.length - 1) {
+      window.location.href = CHAPTERS[chapterIdx + 1].file;
+    } else if (document.body.hasAttribute("data-cover")) {
+      window.location.href = CHAPTERS[0].file;
+    } else if (/glossary\.html$/i.test(pageBaseName())) {
+      window.location.href = "index.html";
+    }
+  }
+
+  function vimScroll(delta) {
+    window.scrollBy({ top: delta, behavior: "smooth" });
+  }
+
+  function isVimBlockedTarget(target) {
+    if (!target) return false;
+    if (/^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) return true;
+    if (target.isContentEditable) return true;
+    return false;
+  }
+
+  function setupVimNavigation(chapterIdx) {
     document.addEventListener("keydown", function (e) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      var t = e.target;
-      if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return;
-      if (e.key === "ArrowRight") {
-        var next = CHAPTERS[currentIdx + 1];
-        if (next) window.location.href = next.file;
-      } else if (e.key === "ArrowLeft") {
-        var prev = CHAPTERS[currentIdx - 1];
-        if (prev) window.location.href = prev.file;
+      if (isVimBlockedTarget(e.target)) return;
+      if (document.querySelector(".book-search.is-open")) return;
+
+      var step = Math.round(window.innerHeight * VIM_SCROLL_RATIO);
+      var key = e.key;
+
+      if (key === "h" || key === "ArrowLeft") {
+        if (key === "h") e.preventDefault();
+        goPrevChapter(chapterIdx);
+      } else if (key === "l" || key === "ArrowRight") {
+        if (key === "l") e.preventDefault();
+        goNextChapter(chapterIdx);
+      } else if (key === "j") {
+        e.preventDefault();
+        vimScroll(step);
+      } else if (key === "k") {
+        e.preventDefault();
+        vimScroll(-step);
       }
     });
   }
@@ -537,7 +587,7 @@
     var INDEX = [];
     var indexReady = false, indexLoading = false, pending = null, debounce = null, activeIndex = -1;
     var shortcutLabel = searchShortcutHint();
-    var READY_HINT = "已索引全书 · " + shortcutLabel + " 打开搜索 · ↑↓ 选择 · Enter 跳转 · Esc 关闭";
+    var READY_HINT = "已索引全书 · " + shortcutLabel + " 搜索 · j/k 滚动 · h/l 切章 · ↑↓ 选结果 · Enter 跳转 · Esc 关闭";
 
     if (kbdEl) kbdEl.textContent = shortcutLabel;
     input.setAttribute("placeholder", "搜索全书… (" + shortcutLabel + ")");
@@ -661,12 +711,6 @@
       document.body.style.overflow = "";
     }
 
-    function pageBaseName() {
-      var p = location.pathname || "";
-      var i = p.lastIndexOf("/");
-      return i >= 0 ? p.slice(i + 1) : p;
-    }
-
     function followSearchResult(href) {
       if (!href) return;
       var hashIdx = href.indexOf("#");
@@ -714,8 +758,8 @@
       debounce = setTimeout(function () { runSearch(v); }, 140);
     });
     input.addEventListener("keydown", function (e) {
-      if (e.key === "ArrowDown") { e.preventDefault(); setActive(activeIndex + 1); }
-      else if (e.key === "ArrowUp") { e.preventDefault(); setActive(activeIndex - 1); }
+      if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); setActive(activeIndex + 1); }
+      else if (e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); setActive(activeIndex - 1); }
       else if (e.key === "Enter") {
         var items = resultsEl.querySelectorAll(".book-search__result");
         var target = items[activeIndex >= 0 ? activeIndex : 0];
@@ -972,6 +1016,15 @@
     document.body.appendChild(pop);
 
     var activeTrigger = null;
+    var dismissGuard = 0;
+
+    function armDismissGuard() {
+      dismissGuard = Date.now() + 450;
+    }
+
+    function shouldIgnoreDismiss() {
+      return Date.now() < dismissGuard;
+    }
 
     function close() {
       backdrop.hidden = true;
@@ -1012,12 +1065,25 @@
       var link = pop.querySelector("[data-glossary-link]");
       link.href = entry.href || ("glossary.html#" + entry.id);
       link.textContent = entry.href && entry.href.indexOf("glossary") === 0 ? "术语表" : "详解章节 →";
+      armDismissGuard();
       backdrop.hidden = false;
       pop.hidden = false;
-      requestAnimationFrame(function () { positionNear(trigger); });
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { positionNear(trigger); });
+      });
     }
 
-    backdrop.addEventListener("click", close);
+    function onBackdropDismiss(e) {
+      if (shouldIgnoreDismiss()) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      close();
+    }
+
+    backdrop.addEventListener("click", onBackdropDismiss);
+    backdrop.addEventListener("touchend", onBackdropDismiss);
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && !pop.hidden) { e.preventDefault(); close(); }
     });
@@ -1032,10 +1098,25 @@
       open: open,
       close: close,
       handleClick: function (e) {
+        if (Date.now() - glossaryTouchAt < 600) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         var t = e.target.closest(".term--glossary,[data-glossary-id]");
         if (!t || !t.getAttribute("data-glossary-id")) return;
         e.preventDefault();
         e.stopPropagation();
+        var entry = GLOSSARY.byId[t.getAttribute("data-glossary-id")];
+        if (entry) open(t, entry);
+      },
+      handlePointerUp: function (e) {
+        if (e.pointerType === "mouse") return;
+        var t = e.target.closest(".term--glossary,[data-glossary-id]");
+        if (!t || !t.getAttribute("data-glossary-id")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        glossaryTouchAt = Date.now();
         var entry = GLOSSARY.byId[t.getAttribute("data-glossary-id")];
         if (entry) open(t, entry);
       },
@@ -1050,6 +1131,7 @@
   }
 
   var glossaryPopover = null;
+  var glossaryTouchAt = 0;
 
   function setupGlossary(root) {
     if (!root || /glossary\.html$/.test(location.pathname)) return;
@@ -1057,6 +1139,7 @@
     linkGlossaryInText(root);
     if (!glossaryPopover) glossaryPopover = createGlossaryPopover();
     root.addEventListener("click", glossaryPopover.handleClick);
+    root.addEventListener("pointerup", glossaryPopover.handlePointerUp);
     root.addEventListener("keydown", glossaryPopover.handleKeydown);
   }
 
@@ -1103,11 +1186,14 @@
     var search = createSearch();
     setupSearchShortcut(search);
     search.preload();
+    var idx = chapterIndex();
+    setupVimNavigation(idx);
+
     if (document.body.hasAttribute("data-cover")) {
       setupCover(search);
+      setupReveal();
       return;
     }
-    var idx = chapterIndex();
     var hasChapterBody = !!document.querySelector(".chapter .chapter__inner");
     if ((idx < 0 || idx >= CHAPTERS.length) && !hasChapterBody) {
       setupReveal();
@@ -1119,7 +1205,6 @@
     buildDesktopLayout(idx);
     if (isChapter) {
       buildPrevNext(idx);
-      setupKeyboard(idx);
     }
     setupProgress(refs);
     setupReveal();

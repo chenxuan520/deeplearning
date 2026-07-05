@@ -46,6 +46,7 @@
           <ul>
             <li>提示词(prompt)、上下文学习、few-shot、思维链(CoT)分别是什么;</li>
             <li>RAG 怎么用“外挂知识库”治好幻觉和知识截止;</li>
+            <li>顶级模型对抗幻觉的<strong>四道防线</strong>:训练倾向诚实、推理锚定证据、输出后自检、系统层兜底;</li>
             <li>提示、RAG、微调三招各自改什么、该在什么时候用;</li>
             <li>function calling / 工具调用怎么让模型学会“借外力”;</li>
             <li>Agent 是什么,MCP 和 A2A 又想解决什么问题;</li>
@@ -120,7 +121,75 @@
           </p>
         </div>
 
-        <h2>3. 提示、RAG 还是微调:三招该用哪个?</h2>
+        <h2>3. 顶级模型怎么系统性地对抗幻觉</h2>
+        <p>
+          RAG 是最实用的一招,但它只是<strong>一道</strong>防线。你可能会问:那今天最顶级的模型,是怎么把幻觉压到“少见且可控”的?
+          先接受一个前提——<strong>幻觉无法被彻底消除,只能层层拦截</strong>。根因在<a class="xref" href="chapter-20.html">第 20 章</a>说过:模型本质是概率续写器,
+          在它内部,“我知道”和“我编一个通顺的”并没有一条天然的分界线。所以顶级模型不追求“消灭幻觉”,而是<strong>在从训练到产品的每个环节都设一道关卡</strong>,像漏斗一样逐层过滤。
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 620 250" role="img" aria-label="对抗幻觉的四道防线漏斗:训练、推理、输出后、系统层">
+              <defs>
+                <linearGradient id="funnelG" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#ff8fa3" /><stop offset="1" stop-color="#8ef0d1" />
+                </linearGradient>
+              </defs>
+              <text x="20" y="30" fill="#ff8fa3" font-size="12">爱编</text>
+              <text x="600" y="30" text-anchor="end" fill="#8ef0d1" font-size="12">可信得多</text>
+              <!-- 四段漏斗 -->
+              <g font-size="12.5" fill="#eef4ff">
+                <rect x="40" y="44" width="540" height="40" rx="8" fill="rgba(255,143,163,0.14)" stroke="#ff8fa3" stroke-width="1.6" />
+                <text x="58" y="62">① 训练阶段</text>
+                <text x="58" y="78" fill="#b6c5e1" font-size="10.5">对齐时惩罚“自信瞎说”、奖励“不知道就说不知道”</text>
+                <rect x="78" y="92" width="464" height="40" rx="8" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="1.6" />
+                <text x="96" y="110">② 推理阶段</text>
+                <text x="96" y="126" fill="#b6c5e1" font-size="10.5">RAG 检索 + 工具调用 + 先推理再答 + 给出处</text>
+                <rect x="116" y="140" width="388" height="40" rx="8" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="1.6" />
+                <text x="134" y="158">③ 输出后</text>
+                <text x="134" y="174" fill="#b6c5e1" font-size="10.5">多次采样自检、另一个模型当“事实核查员”</text>
+                <rect x="154" y="188" width="312" height="40" rx="8" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="1.6" />
+                <text x="172" y="206">④ 系统层</text>
+                <text x="172" y="222" fill="#b6c5e1" font-size="10.5">证据不足就说“无法确认”、高风险交人工复核</text>
+              </g>
+            </svg>
+          </div>
+          <p class="figure__cap">对抗幻觉是<strong>组合拳</strong>而非单一银弹:从训练、推理、输出后到系统层,四道防线层层收窄,把幻觉率一级级压低。</p>
+        </div>
+
+        <h3>3.1 训练阶段:让它倾向于“诚实”</h3>
+        <ul>
+          <li><strong>RLHF 对齐</strong>(<a class="xref" href="chapter-20.html">第 20 章</a>):人类反馈里明确<strong>惩罚“自信地胡说”、奖励“不确定就坦白”</strong>,让模型学会<strong>校准语气</strong>——没把握时说“可能 / 据我所知”,而不是一口咬定。</li>
+          <li><strong>教它说“我不知道”</strong>:很多幻觉来自“被问到知识边界外还硬答”。训练时特意加入“该拒答 / 该表示不确定”的样本,让<strong>弃权成为一个合法选项</strong>,而不是硬憋一个答案。</li>
+          <li><strong>事实性专项偏好</strong>:用“有据可查 vs 凭空编造”的对比数据做偏好训练,把说真话的倾向直接拉高。</li>
+        </ul>
+
+        <h3>3.2 推理阶段:给它外挂和草稿纸</h3>
+        <p>这一阶段是<strong>效果最立竿见影</strong>的,核心思路是:别让它只靠“脑内记忆”硬答,而是把答案<strong>锚定到外部的真实证据</strong>上。</p>
+        <ul>
+          <li><strong>RAG 检索增强</strong>(上一节):回答前先捞真实资料,让它<strong>照着材料答</strong>。这是性价比最高、最主流的一招。</li>
+          <li><strong>工具调用</strong>(见 <a class="xref" href="chapter-22.html#5-工具调用-让模型学会借外力">下文 §5</a>):算数用计算器、查实时信息调 API、跑代码验证——把“需要精确”的事外包给<strong>确定性工具</strong>,不靠脑补。</li>
+          <li><strong>先推理再答</strong>(思维链 / reasoning 模型):像先在草稿纸上<a class="xref" href="chapter-22.html#1-提示词-你和模型之间唯一的旋钮">分步推演</a>再下结论,能显著减少“一步硬猜”导致的推理型幻觉。</li>
+          <li><strong>要求给出处</strong>:让答案<strong>附引用</strong>。一旦被逼着给来源,模型编造的空间就小了,用户也能顺着链接核对。</li>
+        </ul>
+
+        <h3>3.3 输出后:自检与交叉验证</h3>
+        <ul>
+          <li><strong>多次采样自检(self-consistency)</strong>:同一问题采样多个答案,<strong>互相不一致的地方</strong>往往就是模型没把握之处,取多数或触发复查。</li>
+          <li><strong>让另一个模型当“事实核查员”</strong>:用一个校验模型逐句核对“生成内容 vs 检索到的证据”是否吻合(RAG 里叫 <em>groundedness / 忠实度</em>检查),对不上就打回重来。</li>
+          <li><strong>系统兜底</strong>:检索不到证据、置信度过低时,产品宁可回一句“<strong>无法确认</strong>”也不硬答;医疗、法律、金融等高风险场景则要求<strong>人工复核 + 显示信息来源</strong>。</li>
+        </ul>
+
+        <div class="callout callout--note reveal">
+          <span class="callout__title">一句话记住</span>
+          <p>
+            对抗幻觉靠的是<strong>组合拳</strong>:<strong>训练时</strong>让它倾向诚实、会拒答 → <strong>推理时</strong>用 RAG / 工具 / 推理链把答案锚在真实证据上 → <strong>输出后</strong>自检和交叉验证 → <strong>系统层</strong>加护栏和人工兜底。
+            对普通开发者最够用的三样是:<strong>RAG + 工具调用 + 要求给出处</strong>。
+          </p>
+        </div>
+
+        <h2>4. 提示、RAG 还是微调:三招该用哪个?</h2>
         <p>
           讲完提示和 RAG,一个很自然的问题冒出来了:要让模型在我的场景里表现更好,到底是<strong>改提示</strong>、<strong>接 RAG</strong>,
           还是干脆<strong>微调</strong>(fine-tune,拿你的数据接着训一小段,属于<a class="xref" href="chapter-20.html">第 20 章</a>后训练的范畴)?
@@ -171,7 +240,7 @@
           </p>
         </div>
 
-        <h2>4. 工具调用:让模型学会“借外力”</h2>
+        <h2>5. 工具调用:让模型学会“借外力”</h2>
         <p>
           大模型不擅长精确计算,也查不到实时数据(<a class="xref" href="chapter-20.html">第 20 章</a>)。那就<strong>别让它硬算</strong>——让它调用外部工具。
           这套机制最早叫 <span class="term">function calling(函数调用)</span>:
@@ -187,7 +256,7 @@
           模型从“一张嘴”升级成了“会用工具的手”。
         </p>
 
-        <h2>5. Agent:把大模型变成会做事的“智能体”</h2>
+        <h2>6. Agent:把大模型变成会做事的“智能体”</h2>
         <p>
           当一个系统能<strong>感知环境 → 思考决策 → 执行动作</strong>,还能看着结果继续下一步,它就成了一个
           <span class="term">Agent(智能体)</span>。如果负责“思考决策”的大脑是一个大模型,那它就是我们现在常说的 AI Agent。
@@ -211,7 +280,7 @@
           真正去编辑和执行(执行),再根据报错继续修(循环)。RAG 和工具调用,都是喂给这个“大脑”的能力。
         </p>
 
-        <h2>6. MCP 与 A2A:让 Agent 能“接万物”“互相通话”</h2>
+        <h2>7. MCP 与 A2A:让 Agent 能“接万物”“互相通话”</h2>
         <p>
           Agent 要调用各种外部工具和数据源,如果每接一个都要定制一套对接,就太乱了。于是出现了协议来<strong>统一接口</strong>:
         </p>
@@ -223,7 +292,7 @@
         </ul>
         <p>这两个协议都在走向行业标准。你不需要记细节,只要建立一个认知:<strong>大模型正从“一个聊天框”,长成一个能连接工具、彼此协作的生态。</strong></p>
 
-        <h2>7. 用它,但别全信它</h2>
+        <h2>8. 用它,但别全信它</h2>
         <div class="callout callout--warn reveal">
           <span class="callout__title">几条实用底线</span>
           <p>
@@ -237,7 +306,7 @@
           把这些记在心里,你就能既享受它的强大,又不被它的“自信”带偏。理解原理的人,用起工具来总是更稳、更有分寸。
         </p>
 
-        <h2>8. 为什么有时觉得它“变笨了”?</h2>
+        <h2>9. 为什么有时觉得它“变笨了”?</h2>
         <p>
           作为使用者,你碰到的“<strong>降智</strong>”往往不是模型一夜之间重训坏了,而是<strong>使用链路</strong>里的某个环节在起作用:
         </p>
@@ -268,6 +337,7 @@
           <ul>
             <li>提示词是你唯一的旋钮:zero-shot 直接问、few-shot 给例子、CoT 让它一步步想。</li>
             <li>RAG = 先检索再回答,用词嵌入+相似度找资料,把“闭卷”变“开卷”,治幻觉与知识截止。</li>
+            <li>对抗幻觉是组合拳:训练时让它倾向诚实/会拒答,推理时用 RAG+工具+推理链锚定证据,输出后自检交叉验证,系统层加护栏与人工兜底;幻觉只能压低、无法根除。</li>
             <li>提示 / RAG / 微调是成本递增的三层:先改提示,缺知识上 RAG,只有要固化风格才微调——别拿微调补知识。</li>
             <li>function calling 让模型调用计算器/搜索/API,补上它不会算、查不到的短板。</li>
             <li>Agent = 大模型当大脑 + 感知与执行 + 多步循环;MCP 统一“接工具”、A2A 规范“Agent 互联”。</li>

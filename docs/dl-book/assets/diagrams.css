@@ -1496,3 +1496,203 @@ a.chain-map__step:hover {
 .chain-map__note strong {
   color: var(--text);
 }
+
+/* ============================================================= */
+/* 竖向时间线 (zigzag)                                            */
+/* ============================================================= */
+
+.timeline {
+  --tl-line: var(--line-strong);
+  --tl-dot: var(--primary);
+  position: relative;
+  max-width: 56rem;
+  margin: 2rem auto;
+  padding: 0.5rem 0;
+}
+
+/* 居中的主轴 */
+.timeline::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--tl-line) 6%,
+    var(--tl-line) 94%,
+    transparent
+  );
+}
+
+.timeline__item {
+  position: relative;
+  width: 50%;
+  padding: 0.55rem 2.4rem;
+  box-sizing: border-box;
+}
+
+/* 左右交替 */
+.timeline__item:nth-child(odd) {
+  left: 0;
+  text-align: right;
+}
+.timeline__item:nth-child(even) {
+  left: 50%;
+  text-align: left;
+}
+
+/* 轴上的圆点 */
+.timeline__item::after {
+  content: "";
+  position: absolute;
+  top: 1.05rem;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--bg-soft);
+  border: 2.5px solid var(--tl-dot);
+  box-shadow: 0 0 0 4px rgba(8, 17, 31, 0.9);
+  z-index: 1;
+}
+.timeline__item:nth-child(odd)::after {
+  right: -6.5px;
+}
+.timeline__item:nth-child(even)::after {
+  left: -6.5px;
+}
+
+.timeline__card {
+  display: inline-block;
+  text-align: left;
+  max-width: 22rem;
+  padding: 0.7rem 0.95rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--tl-dot);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+/* 奇数项在轴左侧, 让强调边贴近轴线 */
+.timeline__item:nth-child(odd) .timeline__card {
+  border-left: 1px solid var(--line);
+  border-right: 3px solid var(--tl-dot);
+}
+
+.timeline__year {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--tl-dot);
+  letter-spacing: 0.02em;
+}
+
+.timeline__title {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.96rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.timeline__desc {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--text-soft);
+}
+
+/* 低潮 / 寒冬节点: 冷色、点空心 */
+.timeline__item--winter {
+  --tl-dot: var(--text-dim);
+}
+.timeline__item--winter .timeline__year {
+  color: var(--text-dim);
+}
+
+/* 爆发 / 里程碑节点: 高亮、点更大更亮 */
+.timeline__item--boom {
+  --tl-dot: var(--accent);
+}
+.timeline__item--boom .timeline__card {
+  background: var(--panel-strong);
+}
+.timeline__item--boom::after {
+  width: 16px;
+  height: 16px;
+  top: 0.95rem;
+  box-shadow: 0 0 0 4px rgba(8, 17, 31, 0.9), 0 0 14px 1px var(--accent);
+}
+.timeline__item--boom:nth-child(odd)::after {
+  right: -8px;
+}
+.timeline__item--boom:nth-child(even)::after {
+  left: -8px;
+}
+
+/* 图例 */
+.timeline__legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem 1.3rem;
+  margin: 0.4rem auto 1.4rem;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+.timeline__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.timeline__legend i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--bg-soft);
+  border: 2.5px solid var(--primary);
+}
+.timeline__legend i.is-winter {
+  border-color: var(--text-dim);
+}
+.timeline__legend i.is-boom {
+  border-color: var(--accent);
+  box-shadow: 0 0 8px 0 var(--accent);
+}
+
+/* 窄屏: 退化成单列, 轴移到左侧 */
+@media (max-width: 640px) {
+  .timeline::before {
+    left: 9px;
+    transform: none;
+  }
+  .timeline__item,
+  .timeline__item:nth-child(odd),
+  .timeline__item:nth-child(even) {
+    width: 100%;
+    left: 0;
+    text-align: left;
+    padding: 0.5rem 0 0.5rem 2.1rem;
+  }
+  .timeline__item::after,
+  .timeline__item:nth-child(odd)::after,
+  .timeline__item:nth-child(even)::after {
+    left: 3px;
+    right: auto;
+  }
+  .timeline__item--boom:nth-child(odd)::after,
+  .timeline__item--boom:nth-child(even)::after {
+    left: 1.5px;
+  }
+  .timeline__card,
+  .timeline__item:nth-child(odd) .timeline__card {
+    max-width: none;
+    border-left: 3px solid var(--tl-dot);
+    border-right: 1px solid var(--line);
+  }
+}

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 26 章 · 无监督与自监督学习 | 从神经元到大模型</title>
+    <title>第 26 章 · 机器学习全景图 | 从神经元到大模型</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -12,306 +12,564 @@
     <main class="chapter">
       <div class="chapter__inner">
         <p class="chapter__eyebrow">第 26 章 · 番外</p>
-        <h1>无监督与自监督学习</h1>
+        <h1>机器学习全景图</h1>
 
         <p class="lead">
-          本书主线走的是<strong>监督学习</strong>(每条数据带标准答案)和<strong>强化学习</strong>(靠奖励试错)。
-          但<a class="xref" href="chapter-00.html#机器学习的三大学习范式">第 0 章</a>那张范式地图里还有一支我们一直没展开——<span class="term">无监督学习(unsupervised learning)</span>:
-          <strong>数据没有任何标签,模型要自己从中发现结构</strong>。这一章作为番外,把它讲清楚:聚类、降维(PCA)、自编码器,再聊几个高级主题,
-          最后你会发现——<strong>其实这本书里,你早就见过它的身影</strong>。
+          前面 26 章是沿着一条主线走:从一个神经元,一路搭到 Transformer、大模型和几个真实 C++ demo。
+          这一章换个视角,把地图摊开:机器学习到底有哪些分支?它和 AI、深度学习、生成式 AI 是什么关系?
+          从 1950 年代到 2026 年,这条路大概经历了哪些转折?以后再冒出新模型、新产品、新缩写,又该怎么放回这张地图?
         </p>
 
         <div class="callout callout--warn reveal">
-          <span class="callout__title">读前须知:这是主线外的加餐</span>
+          <span class="callout__title">读前须知:这是视野篇,不是新主线</span>
           <p>
-            这一章和主线关系不大,更像“开阔眼界”的一集番外,所以<strong>不要求你先读它</strong>——跳过完全不影响理解全书。
-            另外,和前面每章都对照 <code>src/</code> 里真实实现不同,<strong>本章暂时还没有配套的 C++ 代码</strong>(聚类 / PCA / 自编码器仓库里都还没写)。
-            所以这一章会更偏<strong>原理和直觉</strong>,少几段“逐行读代码”;聚类 / PCA / 自编码器的 C++ 示例会在之后的版本里补进仓库。
+            这一章不继续推公式,也不要求你写新代码。它的作用是帮你建立<strong>行业地图</strong>:
+            知道自己学过的东西在大图里放在哪,也知道新闻里那些新名词大概属于哪一支。
+            读完之后,你不需要记住每个缩写,但应该能看出它属于哪类任务、哪类模型、解决什么瓶颈。
           </p>
         </div>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>无监督学习到底在解决什么问题,和监督学习差在哪;</li>
-            <li><strong>聚类</strong>(以 K-means 为例):怎么把没有标签的数据自动分成几群;</li>
-            <li><strong>降维 / PCA</strong>:为什么能把高维数据“压扁”还不太失真,它在找什么方向;</li>
-            <li><strong>自编码器</strong>:用神经网络做“压缩—重建”,以及它和 PCA、大模型潜空间的关系;</li>
-            <li>t-SNE/UMAP 可视化、对比学习、自监督等高级主题的直觉;</li>
-            <li>本书里哪些地方其实<strong>已经用到了</strong>无监督/自监督的思想。</li>
+            <li>AI、机器学习、深度学习、生成式 AI、大模型之间到底是什么包含关系;</li>
+            <li>机器学习按“学习信号”可以分成监督、无监督/自监督、强化学习,按“任务”又有分类、回归、推荐、生成、控制等分支;</li>
+            <li>从符号 AI、感知机、反向传播、AlexNet、AlphaGo、Transformer 到 ChatGPT 的关键时间线;</li>
+            <li>看到一个 AI 产品或新名词时,能用一套检查清单判断它到底靠不靠谱、该放在地图哪里;</li>
+            <li>以后看到一个新模型/新论文/新产品,该用哪几个问题快速定位它。</li>
           </ul>
         </section>
 
-        <h2>1. 没有标签,能学什么?</h2>
+        <h2>1. 先把几个圈分清</h2>
         <p>
-          监督学习像“有老师批改”:每条数据都配一个标准答案(这是猫、房价是 320 万)。
-          可现实里,<strong>绝大多数数据是没有标签的</strong>——你有一亿张图片、十亿条日志,但没人一条条标注过它们。
-          请人标注既慢又贵。那么问题来了:<strong>只有数据、没有答案,机器还能学到东西吗?</strong>
+          很多人第一次接触会把 <span class="term">AI</span>、<span class="term">机器学习</span>、<span class="term">深度学习</span>、<span class="term">大模型</span>混在一起。
+          其实最稳的记法是四个同心圈:
         </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 680 380" role="img" aria-label="AI、机器学习、深度学习、生成式 AI 与大模型的包含关系">
+              <rect x="44" y="36" width="592" height="302" rx="24" fill="rgba(106,195,255,0.08)" stroke="#6ac3ff" stroke-width="2.3" />
+              <text x="340" y="72" text-anchor="middle" fill="#6ac3ff" font-size="17" font-weight="700">AI 人工智能</text>
+              <text x="340" y="94" text-anchor="middle" fill="#b6c5e1" font-size="11">让机器表现出智能:搜索、规划、推理、感知、语言、控制...</text>
+
+              <rect x="104" y="116" width="472" height="182" rx="20" fill="rgba(142,240,209,0.09)" stroke="#8ef0d1" stroke-width="2.2" />
+              <text x="340" y="148" text-anchor="middle" fill="#8ef0d1" font-size="16" font-weight="700">机器学习 ML</text>
+              <text x="340" y="169" text-anchor="middle" fill="#b6c5e1" font-size="11">不把规则全写死,而是从数据里学规律</text>
+
+              <rect x="168" y="192" width="344" height="82" rx="17" fill="rgba(139,123,255,0.12)" stroke="#8b7bff" stroke-width="2.2" />
+              <text x="270" y="226" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">深度学习 DL</text>
+              <text x="270" y="247" text-anchor="middle" fill="#b6c5e1" font-size="10">用很多层神经网络学表示</text>
+
+              <rect x="356" y="204" width="130" height="56" rx="14" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" />
+              <text x="421" y="226" text-anchor="middle" fill="#ffcf72" font-size="12" font-weight="700">生成式 AI</text>
+              <text x="421" y="244" text-anchor="middle" fill="#b6c5e1" font-size="9">文本/图像/音频/代码</text>
+              <text x="421" y="258" text-anchor="middle" fill="#8ef0d1" font-size="9">大模型常在这里</text>
+
+              <g fill="#8499bd" font-size="10">
+                <text x="76" y="320">规则系统、搜索、专家系统等:属于 AI,但不一定靠机器学习</text>
+                <text x="124" y="288">决策树、SVM、随机森林等:属于 ML,但不一定是深度学习</text>
+              </g>
+            </svg>
+          </div>
+          <p class="figure__cap">AI 是最大目标;机器学习是实现 AI 的主流路线;深度学习是机器学习里用深层神经网络的路线;生成式 AI 和大模型主要是深度学习发展到大规模后的结果。</p>
+        </div>
+
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">一句话版本</span>
+          <p>
+            <strong>AI 是目标,机器学习是方法,深度学习是一类模型,大模型是深度学习规模化之后的一种形态。</strong>
+            这四个词不是并列关系,而是层层包含、互相交叉。
+          </p>
+        </div>
+
         <p>
-          能。因为数据本身<strong>自带结构</strong>:相似的样本会挤在一起、很多维度其实高度相关、大部分信息可以用更少的“坐标”概括。
-          无监督学习干的就是<strong>把这些藏在数据里的结构挖出来</strong>,而不需要任何人工标签。它主要回答两类问题:
+          光有“同心圈”还不够——机器学习内部到底怎么分门别类、这些类型又<strong>共享什么</strong>?下面这张思维导图先给你一张<strong>总览</strong>,
+          后面 §2 / §3 / §4 再分别展开三种分法。看图时抓住一个要点:<strong>无论哪一支,骨架都是同一句话——“从数据里学一个函数,靠最小化某个目标”</strong>。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 820 430" role="img" aria-label="机器学习全景思维导图:左侧根是机器学习,向右分出按学习信号、按任务、按模型家族三大分支及其子类">
+              <!-- 根 -> 三大主干 的肘形连线 -->
+              <g stroke="#5b6f93" stroke-width="1.8" fill="none">
+                <path d="M150,215 H185 V90 H236" />
+                <path d="M150,215 H210 H236" />
+                <path d="M150,215 H185 V340 H236" />
+              </g>
+              <!-- 主干 -> 叶子 的短横连线 -->
+              <g stroke="#8ef0d1" stroke-width="1.3" fill="none" opacity="0.6">
+                <path d="M388,66 H470" /><path d="M388,90 H470" /><path d="M388,114 H470" /><path d="M388,138 H470" />
+                <path d="M388,90 V66" /><path d="M388,90 V138" />
+              </g>
+              <g stroke="#ffcf72" stroke-width="1.3" fill="none" opacity="0.55">
+                <path d="M360,215 H470" /><path d="M360,191 H470" /><path d="M360,239 H470" />
+                <path d="M360,215 V191" /><path d="M360,215 V239" />
+              </g>
+              <g stroke="#8b7bff" stroke-width="1.3" fill="none" opacity="0.6">
+                <path d="M400,340 H470" /><path d="M400,316 H470" /><path d="M400,364 H470" />
+                <path d="M400,340 V316" /><path d="M400,340 V364" />
+              </g>
+
+              <!-- 根节点 -->
+              <ellipse cx="82" cy="215" rx="68" ry="44" fill="rgba(106,195,255,0.16)" stroke="#6ac3ff" stroke-width="2.4" />
+              <text x="82" y="210" text-anchor="middle" fill="#eef4ff" font-size="17" font-weight="700">机器学习</text>
+              <text x="82" y="231" text-anchor="middle" fill="#b6c5e1" font-size="10.5">从数据里学规律</text>
+
+              <!-- 主干1: 按学习信号 -->
+              <rect x="236" y="68" width="152" height="44" rx="12" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="312" y="90" text-anchor="middle" fill="#8ef0d1" font-size="13" font-weight="700">按学习信号</text>
+              <text x="312" y="105" text-anchor="middle" fill="#8499bd" font-size="9.5">靠什么信号学 · §2</text>
+              <g font-size="11.5" fill="#cdeee0">
+                <text x="478" y="70">监督 · 带标准答案</text>
+                <text x="478" y="94">无监督 · 自己找结构</text>
+                <text x="478" y="118">自监督 · 自造题和答案</text>
+                <text x="478" y="142">强化 · 靠奖励试错</text>
+              </g>
+
+              <!-- 主干2: 按任务 -->
+              <rect x="236" y="193" width="124" height="44" rx="12" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" />
+              <text x="298" y="215" text-anchor="middle" fill="#ffcf72" font-size="13" font-weight="700">按任务</text>
+              <text x="298" y="230" text-anchor="middle" fill="#8499bd" font-size="9.5">要它做什么 · §3</text>
+              <g font-size="11.5" fill="#f2e2bd">
+                <text x="478" y="195">分类 / 回归</text>
+                <text x="478" y="219">排序 / 推荐 / 序列预测</text>
+                <text x="478" y="243">生成 / 决策控制 / 异常检测</text>
+              </g>
+
+              <!-- 主干3: 按模型家族 -->
+              <rect x="236" y="318" width="164" height="44" rx="12" fill="rgba(139,123,255,0.16)" stroke="#8b7bff" stroke-width="2" />
+              <text x="318" y="340" text-anchor="middle" fill="#c3b9ff" font-size="13" font-weight="700">按模型家族</text>
+              <text x="318" y="355" text-anchor="middle" fill="#8499bd" font-size="9.5">用什么“脑子” · §4</text>
+              <g font-size="11.5" fill="#ddd6ff">
+                <text x="478" y="320">线性 / 树模型 / 核方法(SVM)</text>
+                <text x="478" y="344">神经网络 → 深度学习 → 大模型</text>
+                <text x="478" y="368">概率图 / 因果模型</text>
+              </g>
+            </svg>
+          </div>
+          <p class="figure__cap">
+            机器学习全景思维导图:同一个“机器学习”,能<strong>按学习信号</strong>(§2)、<strong>按任务</strong>(§3)、<strong>按模型家族</strong>(§4)三种角度切分——三种分法看的是同一头大象的不同侧面。
+          </p>
+        </div>
+
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">三种分法不同,但内核是同一套(这才是它们的“共同点”)</span>
+          <p>
+            不管落到哪一支,一个机器学习系统的骨架都是同样四步:
+          </p>
+          <p>
+            <strong>① 有一个可调的模型</strong>(一堆参数)→
+            <strong>② 定义一个“目标 / 损失”</strong>衡量它做得好不好 →
+            <strong>③ 用数据不断把损失降下去</strong>(训练)→
+            <strong>④ 在没见过的数据上评估</strong>它是否真的学会。
+          </p>
+          <p style="margin-bottom:0">
+            监督学习的“目标”是“预测 vs 标准答案”,无监督是“数据自身的合理性”,强化学习是“累计奖励”——<strong>目标的来源不同,但“定义目标、再想办法优化它”这个内核完全一致</strong>。这也是为什么学透了前面的<a class="xref" href="chapter-04.html">损失</a>和<a class="xref" href="chapter-05.html">梯度下降</a>,换个分支也能很快看懂。
+          </p>
+        </div>
+
+        <h2>2. 按“学习信号”分:它靠什么学?</h2>
+        <p>
+          最常用的分法,不是看模型长什么样,而是看训练时<strong>靠什么信号来学</strong>。
+          这和<a class="xref" href="chapter-00.html#机器学习的三大学习范式">第 0 章</a>那张表一致,这里只把地图补完整一点:
         </p>
         <div class="table-wrap reveal">
           <table class="calc-table calc-table--wrap">
-            <thead><tr><th>想干的事</th><th>叫什么</th><th>一句话</th><th>典型方法</th></tr></thead>
+            <thead><tr><th>分支</th><th>训练信号</th><th>典型问题</th><th>本书对应</th></tr></thead>
             <tbody>
-              <tr><td>把数据<strong>分成几群</strong></td><td>聚类 clustering</td><td>“物以类聚”——谁和谁像,就归一堆</td><td>K-means、层次聚类、DBSCAN</td></tr>
-              <tr><td>把数据<strong>压到低维</strong></td><td>降维 dimensionality reduction</td><td>用更少的坐标概括,还尽量不丢信息</td><td>PCA、自编码器、t-SNE/UMAP</td></tr>
+              <tr><td><strong>监督学习</strong></td><td>样本带标准答案</td><td>图片分类、房价预测、垃圾邮件识别</td><td>第 2–11 章、MNIST</td></tr>
+              <tr><td><strong>无监督学习</strong></td><td>没有人工标签,自己找结构</td><td>聚类、降维、异常检测、表示学习</td><td><a class="xref" href="chapter-27.html">第 27 章</a></td></tr>
+              <tr><td><strong>自监督学习</strong></td><td>从数据里自动造题和答案</td><td>预测下一个词、遮住一块图让模型补</td><td><a class="xref" href="chapter-19.html">第 19 章</a>、<a class="xref" href="chapter-20.html">第 20 章</a></td></tr>
+              <tr><td><strong>强化学习</strong></td><td>奖励/惩罚,靠试错改策略</td><td>下棋、机器人控制、推荐策略、RLHF</td><td><a class="xref" href="chapter-12.html">第 12 章</a>、<a class="xref" href="chapter-25.html">第 25 章</a></td></tr>
+              <tr><td><strong>半监督/主动学习</strong></td><td>少量标签 + 大量无标签,或主动挑样本请人标</td><td>标注很贵的医疗、工业质检、语音数据</td><td>本书只建立概念</td></tr>
             </tbody>
           </table>
-          <p class="calc-table__cap">聚类关心“样本怎么分组”,降维关心“特征怎么压缩”——两条主线,下面各挑代表方法讲透。</p>
+          <p class="calc-table__cap">注意:这些不是互斥阵营。一个真实系统常常会混用:先自监督预训练,再监督微调,最后用强化学习/偏好数据做对齐。</p>
         </div>
+
+        <h2>3. 按“任务”分:它要帮你做什么?</h2>
+        <p>
+          另一种更贴近业务的分法,是看输出到底是什么。你以后看到一个 AI 项目,先问“它在输出什么”,通常就能定位七八成:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>任务族</th><th>输出</th><th>常见场景</th><th>常见模型</th></tr></thead>
+            <tbody>
+              <tr><td><strong>分类</strong></td><td>离散类别</td><td>猫/狗/人脸、垃圾邮件、故障类型</td><td>逻辑回归、树模型、CNN、Transformer</td></tr>
+              <tr><td><strong>回归</strong></td><td>连续数值</td><td>价格、销量、温度、风险分数</td><td>线性模型、GBDT、MLP</td></tr>
+              <tr><td><strong>排序/推荐/搜索</strong></td><td>一组候选的顺序</td><td>搜索结果、短视频推荐、广告排序</td><td>GBDT、双塔、召回+排序、强化学习</td></tr>
+              <tr><td><strong>序列预测</strong></td><td>下一个时间点/下一个 token</td><td>语言模型、时间序列、语音识别</td><td>RNN、Transformer、状态空间模型</td></tr>
+              <tr><td><strong>生成</strong></td><td>新内容</td><td>写文章、画图、生成代码、做视频</td><td>语言模型、扩散模型、多模态模型</td></tr>
+              <tr><td><strong>决策与控制</strong></td><td>动作/策略</td><td>游戏、机器人、调度、自动驾驶局部规划</td><td>强化学习、规划、模仿学习</td></tr>
+              <tr><td><strong>异常检测</strong></td><td>是否“不像正常样本”</td><td>风控、机器故障、入侵检测</td><td>统计模型、自编码器、孤立森林</td></tr>
+            </tbody>
+          </table>
+        </div>
+
         <div class="callout callout--note reveal">
-          <span class="callout__title">和监督学习最本质的区别:没有“损失对答案”</span>
+          <span class="callout__title">为什么大模型看起来“什么都能做”?</span>
           <p>
-            监督学习的<a class="xref" href="chapter-04.html">损失</a>是“预测 vs 标准答案”的差距;无监督没有答案,那它<strong>拿什么当优化目标</strong>?
-            答案是——<strong>用数据自身的某种“合理性”当目标</strong>:聚类让“同群更紧、异群更远”,降维让“压扁再还原后丢的信息最少”。
-            目标变了,但“定义一个数、想办法让它变好”的<a class="xref" href="chapter-05.html">套路</a>没变。
+            因为很多任务都可以被改写成“给一段上下文,预测接下来该输出什么”:
+            分类可以输出类别名,翻译可以输出目标语言句子,写代码可以输出代码,工具调用可以输出结构化参数。
+            这不是说传统分支消失了,而是语言模型把很多任务统一进了一个<strong>序列生成接口</strong>。
           </p>
         </div>
 
-        <h2>2. 聚类:让数据自己“物以类聚”</h2>
+        <h2>4. 按“模型家族”分:它用什么脑子?</h2>
         <p>
-          <span class="term">聚类</span>要解决的问题一句话:<strong>给一堆没有标签的点,自动把它们分成 K 群,让同群的尽量像、不同群的尽量不像。</strong>
-          比如把用户按行为分成几类、把新闻按主题归堆——事先谁都没告诉你“该分成哪几类”,是数据自己显出来的。
+          学习信号和任务说的是“怎么学、做什么”;模型家族说的是“用什么结构承载规律”。历史上几条路线长期并存:
         </p>
-
-        <h3>2.1 K-means:最经典的聚类</h3>
-        <p>
-          <span class="term">K-means</span> 的思路朴素到你能自己想出来。先说好要分 <var>K</var> 群(比如 3 群),然后<strong>两步反复横跳</strong>直到稳定:
-        </p>
-        <ol>
-          <li><strong>分配</strong>:每个点看离哪个“群中心”最近,就归到那一群;</li>
-          <li><strong>更新</strong>:每一群把自己所有点的<strong>平均位置</strong>算出来,当作新的群中心;</li>
-          <li>回到第 1 步,直到中心不再挪动。</li>
-        </ol>
-        <div class="figure reveal">
-          <div class="diagram">
-            <svg viewBox="0 0 620 210" role="img" aria-label="K-means 两步迭代:分配到最近中心, 再把中心移到群均值">
-              <!-- 第一步: 分配 -->
-              <text x="150" y="24" text-anchor="middle" fill="#b6c5e1" font-size="12">① 分配:各归最近的中心</text>
-              <!-- 群1 蓝点 -->
-              <circle cx="80" cy="70" r="4" fill="#6ac3ff" /><circle cx="100" cy="90" r="4" fill="#6ac3ff" /><circle cx="70" cy="105" r="4" fill="#6ac3ff" />
-              <!-- 群2 绿点 -->
-              <circle cx="200" cy="80" r="4" fill="#8ef0d1" /><circle cx="220" cy="105" r="4" fill="#8ef0d1" /><circle cx="185" cy="120" r="4" fill="#8ef0d1" />
-              <!-- 中心(叉) -->
-              <text x="88" y="92" fill="#6ac3ff" font-size="16" text-anchor="middle">✕</text>
-              <text x="205" y="104" fill="#8ef0d1" font-size="16" text-anchor="middle">✕</text>
-              <text x="150" y="175" text-anchor="middle" fill="#8499bd" font-size="10">每个点连到最近的 ✕</text>
-              <!-- 箭头 -->
-              <text x="310" y="105" text-anchor="middle" fill="#8499bd" font-size="22">→</text>
-              <!-- 第二步: 更新 -->
-              <text x="470" y="24" text-anchor="middle" fill="#b6c5e1" font-size="12">② 更新:中心移到本群均值</text>
-              <circle cx="400" cy="70" r="4" fill="#6ac3ff" /><circle cx="420" cy="90" r="4" fill="#6ac3ff" /><circle cx="390" cy="105" r="4" fill="#6ac3ff" />
-              <circle cx="520" cy="80" r="4" fill="#8ef0d1" /><circle cx="540" cy="105" r="4" fill="#8ef0d1" /><circle cx="505" cy="120" r="4" fill="#8ef0d1" />
-              <!-- 新中心(移动后, 用虚线圈示意挪动) -->
-              <text x="403" y="94" fill="#6ac3ff" font-size="16" text-anchor="middle">✦</text>
-              <text x="522" y="107" fill="#8ef0d1" font-size="16" text-anchor="middle">✦</text>
-              <text x="470" y="175" text-anchor="middle" fill="#8499bd" font-size="10">✦ = 新中心(该群所有点的平均)</text>
-            </svg>
-          </div>
-          <p class="figure__cap">K-means 就在“①分配 ②挪中心”之间反复,直到中心稳定。像磁铁和铁屑互相找平衡:点被最近的中心吸走,中心又被吸来的点拉向它们的重心。</p>
-        </div>
-        <p>
-          它优化的“合理性”是一个能写出来的数——<strong>每个点到自己群中心的距离平方和</strong>(记作惯性 inertia),两步迭代每一轮都让它下降。
-          这其实和<a class="xref" href="chapter-05.html">梯度下降</a>精神一致:定义一个越小越好的目标,再一步步把它降下去,只是这里用的是“分配—平均”这种更直接的更新。
-        </p>
-        <div class="callout callout--warn reveal">
-          <span class="callout__title">K-means 的三个坑</span>
-          <p>
-            <strong>① K 要自己定</strong>:分几群没有标准答案,常用“手肘法”(看惯性随 K 下降的拐点)或轮廓系数来挑。<br />
-            <strong>② 初始中心影响结果</strong>:随机初始可能收敛到差的局部解,实践里用 <em>k-means++</em> 挑更分散的初始点,或多跑几次取最好。<br />
-            <strong>③ 假设“圆形、大小相近”的群</strong>:它按距离硬分,遇到细长条、环形或密度差异大的分布会失灵——这时换 DBSCAN(按密度聚)、高斯混合(允许椭圆)等更合适。
-          </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>家族</th><th>直觉</th><th>强项</th><th>短板</th></tr></thead>
+            <tbody>
+              <tr><td><strong>规则/符号系统</strong></td><td>专家把规则写进去</td><td>可解释、可控、适合明确流程</td><td>规则难覆盖真实世界长尾</td></tr>
+              <tr><td><strong>线性/广义线性模型</strong></td><td>特征加权求和</td><td>快、稳、好解释</td><td>表达力有限,依赖人工特征</td></tr>
+              <tr><td><strong>树模型/集成</strong></td><td>一堆 if-else 自动组合</td><td>表格数据非常强,工程成熟</td><td>不擅长原始图像/语音/长文本</td></tr>
+              <tr><td><strong>核方法/SVM</strong></td><td>把数据映到更高维再切开</td><td>小中型数据、理论漂亮</td><td>大规模数据和端到端表示学习不方便</td></tr>
+              <tr><td><strong>神经网络</strong></td><td>多层可学习变换</td><td>图像、语音、文本、多模态都能端到端学</td><td>吃数据和算力,解释难,调参多</td></tr>
+              <tr><td><strong>概率/因果模型</strong></td><td>显式建模不确定性和因果关系</td><td>科学、医疗、决策分析里很重要</td><td>建模假设难,和深度学习融合仍在发展</td></tr>
+              <tr><td><strong>大模型</strong>(深度学习的规模化形态)</td><td>神经网络放到超大规模,先预训练再迁移</td><td>通用、可交互、可当平台;一套底座多任务</td><td>成本高、可靠性和治理挑战大</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">不要把“新”误解成“旧的没用了”。到 2026 年,金融风控、广告排序、工业质检里仍大量使用树模型、线性模型和规则系统;大模型不是独立的第七家,它<strong>本身就是神经网络/深度学习放大后的形态</strong>,更像在这些经典家族之上新增了一层强大的通用接口。</p>
         </div>
 
-        <h2>3. 降维:把高维数据“压扁”还不太失真</h2>
+        <h3>4.1 为什么最后是深度学习脱颖而出?</h3>
         <p>
-          很多数据维度高得吓人:一张 <code>28×28</code> 的图是 784 维,一个词向量几百维。
-          <strong>降维</strong>就是把它们压到很少的几维(比如 2 维好画图,或几十维喂给下游),同时<strong>尽量保住原来的信息</strong>。
-          为什么可能?因为高维数据往往“<strong>虚胖</strong>”——很多维度高度相关、真正有效的自由度远没那么多。
+          既然这么多家族各有强项,为什么最近十几年的舞台中央是<strong>深度学习</strong>?先把它们放在几个关键维度上摆一摆:
         </p>
-
-        <h3>3.1 PCA:找到数据“最舒展的方向”</h3>
-        <p>
-          <span class="term">主成分分析(PCA)</span>是最经典的降维。直觉:一团数据在高维空间里像一个<strong>橄榄球</strong>——它在某些方向上“铺得很开”(方差大、信息多),在另一些方向上“很扁”(方差小、几乎没信息)。
-          PCA 做的就是<strong>找出数据最舒展(方差最大)的那几个方向</strong>,把数据投影上去,扁的方向直接扔掉:
-        </p>
-        <div class="figure reveal">
-          <div class="diagram">
-            <svg viewBox="0 0 480 230" role="img" aria-label="PCA:沿方差最大的主方向投影, 扔掉方差小的次方向">
-              <!-- 坐标轴 -->
-              <line x1="60" y1="180" x2="420" y2="180" stroke="#46587a" stroke-width="1.2" />
-              <line x1="60" y1="30" x2="60" y2="180" stroke="#46587a" stroke-width="1.2" />
-              <!-- 散布成斜椭圆的点 -->
-              <g fill="#6ac3ff">
-                <circle cx="120" cy="150" r="3.5"/><circle cx="150" cy="140" r="3.5"/><circle cx="175" cy="122" r="3.5"/>
-                <circle cx="205" cy="118" r="3.5"/><circle cx="230" cy="100" r="3.5"/><circle cx="260" cy="95" r="3.5"/>
-                <circle cx="285" cy="78" r="3.5"/><circle cx="315" cy="72" r="3.5"/><circle cx="345" cy="58" r="3.5"/>
-                <circle cx="165" cy="140" r="3.5"/><circle cx="245" cy="112" r="3.5"/><circle cx="300" cy="90" r="3.5"/>
-              </g>
-              <!-- 主方向 PC1 (方差最大, 沿斜向) -->
-              <line x1="110" y1="160" x2="360" y2="50" stroke="#8ef0d1" stroke-width="2.6" marker-end="url(#pca-a)" />
-              <text x="368" y="48" fill="#8ef0d1" font-size="11">主方向 PC1(方差最大, 留)</text>
-              <!-- 次方向 PC2 (垂直, 方差小) -->
-              <line x1="235" y1="105" x2="285" y2="160" stroke="#ff8fa3" stroke-width="2" stroke-dasharray="4 4" marker-end="url(#pca-b)" />
-              <text x="250" y="200" fill="#ff8fa3" font-size="11">次方向 PC2(方差小, 扔)</text>
-              <defs>
-                <marker id="pca-a" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" /></marker>
-                <marker id="pca-b" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ff8fa3" /></marker>
-              </defs>
-            </svg>
-          </div>
-          <p class="figure__cap">这团 2 维点其实“主要沿着 PC1 那条斜线铺开”。把每个点投影到 PC1 上,就用 1 个数(在这条线上的位置)近似了原来的 2 个数——降了一维,却几乎没丢信息,因为 PC2 方向本来就没多少变化。</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>维度</th><th>线性 / 树 / SVM 等经典模型</th><th>深度学习</th></tr></thead>
+            <tbody>
+              <tr><td><strong>要不要人工设计特征</strong></td><td>大多<strong>要</strong>:得靠专家把原始数据加工成好用的特征</td><td><strong>不用</strong>:从原始像素/文字里<strong>自动学出</strong>层次化特征</td></tr>
+              <tr><td><strong>数据越多越强吗</strong></td><td>到一定量就<strong>饱和</strong>,再喂也涨不动</td><td>基本<strong>越多越强</strong>,能吃下海量数据持续变好</td></tr>
+              <tr><td><strong>原始感知数据(图/音/文)</strong></td><td>弱,需要大量预处理</td><td><strong>强项</strong>,端到端直接处理</td></tr>
+              <tr><td><strong>表格 / 中小数据</strong></td><td><strong>强</strong>,又快又准还好解释</td><td>常常不划算,容易过拟合</td></tr>
+              <tr><td><strong>算力需求</strong></td><td>低,一台笔记本就能跑</td><td>高,吃 GPU / 大规模并行</td></tr>
+              <tr><td><strong>可解释性</strong></td><td><strong>好</strong>(尤其决策树、线性)</td><td>差,更像黑盒</td></tr>
+            </tbody>
+          </table>
         </div>
         <p>
-          把这个思路推广:PCA 找出<strong>一组互相垂直的主方向</strong>,按“数据在该方向上铺得多开”(方差)从大到小排序;
-          想降到 <var>k</var> 维,就留下<strong>前 <var>k</var> 个最舒展的方向</strong>,其余全扔。留下的这几个方向叫<strong>主成分</strong>。
-          比如把 784 维的手写数字压到 50 维,常常还能保住绝大部分“长相信息”。
+          看这张表就明白:深度学习赢的<strong>不是“样样都最好”</strong>——在表格数据、小样本、要解释的场景里,它至今都不占优(<a class="xref" href="chapter-28.html">第 28 章</a>的树模型就常常更好用)。
+          它真正的<strong>杀手锏只有一个,但极其关键</strong>:
         </p>
         <div class="callout callout--tip reveal">
-          <span class="callout__title">PCA 和你学过的东西的接口</span>
+          <span class="callout__title">深度学习脱颖而出的三个原因(缺一不可)</span>
           <p>
-            PCA 本质是一次<strong>线性变换</strong>(<a class="xref" href="chapter-01.html#4-矩阵-一次批量线性变换">矩阵乘法</a>):把原始向量乘一个“投影矩阵”就得到低维坐标。
-            所以它<strong>只能抓线性结构</strong>——数据要是拧成一团麻花(非线性),PCA 就压不好了。想抓非线性,得请出下面的<strong>自编码器</strong>。
+            <strong>① 自动学特征。</strong>经典模型最费人的一步是“人工设计特征”;深度学习把这步也交给网络自己学(<a class="xref" href="chapter-13.html">第 13 章</a>的 CNN 逐层从边缘到物体),
+            在图像、语音、文本这些<strong>原始感知数据</strong>上一举甩开对手。<br />
+            <strong>② 越大越强、能吃数据。</strong>经典模型喂到一定量就饱和,深度网络却能随<strong>数据和参数一起放大</strong>持续变好——这正是<a class="xref" href="chapter-20.html">第 20 章</a>“规模定律”和大模型的根基。<br />
+            <strong>③ 恰好赶上了算力和数据。</strong>2012 年前后,<strong>GPU 算力 + 互联网级数据</strong>同时到位,深度学习“吃数据吃算力”的胃口第一次被喂饱,于是<a class="xref" href="chapter-26.html#5-一条时间线-机器学习怎么走到今天">AlexNet 一炮而红</a>。
           </p>
         </div>
-
-        <h2>4. 自编码器:用神经网络做“压缩—重建”</h2>
         <p>
-          <span class="term">自编码器(autoencoder)</span>是把降维交给<a class="xref" href="chapter-03.html">神经网络</a>来做,而且它是个绝妙的“无监督却用监督的办法训”的例子。结构像一个<strong>沙漏</strong>:
+          所以更准确的说法是:<strong>深度学习不是取代了其它家族,而是打开了一片它们做不到的新疆域</strong>——凡是“数据海量、又是原始感知信号”的任务,它几乎通吃;
+          而在表格、小样本、强解释的老阵地上,经典模型依旧稳稳地在用。这也呼应了本节开头那句:<strong>不要把“新”误解成“旧的没用了”。</strong>
         </p>
-        <div class="figure reveal">
-          <div class="diagram">
-            <div class="pipe">
-              <div class="pipe__box">输入 x<small>比如 784 维</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">编码器<small>逐层压小</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">瓶颈 z<small>比如 32 维</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">解码器<small>逐层还原</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">重建 x′<small>还是 784 维</small></div>
+
+        <h2>5. 一条时间线:机器学习怎么走到今天</h2>
+        <p>
+          这条时间线不求列全所有论文,只抓对今天影响最大的转折。你会发现,机器学习的发展并不是一路直线上升,
+          而是反复经历“想法超前 → 算力/数据不够 → 沉寂 → 条件成熟后爆发”。
+        </p>
+        <div class="timeline__legend reveal">
+          <span><i></i>关键节点</span>
+          <span><i class="is-winter"></i>低潮 / “寒冬”</span>
+          <span><i class="is-boom"></i>爆发式突破</span>
+        </div>
+        <div class="timeline reveal">
+          <div class="timeline__item">
+            <div class="timeline__card">
+              <span class="timeline__year">1950</span>
+              <span class="timeline__title">Turing 提出“机器能否思考”的检验</span>
+              <span class="timeline__desc">把智能机器从哲学问题拉进可操作的讨论。</span>
             </div>
           </div>
-          <p class="figure__cap">自编码器:编码器把输入挤过一个又窄又细的“瓶颈”(低维 z),解码器再从 z 尽量还原出原图。中间那个 z,就是学到的低维表示。</p>
+          <div class="timeline__item">
+            <div class="timeline__card">
+              <span class="timeline__year">1956</span>
+              <span class="timeline__title">Dartmouth 夏季研究项目</span>
+              <span class="timeline__desc">“人工智能”正式成形,早期集中在符号推理、搜索和语言。</span>
+            </div>
+          </div>
+          <div class="timeline__item">
+            <div class="timeline__card">
+              <span class="timeline__year">1957–58</span>
+              <span class="timeline__title">Rosenblatt 感知机</span>
+              <span class="timeline__desc">早期神经网络路线出现,证明机器能从样本中调权重。</span>
+            </div>
+          </div>
+          <div class="timeline__item timeline__item--winter">
+            <div class="timeline__card">
+              <span class="timeline__year">1969</span>
+              <span class="timeline__title">《Perceptrons》指出单层感知机局限</span>
+              <span class="timeline__desc">神经网络热度骤降,进入漫长“寒冬”的重要导火索。</span>
+            </div>
+          </div>
+          <div class="timeline__item">
+            <div class="timeline__card">
+              <span class="timeline__year">1986</span>
+              <span class="timeline__title">反向传播被系统推广</span>
+              <span class="timeline__desc">多层网络终于有了可用的训练方法——正是本书<a class="xref" href="chapter-06.html">第 6 章</a>的核心。</span>
+            </div>
+          </div>
+          <div class="timeline__item">
+            <div class="timeline__card">
+              <span class="timeline__year">1997</span>
+              <span class="timeline__title">Deep Blue 击败国际象棋世界冠军</span>
+              <span class="timeline__desc">展示搜索 + 评估函数 + 专用工程在封闭规则游戏里的威力。</span>
+            </div>
+          </div>
+          <div class="timeline__item">
+            <div class="timeline__card">
+              <span class="timeline__year">~2006</span>
+              <span class="timeline__title">“深度学习”复兴</span>
+              <span class="timeline__desc">更大的数据、更好的训练技巧、更强的 GPU,让深层网络重新可行。</span>
+            </div>
+          </div>
+          <div class="timeline__item timeline__item--boom">
+            <div class="timeline__card">
+              <span class="timeline__year">2012</span>
+              <span class="timeline__title">AlexNet 赢得 ImageNet</span>
+              <span class="timeline__desc">CNN + GPU + 大数据让视觉任务大幅跃迁,深度学习就此成为主流。</span>
+            </div>
+          </div>
+          <div class="timeline__item">
+            <div class="timeline__card">
+              <span class="timeline__year">2014</span>
+              <span class="timeline__title">GAN、seq2seq 等兴起</span>
+              <span class="timeline__desc">生成模型和端到端序列建模开始快速发展。</span>
+            </div>
+          </div>
+          <div class="timeline__item timeline__item--boom">
+            <div class="timeline__card">
+              <span class="timeline__year">2016</span>
+              <span class="timeline__title">AlphaGo</span>
+              <span class="timeline__desc">深度网络 + 搜索 + 强化学习自我对弈,在复杂决策上突破人类顶尖水平。</span>
+            </div>
+          </div>
+          <div class="timeline__item timeline__item--boom">
+            <div class="timeline__card">
+              <span class="timeline__year">2017</span>
+              <span class="timeline__title">Transformer</span>
+              <span class="timeline__desc">用注意力取代 RNN 的串行瓶颈,成为大模型时代的底座结构。</span>
+            </div>
+          </div>
+          <div class="timeline__item">
+            <div class="timeline__card">
+              <span class="timeline__year">2018</span>
+              <span class="timeline__title">BERT</span>
+              <span class="timeline__desc">“预训练 + 微调”成为 NLP 标配,自监督预训练走到舞台中央。</span>
+            </div>
+          </div>
+          <div class="timeline__item">
+            <div class="timeline__card">
+              <span class="timeline__year">2020</span>
+              <span class="timeline__title">GPT-3</span>
+              <span class="timeline__desc">规模化语言模型展示 few-shot / 上下文学习,提示词成为交互接口。</span>
+            </div>
+          </div>
+          <div class="timeline__item timeline__item--boom">
+            <div class="timeline__card">
+              <span class="timeline__year">2022</span>
+              <span class="timeline__title">ChatGPT 发布</span>
+              <span class="timeline__desc">大模型从研究圈进入大众视野,对话式 AI 成为新的产品入口。</span>
+            </div>
+          </div>
+          <div class="timeline__item">
+            <div class="timeline__card">
+              <span class="timeline__year">2023–24</span>
+              <span class="timeline__title">多模态、RAG、Agent、AI 治理加速</span>
+              <span class="timeline__desc">模型开始看图、听音频、调用工具;NIST AI RMF、EU AI Act 等治理框架落地。</span>
+            </div>
+          </div>
+          <div class="timeline__item">
+            <div class="timeline__card">
+              <span class="timeline__year">2025–26</span>
+              <span class="timeline__title">能力扩散到代码、科学、长上下文与工作流</span>
+              <span class="timeline__desc">能力继续提升,但评估、成本、环境影响、可靠性成为更硬的瓶颈。</span>
+            </div>
+          </div>
         </div>
+
+        <h2>6. 别只看 demo:判断一个 AI 项目是否靠谱</h2>
         <p>
-          它的训练目标特别巧:<strong>让输出 x′ 尽量等于输入 x 本身</strong>——损失就是“重建的图和原图差多少”(<a class="xref" href="chapter-04.html#2-回归任务-均方误差-mse">MSE</a>)。
-          注意这里<strong>没有用到任何人工标签,答案就是输入自己</strong>——所以它是无监督的;但训练方法又完完全全是<a class="xref" href="chapter-06.html">反向传播 + 梯度下降</a>那一套。
+          以后看到一个模型、产品、论文或创业项目,
+          先别急着被演示效果带走,按下面五个问题过一遍:
         </p>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">为什么“照抄自己”能学到有用的东西?</span>
-          <p>
-            关键在中间那个<strong>又窄的瓶颈</strong>:要把 784 维硬挤过 32 维、还能还原回去,网络就<strong>被逼着</strong>只保留最本质、最有信息量的特征,扔掉噪声和冗余。
-            如果瓶颈和输入一样宽,它可以偷懒直接“复制粘贴”,啥也学不到——<strong>正是“压缩”这个约束,逼出了有用的表示。</strong>
-            这个中间表示 <var>z</var>,就是我们要的降维结果,可以拿去聚类、可视化或喂给下游任务。
-          </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>先问什么</th><th>具体看什么</th><th>最常见的坑</th><th>本书对应</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>准不准?</strong></td>
+                <td>有没有真实测试集、边界样本、失败案例;指标是否和业务目标一致</td>
+                <td>只展示漂亮 demo,benchmark 高但真实数据上一塌糊涂</td>
+                <td><a class="xref" href="chapter-11.html">评估与数据</a></td>
+              </tr>
+              <tr>
+                <td><strong>稳不稳?</strong></td>
+                <td>多跑几次是否一致;长上下文、工具调用、多轮交互会不会掉链子</td>
+                <td>演示时成功一次,上线后幻觉、漏读、乱调用工具</td>
+                <td><a class="xref" href="chapter-22.html">幻觉与使用</a></td>
+              </tr>
+              <tr>
+                <td><strong>贵不贵?</strong></td>
+                <td>训练/推理成本、延迟、吞吐、显存、并发;能否量化、缓存、批处理</td>
+                <td>能跑,但跑不起;用户一多,成本和延迟直接爆掉</td>
+                <td><a class="xref" href="chapter-21.html">大模型工程</a></td>
+              </tr>
+              <tr>
+                <td><strong>安不安全?</strong></td>
+                <td>数据权限、隐私、审计、输出边界、越权操作、版权与合规责任</td>
+                <td>把内部数据随手喂给外部模型,或让 Agent 拿到过大的权限</td>
+                <td><a class="xref" href="chapter-22.html">RAG / Agent</a></td>
+              </tr>
+              <tr>
+                <td><strong>接得进流程吗?</strong></td>
+                <td>人机分工、回退方案、监控、人工复核、和现有系统的数据接口</td>
+                <td>做了一个聊天框,但没人知道该在流程里什么时候用、错了谁兜底</td>
+                <td><a class="xref" href="chapter-25.html">强化学习策略</a></td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">真正落地时,“能生成一段漂亮回答”只是第一关。评估、成本、可靠性、权限和流程接入,往往才决定它有没有用。</p>
         </div>
-        <p>
-          <strong>自编码器和 PCA 什么关系?</strong> 可以粗略地说:<strong>自编码器是 PCA 的“非线性升级版”</strong>。如果把编码器/解码器都限制成一层线性、不加激活,它学出来的其实和 PCA 几乎一样;
-          一旦加上多层和<a class="xref" href="chapter-07.html">非线性激活</a>,它就能抓 PCA 抓不到的弯曲结构。而“把输入压进一个低维<strong>潜空间(latent)</strong>再还原”这个思路,你在
-          <a class="xref" href="chapter-20.html#反过来-文生图与文生视频扩散模型">第 20 章的 Stable Diffusion</a> 里已经见过——它正是先用自编码器把图压进潜空间再去噪的。
-        </p>
-
-        <h2>5. 几个高级主题(建立个印象)</h2>
-
-        <h3>5.1 t-SNE / UMAP:专门为“看一眼”而生的降维</h3>
-        <p>
-          PCA 压到 2 维常常糊成一团,因为它只顾“保方差”、不擅长展示<strong>邻里关系</strong>。
-          <span class="term">t-SNE</span> 和 <span class="term">UMAP</span> 是两种专为<strong>可视化</strong>设计的非线性降维:它们的目标不是还原,而是<strong>“原来挨得近的点,压到 2 维后还挨得近”</strong>。
-          你在很多论文里看到的“一团团漂亮的彩色散点图”(比如把 MNIST 压成 2 维,0–9 自动聚成十坨)基本都是它俩画的。
-        </p>
         <div class="callout callout--warn reveal">
-          <span class="callout__title">用它们看图别过度解读</span>
+          <span class="callout__title">一句硬话</span>
           <p>
-            t-SNE/UMAP 很擅长显示“谁和谁成团”,但图上<strong>团与团之间的距离、团的大小</strong>往往<strong>不可信</strong>(算法为了把局部邻里塞进 2 维,牺牲了全局尺度)。
-            所以它们是<strong>探索和展示</strong>的好工具,不能拿来当“距离测量仪”。
+            AI 项目最容易骗人的地方,不是模型完全没能力,而是<strong>能力只在少数样例里成立</strong>。
+            所以你要学会追问:失败率是多少?失败时能不能发现?发现后谁处理?处理成本是否还能接受?
           </p>
         </div>
 
-        <h3>5.2 对比学习:不用标签,也能学出好表示</h3>
+        <h2>7. 以后看到新名词,用这四个问题定位</h2>
         <p>
-          <span class="term">对比学习(contrastive learning)</span>是近年最火的自监督表示学习思路,一句话:<strong>让“同一个东西的两个视角”在表示空间里靠近,让“不同东西”推远。</strong>
-          比如同一张猫图,随机裁剪/变色成两个版本,模型要学会“这俩其实是一个东西”(拉近),而与别的图(推远)。
-          全程<strong>不需要任何人工标签</strong>,却能学出非常通用的特征——你在
-          <a class="xref" href="chapter-20.html#反过来-文生图与文生视频扩散模型">第 20 章文生图</a> 里见到的 <strong>CLIP</strong>,正是用对比学习把“图和它的配文”拉近、把不配对的推远,从而把图文对齐到同一空间。
+          AI 名词更新太快,硬背会很累。更好的办法是用四个问题给它“归档”:
         </p>
-
-        <h3>5.3 自监督:无监督和监督的“合体”</h3>
-        <p>
-          <span class="term">自监督(self-supervised)</span>是<a class="xref" href="chapter-00.html#机器学习的三大学习范式">第 0 章</a>提过的那个精妙变体:<strong>形式上没有人工标签(像无监督),却从数据里自动“抠”出答案来做监督式训练</strong>。
-          最典型的就是<a class="xref" href="chapter-19.html">语言模型</a>——把句子的下一个词盖住让模型猜,“被盖的词”就是免费的现成答案。
-        </p>
+        <ol>
+          <li><strong>它学什么信号?</strong> 是监督、无监督、自监督、强化学习,还是混合?</li>
+          <li><strong>它输出什么?</strong> 类别、数值、排序、文本、图像、动作,还是工具调用?</li>
+          <li><strong>它靠什么结构?</strong> 树模型、CNN、RNN、Transformer、扩散模型、检索系统,还是多模型组合?</li>
+          <li><strong>它解决什么瓶颈?</strong> 能力、成本、速度、长上下文、可靠性、数据隐私、部署还是交互体验?</li>
+        </ol>
         <div class="callout callout--tip reveal">
-          <span class="callout__title">为什么自监督是大模型时代的主角</span>
+          <span class="callout__title">真正的学习路线</span>
           <p>
-            监督学习卡在“标注贵”,而自监督<strong>把无标注的海量数据变成了可训练的题库</strong>——这正是<a class="xref" href="chapter-20.html#7-大模型是怎么炼成的-预训练--后训练">大模型预训练</a>能吞下整个互联网的根本原因。
-            可以说:<strong>无监督/自监督思想,才是今天大模型规模的真正地基。</strong>严格分类上自监督常被看作无监督的一个分支,但因为它用的是监督式的训练机制,单独拎出来理解更清楚。
+            不要追着每个新缩写跑。先抓住<strong>任务、数据、模型、损失、优化、评估、部署</strong>这七个骨架。
+            新名词再花哨,通常也只是这七件事的某个组合或改良。
           </p>
         </div>
 
-        <div class="callout callout--note reveal">
-          <span class="callout__title">其实你早就见过它了</span>
-          <p>
-            回头一看,无监督/自监督的影子在本书里到处都是:<br />
-            · <a class="xref" href="chapter-15.html">第 15 章 word2vec</a>——不用标签,靠“上下文共现”把词的语义学出来,是经典的自监督;<br />
-            · <a class="xref" href="chapter-19.html">第 19 章 / 第 20 章预训练</a>——遮词/预测下一个词,自监督的看家本领;<br />
-            · <a class="xref" href="chapter-20.html#反过来-文生图与文生视频扩散模型">第 20 章 Stable Diffusion 的潜空间、CLIP</a>——自编码器降维 + 对比学习对齐。<br />
-            所以这一章与其说是“新知识”,不如说是<strong>给你散落各处的直觉起了个正式的名字、连成一张网</strong>。
-          </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>新名词</th><th>它学什么 / 用什么</th><th>它输出什么</th><th>它主要解决什么瓶颈</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>RAG</strong></td>
+                <td>检索系统 + 语言模型,通常不需要重新训练大模型</td>
+                <td>带外部资料依据的回答</td>
+                <td>模型记不住最新/私有知识,也容易凭空编</td>
+              </tr>
+              <tr>
+                <td><strong>Agent</strong></td>
+                <td>语言模型 + 工具调用 + 多步循环</td>
+                <td>一串动作:查资料、写文件、调用接口、再总结</td>
+                <td>把“回答问题”扩展成“执行任务”</td>
+              </tr>
+              <tr>
+                <td><strong>MoE</strong></td>
+                <td>Transformer 里把部分 FFN 换成多个专家,Router 只激活少数几个</td>
+                <td>仍是 token 概率或中间表示</td>
+                <td>参数变多但每次只算一部分,在能力和成本之间折中</td>
+              </tr>
+              <tr>
+                <td><strong>LoRA</strong></td>
+                <td>冻结大模型原权重,只训练低秩小矩阵</td>
+                <td>同一个模型接口,但更贴近某个任务/风格</td>
+                <td>全量微调太贵、显存太吃紧、部署版本太多</td>
+              </tr>
+              <tr>
+                <td><strong>扩散模型</strong></td>
+                <td>学习从噪声一步步还原数据的去噪过程</td>
+                <td>图片、视频、音频等连续信号</td>
+                <td>生成高质量视觉内容,比逐 token 生成更适合图像</td>
+              </tr>
+              <tr>
+                <td><strong>GBDT</strong></td>
+                <td>一棵接一棵的树,每棵补前面模型的错</td>
+                <td>分类概率、回归数值、排序分数</td>
+                <td>表格数据上追求高精度,且训练/推理成本可控</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">这样归档之后,新名词就不再神秘:先看它属于哪类数据、哪类模型、哪类输出,再看它到底解决哪个旧瓶颈。</p>
         </div>
+
+        <h2>资料来源与延伸阅读</h2>
+        <p>
+          这一章的时间线和延伸阅读参考了几类资料,不要求逐篇读完;以后想核对关键节点,这些比二手文章稳:
+        </p>
+        <ul>
+          <li><a class="xref" href="https://hai.stanford.edu/ai-index/2026-ai-index-report" target="_blank" rel="noopener">Stanford HAI · 2026 AI Index Report</a>:年度 AI 能力、产业、治理、社会影响综述。</li>
+          <li><a class="xref" href="https://home.dartmouth.edu/about/artificial-intelligence-ai-coined-dartmouth" target="_blank" rel="noopener">Dartmouth · AI 一词的诞生</a>:1956 年 Dartmouth 项目的背景。</li>
+          <li><a class="xref" href="https://www.nature.com/articles/323533a0" target="_blank" rel="noopener">Rumelhart, Hinton, Williams · Back-propagation</a>:反向传播经典论文。</li>
+          <li><a class="xref" href="https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks" target="_blank" rel="noopener">AlexNet · ImageNet 2012</a>:深度学习视觉浪潮的关键节点。</li>
+          <li><a class="xref" href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">Attention Is All You Need</a>:Transformer 原始论文。</li>
+          <li><a class="xref" href="https://openai.com/index/chatgpt/" target="_blank" rel="noopener">OpenAI · Introducing ChatGPT</a>:2022 年 ChatGPT 发布说明。</li>
+        </ul>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li><strong>无监督学习</strong>:数据没有标签,靠“数据自身的合理性”当目标,挖出藏在里面的结构;两大任务是聚类和降维。</li>
-            <li><strong>聚类(K-means)</strong>:定好 K 群,反复“分配到最近中心 → 中心移到群均值”,最小化点到中心的距离平方和;注意选 K、初始化和形状假设三个坑。</li>
-            <li><strong>降维(PCA)</strong>:找数据方差最大的几个正交主方向,投影上去、扔掉扁的方向;本质是线性变换,只抓线性结构。</li>
-            <li><strong>自编码器</strong>:神经网络版降维,压过窄瓶颈再重建,损失是“重建 vs 原图”;无监督(答案是输入自己)却用反向传播训练,是 PCA 的非线性升级,潜空间思想通向扩散模型。</li>
-            <li><strong>高级主题</strong>:t-SNE/UMAP 专为可视化(别过度解读全局距离);对比学习/自监督不用标签也能学好表示,是大模型预训练的地基。</li>
-            <li>本书的 word2vec、语言模型预训练、CLIP、Stable Diffusion 潜空间,处处是无监督/自监督的身影。</li>
+            <li><strong>AI ⊃ 机器学习 ⊃ 深度学习</strong>;生成式 AI 和大模型主要是深度学习规模化后的重要分支。</li>
+            <li>按学习信号看,有监督、无监督/自监督、强化学习;真实系统常常混合使用。</li>
+            <li>按任务看,有分类、回归、排序/推荐、序列预测、生成、决策控制、异常检测等。</li>
+            <li>模型家族长期并存:规则、线性模型、树模型、核方法、神经网络(及其规模化形态大模型)、概率/因果模型各有位置;深度学习靠“自动学特征 + 越大越强 + 赶上算力数据”在感知类任务上脱颖而出,但没有取代经典模型。</li>
+            <li>关键时间线:1956 AI 命名,1957/58 感知机,1986 反向传播,2012 AlexNet,2016 AlphaGo,2017 Transformer,2022 ChatGPT,2025–2026 走向多模态、Agent、科学和真实工作流。</li>
+            <li>看 AI 产品不能只看 demo:要追问准不准、稳不稳、贵不贵、安不安全、能不能接进真实流程。</li>
+            <li>看到新名词,先问学习信号、输出任务、模型结构和解决的瓶颈,再把它放回地图里。</li>
           </ul>
         </section>
-
 
         <h2>动手与思考</h2>
         <div class="quiz reveal">
           <details class="quiz__item">
-            <summary class="quiz__q">问题 1:无监督学习没有标签,那它拿什么当“损失/目标”?</summary>
+            <summary class="quiz__q">问题 1:AI、机器学习、深度学习、大模型是什么关系?</summary>
             <div class="quiz__a">
-              <p>拿数据自身的某种“合理性”当目标:K-means 最小化“每个点到自己群中心的距离平方和”;自编码器最小化“重建结果和原输入的差距”。目标不再是“预测 vs 人工答案”,而是“数据内部结构好不好”。</p>
+              <p>AI 是最大目标;机器学习是从数据里学规律的路线;深度学习是机器学习里用多层神经网络的路线;大模型是深度学习在海量数据、算力和自监督训练下形成的规模化模型。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 2:自编码器明明在“照抄输入”,为什么还能学到有用的东西?</summary>
+            <summary class="quiz__q">问题 2:为什么说自监督是大模型时代的关键?</summary>
             <div class="quiz__a">
-              <p>因为中间有个很窄的<strong>瓶颈</strong>。要把高维输入挤过低维瓶颈还能还原,网络被迫只保留最本质的信息、丢掉冗余和噪声——这个被压出来的低维表示就是有用的特征。如果瓶颈不窄,它会偷懒直接复制,什么也学不到。</p>
+              <p>因为它能从无标注数据里自动造训练目标,比如“预测下一个 token”。这样模型就能利用海量文本、图像和代码,不必等人类逐条标注答案。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 3:PCA 和自编码器有什么联系与区别?</summary>
+            <summary class="quiz__q">问题 3:传统机器学习在大模型时代还有用吗?</summary>
             <div class="quiz__a">
-              <p>都是降维。PCA 是线性变换,只能找“方差最大的直方向”,抓不了弯曲结构。自编码器用多层 + 非线性激活,能抓非线性结构——当它退化成单层线性、无激活时,学到的几乎就是 PCA。所以自编码器可视作 PCA 的非线性升级版。</p>
+              <p>有。表格数据、风控、广告排序、工业规则、低成本部署等场景里,线性模型、树模型、规则系统仍然很强。大模型提供了新的通用接口,但不会把所有旧工具一夜清空。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 4:自监督为什么被说成“大模型的地基”?</summary>
+            <summary class="quiz__q">问题 4:看到一个新 AI 名词,最该先问什么?</summary>
             <div class="quiz__a">
-              <p>因为它把海量<strong>无标注</strong>数据变成了可训练的题库(如“遮住下一个词让模型猜”,答案免费)。监督学习卡在标注昂贵,而自监督绕开了这道坎,才让大模型能拿整个互联网来预训练。</p>
+              <p>先问四件事:它靠什么学习信号?输出什么?用什么模型结构?解决什么瓶颈?这四个问题能把大多数新概念放回地图里。</p>
             </div>
           </details>
         </div>
 
         <div class="summary reveal" style="text-align:center">
-          <h2>这一章小结 · 视野又宽了一点</h2>
+          <h2>地图展开了 · 接着挑两支深入看</h2>
           <p>
-            主线之外,你又认识了机器学习的第三支——<strong>无监督</strong>,以及它和大模型时代主角<strong>自监督</strong>的血缘。
-            监督、强化、无监督/自监督,三大范式的地图现在都在你脑子里了。下一章把视角再拉远一点,看完整机器学习分支、历史时间线和今天的现状。
+            有了这张全景图,后面两章番外各挑一支主线之外的分支深入:先看那支“没有标签也能学”的<strong>无监督与自监督</strong>,
+            再看在表格数据上至今仍是主力的<strong>决策树与随机森林</strong>。
           </p>
-          <p style="margin-top:1.4rem"><a class="button button--primary" href="chapter-27.html">继续看机器学习全景图</a></p>
+          <p style="margin-top:1.4rem"><a class="button button--primary" href="chapter-27.html">继续 · 无监督与自监督学习</a></p>
         </div>
       </div>
     </main>

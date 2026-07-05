@@ -88,11 +88,184 @@
             瞬间就完。大模型的矩阵运算恰好能拆成海量互不依赖的小乘加,天生适合这种“人海战术”。
           </p>
         </div>
+
+        <h3>为什么差别这么大?根子在“晶体管预算花在哪”</h3>
+        <p>
+          “一个少而强、一个多而弱”只是<strong>现象</strong>。真正的原因只有一句话:
+          <strong>一块芯片面积有限,能塞的晶体管数量是固定的;CPU 和 GPU 拿到同样一笔“预算”,却花在了相反的地方。</strong>
+        </p>
+        <div class="figure reveal">
+          <svg viewBox="0 0 720 260" role="img" aria-label="CPU 与 GPU 芯片平面预算对比图">
+            <!-- CPU 芯片 -->
+            <text x="175" y="24" text-anchor="middle" fill="#8499bd" font-size="13">CPU:少数几个强核</text>
+            <rect x="40" y="36" width="270" height="200" rx="10" fill="rgba(139,123,255,0.06)" stroke="#8b7bff" stroke-width="1.6" />
+            <!-- 4 个大 ALU -->
+            <rect x="58" y="54" width="110" height="70" rx="6" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.6" />
+            <text x="113" y="94" text-anchor="middle" fill="#eef4ff" font-size="12">ALU</text>
+            <rect x="182" y="54" width="110" height="70" rx="6" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.6" />
+            <text x="237" y="94" text-anchor="middle" fill="#eef4ff" font-size="12">ALU</text>
+            <rect x="58" y="132" width="110" height="44" rx="6" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.6" />
+            <text x="113" y="158" text-anchor="middle" fill="#eef4ff" font-size="12">ALU</text>
+            <rect x="182" y="132" width="110" height="44" rx="6" fill="rgba(255,207,114,0.28)" stroke="#ffcf72" stroke-width="1.6" />
+            <text x="237" y="158" text-anchor="middle" fill="#eef4ff" font-size="12">ALU</text>
+            <!-- 大片控制 + 缓存 -->
+            <rect x="58" y="184" width="234" height="20" rx="4" fill="rgba(139,123,255,0.30)" stroke="#8b7bff" stroke-width="1.2" />
+            <text x="175" y="199" text-anchor="middle" fill="#dfe7ff" font-size="10">控制:分支预测 / 乱序执行</text>
+            <rect x="58" y="208" width="234" height="20" rx="4" fill="rgba(88,166,255,0.22)" stroke="#58a6ff" stroke-width="1.2" />
+            <text x="175" y="223" text-anchor="middle" fill="#dfe7ff" font-size="10">大容量缓存 Cache</text>
+
+            <!-- GPU 芯片 -->
+            <text x="545" y="24" text-anchor="middle" fill="#8499bd" font-size="13">GPU:几千个弱核</text>
+            <rect x="410" y="36" width="270" height="200" rx="10" fill="rgba(139,123,255,0.06)" stroke="#8b7bff" stroke-width="1.6" />
+            <!-- 满屏 ALU 网格:8列 x 6行 -->
+            <rect x="426" y="52" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="455" y="52" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="484" y="52" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="513" y="52" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="542" y="52" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="571" y="52" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="600" y="52" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="629" y="52" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="426" y="77" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="455" y="77" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="484" y="77" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="513" y="77" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="542" y="77" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="571" y="77" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="600" y="77" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="629" y="77" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="426" y="102" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="455" y="102" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="484" y="102" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="513" y="102" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="542" y="102" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="571" y="102" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="600" y="102" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="629" y="102" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="426" y="127" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="455" y="127" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="484" y="127" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="513" y="127" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="542" y="127" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="571" y="127" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="600" y="127" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="629" y="127" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="426" y="152" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="455" y="152" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="484" y="152" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="513" y="152" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="542" y="152" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="571" y="152" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="600" y="152" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="629" y="152" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="426" y="177" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="455" y="177" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="484" y="177" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="513" y="177" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="542" y="177" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="571" y="177" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="600" y="177" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <rect x="629" y="177" width="26" height="22" rx="3" fill="rgba(255,207,114,0.24)" stroke="#ffcf72" stroke-width="1" />
+            <!-- 极薄控制条 -->
+            <rect x="426" y="212" width="238" height="14" rx="3" fill="rgba(139,123,255,0.30)" stroke="#8b7bff" stroke-width="1" />
+            <text x="545" y="222" text-anchor="middle" fill="#b6c5e1" font-size="9">控制 + 缓存(压到很薄)</text>
+          </svg>
+          <p class="figure__cap">同样大的一块芯片:CPU 把大片面积让给<strong>控制电路和缓存</strong>(蓝紫),真正算数的 ALU(金)只占一角;GPU 几乎<strong>整块铺满 ALU</strong>,控制和缓存被压到极薄。“花钱买聪明”还是“花钱买数量”,一眼可见。</p>
+        </div>
+        <p>
+          CPU 为什么舍得把大半面积“浪费”在不做计算的电路上?因为它要解决三个 GPU 干脆<strong>放弃</strong>的难题。这三笔取舍,就是差距的全部来源:
+        </p>
+
+        <h4>取舍一:为“一条路走到黑”提速,还是为“人多”让路</h4>
+        <p>
+          CPU 面对的典型程序是:<code>if 条件成立走 A,否则走 B</code>,而且<strong>下一步算什么,取决于上一步的结果</strong>。这种强依赖的串行代码没法靠“人多”加速——你都不知道该往哪走,加再多核也只能干等。
+          于是 CPU 把晶体管砸在<strong>让这一条指令流尽量快</strong>上:
+        </p>
+        <ul>
+          <li><strong>分支预测</strong>:<code>if</code> 结果还没算出来,就先赌一个方向提前开跑,赌对了白赚时间;</li>
+          <li><strong>乱序执行</strong>:某条指令在等数据,就先把后面不依赖它的指令拎上来先算;</li>
+          <li><strong>大容量缓存</strong>:把常用数据留在芯片上,别每次都去慢吞吞的内存取。</li>
+        </ul>
+        <p>
+          这些电路<strong>一点计算都不做</strong>,纯粹是“调度和加速”的管理层,却吃掉了 CPU 大半面积——这就是“博士很聪明”背后那套昂贵的辅助机构。
+          GPU 直接<strong>把这套全砍了</strong>:它赌的是另一种活——成千上万笔计算<strong>彼此独立、没有分支、算什么早已定死</strong>(矩阵乘法正是如此)。不用猜路、不用调度,那些电路就是浪费,<strong>省下的面积全换成 ALU</strong>。
+        </p>
+
+        <h4>取舍二:内存很慢,是“想办法别等”还是“人海盖过去”</h4>
+        <p>
+          访问内存很慢:CPU 算一步只要 1 个时钟周期,去内存取一次数据却要等几百个周期。两家的应对天差地别:
+        </p>
+        <ul>
+          <li><strong>CPU:想办法别去等</strong>——靠大缓存把数据留在身边,靠乱序执行在等待的空档找别的活干。花的还是“辅助电路”的钱。</li>
+          <li><strong>GPU:大方承认就是慢,但我人多</strong>——<strong>一批线程卡在等内存时,调度器瞬间切去算另一批早已就绪的线程</strong>。几千个线程轮着上,单个线程的等待被彻底“盖住”。这叫<strong>用吞吐掩盖延迟</strong>。</li>
+        </ul>
+        <p>
+          所以 GPU 的每个核心其实<strong>又慢又笨</strong>,单看一个线程比 CPU 慢得多;可几千个一起转,总吞吐反而碾压 CPU。它赢在总量,从不赢在单点。
+        </p>
+
+        <h4>取舍三:几千个核心“合用一个大脑”(SIMT)</h4>
+        <p>
+          GPU 还有个省面积的狠招:<strong>不给每个核心都配一套指挥系统</strong>。它把核心分组,<strong>一组几十个核心共享同一个控制单元、齐步走同一条指令</strong>,只是各自处理不同的数据。这叫 <span class="term">SIMT(单指令多线程)</span>。
+        </p>
+        <ul>
+          <li><strong>好处</strong>:省下的控制电路面积,又能多塞一大堆 ALU;</li>
+          <li><strong>代价</strong>:<strong>一旦这组核心里出现分支</strong>(有的该走 A、有的该走 B),它们没法各走各的,只能<strong>先全体走 A(该走 B 的干等)、再全体走 B</strong>,效率直接对半砍。这正是 <strong>GPU 最怕 <code>if-else</code> 分支</strong>的原因,也是它“笨”的代价。</li>
+        </ul>
+        <p>
+          而神经网络的矩阵乘法<strong>没有分支</strong>,每个数据走的路一模一样,完美适配 SIMT——这不是巧合,是深度学习恰好落在了 GPU 最擅长的那类计算上。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">一句话记住差距的根源</span>
+          <p>
+            <strong>CPU 假设“任务复杂、彼此依赖、充满判断”,所以花钱买<em>聪明</em>;GPU 假设“任务简单、彼此独立、没有判断”,所以花钱买<em>数量</em>。</strong>
+            神经网络恰好是后一种,所以同一件事 GPU 能比 CPU 快几十上百倍——快的不是“单个核”,是“核多、且全用在了刀刃上”。
+          </p>
+        </div>
         <p>
           怎么把一个大矩阵乘法均匀地拆给上万个核、让它们别打架又别闲着?这件苦活由英伟达的
           <span class="term">CUDA</span> 平台包办。开发者只管调用,底层调度交给它——这也是英伟达护城河极深的原因之一。
           (人们口中的“买卡”,买的就是这种 GPU 卡。)
         </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>维度</th><th>CPU</th><th>GPU</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>核心数量</strong></td>
+                <td>少(几个 ~ 几十个)</td>
+                <td>极多(上千 ~ 上万个)</td>
+              </tr>
+              <tr>
+                <td><strong>单核能力</strong></td>
+                <td>强:擅长复杂逻辑、分支判断</td>
+                <td>弱:只擅长简单算术</td>
+              </tr>
+              <tr>
+                <td><strong>设计目标</strong></td>
+                <td>低延迟——把<strong>单件事</strong>做到最快</td>
+                <td>高吞吐——单位时间处理的<strong>总量</strong>最大</td>
+              </tr>
+              <tr>
+                <td><strong>擅长的活</strong></td>
+                <td>串行、分支多、逻辑复杂的任务</td>
+                <td>大规模并行、同一种运算铺开的任务</td>
+              </tr>
+              <tr>
+                <td><strong>在深度学习里</strong></td>
+                <td>数据预处理、任务调度、跑不并行的零碎逻辑</td>
+                <td><strong>矩阵乘法主力</strong>(训练与推理的绝大部分算力)</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">一句话:CPU 追求“把一件事做到极快”,GPU 追求“同时做海量简单的事”。神经网络的核心计算就是<a class="xref" href="chapter-06.html">大量互不依赖的乘加</a>,天生落在 GPU 这一栏。</p>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">还有更专一的芯片:TPU / NPU</span>
+          <p>
+            既然神经网络说到底就是矩阵乘法,有人干脆造了把电路<strong>直接做成“矩阵乘法机器”</strong>的专用芯片:谷歌的 <span class="term">TPU</span>、手机 / 端侧里的 <span class="term">NPU</span> 都属这类。
+            它们比通用 GPU 更“偏科”——在“算矩阵”这一件事上更快、更省电,但灵活性不如 GPU。你可以把它们理解成:GPU 是“什么并行活都能接的万能车间”,TPU/NPU 是“只造一种零件、但造得飞快的专用产线”。
+          </p>
+        </div>
 
         <h2>3. 显存:第一堵墙</h2>
         <p>

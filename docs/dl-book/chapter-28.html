@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 28 章 · 决策树与随机森林 | 从神经元到大模型</title>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body data-chapter="28">
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">第 28 章 · 番外</p>
+        <h1>经典机器学习:决策树与随机森林</h1>
+
+        <p class="lead">
+          这本书一路都在讲神经网络,但它并不是机器学习的全部。<a class="xref" href="chapter-26.html#4-按模型家族分-它用什么脑子">第 26 章那张“模型家族表”</a>里,
+          有一支叫<strong>树模型</strong>——到 2026 年,它在<strong>表格数据</strong>(银行风控、广告排序、销量预测、工业质检)上依然常常<strong>比神经网络更好用</strong>。
+          这一章就把这支讲清楚:一棵<strong>决策树</strong>是怎么学出来的,为什么单棵容易过拟合,以及<strong>随机森林</strong>和<strong>梯度提升树</strong>怎么用“很多棵树”把它救回来。
+        </p>
+
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">读前须知:这是并行世界,不是主线延续</span>
+          <p>
+            前面 27 章的神经网络和这一章的树模型,是机器学习里<strong>两条并行的路线</strong>,不是谁进化成谁。
+            这一章不依赖前面的反向传播、梯度下降——树模型压根不用求导。它更像给你补上“<strong>另一半地图</strong>”:
+            知道除了神经网络,业界还常年在用什么、为什么用。本章仍以原理和直觉为主,暂无配套 C++ 代码。
+          </p>
+        </div>
+
+        <section class="objectives reveal">
+          <h2>读完这一章,你会明白</h2>
+          <ul>
+            <li>一棵决策树到底在学什么——其实就是<strong>把一串 if-else 从数据里自动长出来</strong>;</li>
+            <li>它凭什么决定“先问哪个问题”:<strong>基尼不纯度 / 信息增益</strong>是怎么打分的;</li>
+            <li>整棵树是怎么<strong>训练</strong>出来的——<strong>贪心 + 递归</strong>地反复问“下一刀切哪最划算”,全程不求导;</li>
+            <li>为什么单棵树特别容易<strong>过拟合</strong>,以及“剪枝”在干嘛;</li>
+            <li>随机森林怎么用<strong>“很多棵各自有偏见的树投票”</strong>把误差压下去(Bagging);</li>
+            <li>梯度提升树(GBDT)又是另一种思路:<strong>一棵接一棵地专门纠错</strong>(Boosting);</li>
+            <li><strong>kNN</strong> 这个“不训练”的惰性模型怎么靠邻居投票判类;SVM / 逻辑回归 / 朴素贝叶斯速览,以及它们<strong>分别适合什么场景、承担什么作用</strong>。</li>
+          </ul>
+        </section>
+
+        <h2>1. 先从一个问题说起:20 个问题</h2>
+        <p>
+          你小时候大概玩过“猜东西”游戏:我心里想一个动物,你只能问“是/否”问题来猜。聪明的玩法是——
+          <strong>每次都问那个最能把可能性劈成两半的问题</strong>:“它是哺乳动物吗?”“它比猫大吗?”“它会飞吗?”……
+          问不了几轮,答案就锁定了。
+        </p>
+        <p>
+          <strong>决策树就是这个游戏的自动版。</strong>给它一堆带标签的数据(比如很多条贷款申请,每条标了“最后有没有还上”),
+          它会自己找出“该按哪些特征、按什么顺序去问”,最后长成一棵能对新样本做判断的树。它和神经网络最大的不同是:
+          <strong>你能一眼读懂它的每一步决策</strong>——这也是它在金融、医疗这类“必须解释为什么”的场景里长盛不衰的原因。
+        </p>
+
+        <h2>2. 决策树:把 if-else 学出来</h2>
+        <p>
+          假设我们要判断“要不要给一个人批贷款”,手上每条历史数据有几个特征:<em>收入</em>、<em>是否有房</em>、<em>信用历史长度</em>,
+          以及标签<em>最终是否违约</em>。一棵学出来的决策树可能长这样:
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 660 340" role="img" aria-label="一棵判断是否放贷的决策树:根据收入、是否有房、信用历史逐层分裂">
+              <!-- 根节点 -->
+              <rect x="250" y="20" width="160" height="46" rx="12" fill="rgba(139,123,255,0.16)" stroke="#8b7bff" stroke-width="2" />
+              <text x="330" y="42" text-anchor="middle" fill="#eef4ff" font-size="13">月收入 &gt; 1 万?</text>
+              <text x="330" y="59" text-anchor="middle" fill="#8499bd" font-size="10">根节点(先问这个)</text>
+              <!-- 一层分裂线 -->
+              <line x1="290" y1="66" x2="150" y2="120" stroke="#5b6f93" stroke-width="1.8" />
+              <line x1="370" y1="66" x2="510" y2="120" stroke="#5b6f93" stroke-width="1.8" />
+              <text x="200" y="98" fill="#ff8fa3" font-size="11">否</text>
+              <text x="452" y="98" fill="#8ef0d1" font-size="11">是</text>
+              <!-- 左子:有房? -->
+              <rect x="72" y="120" width="150" height="42" rx="11" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="1.8" />
+              <text x="147" y="146" text-anchor="middle" fill="#eef4ff" font-size="12">名下有房?</text>
+              <!-- 右子:信用历史 -->
+              <rect x="436" y="120" width="150" height="42" rx="11" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="1.8" />
+              <text x="511" y="140" text-anchor="middle" fill="#eef4ff" font-size="12">信用历史 &gt; 3 年?</text>
+              <text x="511" y="156" text-anchor="middle" fill="#8499bd" font-size="9">还能接着问</text>
+              <!-- 左子分裂 -->
+              <line x1="110" y1="162" x2="70" y2="220" stroke="#5b6f93" stroke-width="1.8" />
+              <line x1="185" y1="162" x2="225" y2="220" stroke="#5b6f93" stroke-width="1.8" />
+              <text x="80" y="196" fill="#ff8fa3" font-size="10">否</text>
+              <text x="214" y="196" fill="#8ef0d1" font-size="10">是</text>
+              <!-- 右子分裂 -->
+              <line x1="474" y1="162" x2="434" y2="220" stroke="#5b6f93" stroke-width="1.8" />
+              <line x1="548" y1="162" x2="588" y2="220" stroke="#5b6f93" stroke-width="1.8" />
+              <text x="444" y="196" fill="#ff8fa3" font-size="10">否</text>
+              <text x="578" y="196" fill="#8ef0d1" font-size="10">是</text>
+              <!-- 叶子 -->
+              <g font-size="12" text-anchor="middle">
+                <rect x="24" y="220" width="92" height="40" rx="10" fill="rgba(255,143,163,0.16)" stroke="#ff8fa3" stroke-width="1.8" />
+                <text x="70" y="238" fill="#ffd7de">拒绝</text><text x="70" y="253" fill="#8499bd" font-size="9">违约多</text>
+                <rect x="180" y="220" width="92" height="40" rx="10" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="1.8" />
+                <text x="226" y="238" fill="#d6fff1">批准</text><text x="226" y="253" fill="#8499bd" font-size="9">有抵押</text>
+                <rect x="388" y="220" width="92" height="40" rx="10" fill="rgba(255,143,163,0.16)" stroke="#ff8fa3" stroke-width="1.8" />
+                <text x="434" y="238" fill="#ffd7de">拒绝</text><text x="434" y="253" fill="#8499bd" font-size="9">记录太短</text>
+                <rect x="544" y="220" width="92" height="40" rx="10" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="1.8" />
+                <text x="590" y="238" fill="#d6fff1">批准</text><text x="590" y="253" fill="#8499bd" font-size="9">高收入+信用好</text>
+              </g>
+              <text x="330" y="300" text-anchor="middle" fill="#8499bd" font-size="11">从根节点一路问下来,落到哪个叶子,就给哪个答案</text>
+              <text x="330" y="320" text-anchor="middle" fill="#66799b" font-size="10">紫=判断节点(问一个特征)　　绿/红=叶子(最终结论)</text>
+            </svg>
+          </div>
+          <p class="figure__cap">
+            一棵决策树:每个<strong>内部节点</strong>就是一个“问一个特征”的判断,每条<strong>边</strong>是答案,每个<strong>叶子</strong>给出最终结论。预测时,新样本从根节点开始按特征一路往下走,落到哪片叶子就输出哪个答案。
+          </p>
+        </div>
+
+        <p>
+          注意:树的形状、先问哪个特征、在哪个数值上切,<strong>都不是人写死的,而是从数据里“学”出来的</strong>。
+          那么问题来了——它凭什么决定“根节点先问收入,而不是先问有没有房”?
+        </p>
+
+        <h3>2.1 怎么选“该问哪个问题”:基尼与信息增益</h3>
+        <p>
+          核心思想一句话:<strong>选那个能把数据分得“最干净”的问题。</strong>“干净”指的是——分完之后,每一堆里尽量都是同一类
+          (要么几乎全是“会还款”,要么几乎全是“会违约”)。衡量“不干净”程度的常用指标是<span class="term">基尼不纯度(Gini impurity)</span>:
+        </p>
+        <div class="mathblock reveal">
+          Gini = 1 − Σ<sub>k</sub> <var>p</var><sub>k</sub><sup>2</sup>
+          <span class="label">p_k 是这一堆里第 k 类所占比例。全是一类时 Gini=0(最干净);两类各占一半时 Gini=0.5(最乱)</span>
+        </div>
+        <p>
+          举个数字:一个节点里有 10 条样本,如果 <strong>10 条全是“会还款”</strong>,那 Gini = 1 − 1² = <strong>0</strong>,纯净到不用再问了;
+          如果 <strong>5 条还款、5 条违约</strong>,Gini = 1 − (0.5² + 0.5²) = <strong>0.5</strong>,乱成一团。
+          决策树会<strong>逐个特征、逐个切分点</strong>试一遍,算出“切完之后左右两堆的加权平均 Gini 下降了多少”,
+          <strong>下降最多的那个切法就是这一步的最优提问</strong>。然后对切出来的每一堆递归重复,直到足够干净——树就这样一层层长出来了。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">信息增益:换一把尺子,思路一样</span>
+          <p>
+            另一套经典指标(ID3 / C4.5 算法用)是<span class="term">信息增益</span>,把“不纯度”换成信息论里的<strong>熵(entropy)</strong>
+            H = −Σ <var>p</var><sub>k</sub> log <var>p</var><sub>k</sub>,再看“分裂后熵减少了多少”。尺子不同,<strong>目标完全一致</strong>:让每一刀都尽量把混在一起的类别分开。
+          </p>
+        </div>
+
+        <h3>2.2 怎么把整棵树种出来:贪心 + 递归</h3>
+        <p>
+          上一节解决的是“<strong>某一个节点</strong>该按哪个特征、哪个切分点分”。那整棵树呢?答案是一句话:
+          <strong>在每个节点都用上面的打分选一个当下最优的切法,切完之后对切出来的每一小堆<em>重复同样的动作</em></strong>。
+          这种“每一步都只挑眼前最好、不回头”的策略叫<span class="term">贪心(greedy)</span>,配合“对子问题重复自己”的<span class="term">递归(recursion)</span>,树就长出来了。写成步骤:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">决策树训练:递归分裂(伪代码)</figcaption>
+          <pre class="code-walk__code"><code>训练一个节点(落在这个节点的样本集合 D):
+  1. 若 D 已经足够纯(几乎全一类)或满足停止条件:   <b class="cw-tag">1</b>
+        把这个节点设成叶子,输出 D 里最多的那一类,返回
+  2. 否则,遍历每个特征 × 每个可能的切分点:          <b class="cw-tag">2</b>
+        算“按它切开后,左右两堆的加权平均不纯度”
+  3. 选出让不纯度下降最多的那个 (特征, 切分点)        <b class="cw-tag">3</b>
+  4. 用它把 D 分成左、右两堆                          <b class="cw-tag">4</b>
+  5. 对左堆、右堆各自递归调用“训练一个节点”           <b class="cw-tag">5</b></code></pre>
+          <ol class="code-walk__notes">
+            <li><strong>递归的出口</strong>:纯了就不用再问,直接当叶子。停止条件还包括“深度到顶”“样本太少”等(下一节剪枝会展开)。</li>
+            <li><strong>穷举打分</strong>:这是树“学习”的核心动作——它不靠求导,而是<strong>把所有候选切法都试一遍</strong>,用 §2.1 的基尼/信息增益给每种切法打分。</li>
+            <li><strong>贪心选择</strong>:只挑当前这一步分得最干净的,不考虑“将来会不会更好”。这让训练很快,但也是单棵树容易长歪的原因之一。</li>
+            <li><strong>一分为二</strong>:比如“收入 &gt; 1 万”成立的样本进右堆,不成立的进左堆。</li>
+            <li><strong>对子问题重复自己</strong>:左右两堆各自又是一个更小的训练问题,套用同一套流程,直到触发出口。</li>
+          </ol>
+        </figure>
+        <p>
+          所以决策树的“训练”和神经网络<strong>完全是两码事</strong>:它<strong>没有权重可调、不做反向传播、也没有学习率</strong>,
+          整个过程就是“<strong>不停地问:下一刀切在哪最划算?</strong>”。下面用一个最小的例子,把“打分”这一步真正算一遍。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">动手算一次:这一刀到底降了多少不纯度</span>
+          <p>
+            设一个节点有 <strong>10 条样本:6 条会还款、4 条会违约</strong>,当前不纯度
+            Gini = 1 − (0.6² + 0.4²) = <strong>0.48</strong>。现在试一个切法“<strong>月收入 &gt; 1 万?</strong>”,把样本分成两堆:
+          </p>
+          <ul>
+            <li><strong>右堆(收入&gt;1万)</strong>:5 条,4 还款 / 1 违约 → Gini = 1 − (0.8² + 0.2²) = <strong>0.32</strong></li>
+            <li><strong>左堆(收入≤1万)</strong>:5 条,2 还款 / 3 违约 → Gini = 1 − (0.4² + 0.6²) = <strong>0.48</strong></li>
+          </ul>
+          <p style="margin-bottom:0">
+            切完的加权平均不纯度 = (5/10)×0.32 + (5/10)×0.48 = <strong>0.40</strong>,比切之前的 0.48
+            <strong>下降了 0.08</strong>。决策树会对<strong>每个特征的每个切分点</strong>都算一遍这个“下降了多少”,
+            最后挑<strong>下降最多</strong>的那一刀落下去。这就是它每一步在“学”的全部内容。
+          </p>
+        </div>
+
+        <h3>2.3 什么时候停:过拟合与剪枝</h3>
+        <p>
+          如果让树<strong>无限往下长</strong>,它最终能给训练集里<strong>每一条样本都单独切一片叶子</strong>——训练准确率 100%。
+          但这恰恰是灾难:它把训练数据里的<strong>噪声和巧合也当成规律背了下来</strong>,一遇到新样本就露馅。
+          这就是<a class="xref" href="chapter-10.html">第 10 章</a>讲过的<span class="term">过拟合</span>,在树模型里尤其严重。
+        </p>
+        <p>常用的两类刹车:</p>
+        <ul>
+          <li><strong>预剪枝(提前停)</strong>:长树时就设限——比如“最深不超过 5 层”“一个节点少于 20 条样本就不再分”“不纯度下降太小就停”。</li>
+          <li><strong>后剪枝(先长再砍)</strong>:先让树长满,再用验证集从底往上评估,把“砍掉后泛化反而更好”的枝叶剪掉。</li>
+        </ul>
+        <p>
+          但即便剪枝,<strong>单棵决策树依然有个顽疾:不稳定</strong>。训练数据只要变动一点点(去掉几条样本),
+          它可能就从根节点开始选了完全不同的特征,长成另一棵样子完全不同的树。<strong>正是这个“不稳定”,催生了随机森林。</strong>
+        </p>
+
+        <h2>3. 随机森林:三个臭皮匠,顶个诸葛亮</h2>
+        <p>
+          既然一棵树又不稳、又爱过拟合,那就<strong>种一大片树,让它们投票</strong>。这就是<span class="term">随机森林(Random Forest)</span>,
+          它用的通用套路叫 <span class="term">Bagging</span>(Bootstrap Aggregating)。关键是要让每棵树都<strong>不一样</strong>、犯<strong>各自独立的错</strong>,靠两重随机做到:
+        </p>
+        <ul>
+          <li><strong>样本随机</strong>:每棵树不是拿全部数据,而是从训练集里<strong>有放回地随机抽</strong>一批样本来训(有的样本被抽中多次,有的没被抽到)。</li>
+          <li><strong>特征随机</strong>:每次分裂时,不是从所有特征里挑最优,而是<strong>先随机抽一个特征子集</strong>,只在子集里挑最优。这样避免所有树都被同一个“强特征”主导,长得千篇一律。</li>
+        </ul>
+        <p>预测时:<strong>分类问题让所有树投票取多数,回归问题取所有树输出的平均。</strong></p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 660 300" role="img" aria-label="随机森林:一份数据抽样训练出多棵不同的树,预测时投票汇总">
+              <!-- 数据集 -->
+              <rect x="24" y="120" width="96" height="56" rx="12" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="2" />
+              <text x="72" y="144" text-anchor="middle" fill="#eef4ff" font-size="12">训练数据</text>
+              <text x="72" y="162" text-anchor="middle" fill="#8499bd" font-size="10">有放回抽样</text>
+              <!-- 抽样箭头 -->
+              <line x1="120" y1="140" x2="196" y2="70" stroke="#5b6f93" stroke-width="1.6" />
+              <line x1="120" y1="148" x2="196" y2="148" stroke="#5b6f93" stroke-width="1.6" />
+              <line x1="120" y1="156" x2="196" y2="226" stroke="#5b6f93" stroke-width="1.6" />
+              <!-- 三棵树(简化三角形) -->
+              <g>
+                <polygon points="230,48 268,48 249,86" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="1.8" />
+                <circle cx="249" cy="44" r="6" fill="rgba(139,123,255,0.4)" stroke="#8b7bff" stroke-width="1.4" />
+                <text x="290" y="72" fill="#c8d8f8" font-size="12">树 1</text>
+              </g>
+              <g>
+                <polygon points="230,126 268,126 249,164" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="1.8" />
+                <circle cx="249" cy="122" r="6" fill="rgba(139,123,255,0.4)" stroke="#8b7bff" stroke-width="1.4" />
+                <text x="290" y="150" fill="#c8d8f8" font-size="12">树 2</text>
+              </g>
+              <g>
+                <polygon points="230,204 268,204 249,242" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="1.8" />
+                <circle cx="249" cy="200" r="6" fill="rgba(139,123,255,0.4)" stroke="#8b7bff" stroke-width="1.4" />
+                <text x="290" y="228" fill="#c8d8f8" font-size="12">… 树 N</text>
+              </g>
+              <!-- 每棵树的输出 -->
+              <text x="360" y="52" fill="#8ef0d1" font-size="12" text-anchor="middle">批准</text>
+              <text x="360" y="150" fill="#ff8fa3" font-size="12" text-anchor="middle">拒绝</text>
+              <text x="360" y="228" fill="#8ef0d1" font-size="12" text-anchor="middle">批准</text>
+              <!-- 投票汇总箭头 -->
+              <line x1="392" y1="48" x2="470" y2="140" stroke="#5b6f93" stroke-width="1.6" />
+              <line x1="392" y1="146" x2="470" y2="148" stroke="#5b6f93" stroke-width="1.6" />
+              <line x1="392" y1="224" x2="470" y2="158" stroke="#5b6f93" stroke-width="1.6" />
+              <!-- 投票箱 -->
+              <rect x="472" y="118" width="108" height="60" rx="14" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" />
+              <text x="526" y="142" text-anchor="middle" fill="#ffcf72" font-size="13">投票 / 平均</text>
+              <text x="526" y="162" text-anchor="middle" fill="#b6c5e1" font-size="10">多数说“批准”</text>
+              <!-- 最终 -->
+              <line x1="580" y1="148" x2="616" y2="148" stroke="#5b6f93" stroke-width="1.8" />
+              <text x="628" y="152" text-anchor="middle" fill="#8ef0d1" font-size="13">批准</text>
+            </svg>
+          </div>
+          <p class="figure__cap">
+            随机森林:从同一份数据反复<strong>抽样</strong>训出许多<strong>各不相同</strong>的树,预测时让它们<strong>投票 / 取平均</strong>。单棵树各有各的偏见和错误,但把大量<strong>独立的错</strong>平均掉后,整体反而又准又稳。
+          </p>
+        </div>
+
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">为什么“投票”会更准?</span>
+          <p>
+            想象一群人估西瓜重量:每个人都会估偏,有人偏高有人偏低。但只要大家的错误<strong>方向各异、互相独立</strong>,
+            把所有人的估计<strong>一平均,正负就抵消了</strong>,群体结果往往比任何一个专家都准。随机森林靠“样本随机+特征随机”刻意制造这种<strong>独立性</strong>,
+            所以它几乎不用怎么调参就很能打,是表格数据上最好用的“开箱即用”模型之一。
+          </p>
+        </div>
+
+        <h2>4. 梯度提升树:一棵接一棵地纠错</h2>
+        <p>
+          随机森林是<strong>并行</strong>种一堆树再平均(Bagging);还有另一条思路正好相反——<strong>串行</strong>地一棵接一棵种,
+          <strong>每棵新树都专门去修正前面所有树加起来还没做对的部分</strong>。这就是 <span class="term">Boosting</span>,
+          它的代表是<span class="term">梯度提升树(GBDT)</span>:
+        </p>
+        <ul>
+          <li>先种一棵很浅的树,做个粗略预测;</li>
+          <li>算出它<strong>还差多少</strong>(残差 / 梯度方向);</li>
+          <li>再种一棵新树,<strong>专门去拟合这个“差多少”</strong>;</li>
+          <li>把新树加进来,预测更准一点;如此反复几百上千棵,每棵都只补一小步。</li>
+        </ul>
+        <p>
+          你可能已经嗅到熟悉的味道了——“看还差多少,朝减小误差的方向挪一小步”,这正是<a class="xref" href="chapter-05.html">第 5 章梯度下降</a>的思路,
+          只不过这里每一步挪的不是数字参数,而是<strong>加进来一棵新树</strong>。<strong>XGBoost、LightGBM</strong> 就是 GBDT 的高效工业实现,
+          在 Kaggle 竞赛和真实表格业务里常年是<strong>夺冠常客</strong>。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th></th><th>随机森林(Bagging)</th><th>梯度提升树(Boosting)</th></tr></thead>
+            <tbody>
+              <tr><td>树之间</td><td><strong>并行、独立</strong>,互不知道</td><td><strong>串行、接力</strong>,后一棵补前面的错</td></tr>
+              <tr><td>每棵树</td><td>长得比较深、比较强</td><td>通常很浅(弱学习器),靠数量取胜</td></tr>
+              <tr><td>主要降低</td><td>方差(让结果更稳、不过拟合)</td><td>偏差(让结果更准、拟合更细)</td></tr>
+              <tr><td>脾气</td><td>不太挑参数,稳健好用</td><td>更准,但要小心调参、否则会过拟合</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">同样是“很多棵树”,Bagging 靠“平均独立的错”求稳,Boosting 靠“接力纠错”求准。两者是表格数据上的两大主力。</p>
+        </div>
+
+        <h2>5. kNN:一个“不训练”的模型</h2>
+        <p>
+          讲完树,再看一个思路截然相反、却同样经典的模型——<span class="term">k 近邻(k-Nearest Neighbors,kNN)</span>。
+          它的想法朴素到有点“耍赖”:<strong>要判断一个新样本是哪一类,就看它周围离得最近的 k 个老样本大多是什么类,少数服从多数。</strong>
+          “物以类聚,人以群分”,说的就是它。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 520 300" role="img" aria-label="kNN 示意:新样本看最近的 k 个邻居投票决定类别">
+              <!-- 坐标系 -->
+              <line x1="40" y1="260" x2="490" y2="260" stroke="#46587a" stroke-width="1.4" />
+              <line x1="40" y1="30" x2="40" y2="260" stroke="#46587a" stroke-width="1.4" />
+              <text x="486" y="278" fill="#8499bd" font-size="11">特征 1</text>
+              <text x="52" y="42" fill="#8499bd" font-size="11">特征 2</text>
+              <!-- A 类(蓝) -->
+              <g fill="#6ac3ff">
+                <circle cx="120" cy="200" r="8" /><circle cx="160" cy="150" r="8" />
+                <circle cx="110" cy="120" r="8" /><circle cx="185" cy="205" r="8" />
+                <circle cx="90" cy="165" r="8" />
+              </g>
+              <!-- B 类(橙) -->
+              <g fill="#ffcf72">
+                <circle cx="360" cy="90" r="8" /><circle cx="405" cy="130" r="8" />
+                <circle cx="350" cy="150" r="8" /><circle cx="420" cy="80" r="8" />
+                <circle cx="300" cy="110" r="8" />
+              </g>
+              <!-- 待判样本(问号) + k=3 圈 -->
+              <circle cx="255" cy="170" r="62" fill="none" stroke="#8ef0d1" stroke-width="1.6" stroke-dasharray="5 4" />
+              <circle cx="255" cy="170" r="10" fill="rgba(142,240,209,0.25)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="255" y="175" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">?</text>
+              <!-- 连到最近的3个邻居 -->
+              <line x1="255" y1="170" x2="185" y2="205" stroke="#8ef0d1" stroke-width="1.3" />
+              <line x1="255" y1="170" x2="300" y2="110" stroke="#8ef0d1" stroke-width="1.3" />
+              <line x1="255" y1="170" x2="350" y2="150" stroke="#8ef0d1" stroke-width="1.3" />
+              <text x="255" y="250" text-anchor="middle" fill="#8499bd" font-size="11">k=3:最近 3 个里 2 橙 1 蓝 → 判为橙类</text>
+              <!-- 图例 -->
+              <g font-size="11">
+                <circle cx="360" cy="235" r="6" fill="#6ac3ff" /><text x="374" y="239" fill="#c8d8f8">A 类</text>
+                <circle cx="420" cy="235" r="6" fill="#ffcf72" /><text x="434" y="239" fill="#c8d8f8">B 类</text>
+              </g>
+            </svg>
+          </div>
+          <p class="figure__cap">kNN 判类:找出离待判样本(?)最近的 k 个邻居,让它们投票。k=3 时这里 2 橙 1 蓝,于是判成橙类。</p>
+        </div>
+        <p>kNN 最有意思的一点是——<strong>它几乎没有“训练”这回事</strong>:</p>
+        <ul>
+          <li><strong>“训练”只是把数据存起来</strong>。它不像决策树要递归分裂,也不像神经网络要反向传播,训练阶段什么都不算,所以被叫作<span class="term">惰性学习(lazy learning)</span>。</li>
+          <li><strong>所有计算都堆在预测时</strong>。来一个新样本,才现算它到<em>每一个</em>老样本的距离(常用欧氏距离),排序取最近的 k 个投票。</li>
+          <li><strong>k 是关键旋钮</strong>:k 太小(如 k=1)容易被个别噪声点带偏、过拟合;k 太大又会把很远的、不相干的点也拉进来投票,变得模糊。</li>
+        </ul>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">简单的代价:又慢又怕“维度灾难”</span>
+          <p>
+            kNN 思想极简、也不需要训练,但代价是<strong>预测慢</strong>:每判一个新样本都要和全部训练数据比一遍距离,数据一大就吃不消。
+            而且它高度依赖“距离有意义”——当特征维度很高时,所有点的距离会变得差不多(<strong>维度灾难</strong>),
+            近邻也就失去了意义。所以 kNN 更适合<strong>维度不高、数据量不大</strong>的场景,以及作为快速验证想法的基线。
+          </p>
+        </div>
+
+        <h2>6. 其他常见的经典模型(速览)</h2>
+        <p>
+          树和 kNN 之外,还有几位“深度学习之前的主力”,至今在合适场景里依然好用。这里各给一句话直觉,建立个印象即可:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>模型</th><th>一句话直觉</th><th>擅长</th></tr></thead>
+            <tbody>
+              <tr><td><strong>逻辑回归</strong></td><td>加权求和再过一个 Sigmoid,输出“属于某类的概率”</td><td>快、稳、极好解释;是很多系统的基线</td></tr>
+              <tr><td><strong>SVM 支持向量机</strong></td><td>找一条“间隔最大”的分界线;必要时用核函数映到高维再切</td><td>中小规模、高维数据,理论漂亮</td></tr>
+              <tr><td><strong>朴素贝叶斯</strong></td><td>用贝叶斯公式算概率,假设各特征“互相独立”(所以叫朴素)</td><td>文本分类、垃圾邮件过滤,又快又意外地好用</td></tr>
+              <tr><td><strong>K-means 聚类</strong></td><td>没有标签,自动把数据聚成 K 堆</td><td>见 <a class="xref" href="chapter-27.html">第 27 章</a>,属于无监督</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">你其实早就见过逻辑回归了</span>
+          <p>
+            逻辑回归 = “加权求和 <var>Σ w·x + b</var> → 过 Sigmoid → 输出概率”。对照<a class="xref" href="chapter-02.html">第 2 章的一个神经元</a>你会发现:
+            <strong>一个带 Sigmoid 的神经元,本质上就是一个逻辑回归</strong>。所以神经网络并不是凭空冒出来的新物种——它更像是把这些经典的“小砖块”<strong>大规模堆叠、再让它们端到端一起学</strong>。
+          </p>
+        </div>
+
+        <h2>7. 一张速查表:它们分别用在哪</h2>
+        <p>
+          经典模型不是“老古董”,更像一套工具箱。它们的差别不只是准不准,还包括<strong>训练成本、预测速度、可解释性、对数据形态的要求</strong>。
+          下面这张表可以当成第一版选型地图:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>模型</th><th>典型场景</th><th>主要作用</th><th>不太适合</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>决策树</strong></td>
+                <td>小中型表格数据;规则审核;需要解释每一步的风控/运营策略</td>
+                <td>把数据里的判断规则变成一串可读的 if-else,方便人检查、改规则、做合规说明</td>
+                <td>数据噪声大、特征很多且关系复杂时,单棵树容易过拟合、不稳定</td>
+              </tr>
+              <tr>
+                <td><strong>随机森林</strong></td>
+                <td>表格分类/回归;想先拿一个稳健基线;不想花太多时间调参</td>
+                <td>用很多棵树投票/平均,把单棵树的偶然错误平均掉;常用于快速判断“这个问题能不能从特征里学出来”</td>
+                <td>追求极致精度、模型要很小、或需要每条预测都有非常短的解释链路时</td>
+              </tr>
+              <tr>
+                <td><strong>GBDT / XGBoost / LightGBM</strong></td>
+                <td>银行风控、广告点击率、推荐排序、销量/价格预测等表格业务</td>
+                <td>一棵接一棵纠错,通常是表格数据上的高精度主力;还能输出特征重要性,帮人发现哪些字段最有用</td>
+                <td>原始图片、语音、长文本这类需要自动学表示的非结构化数据</td>
+              </tr>
+              <tr>
+                <td><strong>kNN</strong></td>
+                <td>数据量不大、维度不高、距离有意义的分类/检索;快速做 demo 或基线</td>
+                <td>不训练,直接靠“最近的老样本”投票;也常用于相似案例查找、简单推荐、异常点初筛</td>
+                <td>大数据量预测会慢;高维特征里距离容易失真;线上低延迟服务通常不直接裸用</td>
+              </tr>
+              <tr>
+                <td><strong>逻辑回归</strong></td>
+                <td>二分类风控、广告点击率、转化率预估、医疗风险评分;需要概率和可解释系数</td>
+                <td>给出“属于某类的概率”,训练快、上线便宜、系数可解释;非常适合作为生产基线和可解释评分卡</td>
+                <td>强非线性关系很多、特征交叉复杂且不想手工做特征工程时</td>
+              </tr>
+              <tr>
+                <td><strong>SVM</strong></td>
+                <td>中小规模、高维稀疏特征;文本分类、传统图像特征分类、生物信息等</td>
+                <td>找最大间隔分界面,小数据上常很稳;核函数能处理一部分非线性边界</td>
+                <td>百万级以上大数据、需要频繁增量训练、或需要自然输出概率的场景</td>
+              </tr>
+              <tr>
+                <td><strong>朴素贝叶斯</strong></td>
+                <td>垃圾邮件过滤、新闻分类、舆情标签、关键词很有信号的文本任务</td>
+                <td>用词/特征出现的概率快速判类;训练和预测都极快,小数据也能跑出可用结果</td>
+                <td>特征之间强相关、需要理解上下文语义、或类别边界很复杂的任务</td>
+              </tr>
+              <tr>
+                <td><strong>K-means</strong></td>
+                <td>没有标签时做用户分群、商品分组、图片颜色聚类、数据探索</td>
+                <td>先把样本粗分成几群,帮助人看结构、做分层运营,或给后续模型造特征</td>
+                <td>不知道该分几群、簇形状弯弯绕绕、离群点很多的场景</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">选模型时先问三件事:数据是表格还是图文语音?数据量是小中大?业务要不要解释?答案通常已经能排除一大半模型。</p>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">一个实用顺序</span>
+          <p>
+            真做项目时,别一上来就拿大模型压。表格任务可以先用<strong>逻辑回归</strong>做可解释基线,
+            再用<strong>随机森林</strong>看非线性信号是否存在,最后用<strong>GBDT</strong>冲精度;
+            图像、语音、长文本这类原始感知数据,再优先考虑 CNN / Transformer / 大模型。
+          </p>
+        </div>
+
+        <h2>8. 到底什么时候用树、什么时候用神经网络?</h2>
+        <p>
+          这是最实用的问题。别被“深度学习最先进”带偏了——<strong>选模型要看数据长什么样</strong>:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>你的数据 / 场景</th><th>更推荐</th><th>为什么</th></tr></thead>
+            <tbody>
+              <tr><td><strong>表格数据</strong>(Excel 那种:一行样本、多列特征)</td><td>树模型 / GBDT</td><td>特征各有含义、量纲不同、还常有缺失,树天然能吃;通常又快又准</td></tr>
+              <tr><td><strong>图像、语音、视频</strong></td><td>神经网络(CNN 等)</td><td>原始像素/波形需要自动学层次化特征,树很难处理</td></tr>
+              <tr><td><strong>长文本、对话、翻译</strong></td><td>神经网络(Transformer)</td><td>需要理解顺序和长距离依赖</td></tr>
+              <tr><td><strong>数据量很小</strong>(几百上千条)</td><td>经典模型 / 树</td><td>神经网络容易过拟合、也不划算</td></tr>
+              <tr><td><strong>必须能解释每一步</strong>(风控、医疗合规)</td><td>决策树 / 逻辑回归</td><td>决策路径人能读懂,神经网络更像黑盒</td></tr>
+              <tr><td><strong>数据海量、且是原始感知信号</strong></td><td>深度学习 / 大模型</td><td>数据越多、结构越原始,端到端表示学习优势越大</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">一个常被验证的经验:<strong>在中小规模表格数据上,调好的 GBDT 往往打平甚至超过深度网络</strong>,而且训练快得多。所以“用不用神经网络”,先看数据,而不是先看潮流。</p>
+        </div>
+
+        <section class="summary reveal">
+          <h2>小结</h2>
+          <ul>
+            <li>决策树 = 从数据里自动长出来的一串 if-else;预测就是从根节点按特征一路走到叶子。</li>
+            <li>选“先问哪个特征”靠<strong>基尼不纯度 / 信息增益</strong>:哪一刀把类别分得最干净,就选哪一刀。</li>
+            <li>整棵树靠<strong>贪心 + 递归</strong>训练:每个节点穷举所有切法挑最优,再对左右两堆重复;不求导、无学习率。</li>
+            <li>单棵树容易<strong>过拟合、不稳定</strong>,靠剪枝缓解,但根治要靠“很多棵树”。</li>
+            <li><strong>随机森林(Bagging)</strong>:样本随机 + 特征随机种一堆独立的树,投票/平均求稳。</li>
+            <li><strong>梯度提升树(Boosting/GBDT)</strong>:串行接力,每棵新树专补前面的错,求准;XGBoost/LightGBM 是工业主力。</li>
+            <li><strong>kNN</strong> 不训练,把计算全留到预测时靠最近邻投票;逻辑回归、SVM、朴素贝叶斯各有擅长,<strong>一个带 Sigmoid 的神经元就是逻辑回归</strong>。</li>
+            <li>经典模型各有位置:逻辑回归做可解释概率基线,随机森林做稳健基线,GBDT 冲表格精度,kNN 做近邻检索/小数据验证,SVM 适合中小高维数据,朴素贝叶斯适合快速文本分类。</li>
+            <li>选型看数据:<strong>表格数据优先树模型,图像/语音/长文本优先神经网络</strong>,不是越“深”越好。</li>
+          </ul>
+        </section>
+
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:一个节点里 8 条样本全是“会还款”,它的基尼不纯度是多少?说明什么?</summary>
+            <div class="quiz__a">
+              <p>Gini = 1 − 1² = 0。说明这堆已经完全纯净(全一类),不需要再分裂,可以直接作为叶子给出结论。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:随机森林为什么要“特征随机”?只做“样本随机”不行吗?</summary>
+            <div class="quiz__a">
+              <p>如果只做样本随机,一旦存在某个特别强的特征,几乎每棵树都会先拿它来分裂,结果所有树长得很像、错误高度相关,平均起来降不了多少方差。加上“每次分裂只在随机特征子集里挑”,才能强制让树彼此不同、错误更独立,投票才真正有效。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:随机森林和梯度提升树,最本质的区别是什么?</summary>
+            <div class="quiz__a">
+              <p>随机森林是并行、独立地种很多树再平均,主要降低方差(求稳);梯度提升树是串行接力,每棵新树专门拟合前面所有树的残差,主要降低偏差(求准)。一个靠“平均独立的错”,一个靠“接力纠错”。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:手上是一份 5000 行、30 列的银行客户表格,要预测会不会违约,你先试哪个模型?</summary>
+            <div class="quiz__a">
+              <p>先试树模型 / GBDT(如 XGBoost、LightGBM)。这是典型的中小规模表格数据,特征有含义、量纲不一、可能有缺失,树模型天然适配、训练快、还相对好解释;神经网络在这种场景通常没有优势,还更容易过拟合。</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="summary reveal" style="text-align:center">
+          <h2>番外读完 · 另一半地图补上了</h2>
+          <p>
+            现在你手里有了完整的两张地图:一边是这本书主讲的<strong>神经网络 / 深度学习</strong>,
+            另一边是<strong>树模型和经典机器学习</strong>。真实世界里它们常常并肩作战——
+            大模型负责理解图文语音,树模型负责稳稳地啃表格。知道什么时候用哪个,比只会一种更值钱。
+          </p>
+          <p style="margin-top:1.4rem"><a class="button button--primary" href="index.html">返回目录 / 重读某章</a></p>
+        </div>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>

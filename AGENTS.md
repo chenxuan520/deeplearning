@@ -355,7 +355,7 @@
 
 ## 7) 交互式电子书 (`docs/dl-book/`)
 
-配套深度学习入门电子书，静态站点位于 `docs/dl-book/`，共 26 章 + 术语表，含交互示意图与实验台。
+配套深度学习入门电子书，静态站点位于 `docs/dl-book/`，共 **29 章**(第 0–25 章正文 + 第 26–28 章「第七部分 · 番外」)+ 术语表，含交互示意图与实验台。番外三章分别是:第 26 章「机器学习全景图」、第 27 章「无监督与自监督学习」、第 28 章「经典机器学习:决策树与随机森林」。
 
 ### 链接
 - **在线阅读 (GitHub Pages)**: https://chenxuan520.github.io/deeplearning/
@@ -392,3 +392,23 @@ cd docs/dl-book && python3 -m http.server 8765
 ```
 
 小节锚点 id 由 `docs/dl-book/assets/book.js` 里的 `slugify()` 根据 h2/h3 标题自动生成（小写、冒号变空格、空白变连字符、去掉标点）。新增或改标题后需重新核对锚点是否仍正确。
+
+### 校验脚本（改书后务必先跑，别靠肉眼）
+`docs/dl-book/tools/` 下有一套只依赖 Python3 标准库的自查脚本，改完章节 HTML **务必在 `docs/dl-book/` 目录下**跑一遍再提交；CI(`.github/workflows/dl-book-check.yml`)也会跑前两个：
+
+```bash
+cd docs/dl-book
+python3 tools/check_structure.py   # HTML 标签配平 + 每章 h2 主编号是否 1,2,3… 连续
+python3 tools/check_anchors.py     # 所有跨章/跨节 #锚点 是否指向存在的 h2/h3(输出“失效: 0”才算过)
+python3 tools/count_chars.py -v    # (可选) 统计篇幅变化
+```
+
+**不要再手算 slug 来核对锚点**——`check_anchors.py` 已经复刻了 `book.js` 的 `slugify()` 规则,直接跑它即可。改标题、加小节、顺延编号之后,这两个脚本任一非 0 就说明有链接断了或结构坏了。改 `assets/book.js` 后再跑 `node --check assets/book.js`。
+
+### 改书注意事项（几处容易踩的坑）
+- **h2 编号会顺延**:在某章中间插入带编号的新 h2 小节后,后面所有 h2 编号要跟着 +1,否则 `check_structure.py` 报“h2 编号不连续”。「读完这一章」「小结」「动手与思考」等无编号 h2 不计入。
+- **改编号/标题前先查跨章引用**:别的章可能用 `chapter-XX.html#8-xxx` 这类**数字锚点**指过来,顺延编号会打断它们。动手前先 `grep -rn 'chapter-XX.html#' docs/dl-book/` 确认没有指向将被改动编号的引用。
+- **slug 会保留圈号和汉字**:`①②③④` 属于 `\w`,不会被 `slugify()` 去掉,写锚点时别漏(例如 `#④-知识蒸馏-让小模型拜大模型为师`)。拿不准就用脚本现算:见 `tools/README.md`。
+- **callout 变体只有四种**:`callout--analogy` / `callout--note` / `callout--tip` / `callout--warn`(定义在 `assets/book.css`)。别用不存在的类名(如 `callout--key`),否则不会有样式。
+- **新讲的重要术语要同步进 `glossary.html`**:按现有 `<li id="g-xxx" data-aliases="别名,别名">…<a href="chapter-XX.html#锚点">→ 第 X 章</a></li>` 格式补,放进对应分组(网络基础 / 训练三件套 / 大模型 等),否则会出现“书里讲了、术语表查不到”的空缺。
+- **并发编辑时可用脚本改**:若有多个 agent 同时改 dl-book 文件,内置 `Edit` 可能反复报“File has not been read”;此时可写一次性 Python 脚本做带 `assert 命中数==预期` 的字符串替换绕开状态跟踪,跑完即删。

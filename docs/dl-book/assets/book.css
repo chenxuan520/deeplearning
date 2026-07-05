@@ -427,6 +427,8 @@ a.xref:hover {
   text-decoration: none;
   border-radius: 2px;
   transition: color 0.15s ease, background 0.15s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(106, 195, 255, 0.22);
 }
 
 .term.term--glossary {
