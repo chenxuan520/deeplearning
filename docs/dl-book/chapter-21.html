@@ -51,7 +51,7 @@
             <li>推理提速的关键:KV cache、批处理、量化,以及量化与“降智”体感的关系;</li>
             <li><strong>MoE(混合专家)</strong>把什么换成并列专家、<code>N</code>/<code>k</code> 怎么定、Attention 是否共用、<strong>路由器和专家怎么一起训</strong>、负载均衡,以及<strong>压 k/缩专家会不会降智</strong>;</li>
             <li><strong>稀疏注意力</strong>的几种套路(滑动窗口 / 全局 / 动态 top-k),以及它和 FlashAttention 的区别;</li>
-            <li><strong>1M 上下文到底怎么做到</strong>:RoPE 外推 + 位置插值/NTK/YaRN,再叠加少算 / 缓存 / 分块 / 并行 / 长训练的组合拳;</li>
+            <li><strong>1M 上下文到底怎么做到</strong>:RoPE 外推 + 位置插值/NTK/YaRN,再叠加少算 / 缓存 / 分块 / 并行 / 长训练的组合拳;并用 GLM-5.2 / DeepSeek-V4 看 IndexShare、CSA/HCA、MTP 与 effort level 如何落地;</li>
             <li><strong>推理服务怎么扛住海量用户</strong>:prefill/decode 两阶段、连续批处理、PagedAttention 分页复用 KV cache、多副本负载均衡,以及吞吐与延迟的取舍。</li>
           </ul>
         </section>
@@ -388,8 +388,16 @@
           (<a class="xref" href="chapter-17.html#7-不能偷看未来-causal-mask">第 17 章</a>)。把它们缓存下来,新词只算自己的部分,省掉海量重复计算,生成因此快很多。它直接建立在你学过的 Q/K/V 之上。</li>
           <li><span class="pill">批处理(batching)</span>把很多用户的请求<strong>攒成一批</strong>一起算,充分喂饱 GPU 的上万个核,提高吞吐。</li>
           <li><span class="pill">量化</span>推理用低精度权重(第 4 节),又快又省显存——也最容易带来<a class="xref" href="chapter-21.html#4-省显存两招-混合精度与量化">“降智”体感</a>。</li>
-          <li><span class="pill">推测解码(speculative decoding)</span>用小模型先“猜”一串 token,大模型再批量验证,猜对就白赚速度;猜错再回退。不降低能力,是<strong>用额外算力换延迟</strong>的推理技巧。</li>
+          <li><span class="pill">推测解码(speculative decoding)</span>用小模型或 MTP 层先“猜”一串 token,大模型再批量验证,猜对就白赚速度;猜错再回退。不降低能力,是<strong>用额外算力换延迟</strong>的推理技巧。</li>
         </ul>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">案例:快模型不是只靠“变小”</span>
+          <p>
+            MiMo-V2-Flash 这类新模型给了一个很好的工程样板:总参数很多,但 MoE 每步只激活一小部分专家;
+            注意力层不是层层全局看,而是<strong>滑动窗口 + 间隔全局注意力</strong>;训练时加 <span class="term">MTP(多 token 预测)</span>,
+            推理时又把 MTP 层当草稿模型做<strong>推测解码</strong>。结果是:模型并不只是“缩小”,而是把<strong>少激活、少看、少等</strong>三件事叠在一起。
+          </p>
+        </div>
         <p>
           这几招是“单点提速”。把它们组织成一套能同时服务<strong>海量用户</strong>的在线系统,还需要连续批处理、KV cache 分页复用、多副本调度——这是<a class="xref" href="chapter-21.html#10-推理服务-几亿用户同时问怎么扛得住">第 10 节</a>的主题。
         </p>
@@ -1160,6 +1168,132 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           </p>
         </div>
         <div class="callout callout--tip reveal">
+          <span class="callout__title">案例:GLM-5.2 与 DeepSeek-V4 的百万上下文路线</span>
+          <p>
+            先别记名词。把 1M 上下文想成一本<strong>一百万页的书</strong>:模型每生成一个新 token,都要决定“该回头看哪些页”。
+            真正的优化,不是假装能把整本书逐页重读,而是想办法<strong>少翻页、复用目录、把远处内容压成摘要</strong>。
+          </p>
+          <div class="figure figure--reading reveal">
+            <svg viewBox="0 0 760 320" role="img" aria-label="GLM-5.2 IndexShare:四层共用一次索引">
+              <text x="380" y="30" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">GLM-5.2:四层共用一次“目录”</text>
+              <text x="380" y="56" text-anchor="middle" fill="#8499bd" font-size="13">只在第 1 层找 top-k,第 2-4 层复用同一份索引结果</text>
+
+              <g transform="translate(55 86)">
+                <text x="125" y="-18" text-anchor="middle" fill="#b6c5e1" font-size="14">朴素做法</text>
+                <rect x="0" y="0" width="250" height="178" rx="12" fill="rgba(149,176,227,0.06)" stroke="#53627d"/>
+                <g fill="rgba(149,176,227,0.18)" stroke="#53627d">
+                  <rect x="30" y="20" width="190" height="26" rx="5"/>
+                  <rect x="30" y="58" width="190" height="26" rx="5"/>
+                  <rect x="30" y="96" width="190" height="26" rx="5"/>
+                  <rect x="30" y="134" width="190" height="26" rx="5"/>
+                </g>
+                <g fill="#ffcf72" font-size="12" text-anchor="middle">
+                  <text x="125" y="37">第 1 层:找 top-k</text>
+                  <text x="125" y="75">第 2 层:再找 top-k</text>
+                  <text x="125" y="113">第 3 层:再找 top-k</text>
+                  <text x="125" y="151">第 4 层:再找 top-k</text>
+                </g>
+              </g>
+
+              <g transform="translate(455 86)">
+                <text x="125" y="-18" text-anchor="middle" fill="#b6c5e1" font-size="14">IndexShare</text>
+                <rect x="0" y="0" width="250" height="178" rx="12" fill="rgba(88,166,255,0.07)" stroke="#58a6ff"/>
+                <rect x="30" y="20" width="190" height="30" rx="5" fill="rgba(255,207,114,0.38)" stroke="#ffcf72"/>
+                <text x="125" y="39" text-anchor="middle" fill="#0b0906" font-size="12">第 1 层:找 top-k</text>
+                <line x1="125" y1="50" x2="125" y2="132" stroke="#ffcf72" stroke-width="2" stroke-dasharray="5 5"/>
+                <g fill="rgba(88,166,255,0.16)" stroke="#58a6ff">
+                  <rect x="30" y="68" width="190" height="24" rx="5"/>
+                  <rect x="30" y="106" width="190" height="24" rx="5"/>
+                  <rect x="30" y="144" width="190" height="24" rx="5"/>
+                </g>
+                <g fill="#dfe7ff" font-size="12" text-anchor="middle">
+                  <text x="125" y="84">第 2 层:复用目录</text>
+                  <text x="125" y="122">第 3 层:复用目录</text>
+                  <text x="125" y="160">第 4 层:复用目录</text>
+                </g>
+              </g>
+
+              <line x1="330" y1="176" x2="430" y2="176" stroke="#8b7bff" stroke-width="3"/>
+              <polygon points="430,176 416,168 416,184" fill="#8b7bff"/>
+              <text x="380" y="156" text-anchor="middle" fill="#8b7bff" font-size="14" font-weight="700">少问 3 次</text>
+              <text x="180" y="298" text-anchor="middle" fill="#8499bd" font-size="13">4 层问 4 次路</text>
+              <text x="580" y="298" text-anchor="middle" fill="#8499bd" font-size="13">4 层只问 1 次路</text>
+            </svg>
+            <p class="figure__cap">GLM-5.2 的 IndexShare 省的是“反复找该看谁”的成本:相邻几层通常关注的历史 token 差不多,没必要每层都重新算一遍索引。</p>
+          </div>
+
+          <div class="figure figure--reading reveal">
+            <svg viewBox="0 0 760 360" role="img" aria-label="DeepSeek-V4 CSA HCA:压缩 KV cache 再做注意力">
+              <text x="380" y="30" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">DeepSeek-V4:一份长历史,按远近分流</text>
+              <text x="380" y="56" text-anchor="middle" fill="#8499bd" font-size="13">近处保细节 · 中间压缩后挑重点 · 远处只保留轮廓</text>
+
+              <g transform="translate(54 130)">
+                <rect x="0" y="0" width="210" height="92" rx="12" fill="rgba(149,176,227,0.06)" stroke="#53627d"/>
+                <text x="105" y="24" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">1M 历史 KV</text>
+                <g fill="rgba(149,176,227,0.30)">
+                  <rect x="28" y="46" width="16" height="20" rx="2"/><rect x="52" y="46" width="16" height="20" rx="2"/><rect x="76" y="46" width="16" height="20" rx="2"/><rect x="100" y="46" width="16" height="20" rx="2"/>
+                  <rect x="124" y="46" width="16" height="20" rx="2"/><rect x="148" y="46" width="16" height="20" rx="2"/><rect x="172" y="46" width="16" height="20" rx="2"/>
+                </g>
+                <text x="105" y="82" text-anchor="middle" fill="#8499bd" font-size="12">不能全部原样摊开</text>
+              </g>
+
+              <line x1="264" y1="176" x2="340" y2="176" stroke="#8b7bff" stroke-width="2.4"/>
+              <polygon points="340,176 327,169 327,183" fill="#8b7bff"/>
+              <g transform="translate(340 146)">
+                <rect x="0" y="0" width="86" height="60" rx="12" fill="rgba(139,123,255,0.13)" stroke="#8b7bff"/>
+                <text x="43" y="25" text-anchor="middle" fill="#dfe7ff" font-size="13" font-weight="700">按距离</text>
+                <text x="43" y="43" text-anchor="middle" fill="#dfe7ff" font-size="13" font-weight="700">分流</text>
+              </g>
+
+              <path d="M426 176 H454 V102 H478" stroke="#53627d" stroke-width="2.2" fill="none"/>
+              <polygon points="478,102 465,95 465,109" fill="#53627d"/>
+              <path d="M426 176 H478" stroke="#58a6ff" stroke-width="2.2" fill="none"/>
+              <polygon points="478,176 465,169 465,183" fill="#58a6ff"/>
+              <path d="M426 176 H454 V250 H478" stroke="#8b7bff" stroke-width="2.2" fill="none"/>
+              <polygon points="478,250 465,243 465,257" fill="#8b7bff"/>
+
+              <g transform="translate(478 72)">
+                <rect x="0" y="0" width="230" height="60" rx="12" fill="rgba(149,176,227,0.06)" stroke="#53627d"/>
+                <text x="115" y="24" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">SWA · 近处</text>
+                <text x="115" y="43" text-anchor="middle" fill="#8499bd" font-size="12">原样保留,细节不丢</text>
+              </g>
+
+              <g transform="translate(478 146)">
+                <rect x="0" y="0" width="230" height="60" rx="12" fill="rgba(88,166,255,0.08)" stroke="#58a6ff"/>
+                <text x="115" y="21" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">CSA · 中距离</text>
+                <rect x="42" y="32" width="54" height="20" rx="5" fill="rgba(255,207,114,0.38)" stroke="#ffcf72"/>
+                <rect x="134" y="32" width="54" height="20" rx="5" fill="rgba(255,207,114,0.38)" stroke="#ffcf72"/>
+                <text x="69" y="46" text-anchor="middle" fill="#0b0906" font-size="11">摘要</text>
+                <text x="161" y="46" text-anchor="middle" fill="#0b0906" font-size="11">摘要</text>
+              </g>
+
+              <g transform="translate(478 220)">
+                <rect x="0" y="0" width="230" height="60" rx="12" fill="rgba(139,123,255,0.08)" stroke="#8b7bff"/>
+                <text x="115" y="24" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">HCA · 远处</text>
+                <text x="115" y="43" text-anchor="middle" fill="#8499bd" font-size="12">压得更狠,只留轮廓</text>
+              </g>
+
+              <text x="380" y="328" text-anchor="middle" fill="#8499bd" font-size="13">三条线严格对齐:近处细看,中间摘要后挑重点,远处只看轮廓</text>
+            </svg>
+            <p class="figure__cap">DeepSeek-V4 的思路是“分层看资料”:近处别压太狠,远处不必原样保存,中间先压缩再挑重点。</p>
+          </div>
+          <p>
+            <strong>GLM-5.2 的 IndexShare</strong> 很像几层模型共用一份“目录”:第一层先找出最相关的 top-k 历史 token,
+            后面几层先复用这份结果,不用每层都重新找。文章给的数字是:在 1M context 下,这能把 per-token FLOPs 降低约 <strong>2.9×</strong>。
+          </p>
+          <p>
+            <strong>DeepSeek-V4 的 CSA/HCA</strong> 更像给超长历史做“摘要”:
+            CSA 把每 <var>m</var> 个 token 的 KV cache 压成一个条目,再在压缩后的历史上挑重点;
+            HCA 把更远的历史压得更狠,保留全局远景;滑动窗口注意力则负责近处细节。
+            论文给出的 1M context 设置下,DeepSeek-V4-Pro 相比 DeepSeek-V3.2 只需要约 <strong>27%</strong> 的单 token 推理 FLOPs 和 <strong>10%</strong> 的 KV cache。
+          </p>
+          <p>
+            这两条路线说到底都在回答同一个问题:
+            <strong>面对一百万个 token,模型不能每层都重新翻完整资料,也不能把所有历史原样存在显存里。</strong>
+            它必须学会建目录、做摘要、复用缓存,再配合真正的长上下文训练。
+          </p>
+        </div>
+        <div class="callout callout--tip reveal">
           <span class="callout__title">别混:稀疏注意力 ≠ FlashAttention</span>
           <p>
             让注意力更快有<strong>两条不同的路</strong>,常被搞混:<br />
@@ -1276,6 +1410,7 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
             <li>稀疏注意力:只算部分 token 对——固定套路(滑动窗口 + 全局)或动态挑 top-k,把 O(n²) 压下来;它是“少算”(近似),区别于 FlashAttention 的“精确加速”。</li>
             <li><var>n</var>×<var>n</var> 注意力矩阵在 <var>n</var>=1M 时高达一万亿个数(单头单层就 ~2TB),但它<strong>从不被整个物化</strong>:FlashAttention 分块流式算(精确、不写出大矩阵、省显存),稀疏注意力干脆少算(近似、降复杂度)。</li>
             <li>百万级长上下文是<strong>五层组合拳</strong>:位置编码(RoPE + PI/NTK/YaRN 拉伸)编得到远处、稀疏注意力少算、量化/分页缓存存得下、分块 prefill+多卡算得动、长上下文续训真学过——不是把 full attention 的窗口数字改成 1M。</li>
+            <li>快模型也是组合拳:MoE 少激活专家、混合滑窗/全局注意力少看 token、MTP 既辅助训练又能做推测解码,一起把成本压下来。</li>
             <li>推理服务扛海量用户:分 prefill(并行、算得饱)/ decode(逐字、喂不饱)两阶段;用连续批处理把多请求拼一起、PagedAttention 分页复用 KV cache、多副本 + 负载均衡横向扩展;吞吐与延迟(TTFT/TPOT)之间要按场景取舍。</li>
           </ul>
         </section>

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 22 章 · 用好大模型:提示、RAG 与 Agent | 从神经元到大模型</title>
+    <title>第 22 章 · 用好大模型:Context、Harness 与 Agent | 从神经元到大模型</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -12,13 +12,13 @@
     <main class="chapter">
       <div class="chapter__inner">
         <p class="chapter__eyebrow">第 22 章 · 通往大模型</p>
-        <h1>用好大模型:提示、RAG 与 Agent</h1>
+        <h1>用好大模型:Context、Harness 与 Agent</h1>
 
         <p class="lead">
           绝大多数人既不训练也不部署大模型,而是<strong>直接使用</strong>别人训练好的那个。
-          这一章把“用”这件事讲透:怎么写提示词让它更听话、怎么用 <strong>RAG</strong> 给它补上最新和私有的知识、
-          怎么让它<strong>调用工具</strong>去算数和查资料、以及 <strong>Agent</strong>、<strong>MCP</strong> 这些热词到底把大模型
-          变成了什么。全程你会看到:这些花样,全都建立在前面那些章的原理之上。
+          这一章把“用”这件事讲透:从 <strong>prompt engineering</strong> 到 <strong>context engineering</strong>,
+          再到 <strong>harness engineering</strong>。你会看到:提示词、RAG、工具调用、memory、MCP/A2A、Agent
+          并不是一堆散乱热词,而是在一步步给模型接上上下文、工具、状态、验证和工程护栏。
         </p>
 
         <div class="callout callout--note reveal" aria-label="本章在整条链路的位置">
@@ -38,22 +38,82 @@
             <span class="chain-map__sep">›</span>
             <span class="chain-map__step is-here">22 用好它</span>
           </nav>
-          <p class="chain-map__note">上一站(<a class="xref" href="chapter-21.html">第 21 章</a>)讲了工程与基建;<strong>本站</strong>讲你不训练、也不部署,只<strong>使用</strong>它时的招数——提示 / RAG / 工具 / Agent。这也是这条主线的<strong>终点</strong>。</p>
+          <p class="chain-map__note">上一站(<a class="xref" href="chapter-21.html">第 21 章</a>)讲了工程与基建;<strong>本站</strong>讲你不训练、也不部署,只<strong>使用</strong>它时的系统方法——Prompt / Context / Harness / Agent。这也是这条主线的<strong>终点</strong>。</p>
         </div>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
+            <li>为什么“用好模型”的重心正在从 <strong>prompt engineering → context engineering → harness engineering</strong> 迁移;</li>
             <li>提示词(prompt)、上下文学习、few-shot、思维链(CoT)分别是什么;</li>
             <li>RAG 怎么用“外挂知识库”治好幻觉和知识截止;</li>
             <li>顶级模型对抗幻觉的<strong>四道防线</strong>:训练倾向诚实、推理锚定证据、输出后自检、系统层兜底;</li>
+            <li>为什么很多评测会奖励“不会也猜”,以及机制可解释性怎样开始解剖模型内部电路;</li>
             <li>提示、RAG、微调三招各自改什么、该在什么时候用;</li>
             <li>function calling / 工具调用怎么让模型学会“借外力”;</li>
             <li>Agent 是什么,MCP 和 A2A 又想解决什么问题;</li>
+            <li><strong>上下文工程</strong>为什么是 Agent 的工作记忆:动态压缩、外部 memory、经验手册、子 Agent 隔离上下文;</li>
+            <li><strong>Harness 工程</strong>怎样用文件系统、沙箱、评测器、hooks 和后台清理,把模型变成稳定工作系统;</li>
             <li>用大模型时该守的安全与常识底线;</li>
-            <li>为什么同一模型在不同产品/参数下会“有时很聪明、有时像降智”。</li>
+            <li>为什么未来工程师的重点会从“写代码”转向“设计 Agent 的工作环境”。</li>
           </ul>
         </section>
+
+        <h2>从 Prompt 到 Context,再到 Harness</h2>
+        <p>
+          早期大家谈“用好大模型”,重点几乎都在 <span class="term">prompt engineering</span>:
+          怎么写指令、怎么给例子、怎么让它一步步想。后来任务变长、工具变多、Agent 开始循环做事,
+          问题就不再只是“这一句话怎么写”,而是<strong>模型每一步应该看见什么</strong>——这就是
+          <span class="term">context engineering</span>。再往后,模型要真的写代码、点浏览器、跑测试、维护状态、接受审查,
+          就需要一整套包在模型外面的工程外壳,也就是 <span class="term">harness engineering</span>。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 720 250" role="img" aria-label="Prompt engineering 到 Context engineering 再到 Harness engineering 的演进">
+              <defs>
+                <marker id="evolveArrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+                  <path d="M0,0 L8,4.5 L0,9 Z" fill="#6ac3ff" />
+                </marker>
+              </defs>
+              <text x="360" y="28" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">用好模型的三层工程</text>
+              <g fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="1.5">
+                <rect x="42" y="70" width="178" height="88" rx="10" />
+                <rect x="272" y="70" width="178" height="88" rx="10" />
+                <rect x="502" y="70" width="178" height="88" rx="10" />
+              </g>
+              <g fill="#eef4ff" text-anchor="middle">
+                <text x="131" y="98" font-size="15" font-weight="700">Prompt</text>
+                <text x="131" y="120" fill="#b6c5e1" font-size="12">把话说清楚</text>
+                <text x="131" y="140" fill="#8499bd" font-size="11">指令 / 示例 / CoT</text>
+                <text x="361" y="98" font-size="15" font-weight="700">Context</text>
+                <text x="361" y="120" fill="#b6c5e1" font-size="12">每步该看什么</text>
+                <text x="361" y="140" fill="#8499bd" font-size="11">RAG / memory / 压缩</text>
+                <text x="591" y="98" font-size="15" font-weight="700">Harness</text>
+                <text x="591" y="120" fill="#b6c5e1" font-size="12">让它稳定做事</text>
+                <text x="591" y="140" fill="#8499bd" font-size="11">工具 / 状态 / 评测 / 护栏</text>
+              </g>
+              <g stroke="#6ac3ff" stroke-width="1.8" fill="none" marker-end="url(#evolveArrow)">
+                <path d="M220 114 H272" />
+                <path d="M450 114 H502" />
+              </g>
+              <g fill="rgba(255,207,114,0.12)" stroke="#ffcf72" stroke-width="1.4">
+                <rect x="80" y="190" width="560" height="34" rx="8" />
+              </g>
+              <text x="360" y="212" text-anchor="middle" fill="#ffdf95" font-size="13">模型越会做事,人类越要从“写提示”转向“设计它工作的环境”</text>
+            </svg>
+          </div>
+          <p class="figure__cap">Prompt 是给模型一句好指令;Context 是给它一份好工作记忆;Harness 是给它一套能执行、能验证、能恢复的工作环境。</p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>层级</th><th>核心问题</th><th>典型手段</th><th>失败时的表现</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Prompt engineering</strong></td><td>这次该怎么问?</td><td>角色、目标、格式、few-shot、思维链</td><td>答非所问、格式不对、一步硬猜</td></tr>
+              <tr><td><strong>Context engineering</strong></td><td>这一步该给它看什么?</td><td>RAG、上下文压缩、memory、经验手册、子 Agent 摘要</td><td>上下文污染、忘记目标、看了也抓不住重点</td></tr>
+              <tr><td><strong>Harness engineering</strong></td><td>怎样让它长期稳定做事?</td><td>文件系统、沙箱、工具执行、计划/交接、评测器、hooks、后台清理</td><td>做一半停下、无法复现、越改越乱、自评过度乐观</td></tr>
+            </tbody>
+          </table>
+        </div>
 
         <h2>1. 提示词:你和模型之间唯一的旋钮</h2>
         <p>
@@ -127,6 +187,16 @@
           先接受一个前提——<strong>幻觉无法被彻底消除,只能层层拦截</strong>。根因在<a class="xref" href="chapter-20.html">第 20 章</a>说过:模型本质是概率续写器,
           在它内部,“我知道”和“我编一个通顺的”并没有一条天然的分界线。所以顶级模型不追求“消灭幻觉”,而是<strong>在从训练到产品的每个环节都设一道关卡</strong>,像漏斗一样逐层过滤。
         </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">2025 年的一个重要提醒</span>
+          <p>
+            OpenAI 等作者的论文
+            <a href="https://arxiv.org/abs/2509.04664">Why Language Models Hallucinate</a>
+            把这个问题说得很清楚:<strong>幻觉不只是“模型笨”,也是训练和评测制度在奖励它猜。</strong>
+            预训练只教它“什么文本像真的”,却很少系统告诉它“哪些相似说法是假的”;而很多排行榜又把“不知道”直接判 0 分。
+            于是模型在不确定时,猜一个答案往往比诚实弃权更像“好考生”。
+          </p>
+        </div>
 
         <div class="figure reveal">
           <div class="diagram">
@@ -180,6 +250,50 @@
           <li><strong>让另一个模型当“事实核查员”</strong>:用一个校验模型逐句核对“生成内容 vs 检索到的证据”是否吻合(RAG 里叫 <em>groundedness / 忠实度</em>检查),对不上就打回重来。</li>
           <li><strong>系统兜底</strong>:检索不到证据、置信度过低时,产品宁可回一句“<strong>无法确认</strong>”也不硬答;医疗、法律、金融等高风险场景则要求<strong>人工复核 + 显示信息来源</strong>。</li>
         </ul>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">复杂任务的新范式:生成、验证、修复、选择</span>
+          <p>
+            MaxProof 这类数学证明系统说明了一件事:难题不一定要押宝“模型一次答对”。
+            更稳的做法是把一次回答拆成一个小型搜索系统:先生成多条候选路线,再让验证器挑错,
+            把有希望的路线交给修复器局部补洞或整体重写,最后用排序/投票选出一个提交答案。
+            这和 Agent 做事很像——大模型不只是“说出答案”,而是在一个<strong>生成 → 验证 → 修复 → 选择</strong>的循环里逐步逼近答案。
+          </p>
+        </div>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 680 190" role="img" aria-label="复杂任务的生成验证修复选择流程">
+              <defs>
+                <marker id="proofArrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+                  <path d="M0,0 L8,4.5 L0,9 Z" fill="#6ac3ff" />
+                </marker>
+              </defs>
+              <g fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="1.5">
+                <rect x="34" y="58" width="128" height="56" rx="8" />
+                <rect x="202" y="58" width="128" height="56" rx="8" />
+                <rect x="370" y="58" width="128" height="56" rx="8" />
+                <rect x="538" y="58" width="108" height="56" rx="8" />
+              </g>
+              <g fill="#eef4ff" font-size="14" text-anchor="middle">
+                <text x="98" y="82" font-weight="700">生成</text>
+                <text x="98" y="101" fill="#b6c5e1" font-size="11">多条候选</text>
+                <text x="266" y="82" font-weight="700">验证</text>
+                <text x="266" y="101" fill="#b6c5e1" font-size="11">找错/打分</text>
+                <text x="434" y="82" font-weight="700">修复</text>
+                <text x="434" y="101" fill="#b6c5e1" font-size="11">补洞/重写</text>
+                <text x="592" y="82" font-weight="700">选择</text>
+                <text x="592" y="101" fill="#b6c5e1" font-size="11">投票/排序</text>
+              </g>
+              <g stroke="#6ac3ff" stroke-width="1.8" fill="none" marker-end="url(#proofArrow)">
+                <path d="M162 86 H202" />
+                <path d="M330 86 H370" />
+                <path d="M498 86 H538" />
+              </g>
+              <path d="M434 124 C434 154 120 154 98 122" stroke="#ffcf72" stroke-width="1.8" fill="none" marker-end="url(#proofArrow)" />
+              <text x="266" y="168" text-anchor="middle" fill="#ffdf95" font-size="12">不满意就回到候选池继续改,而不是硬交第一版</text>
+            </svg>
+          </div>
+          <p class="figure__cap">复杂任务的可靠性来自系统结构:多候选扩大搜索空间,验证器压低明显错误,修复器把“差一点”的答案救回来,选择器负责最后提交。</p>
+        </div>
 
         <div class="callout callout--note reveal">
           <span class="callout__title">一句话记住</span>
@@ -188,6 +302,91 @@
             对普通开发者最够用的三样是:<strong>RAG + 工具调用 + 要求给出处</strong>。
           </p>
         </div>
+
+        <h3>3.4 评测也会塑造模型:别把“不知道”判成错</h3>
+        <p>
+          很多事实没有规律可推,比如某个人的生日、冷门论文标题、一个小项目的真实配置。
+          训练集中没见过,模型就不能靠“更聪明”凭空算出来。此时最可靠的行为应该是<strong>承认不确定</strong>,
+          或者要求检索/工具/更多上下文。但如果评测只看最终答案对不对,问题就来了:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>模型不确定时</th><th>0/1 评分下的结果</th><th>学到的倾向</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>说“不知道”</strong></td>
+                <td>通常直接 0 分</td>
+                <td>诚实没有收益</td>
+              </tr>
+              <tr>
+                <td><strong>猜一个看似合理的答案</strong></td>
+                <td>错了 0 分,但猜中就 1 分</td>
+                <td>不会也要试着答</td>
+              </tr>
+              <tr>
+                <td><strong>说明证据不足并请求检索</strong></td>
+                <td>许多榜单仍不给分</td>
+                <td>谨慎反而吃亏</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">这就是论文说的“好考生”效应:在许多 benchmark 里,猜测有期望收益,弃权没有。要减少幻觉,主流评测也要给合理的不确定表达、证据不足和请求澄清留分。</p>
+        </div>
+        <p>
+          所以“抗幻觉”不只是模型公司的训练技巧,也是整个生态的评分问题。
+          如果主流榜单继续奖励硬猜,模型就会被优化成<strong>看起来什么都敢答</strong>;如果榜单奖励校准、引用证据和合理弃权,
+          模型才会更像一个可信助手。
+        </p>
+
+        <h3>3.5 可解释性:不只看输出,还看内部电路</h3>
+        <p>
+          另一条正在发展的路线,是<strong>机制可解释性</strong>:不只问“模型答了什么”,还追问“它内部为什么这么答”。
+          Anthropic 2025 年的
+          <a href="https://transformer-circuits.pub/2025/attribution-graphs/biology.html">On the Biology of a Large Language Model</a>
+          用 <span class="term">归因图(attribution graph)</span> 去追踪 Claude 3.5 Haiku 的内部计算:
+          节点是被激活的概念特征,边表示这些特征怎样影响后面的特征和最终输出。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 600 220" role="img" aria-label="归因图把输入特征、中间概念和输出倾向连成可检查的内部电路">
+              <defs>
+                <marker id="attrArrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+                  <path d="M0,0 L8,4.5 L0,9 Z" fill="#6ac3ff" />
+                </marker>
+              </defs>
+              <text x="300" y="28" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">归因图:把“为什么这样答”画成内部电路</text>
+              <g fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="1.6">
+                <rect x="40" y="76" width="150" height="70" rx="8" />
+                <rect x="225" y="76" width="150" height="70" rx="8" />
+                <rect x="410" y="76" width="150" height="70" rx="8" />
+              </g>
+              <g fill="#eef4ff" font-size="15">
+                <text x="115" y="101" text-anchor="middle" font-weight="700">输入特征</text>
+                <text x="115" y="125" text-anchor="middle" fill="#b6c5e1" font-size="12">词、位置、线索</text>
+                <text x="300" y="101" text-anchor="middle" font-weight="700">中间概念</text>
+                <text x="300" y="125" text-anchor="middle" fill="#b6c5e1" font-size="12">事实、计划、风险</text>
+                <text x="485" y="101" text-anchor="middle" font-weight="700">输出倾向</text>
+                <text x="485" y="125" text-anchor="middle" fill="#b6c5e1" font-size="12">回答、拒答、编造</text>
+              </g>
+              <g stroke="#6ac3ff" stroke-width="1.8" fill="none" marker-end="url(#attrArrow)">
+                <path d="M190 111 H225" />
+                <path d="M375 111 H410" />
+              </g>
+              <g fill="rgba(255,207,114,0.12)" stroke="#ffcf72" stroke-width="1.4">
+                <rect x="108" y="166" width="384" height="34" rx="7" />
+              </g>
+              <text x="300" y="188" text-anchor="middle" fill="#ffdf95" font-size="15">抑制 / 替换特征,验证它是否真的影响输出</text>
+            </svg>
+          </div>
+          <p class="figure__cap">归因图像一张粗略的“神经通路图”:先提出内部机制假设,再通过抑制或替换某些特征验证它是否真的影响输出。</p>
+        </div>
+        <p>
+          这类工作已经能看到一些很具体的内部过程:多步推理里先出现中间事实,写押韵诗前会预先激活候选押韵词,
+          拒答时会把具体危险线索汇入更抽象的有害请求特征,幻觉时也可能是“应该补一个看似合理答案”的路径压过了“我知道/不知道”的信号。
+          它还远不是完整解剖,但方向很重要:可信模型不只要输出正确,还要逐步变得<strong>可检查、可干预、可追责</strong>。
+        </p>
 
         <h2>4. 提示、RAG 还是微调:三招该用哪个?</h2>
         <p>
@@ -280,7 +479,286 @@
           真正去编辑和执行(执行),再根据报错继续修(循环)。RAG 和工具调用,都是喂给这个“大脑”的能力。
         </p>
 
-        <h2>7. MCP 与 A2A:让 Agent 能“接万物”“互相通话”</h2>
+        <h2>7. 上下文工程:Agent 的工作记忆</h2>
+        <p>
+          到这里,你可能会觉得 Agent 的关键是“会不会调用工具”。其实还差一块更底层的东西:
+          <span class="term">上下文工程(context engineering)</span>。它关心的不是“提示词怎么写得漂亮”,
+          而是<strong>每一次调用模型时,到底该把哪些信息放进上下文窗口</strong>。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">上下文窗口不是仓库,是注意力预算</span>
+          <p>
+            很多人以为窗口越长越好,把日志、网页、工具输出、历史对话全塞进去就万事大吉。但模型的注意力不是无限的。
+            上下文越长,模型越容易“看见了但没抓住重点”,这类现象常被称为 <strong>context rot</strong>:
+            不是超过某条线突然失效,而是随着 token 增加,检索细节、保持目标和长距离推理的精度逐渐下降。
+            所以上下文工程的目标是:<strong>用最少的高信号 token,换最大的任务成功率</strong>。
+          </p>
+        </div>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 720 300" role="img" aria-label="上下文工程把目标、工具、证据、记忆和最近轨迹动态组织进模型窗口">
+              <defs>
+                <marker id="ctxArrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+                  <path d="M0,0 L8,4.5 L0,9 Z" fill="#6ac3ff" />
+                </marker>
+              </defs>
+              <text x="360" y="28" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">每一步都重新“配上下文”</text>
+              <g fill="rgba(149,176,227,0.08)" stroke="#53627d" stroke-width="1.3">
+                <rect x="36" y="58" width="140" height="42" rx="8" />
+                <rect x="36" y="112" width="140" height="42" rx="8" />
+                <rect x="36" y="166" width="140" height="42" rx="8" />
+                <rect x="36" y="220" width="140" height="42" rx="8" />
+              </g>
+              <g fill="#dfe7ff" font-size="12" text-anchor="middle">
+                <text x="106" y="83">当前目标</text>
+                <text x="106" y="137">工具说明 / MCP</text>
+                <text x="106" y="191">检索证据 / 文件</text>
+                <text x="106" y="245">memory / 笔记</text>
+              </g>
+              <g fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="1.6">
+                <rect x="272" y="106" width="176" height="94" rx="12" />
+              </g>
+              <text x="360" y="140" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">Context Curator</text>
+              <text x="360" y="164" text-anchor="middle" fill="#b6c5e1" font-size="12">筛选 · 压缩 · 排序 · 去噪</text>
+              <g fill="rgba(142,240,209,0.12)" stroke="#8ef0d1" stroke-width="1.6">
+                <rect x="546" y="106" width="138" height="94" rx="12" />
+              </g>
+              <text x="615" y="140" text-anchor="middle" fill="#eef4ff" font-size="15" font-weight="700">模型一步</text>
+              <text x="615" y="164" text-anchor="middle" fill="#b6c5e1" font-size="12">思考并行动</text>
+              <g stroke="#6ac3ff" stroke-width="1.8" fill="none" marker-end="url(#ctxArrow)">
+                <path d="M176 79 C218 79 226 126 272 126" />
+                <path d="M176 133 H272" />
+                <path d="M176 187 C218 187 226 174 272 174" />
+                <path d="M176 241 C226 241 234 190 272 190" />
+                <path d="M448 153 H546" />
+              </g>
+              <path d="M615 205 C615 276 104 276 104 264" stroke="#ffcf72" stroke-width="1.8" fill="none" marker-end="url(#ctxArrow)" />
+              <text x="360" y="284" text-anchor="middle" fill="#ffdf95" font-size="12">工具结果、失败经验、未完成事项会沉淀回 memory,下一步再被选择性取回</text>
+            </svg>
+          </div>
+          <p class="figure__cap">Agent 不是把所有历史都塞给模型,而是每一步都重新组织一份“刚好够用”的上下文。</p>
+        </div>
+
+        <h3>7.1 动态压缩:保留状态,丢掉噪声</h3>
+        <p>
+          长任务做着做着,对话历史、工具输出和中间尝试会迅速膨胀。最直接的办法叫
+          <span class="term">compaction(上下文压缩)</span>:当窗口接近上限时,把历史压缩成一份高保真状态摘要,
+          再带着这份摘要开启新的上下文窗口继续工作。
+        </p>
+        <p>
+          好的压缩不是“越短越好”,而是<strong>能让 Agent 接着干活</strong>。它应该保留:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>该保留</th><th>为什么重要</th><th>常可丢掉</th></tr></thead>
+            <tbody>
+              <tr><td><strong>当前目标与验收口径</strong></td><td>防止后续动作偏离任务</td><td>寒暄、重复确认</td></tr>
+              <tr><td><strong>关键决策与约束</strong></td><td>避免反复推翻已经确定的方向</td><td>无关分支讨论</td></tr>
+              <tr><td><strong>已完成/未完成清单</strong></td><td>让 Agent 知道下一步从哪里接</td><td>过期 TODO、已解决报错全文</td></tr>
+              <tr><td><strong>重要文件、接口、命令结果</strong></td><td>保留可复现线索和边界条件</td><td>大段原始日志、完整工具输出</td></tr>
+              <tr><td><strong>失败原因与排除路径</strong></td><td>防止同一个坑重复踩</td><td>中间失败的冗余堆栈</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          这里最容易犯的错是<strong>摘要化过猛</strong>:把“为什么这么做”“哪些尝试失败过”“哪个文件刚改过”都压没了。
+          Anthropic 的工程经验里,压缩更像给接班人写交接单:保留架构决策、未解 bug、实现细节和最近访问文件,
+          而不是把历史改写成一段漂亮短文。
+        </p>
+
+        <h3>7.2 Memory:把长期经验放在窗口外</h3>
+        <p>
+          <span class="term">memory</span> 是另一种思路:别把所有信息一直留在上下文里,而是让 Agent 把关键状态写到外部,
+          需要时再读回来。它可以很简单,比如一个 <code>TODO.md</code>、<code>NOTES.md</code>、项目记忆文件,
+          也可以是数据库、向量库或专门的记忆服务。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">memory 不是“聊天记录永久保存”</span>
+          <p>
+            有价值的 memory 更像工作手册:记录<strong>稳定事实</strong>(项目结构、接口约定)、<strong>过程状态</strong>(做到哪一步、还差什么)、
+            <strong>失败经验</strong>(某命令会超时、某参数不能这么传)、<strong>偏好与规范</strong>(输出风格、验证命令)。
+            它不应该存一切原文,而应该存“以后真的会用到的压缩知识”。
+          </p>
+        </div>
+        <p>
+          真正难的是<strong>什么时候写、什么时候读</strong>。写得太少,下一轮忘事;写得太多,检索回来又污染上下文。
+          一个实用做法是把 memory 分层:
+        </p>
+        <ul>
+          <li><strong>工作记忆</strong>:当前任务的 TODO、最近改动、下一步动作,更新频繁,生命周期短;</li>
+          <li><strong>项目记忆</strong>:仓库结构、常用命令、验证脚本、部署规则,比较稳定;</li>
+          <li><strong>经验手册</strong>:反复踩坑后的规则,如“改章节后跑锚点检查”“工具输出太长先摘要再读”。</li>
+        </ul>
+
+        <h3>7.3 可演化 playbook:从执行反馈里长经验</h3>
+        <p>
+          ACE 论文把上下文看成一份会演化的 <strong>playbook</strong>,而不是一段每次整体重写的 prompt。
+          它把过程拆成三种角色:
+        </p>
+        <ul>
+          <li><strong>Generator</strong>:拿当前上下文去做任务,暴露成功路径和失败轨迹;</li>
+          <li><strong>Reflector</strong>:根据成功/失败提炼经验,指出哪些策略有用、哪些误导;</li>
+          <li><strong>Curator</strong>:把这些经验整理成结构化条目,合并回上下文手册。</li>
+        </ul>
+        <p>
+          关键是它用<strong>增量条目</strong>而不是整段重写。每条经验都像一颗小积木,有自己的编号、内容和“有用/有害”计数。
+          这样能避免两个常见问题:
+        </p>
+        <ul>
+          <li><strong>brevity bias</strong>:为了摘要得短,把领域技巧、工具细节和失败模式全删掉;</li>
+          <li><strong>context collapse</strong>:每轮都重写整份上下文,越写越像空泛总结,细节逐轮流失。</li>
+        </ul>
+        <pre class="code-walk__code reveal" style="margin:0.8rem 0" aria-label="上下文记忆条目示例"><code>- id: tool-calendar-timezone
+  helpful: 7
+  harmful: 0
+  note: 调日历工具前先确认 timezone;缺省时不要猜,先查用户资料或请求澄清。
+
+- id: codebase-anchor-check
+  helpful: 12
+  harmful: 1
+  note: 修改电子书 h2/h3 标题后,必须跑 check_anchors.py;不要手算 slug。</code></pre>
+        <p>
+          这类条目比“以后注意工具参数”更有用,因为它具体、可检索、能被计数淘汰。Agent 下一次遇到类似任务时,
+          只需要取回相关条目,不必重读全部历史。
+        </p>
+
+        <h3>7.4 子 Agent:把探索噪声隔离出去</h3>
+        <p>
+          还有一种重要技巧是<strong>隔离上下文</strong>。复杂研究或大代码库排查时,一个主 Agent 如果亲自读完所有文件、日志和网页,
+          很快会把自己的上下文塞满。更稳的做法是让子 Agent 在独立窗口里深挖一个局部问题,最后只返回一份高密度摘要。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>手段</th><th>解决什么</th><th>适合场景</th></tr></thead>
+            <tbody>
+              <tr><td><strong>动态压缩</strong></td><td>长对话快满时保留连续性</td><td>持续编码、长时间调试、连续研究</td></tr>
+              <tr><td><strong>外部 memory</strong></td><td>把稳定经验放到窗口外,按需取回</td><td>项目长期协作、反复执行的工作流</td></tr>
+              <tr><td><strong>可演化 playbook</strong></td><td>从执行反馈中沉淀策略,避免每次从零开始</td><td>Agent 产品、领域任务、工具链使用</td></tr>
+              <tr><td><strong>子 Agent</strong></td><td>隔离大量探索噪声,主 Agent 只读结论</td><td>并行研究、大仓库定位、复杂信息搜集</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          所以,Agent 的“聪明”不只来自模型参数,还来自这套上下文操作系统:
+          <strong>该压缩时压缩,该外存时外存,该检索时检索,该隔离时隔离。</strong>
+          会管理上下文的 Agent,才能在很长的任务里保持方向感。
+        </p>
+
+        <h2>8. Harness 工程:给 Agent 装上外骨骼</h2>
+        <p>
+          如果说上下文工程解决的是“模型每一步看什么”,那 <span class="term">Harness 工程(harness engineering)</span>
+          解决的是“模型怎么在真实环境里长期、安全、可恢复地做事”。LangChain 有个很干脆的说法:
+          <strong>Agent = Model + Harness</strong>。模型负责智能;Harness 负责把这种智能接到状态、工具、文件、沙箱、评测和控制流上。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">Harness 不是更长的提示词</span>
+          <p>
+            原始模型只能接收输入、吐出文本。它不会天然保存状态,不会真的执行代码,不会访问实时世界,也不会自动知道什么时候该停。
+            Harness 就是模型外面的工程系统:给它文件系统保存中间产物,给它工具和浏览器操作世界,给它沙箱限制风险,
+            给它测试和评测器判断好坏,给它 hooks/middleware 做确定性检查,给它交接文档跨越上下文重置。
+          </p>
+        </div>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 720 320" role="img" aria-label="Agent harness 把模型接到状态工具沙箱评测和编排上">
+              <defs>
+                <marker id="harnessArrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+                  <path d="M0,0 L8,4.5 L0,9 Z" fill="#6ac3ff" />
+                </marker>
+              </defs>
+              <text x="360" y="28" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">Agent = Model + Harness</text>
+              <g fill="rgba(142,240,209,0.12)" stroke="#8ef0d1" stroke-width="1.8">
+                <rect x="280" y="122" width="160" height="76" rx="14" />
+              </g>
+              <text x="360" y="154" text-anchor="middle" fill="#eef4ff" font-size="17" font-weight="700">Model</text>
+              <text x="360" y="178" text-anchor="middle" fill="#b6c5e1" font-size="12">推理 · 规划 · 生成</text>
+
+              <g fill="rgba(106,195,255,0.10)" stroke="#6ac3ff" stroke-width="1.4">
+                <rect x="42" y="70" width="150" height="48" rx="9" />
+                <rect x="42" y="202" width="150" height="48" rx="9" />
+                <rect x="282" y="240" width="156" height="48" rx="9" />
+                <rect x="528" y="70" width="150" height="48" rx="9" />
+                <rect x="528" y="202" width="150" height="48" rx="9" />
+              </g>
+              <g fill="#dfe7ff" font-size="12" text-anchor="middle">
+                <text x="117" y="92" font-weight="700">状态 / 文件系统</text>
+                <text x="117" y="108" fill="#8499bd" font-size="10.5">保存进度和产物</text>
+                <text x="117" y="224" font-weight="700">工具 / 浏览器</text>
+                <text x="117" y="240" fill="#8499bd" font-size="10.5">操作真实环境</text>
+                <text x="360" y="262" font-weight="700">沙箱 / 权限</text>
+                <text x="360" y="278" fill="#8499bd" font-size="10.5">限制副作用</text>
+                <text x="603" y="92" font-weight="700">评测 / 测试</text>
+                <text x="603" y="108" fill="#8499bd" font-size="10.5">判断是否够好</text>
+                <text x="603" y="224" font-weight="700">编排 / Hooks</text>
+                <text x="603" y="240" fill="#8499bd" font-size="10.5">交接、重试、清理</text>
+              </g>
+              <g stroke="#6ac3ff" stroke-width="1.7" fill="none" marker-end="url(#harnessArrow)">
+                <path d="M192 94 C246 94 242 142 280 148" />
+                <path d="M192 226 C246 226 242 182 280 174" />
+                <path d="M360 240 V198" />
+                <path d="M528 94 C474 94 478 142 440 148" />
+                <path d="M528 226 C474 226 478 182 440 174" />
+              </g>
+            </svg>
+          </div>
+          <p class="figure__cap">Harness 把模型包进一个可执行系统:状态能落盘,工具能调用,风险有边界,结果能验证,长任务能交接。</p>
+        </div>
+
+        <h3>8.1 长任务 Harness:Planner、Generator、Evaluator</h3>
+        <p>
+          Anthropic 在长时间应用开发实验里,把单个“全能 Agent”拆成三个角色:
+        </p>
+        <ul>
+          <li><strong>Planner</strong>:把一句产品需求扩展成高层产品规格和交付清单,但避免过早写死细节实现;</li>
+          <li><strong>Generator</strong>:按 sprint 一次实现一个功能,把工作落到代码、文件和版本控制里;</li>
+          <li><strong>Evaluator</strong>:像用户一样点应用、跑测试、看数据库/API 状态,按明确标准给出失败原因。</li>
+        </ul>
+        <p>
+          这个设计的关键不是“多几个模型一起聊天”,而是<strong>职责隔离</strong>。做事的 Agent 不负责给自己打高分;
+          评估者用独立上下文、明确标准和真实环境反馈来挑错。长任务中间如果上下文变脏,可以直接重置 Agent,
+          通过结构化 handoff artifact 把当前状态和下一步交给新 Agent,而不是让同一个 Agent 背着越来越重的历史继续硬撑。
+        </p>
+
+        <h3>8.2 Harness 里的确定性护栏</h3>
+        <p>
+          Harness 还要处理模型不擅长但工程系统很擅长的事:确定性约束。比如 OpenAI 的 Harness Engineering 讨论里,
+          他们让 Codex 从空仓库开始生成应用逻辑、测试、CI、文档、可观测性和内部工具;人的主要工作从“写代码”转成
+          <strong>设计环境、明确意图、构建反馈回路</strong>。这不是把一个巨大说明书塞进上下文,而是把知识、约束和反馈做成
+          机器可读、可执行、可维护的仓库结构。
+        </p>
+        <p>
+          一个关键经验是:<strong>AGENTS.md 不该是百科全书,而该是地图</strong>。真正的信息放进结构化的 <code>docs/</code>、
+          架构文档、执行计划、产品规格、生成的 schema、参考资料和质量评分里;简短入口告诉 Agent 下一步该去哪查。
+          这样既避免上下文爆炸,又让知识有所有权、可交叉链接、可被 lint/CI 检查新鲜度。
+        </p>
+        <p>
+          另一条经验是让应用本身<strong>对 Agent 可读</strong>:让 Codex 能按 worktree 启动独立实例,用浏览器协议查看 DOM 和截图,
+          用日志/指标/追踪回答“启动是否低于 800ms”“关键用户旅程是否超过 2 秒”。当 UI、日志和指标都能被 Agent 读取,
+          它才有能力复现问题、验证修复,而不是只靠人类 QA 口头描述。
+        </p>
+        <p>
+          最后是熵管理。完全由 Agent 高速产出的代码会复制仓库里已有模式,包括坏模式。OpenAI 的做法是把“黄金原则”编码成
+          架构约束、结构测试、自定义 lint 和后台 Codex 任务,定期扫描偏差、更新质量评级、发起重构 PR。可以把它想成给
+          Agent 生成的代码加<strong>垃圾回收</strong>:小问题定期扫掉,技术债不要等积成山再一次性还。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>Harness 组件</th><th>它给模型补什么</th><th>例子</th></tr></thead>
+            <tbody>
+              <tr><td><strong>文件系统 / Git</strong></td><td>持久状态、版本、回滚点</td><td>代码、计划、handoff、checkpoint</td></tr>
+              <tr><td><strong>沙箱 / 权限</strong></td><td>可控执行边界</td><td>跑代码、装依赖、浏览网页但限制危险操作</td></tr>
+              <tr><td><strong>测试 / 评测器</strong></td><td>外部反馈</td><td>单测、Playwright、lint、rubric evaluator</td></tr>
+              <tr><td><strong>编排逻辑</strong></td><td>流程和角色分工</td><td>Planner/Generator/Evaluator、子 Agent、重试</td></tr>
+              <tr><td><strong>可观测性</strong></td><td>让 Agent 自己看见运行状态</td><td>DOM 快照、截图、日志、指标、trace</td></tr>
+              <tr><td><strong>Hooks / Middleware</strong></td><td>确定性检查和自动维护</td><td>压缩、继续执行、格式检查、后台清理 PR</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          所以这条演进线可以这样记:<strong>Prompt 让模型听懂你;Context 让模型看见该看的;Harness 让模型在真实系统里可靠地做完。</strong>
+        </p>
+
+        <h2>9. MCP 与 A2A:让 Agent 能“接万物”“互相通话”</h2>
         <p>
           Agent 要调用各种外部工具和数据源,如果每接一个都要定制一套对接,就太乱了。于是出现了协议来<strong>统一接口</strong>:
         </p>
@@ -292,7 +770,7 @@
         </ul>
         <p>这两个协议都在走向行业标准。你不需要记细节,只要建立一个认知:<strong>大模型正从“一个聊天框”,长成一个能连接工具、彼此协作的生态。</strong></p>
 
-        <h2>8. 用它,但别全信它</h2>
+        <h2>10. 用它,但别全信它</h2>
         <div class="callout callout--warn reveal">
           <span class="callout__title">几条实用底线</span>
           <p>
@@ -306,43 +784,20 @@
           把这些记在心里,你就能既享受它的强大,又不被它的“自信”带偏。理解原理的人,用起工具来总是更稳、更有分寸。
         </p>
 
-        <h2>9. 为什么有时觉得它“变笨了”?</h2>
-        <p>
-          作为使用者,你碰到的“<strong>降智</strong>”往往不是模型一夜之间重训坏了,而是<strong>使用链路</strong>里的某个环节在起作用:
-        </p>
-        <table class="reveal">
-          <thead><tr><th>环节</th><th>发生了什么</th><th>去哪章细读</th></tr></thead>
-          <tbody>
-            <tr><td><strong>采样参数</strong></td><td>温度太高答案飘;太低又死板像“不会想”</td><td><a class="xref" href="chapter-19.html">第 19 章</a></td></tr>
-            <tr><td><strong>上下文被截断</strong></td><td>长文档只喂进去一半,它只能瞎猜前半段</td><td><a class="xref" href="chapter-20.html">第 20 章</a>长上下文</td></tr>
-            <tr><td><strong>量化/小模型</strong></td><td>本地 4-bit 或蒸馏版,能力上限更低</td><td><a class="xref" href="chapter-21.html">第 21 章</a></td></tr>
-            <tr><td><strong>MoE 激活过少</strong></td><td>为省算力把 top-k、专家规模压太狠,每步只走很窄的子网络</td><td><a class="xref" href="chapter-21.html">第 21 章</a> MoE §④</td></tr>
-            <tr><td><strong>对齐与安全策略</strong></td><td>拒答变多、口吻变保守</td><td><a class="xref" href="chapter-20.html">第 20 章</a>对齐税</td></tr>
-            <tr><td><strong>系统提示 / 护栏</strong></td><td>产品加了 hidden system prompt、输出过滤,限制风格与话题</td><td>本节下文</td></tr>
-            <tr><td><strong>RAG 检索失败</strong></td><td>知识库没召回到正确段落,它只能硬编</td><td>本章 §2</td></tr>
-          </tbody>
-        </table>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">系统提示(system prompt)与护栏</span>
-          <p>
-            你看到的往往只是<strong>用户消息</strong>,但服务端通常还塞了一段你看不见的<strong>系统提示</strong>:
-            规定角色、语气、哪些话不能说、输出格式等。再叠加<strong>内容安全过滤</strong>(敏感词、分类器拦截),
-            同一底座在不同 App 里可以<strong>判若两“智”</strong>——这不是玄学,是产品策略叠在模型外面。
-            调 API 时若你能设 <code>system</code> 字段,就是在改这一层。
-          </p>
-        </div>
-
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
             <li>提示词是你唯一的旋钮:zero-shot 直接问、few-shot 给例子、CoT 让它一步步想。</li>
             <li>RAG = 先检索再回答,用词嵌入+相似度找资料,把“闭卷”变“开卷”,治幻觉与知识截止。</li>
             <li>对抗幻觉是组合拳:训练时让它倾向诚实/会拒答,推理时用 RAG+工具+推理链锚定证据,输出后自检交叉验证,系统层加护栏与人工兜底;幻觉只能压低、无法根除。</li>
+            <li>复杂任务越来越像搜索系统:生成多个候选,用验证器挑错,用修复器补洞或重写,最后排序/投票选答案。</li>
+            <li>幻觉也来自评测激励:如果“不知道”永远 0 分、猜测有机会得分,模型就会被塑造成爱猜的考生;机制可解释性则尝试用归因图追踪内部特征和电路。</li>
             <li>提示 / RAG / 微调是成本递增的三层:先改提示,缺知识上 RAG,只有要固化风格才微调——别拿微调补知识。</li>
             <li>function calling 让模型调用计算器/搜索/API,补上它不会算、查不到的短板。</li>
-            <li>Agent = 大模型当大脑 + 感知与执行 + 多步循环;MCP 统一“接工具”、A2A 规范“Agent 互联”。</li>
+            <li>Agent = 大模型当大脑 + 感知与执行 + 多步循环;上下文工程负责管理它的工作记忆:压缩历史、写外部 memory、维护经验手册、用子 Agent 隔离噪声。</li>
+            <li>Harness 工程把模型包进工作系统:文件系统保存状态,沙箱限制风险,测试/评测器提供反馈,hooks 和后台任务持续清理熵。</li>
+            <li>MCP 统一“接工具”、A2A 规范“Agent 互联”。</li>
             <li>始终核对关键事实、防提示注入、护隐私——理解原理才能用得稳。</li>
-            <li>“降智”多来自量化、截断、对齐、系统提示、<strong>MoE 激活过少</strong>等<strong>链路上的权衡</strong>,先排查环节再怀疑底座。</li>
           </ul>
         </section>
 

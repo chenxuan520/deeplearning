@@ -32,7 +32,7 @@
     { num: "19", title: "字符级语言模型", file: "chapter-19.html", part: "第五部分 · 通往大模型" },
     { num: "20", title: "通往大模型:原理与训练", file: "chapter-20.html", part: "第五部分 · 通往大模型", core: true },
     { num: "21", title: "大模型的工程与基础设施", file: "chapter-21.html", part: "第五部分 · 通往大模型" },
-    { num: "22", title: "用好大模型:提示、RAG 与 Agent", file: "chapter-22.html", part: "第五部分 · 通往大模型" },
+    { num: "22", title: "用好大模型:Context、Harness 与 Agent", file: "chapter-22.html", part: "第五部分 · 通往大模型" },
     { num: "23", title: "MNIST 实战:第一、二部分", file: "chapter-23.html", part: "第六部分 · 代码实战" },
     { num: "24", title: "mini-LM 实战:第四、五部分", file: "chapter-24.html", part: "第六部分 · 代码实战" },
     { num: "25", title: "井字棋 Q-learning 实战:强化学习", file: "chapter-25.html", part: "第六部分 · 代码实战" },

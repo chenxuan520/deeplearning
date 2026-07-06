@@ -717,6 +717,15 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
             但体感类似:<strong>不是不会,而是浅了、窄了</strong>。
           </p>
         </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">新趋势:一个学生,多个老师</span>
+          <p>
+            传统蒸馏常像“一位大老师带一个小学生”。MiMo-V2-Flash 这类模型展示了更工程化的做法:
+            让数学、代码、Agent、工具使用等<strong>领域老师</strong>分别提供反馈,学生在自己当前生成的轨迹上接受批改,
+            不只学最终答案,还学每一步、每个 token 附近的偏好信号。这类<strong>多教师在线蒸馏</strong>的目标不是单纯压小,
+            而是把多个专家模型或 RL 专项模型的能力<strong>合并进一个更快的统一模型</strong>。
+          </p>
+        </div>
 
         <div class="callout callout--note reveal">
           <span class="callout__title">训练黑话速查(这些词在哪都会遇到)</span>
@@ -1130,7 +1139,7 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
             <li>真实分词用 BPE/子词:高频组合合并成一个 token,存进词表;词表大小是权衡。</li>
             <li>词嵌入把词变成“语义坐标”,<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦相似度衡量语义远近;词向量可迁移复用。</li>
             <li>Scaling Law:参数、数据、算力一起放大,性能可预测提升;超过门槛会“涌现”新能力。</li>
-            <li>预训练(自监督)练出底座能力;后训练(SFT → RLHF/DPO → 蒸馏)把它调成好用的助手。SFT 数据量远小于预训练,但正好打在“用户指令 → 助手回答”的使用入口上,所以能显著改变体感;它常常仍是交叉熵训练,但通常<strong>只对 assistant/completion 部分计 loss</strong>,prompt 更多是作为条件输入。</li>
+            <li>预训练(自监督)练出底座能力;后训练(SFT → RLHF/DPO → 蒸馏)把它调成好用的助手。SFT 数据量远小于预训练,但正好打在“用户指令 → 助手回答”的使用入口上,所以能显著改变体感;它常常仍是交叉熵训练,但通常<strong>只对 assistant/completion 部分计 loss</strong>,prompt 更多是作为条件输入。新的后训练还会用<strong>多教师在线蒸馏</strong>,把数学、代码、Agent 等专项老师的能力压进一个统一模型。</li>
             <li>最近方向:推理模型、多模态(patch→ViT→投影→拼序列)、长上下文、MoE——内核仍是 token + Transformer。上下文窗口由<strong>位置编码 × 训练长度 × 算力显存</strong>三关中最紧的一关决定,且标称长度≠有效长度。</li>
             <li>降智/对齐税/遗忘等多半发生在<strong>后训练、蒸馏、量化、MoE 压 k、截断、产品护栏</strong>等环节,先定位链路再判断能力。</li>
             <li>它本质是概率预测器,所以会幻觉、有知识截止和偏见——要理性使用,并靠 RAG/工具补救。</li>
