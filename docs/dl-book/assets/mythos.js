@@ -31,8 +31,18 @@
   function dialEraOf(slide) {
     var raw = slide.getAttribute("data-dial-era") || slide.getAttribute("data-era") || "";
     raw = raw.trim();
-    if (/^(序|全景|第[一二三四五六七八九十]+幕|抽象层|贯穿始终)$/.test(raw)) return "";
+    if (slide.classList.contains("slide--act") || slide.classList.contains("slide--constellation")) return raw;
+    if (/^(序|全景|抽象层|表示层|贯穿始终)$/.test(raw)) return "";
     return raw.split("·")[0].trim();
+  }
+
+  function dialLabelOf(slide) {
+    var raw = slide.getAttribute("data-label") || slide.id;
+    if (slide.classList.contains("slide--act")) {
+      var parts = raw.split("·");
+      return (parts[1] || raw).trim();
+    }
+    return raw;
   }
 
   slides.forEach(function (s, i) { if (!s.id) s.id = "slide-n-" + i; });
@@ -67,7 +77,7 @@
     dot.className = "dial-item__dot";
     var label = document.createElement("span");
     label.className = "dial-item__label";
-    label.textContent = slide.getAttribute("data-label") || slide.id;
+    label.textContent = dialLabelOf(slide);
 
     a.appendChild(era);
     a.appendChild(dot);
@@ -180,9 +190,15 @@
     var n = Math.min(slides.length - 1, Math.max(0, currentIdx + delta));
     scrollToSlide(slides[n], "smooth");
   }
+  function isEditableTarget(target) {
+    if (!target) return false;
+    if (target.isContentEditable) return true;
+    return /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName || "");
+  }
   document.addEventListener("keydown", function (e) {
-    if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
-    var k = e.key;
+    if (e.defaultPrevented || e.isComposing || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (isEditableTarget(e.target)) return;
+    var k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (k === "ArrowDown" || k === "ArrowRight" || k === "PageDown" || k === "j" || k === "l") { e.preventDefault(); go(1); }
     else if (k === "ArrowUp" || k === "ArrowLeft" || k === "PageUp" || k === "k" || k === "h") { e.preventDefault(); go(-1); }
     else if (k === "Home") { e.preventDefault(); scrollToSlide(slides[0], "smooth"); }
@@ -216,6 +232,74 @@
     dialScrollAcc = 0;
     scrollDialTo((dialScrolling ? dialTargetIdx : (currentIdx < 0 ? 0 : currentIdx)) + step);
   }, { passive: false });
+
+  // ---------- 群星弹窗 ----------
+  function buildConstellationPopover() {
+    var stars = [].slice.call(document.querySelectorAll(".constellation-star"));
+    if (!stars.length) return;
+
+    var pop = document.createElement("aside");
+    pop.className = "constellation-popover";
+    pop.setAttribute("aria-live", "polite");
+    pop.innerHTML =
+      '<button type="button" class="constellation-popover__close" aria-label="关闭">×</button>' +
+      '<p class="constellation-popover__kind"></p>' +
+      '<h3 class="constellation-popover__title"></h3>' +
+      '<p class="constellation-popover__text" data-popover-work></p>' +
+      '<p class="constellation-popover__text" data-popover-meaning></p>';
+    document.body.appendChild(pop);
+
+    var closeBtn = pop.querySelector(".constellation-popover__close");
+    var kind = pop.querySelector(".constellation-popover__kind");
+    var title = pop.querySelector(".constellation-popover__title");
+    var work = pop.querySelector("[data-popover-work]");
+    var meaning = pop.querySelector("[data-popover-meaning]");
+
+    function close() {
+      stars.forEach(function (s) { s.classList.remove("is-selected"); });
+      pop.classList.remove("is-open");
+    }
+    function placeNear(star) {
+      if (window.matchMedia("(max-width: 920px)").matches) {
+        pop.style.left = "";
+        pop.style.top = "";
+        return;
+      }
+      var gap = 14;
+      var pad = 14;
+      var rect = star.getBoundingClientRect();
+      pop.classList.add("is-open");
+      var popRect = pop.getBoundingClientRect();
+      var left = rect.right + gap;
+      var top = rect.top + rect.height / 2 - popRect.height / 2;
+      if (left + popRect.width > window.innerWidth - pad) left = rect.left - popRect.width - gap;
+      if (left < pad) left = pad;
+      top = Math.min(window.innerHeight - popRect.height - pad, Math.max(pad, top));
+      pop.style.left = left + "px";
+      pop.style.top = top + "px";
+    }
+    function open(star) {
+      stars.forEach(function (s) { s.classList.toggle("is-selected", s === star); });
+      kind.textContent = star.getAttribute("data-kind") || "";
+      title.textContent = star.getAttribute("data-title") || star.textContent.trim();
+      work.textContent = star.getAttribute("data-work") || "";
+      meaning.textContent = star.getAttribute("data-meaning") || "";
+      placeNear(star);
+    }
+
+    stars.forEach(function (star) {
+      star.addEventListener("click", function () { open(star); });
+    });
+    closeBtn.addEventListener("click", close);
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") close();
+    });
+    document.addEventListener("click", function (e) {
+      if (!pop.classList.contains("is-open")) return;
+      if (pop.contains(e.target) || e.target.closest(".constellation-star")) return;
+      close();
+    });
+  }
 
   // ---------- 移动端跳转 ----------
   function buildMobileJump() {
@@ -297,6 +381,7 @@
     updateProgress();
   }
   window.addEventListener("resize", function () { readGeom(); layout(currentIdx < 0 ? 0 : currentIdx); });
+  buildConstellationPopover();
   buildMobileJump();
   requestAnimationFrame(boot);
 })();

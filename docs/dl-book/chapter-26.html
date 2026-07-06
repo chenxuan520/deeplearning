@@ -33,8 +33,9 @@
           <h2>读完这一章,你会明白</h2>
           <ul>
             <li>AI、机器学习、深度学习、生成式 AI、大模型之间到底是什么包含关系;</li>
+            <li>AI 历史上两条核心思想路线:符号主义和连接主义分别在想什么、各自卡在哪;</li>
             <li>机器学习按“学习信号”可以分成监督、无监督/自监督、强化学习,按“任务”又有分类、回归、推荐、生成、控制等分支;</li>
-            <li>从符号 AI、感知机、反向传播、AlexNet、AlphaGo、Transformer 到 ChatGPT 的关键时间线;</li>
+            <li>从符号 AI、感知机、反向传播、AlexNet、AlphaGo、Transformer 到 ChatGPT 的关键时间线,以及 AI 寒冬为什么会发生、又为什么能走出来;</li>
             <li>看到一个 AI 产品或新名词时,能用一套检查清单判断它到底靠不靠谱、该放在地图哪里;</li>
             <li>以后看到一个新模型/新论文/新产品,该用哪几个问题快速定位它。</li>
           </ul>
@@ -85,7 +86,7 @@
 
         <p>
           光有“同心圈”还不够——机器学习内部到底怎么分门别类、这些类型又<strong>共享什么</strong>?下面这张思维导图先给你一张<strong>总览</strong>,
-          后面 §2 / §3 / §4 再分别展开三种分法。看图时抓住一个要点:<strong>无论哪一支,骨架都是同一句话——“从数据里学一个函数,靠最小化某个目标”</strong>。
+          后面 §3 / §4 / §5 再分别展开三种分法。看图时抓住一个要点:<strong>无论哪一支,骨架都是同一句话——“从数据里学一个函数,靠最小化某个目标”</strong>。
         </p>
         <div class="figure reveal">
           <div class="diagram">
@@ -118,7 +119,7 @@
               <!-- 主干1: 按学习信号 -->
               <rect x="236" y="68" width="152" height="44" rx="12" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="2" />
               <text x="312" y="90" text-anchor="middle" fill="#8ef0d1" font-size="13" font-weight="700">按学习信号</text>
-              <text x="312" y="105" text-anchor="middle" fill="#8499bd" font-size="9.5">靠什么信号学 · §2</text>
+              <text x="312" y="105" text-anchor="middle" fill="#8499bd" font-size="9.5">靠什么信号学 · §3</text>
               <g font-size="11.5" fill="#cdeee0">
                 <text x="478" y="70">监督 · 带标准答案</text>
                 <text x="478" y="94">无监督 · 自己找结构</text>
@@ -129,7 +130,7 @@
               <!-- 主干2: 按任务 -->
               <rect x="236" y="193" width="124" height="44" rx="12" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" />
               <text x="298" y="215" text-anchor="middle" fill="#ffcf72" font-size="13" font-weight="700">按任务</text>
-              <text x="298" y="230" text-anchor="middle" fill="#8499bd" font-size="9.5">要它做什么 · §3</text>
+              <text x="298" y="230" text-anchor="middle" fill="#8499bd" font-size="9.5">要它做什么 · §4</text>
               <g font-size="11.5" fill="#f2e2bd">
                 <text x="478" y="195">分类 / 回归</text>
                 <text x="478" y="219">排序 / 推荐 / 序列预测</text>
@@ -139,7 +140,7 @@
               <!-- 主干3: 按模型家族 -->
               <rect x="236" y="318" width="164" height="44" rx="12" fill="rgba(139,123,255,0.16)" stroke="#8b7bff" stroke-width="2" />
               <text x="318" y="340" text-anchor="middle" fill="#c3b9ff" font-size="13" font-weight="700">按模型家族</text>
-              <text x="318" y="355" text-anchor="middle" fill="#8499bd" font-size="9.5">用什么“脑子” · §4</text>
+              <text x="318" y="355" text-anchor="middle" fill="#8499bd" font-size="9.5">用什么“脑子” · §5</text>
               <g font-size="11.5" fill="#ddd6ff">
                 <text x="478" y="320">线性 / 树模型 / 核方法(SVM)</text>
                 <text x="478" y="344">神经网络 → 深度学习 → 大模型</text>
@@ -148,7 +149,7 @@
             </svg>
           </div>
           <p class="figure__cap">
-            机器学习全景思维导图:同一个“机器学习”,能<strong>按学习信号</strong>(§2)、<strong>按任务</strong>(§3)、<strong>按模型家族</strong>(§4)三种角度切分——三种分法看的是同一头大象的不同侧面。
+            机器学习全景思维导图:同一个“机器学习”,能<strong>按学习信号</strong>(§3)、<strong>按任务</strong>(§4)、<strong>按模型家族</strong>(§5)三种角度切分——三种分法看的是同一头大象的不同侧面。
           </p>
         </div>
 
@@ -168,7 +169,67 @@
           </p>
         </div>
 
-        <h2>2. 按“学习信号”分:它靠什么学?</h2>
+        <h2>2. 两条老路线:符号主义和连接主义</h2>
+        <p>
+          讲机器学习全景,不能只从今天的模型分类开始。AI 历史上一直有两种很不同的直觉:
+          一种相信“智能 = 明确规则 + 逻辑推理”,另一种相信“智能 = 大量简单单元从经验里调连接强度”。
+          它们分别叫<strong>符号主义(symbolism)</strong>和<strong>连接主义(connectionism)</strong>。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>路线</th><th>核心想法</th><th>典型代表</th><th>强项</th><th>卡住的地方</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>符号主义</strong></td>
+                <td>把知识写成符号、规则和逻辑:如果 A 且 B,那么 C</td>
+                <td>专家系统、逻辑推理、搜索、规划、知识图谱</td>
+                <td>可解释、可控、适合规则清楚的封闭问题</td>
+                <td>真实世界长尾太多,规则写不完;遇到模糊图像、语言歧义很吃力</td>
+              </tr>
+              <tr>
+                <td><strong>连接主义</strong></td>
+                <td>不手写规则,让很多简单单元通过数据自动调权重</td>
+                <td>感知机、神经网络、反向传播、深度学习</td>
+                <td>能从原始数据里学表示,适合图像、语音、文本、多模态</td>
+                <td>早期算力/数据不足,训练深层网络困难,解释性也弱</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">一句话:符号主义像“把规则写进机器”,连接主义像“让机器从样本里自己调出规律”。今天的大模型主要站在连接主义这边,但工具调用、RAG、知识图谱、规划器又把符号路线的东西接了回来。</p>
+        </div>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 330" role="img" aria-label="符号主义、连接主义和现代混合系统的关系图">
+              <text x="380" y="34" text-anchor="middle" fill="#eef4ff" font-size="17" font-weight="700">AI 的两条路线,今天正在重新合流</text>
+              <rect x="58" y="88" width="250" height="138" rx="18" fill="rgba(255,207,114,0.12)" stroke="#ffcf72" stroke-width="2" />
+              <text x="183" y="122" text-anchor="middle" fill="#ffcf72" font-size="16" font-weight="700">符号主义</text>
+              <text x="183" y="150" text-anchor="middle" fill="#eef4ff" font-size="12">规则 / 逻辑 / 搜索 / 知识</text>
+              <text x="183" y="176" text-anchor="middle" fill="#b6c5e1" font-size="11">强:可控、可解释</text>
+              <text x="183" y="198" text-anchor="middle" fill="#b6c5e1" font-size="11">弱:规则写不完</text>
+
+              <rect x="452" y="88" width="250" height="138" rx="18" fill="rgba(106,195,255,0.12)" stroke="#6ac3ff" stroke-width="2" />
+              <text x="577" y="122" text-anchor="middle" fill="#6ac3ff" font-size="16" font-weight="700">连接主义</text>
+              <text x="577" y="150" text-anchor="middle" fill="#eef4ff" font-size="12">神经元 / 权重 / 表示学习</text>
+              <text x="577" y="176" text-anchor="middle" fill="#b6c5e1" font-size="11">强:能从数据里学</text>
+              <text x="577" y="198" text-anchor="middle" fill="#b6c5e1" font-size="11">弱:黑盒、吃数据算力</text>
+
+              <path d="M308 158 H452" stroke="#8499bd" stroke-width="2" stroke-dasharray="5 5" />
+              <polygon points="452,158 440,152 440,164" fill="#8499bd" />
+              <polygon points="308,158 320,152 320,164" fill="#8499bd" />
+
+              <rect x="240" y="250" width="280" height="46" rx="16" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="380" y="279" text-anchor="middle" fill="#8ef0d1" font-size="14" font-weight="700">现代系统:大模型 + 检索 + 工具 + 规则约束</text>
+              <path d="M183 226 C220 258 234 269 240 273" stroke="#ffcf72" stroke-width="1.8" fill="none" />
+              <path d="M577 226 C540 258 526 269 520 273" stroke="#6ac3ff" stroke-width="1.8" fill="none" />
+            </svg>
+          </div>
+          <p class="figure__cap">
+            早期两派常被看成对立:一边写规则,一边学权重。今天更常见的是混合系统:大模型负责理解与生成,检索/工具/规则负责接事实、接动作、控边界。
+          </p>
+        </div>
+
+        <h2>3. 按“学习信号”分:它靠什么学?</h2>
         <p>
           最常用的分法,不是看模型长什么样,而是看训练时<strong>靠什么信号来学</strong>。
           这和<a class="xref" href="chapter-00.html#机器学习的三大学习范式">第 0 章</a>那张表一致,这里只把地图补完整一点:
@@ -187,7 +248,7 @@
           <p class="calc-table__cap">注意:这些不是互斥阵营。一个真实系统常常会混用:先自监督预训练,再监督微调,最后用强化学习/偏好数据做对齐。</p>
         </div>
 
-        <h2>3. 按“任务”分:它要帮你做什么?</h2>
+        <h2>4. 按“任务”分:它要帮你做什么?</h2>
         <p>
           另一种更贴近业务的分法,是看输出到底是什么。你以后看到一个 AI 项目,先问“它在输出什么”,通常就能定位七八成:
         </p>
@@ -215,7 +276,7 @@
           </p>
         </div>
 
-        <h2>4. 按“模型家族”分:它用什么脑子?</h2>
+        <h2>5. 按“模型家族”分:它用什么脑子?</h2>
         <p>
           学习信号和任务说的是“怎么学、做什么”;模型家族说的是“用什么结构承载规律”。历史上几条路线长期并存:
         </p>
@@ -235,7 +296,7 @@
           <p class="calc-table__cap">不要把“新”误解成“旧的没用了”。到 2026 年,金融风控、广告排序、工业质检里仍大量使用树模型、线性模型和规则系统;大模型不是独立的第七家,它<strong>本身就是神经网络/深度学习放大后的形态</strong>,更像在这些经典家族之上新增了一层强大的通用接口。</p>
         </div>
 
-        <h3>4.1 为什么最后是深度学习脱颖而出?</h3>
+        <h3>5.1 为什么最后是深度学习脱颖而出?</h3>
         <p>
           既然这么多家族各有强项,为什么最近十几年的舞台中央是<strong>深度学习</strong>?先把它们放在几个关键维度上摆一摆:
         </p>
@@ -262,7 +323,7 @@
             <strong>① 自动学特征。</strong>经典模型最费人的一步是“人工设计特征”;深度学习把这步也交给网络自己学(<a class="xref" href="chapter-13.html">第 13 章</a>的 CNN 逐层从边缘到物体),
             在图像、语音、文本这些<strong>原始感知数据</strong>上一举甩开对手。<br />
             <strong>② 越大越强、能吃数据。</strong>经典模型喂到一定量就饱和,深度网络却能随<strong>数据和参数一起放大</strong>持续变好——这正是<a class="xref" href="chapter-20.html">第 20 章</a>“规模定律”和大模型的根基。<br />
-            <strong>③ 恰好赶上了算力和数据。</strong>2012 年前后,<strong>GPU 算力 + 互联网级数据</strong>同时到位,深度学习“吃数据吃算力”的胃口第一次被喂饱,于是<a class="xref" href="chapter-26.html#5-一条时间线-机器学习怎么走到今天">AlexNet 一炮而红</a>。
+            <strong>③ 恰好赶上了算力和数据。</strong>2012 年前后,<strong>GPU 算力 + 互联网级数据</strong>同时到位,深度学习“吃数据吃算力”的胃口第一次被喂饱,于是<a class="xref" href="chapter-26.html#6-一条时间线-机器学习怎么走到今天">AlexNet 一炮而红</a>。
           </p>
         </div>
         <p>
@@ -270,7 +331,7 @@
           而在表格、小样本、强解释的老阵地上,经典模型依旧稳稳地在用。这也呼应了本节开头那句:<strong>不要把“新”误解成“旧的没用了”。</strong>
         </p>
 
-        <h2>5. 一条时间线:机器学习怎么走到今天</h2>
+        <h2>6. 一条时间线:机器学习怎么走到今天</h2>
         <p>
           这条时间线不求列全所有论文,只抓对今天影响最大的转折。你会发现,机器学习的发展并不是一路直线上升,
           而是反复经历“想法超前 → 算力/数据不够 → 沉寂 → 条件成熟后爆发”。
@@ -299,7 +360,7 @@
             <div class="timeline__card">
               <span class="timeline__year">1957–58</span>
               <span class="timeline__title">Rosenblatt 感知机</span>
-              <span class="timeline__desc">早期神经网络路线出现,证明机器能从样本中调权重。</span>
+              <span class="timeline__desc">早期神经网络路线出现,靠“预测错了就修正”的感知机学习规则调权重。</span>
             </div>
           </div>
           <div class="timeline__item timeline__item--winter">
@@ -395,7 +456,300 @@
           </div>
         </div>
 
-        <h2>6. 别只看 demo:判断一个 AI 项目是否靠谱</h2>
+        <h3>6.1 几位绕不开的人和他们做了什么</h3>
+        <p>
+          机器学习史不是几个天才单线推进出来的,而是一代人反复在“想法、数学、工程、数据、算力”之间接力。
+          下面这些名字不需要死记,但知道他们分别把哪块地基铺好,以后看 AI 历史就不会只剩一堆年份。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>人物 / 团队</th><th>大致节点</th><th>做了什么</th><th>为什么重要</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Alan Turing</strong></td>
+                <td>1950</td>
+                <td>提出“机器能否思考”的可操作讨论,也留下 Turing Test 这个入口问题</td>
+                <td>把“智能机器”从哲学想象拉到可测试、可讨论的工程问题</td>
+              </tr>
+              <tr>
+                <td><strong>John McCarthy</strong></td>
+                <td>1956</td>
+                <td>组织 Dartmouth 项目,提出并推广 “Artificial Intelligence” 这个名称;后来也发明 Lisp</td>
+                <td>让 AI 成为一个独立研究方向,早期符号主义和程序化推理从这里成形</td>
+              </tr>
+              <tr>
+                <td><strong>Marvin Minsky / Seymour Papert</strong></td>
+                <td>1969</td>
+                <td>在《Perceptrons》里系统分析单层感知机的能力边界</td>
+                <td>他们不是“反 AI”,而是把单层连接主义的短板摊开;这也间接促成后来对多层网络训练方法的追问</td>
+              </tr>
+              <tr>
+                <td><strong>Frank Rosenblatt</strong></td>
+                <td>1957–58</td>
+                <td>提出感知机,用“预测错了就修正”的规则学习权重</td>
+                <td>证明了机器可以从样本中调参数,是连接主义早期最有代表性的模型</td>
+              </tr>
+              <tr>
+                <td><strong>Rumelhart / Hinton / Williams</strong></td>
+                <td>1986</td>
+                <td>系统推广反向传播训练多层网络</td>
+                <td>让多层网络从“理论上更强”变成“可以训练”,对应本书<a class="xref" href="chapter-06.html">第 6 章</a>的主干</td>
+              </tr>
+              <tr>
+                <td><strong>Yann LeCun / Yoshua Bengio / Geoffrey Hinton</strong></td>
+                <td>1980s–2010s</td>
+                <td>长期推动 CNN、表示学习、深度网络训练和连接主义复兴</td>
+                <td>他们代表了深度学习在低潮期坚持到复兴的那条线;2018 年三人获 Turing Award</td>
+              </tr>
+              <tr>
+                <td><strong>Fei-Fei Li 与 ImageNet 团队</strong></td>
+                <td>2009–2012</td>
+                <td>推动大规模标注图像数据集 ImageNet 和挑战赛</td>
+                <td>深度学习不只需要模型,还需要足够大的真实数据和公开评测;AlexNet 的爆发离不开这块地基</td>
+              </tr>
+              <tr>
+                <td><strong>Alex Krizhevsky / Ilya Sutskever / Geoffrey Hinton</strong></td>
+                <td>2012</td>
+                <td>用 AlexNet 在 ImageNet 上大幅领先传统视觉方法</td>
+                <td>把 CNN、GPU、大数据三件事合到一起,让深度学习真正进入主流视野</td>
+              </tr>
+              <tr>
+                <td><strong>Demis Hassabis / David Silver 与 DeepMind 团队</strong></td>
+                <td>2016</td>
+                <td>AlphaGo 结合深度网络、搜索和强化学习击败顶尖棋手</td>
+                <td>说明深度学习不只会看图识字,也能进入复杂决策与策略学习</td>
+              </tr>
+              <tr>
+                <td><strong>Vaswani 等 Transformer 团队</strong></td>
+                <td>2017</td>
+                <td>提出 Transformer,用注意力替代 RNN 的串行瓶颈</td>
+                <td>为今天的大语言模型打下结构基础,对应本书<a class="xref" href="chapter-17.html">注意力</a>和<a class="xref" href="chapter-18.html">Transformer</a>两章</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">这张表的重点不是“谁最伟大”,而是看清每个人补的是哪块拼图:命名问题、符号推理、单层学习、多层训练、大数据、GPU 工程、强化学习、Transformer 架构。</p>
+        </div>
+
+        <h2>7. 为什么会有 AI 寒冬,又为什么能走出来?</h2>
+        <p>
+          “AI 寒冬”不是因为大家突然不相信智能机器了,而是因为<strong>承诺、能力、成本</strong>三者长期对不上。
+          早期研究者常常说得很激动:几年内机器就能翻译、推理、理解语言。可真实系统一落地,就会遇到三个硬墙:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>寒冬的原因</th><th>具体表现</th><th>为什么致命</th></tr></thead>
+            <tbody>
+              <tr><td><strong>能力被高估</strong></td><td>演示样例很好看,换到真实世界就失效</td><td>投资人和政府发现“说好的智能”无法稳定交付</td></tr>
+              <tr><td><strong>知识写不完</strong></td><td>符号系统/专家系统需要人工写规则和维护知识库</td><td>真实世界长尾太多,规则越写越乱、维护成本爆炸</td></tr>
+              <tr><td><strong>算力和数据不够</strong></td><td>多层网络想法有了,但训不动;数据也太少</td><td>模型容量上不去,泛化能力上不去,只能停在小玩具</td></tr>
+              <tr><td><strong>评估不诚实</strong></td><td>研究 demo 和真实任务之间差距太大</td><td>短期热闹之后,落地失败会集中反噬整个领域</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          所以 AI 的低潮不是“思想彻底错了”,而是<strong>当时的工程条件撑不起当时的野心</strong>。
+          符号主义在规则清楚的场景能工作,但处理不了开放世界;连接主义有自动学习的方向,但早期缺数据、缺算力、缺训练技巧。
+          两边都不是完全失败,只是都还没凑齐让它大规模成功的条件。
+        </p>
+
+        <h3>7.1 反向传播没出来之前,感知机怎么学?</h3>
+        <p>
+          Rosenblatt 的感知机不是靠反向传播训练的。它用的是更简单的<strong>感知机学习规则</strong>:
+          先用当前权重做一次预测,如果预测对了就不动;如果预测错了,就把权重往“正确类别”的方向推一点。
+        </p>
+        <p>
+          它的结构非常简单,基本就是<a class="xref" href="chapter-02.html">第 2 章</a>那个神经元的早期版本:
+          输入 <var>x</var><sub>1</sub>, <var>x</var><sub>2</sub>, ... 先各自乘权重,加起来再加偏置,
+          得到一个分数 <var>z</var>;最后过一个<strong>硬阈值函数</strong>:<var>z</var> ≥ 0 就输出 1,否则输出 0。
+          所以你没看错——它就是<strong>单层</strong>的,而且确实没有今天常见的 Sigmoid/ReLU 那种平滑激活。
+          但它有激活函数:那个“过阈值就点亮”的<strong>阶跃函数(step)</strong>就是早期激活函数。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 250" role="img" aria-label="Rosenblatt 感知机结构:输入乘权重求和,再过硬阈值输出 0 或 1">
+              <text x="380" y="34" text-anchor="middle" fill="#eef4ff" font-size="17" font-weight="700">Rosenblatt 感知机:单层线性打分 + 硬阈值</text>
+              <g fill="rgba(106,195,255,0.15)" stroke="#6ac3ff" stroke-width="2">
+                <circle cx="98" cy="82" r="22" />
+                <circle cx="98" cy="128" r="22" />
+                <circle cx="98" cy="174" r="22" />
+              </g>
+              <text x="98" y="87" text-anchor="middle" fill="#eef4ff" font-size="12">x₁</text>
+              <text x="98" y="133" text-anchor="middle" fill="#eef4ff" font-size="12">x₂</text>
+              <text x="98" y="179" text-anchor="middle" fill="#eef4ff" font-size="12">x₃</text>
+
+              <g stroke="#8499bd" stroke-width="2" fill="none">
+                <path d="M120 82 H270" />
+                <path d="M120 128 H270" />
+                <path d="M120 174 H270" />
+              </g>
+              <text x="190" y="74" text-anchor="middle" fill="#8499bd" font-size="11">× w₁</text>
+              <text x="190" y="120" text-anchor="middle" fill="#8499bd" font-size="11">× w₂</text>
+              <text x="190" y="166" text-anchor="middle" fill="#8499bd" font-size="11">× w₃</text>
+
+              <rect x="270" y="86" width="150" height="92" rx="18" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" />
+              <text x="345" y="120" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">加权求和</text>
+              <text x="345" y="145" text-anchor="middle" fill="#b6c5e1" font-size="12">z = w·x + b</text>
+
+              <path d="M420 132 H490" stroke="#8499bd" stroke-width="2" />
+              <polygon points="490,132 478,126 478,138" fill="#8499bd" />
+
+              <rect x="490" y="86" width="132" height="92" rx="18" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="556" y="115" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">硬阈值</text>
+              <text x="556" y="140" text-anchor="middle" fill="#b6c5e1" font-size="12">z ≥ 0 ? 1 : 0</text>
+              <text x="556" y="160" text-anchor="middle" fill="#8499bd" font-size="10">step 激活</text>
+
+              <path d="M622 132 H690" stroke="#8499bd" stroke-width="2" />
+              <polygon points="690,132 678,126 678,138" fill="#8499bd" />
+              <text x="712" y="137" fill="#eef4ff" font-size="14">ŷ</text>
+              <text x="380" y="218" text-anchor="middle" fill="#8499bd" font-size="12">它没有隐藏层,也没有平滑激活;输出只是 0/1 的硬分类</text>
+            </svg>
+          </div>
+          <p class="figure__cap">Rosenblatt 感知机的结构:输入乘权重求和,再过一个硬阈值函数。这个硬阈值就是早期“激活函数”,但不可导。</p>
+        </div>
+        <div class="mathblock reveal">
+          <var>w</var> ← <var>w</var> + η(<var>y</var> − ŷ)<var>x</var>,　<var>b</var> ← <var>b</var> + η(<var>y</var> − ŷ)
+          <span class="label"><var>y</var> 是真实标签,ŷ 是当前预测,η 是步子大小。预测错多少,就沿输入方向修多少。</span>
+        </div>
+        <p>
+          直觉很朴素:如果一个正样本被错判成负样本,就把权重往这个样本方向拉,让下次它更容易被判正;
+          如果一个负样本被错判成正样本,就把权重往反方向推。它不需要链式法则,也不需要逐层传梯度,
+          因为它只有一层线性打分器。它能解决线性可分的二分类问题,但一旦问题需要“中间特征”和多层组合,这套规则就不够用了。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">它和反向传播差在哪?</span>
+          <p>
+            感知机学习规则像“错了就把分界线推一下”,只管单层线性分类。反向传播则是多层网络里的责任分配算法:
+            输出错了多少,要一层层追到每个隐藏层、每个权重上。正因为多层网络需要这种追责机制,
+            <a class="xref" href="chapter-06.html">反向传播</a>后来才变成深度学习的核心。硬阈值函数还有个麻烦:它几乎处处导数为 0、在阈值点不可导,
+            这也是后来人们换成 Sigmoid、ReLU 等可导/分段可导激活函数的重要原因(<a class="xref" href="chapter-07.html">第 7 章</a>)。
+          </p>
+        </div>
+
+        <h3>7.2 《Perceptrons》到底打击了什么?</h3>
+        <p>
+          1969 年 Minsky 和 Papert 的《Perceptrons》之所以影响大,不是因为它说“神经网络完全没用”,
+          而是它把<strong>单层感知机</strong>的边界讲得很硬:单层感知机本质上只能学一条<strong>直线 / 平面</strong>分界。
+          如果一个问题没法被一条直线切开,它就无能为力。
+        </p>
+        <p>
+          最经典的例子是 <strong>XOR(异或)</strong>。输入有两个开关 <var>x</var><sub>1</sub>、<var>x</var><sub>2</sub>:
+          两个相同输出 0,两个不同输出 1。四个点画在平面上,正例在对角线两端,负例在另一条对角线两端。
+          你不可能用一条直线把两个正例放一边、两个负例放另一边。这就叫<strong>线性不可分</strong>。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 300" role="img" aria-label="XOR 线性不可分与多层网络可解决的示意图">
+              <text x="190" y="34" text-anchor="middle" fill="#eef4ff" font-size="16" font-weight="700">单层感知机:一刀切不开 XOR</text>
+              <line x1="80" y1="220" x2="300" y2="220" stroke="#8499bd" stroke-width="2" />
+              <line x1="80" y1="220" x2="80" y2="50" stroke="#8499bd" stroke-width="2" />
+              <text x="304" y="224" fill="#8499bd" font-size="11">x₁</text>
+              <text x="70" y="48" fill="#8499bd" font-size="11">x₂</text>
+              <circle cx="110" cy="190" r="13" fill="rgba(255,143,163,0.22)" stroke="#ff8fa3" stroke-width="2" />
+              <text x="110" y="195" text-anchor="middle" fill="#ffccd5" font-size="12">0</text>
+              <circle cx="250" cy="190" r="13" fill="rgba(142,240,209,0.22)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="250" y="195" text-anchor="middle" fill="#d6fff1" font-size="12">1</text>
+              <circle cx="110" cy="80" r="13" fill="rgba(142,240,209,0.22)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="110" y="85" text-anchor="middle" fill="#d6fff1" font-size="12">1</text>
+              <circle cx="250" cy="80" r="13" fill="rgba(255,143,163,0.22)" stroke="#ff8fa3" stroke-width="2" />
+              <text x="250" y="85" text-anchor="middle" fill="#ffccd5" font-size="12">0</text>
+              <path d="M70 110 C135 135 210 150 302 155" stroke="#ffcf72" stroke-width="2" stroke-dasharray="6 5" fill="none" />
+              <text x="190" y="260" text-anchor="middle" fill="#8499bd" font-size="12">绿点在对角线,红点也在对角线:任何一条直线都会切错</text>
+
+              <text x="570" y="34" text-anchor="middle" fill="#eef4ff" font-size="16" font-weight="700">多层网络:先造中间特征,再组合</text>
+              <g stroke="#8499bd" stroke-width="1.8" fill="none">
+                <path d="M430 100 H500" /><path d="M430 180 H500" />
+                <path d="M540 118 H610" /><path d="M540 162 H610" />
+                <path d="M650 140 H704" />
+                <path d="M500 100 C550 100 560 118 610 118" />
+                <path d="M500 180 C550 180 560 162 610 162" />
+              </g>
+              <g>
+                <circle cx="410" cy="100" r="22" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="2" />
+                <circle cx="410" cy="180" r="22" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="2" />
+                <circle cx="520" cy="118" r="22" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" />
+                <circle cx="520" cy="162" r="22" fill="rgba(255,207,114,0.14)" stroke="#ffcf72" stroke-width="2" />
+                <circle cx="630" cy="140" r="22" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="2" />
+              </g>
+              <text x="410" y="105" text-anchor="middle" fill="#eef4ff" font-size="12">x₁</text>
+              <text x="410" y="185" text-anchor="middle" fill="#eef4ff" font-size="12">x₂</text>
+              <text x="520" y="122" text-anchor="middle" fill="#eef4ff" font-size="10">中间</text>
+              <text x="520" y="166" text-anchor="middle" fill="#eef4ff" font-size="10">特征</text>
+              <text x="630" y="145" text-anchor="middle" fill="#eef4ff" font-size="12">XOR</text>
+              <text x="570" y="260" text-anchor="middle" fill="#8499bd" font-size="12">隐藏层把原问题“拐一下”,输出层再线性切分</text>
+            </svg>
+          </div>
+          <p class="figure__cap">XOR 是单层感知机的经典硬伤:一条直线切不开。但多层网络可以先学中间特征,再把它们组合成非线性边界。</p>
+        </div>
+        <p>
+          当时真正的问题是:大家知道“多层网络理论上可能更强”,但不知道怎么<strong>稳定训练</strong>它。
+          没有好用的反向传播、初始化、激活函数和算力,多层网络只是一个听起来漂亮但很难落地的想法。
+          所以《Perceptrons》打击的不是“所有神经网络”,而是早期那种<strong>只靠单层感知机就想解决复杂智能</strong>的乐观情绪。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">后来怎么解决?</span>
+          <p>
+            解决思路正是本书前面几章走过的链路:
+            <a class="xref" href="chapter-03.html">多层网络</a>提供隐藏层,
+            <a class="xref" href="chapter-07.html">非线性激活</a>让边界能“拐弯”,
+            <a class="xref" href="chapter-06.html">反向传播</a>把误差高效传回每一层,
+            再加上更好的初始化、优化器、GPU 和大数据,多层网络才真正从“理论上更强”变成“工程上训得动”。
+          </p>
+        </div>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 780 340" role="img" aria-label="AI 寒冬与复苏机制:承诺过高导致寒冬,数据算力算法场景成熟带来复苏">
+              <text x="390" y="34" text-anchor="middle" fill="#eef4ff" font-size="17" font-weight="700">AI 的循环:想法先到,条件后来</text>
+              <g transform="translate(48 80)">
+                <rect x="0" y="0" width="148" height="70" rx="14" fill="rgba(255,207,114,0.15)" stroke="#ffcf72" stroke-width="2" />
+                <text x="74" y="30" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">高预期</text>
+                <text x="74" y="52" text-anchor="middle" fill="#b6c5e1" font-size="11">几年内通用智能?</text>
+              </g>
+              <g transform="translate(238 80)">
+                <rect x="0" y="0" width="148" height="70" rx="14" fill="rgba(255,143,163,0.13)" stroke="#ff8fa3" stroke-width="2" />
+                <text x="74" y="30" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">落地失败</text>
+                <text x="74" y="52" text-anchor="middle" fill="#b6c5e1" font-size="11">数据少 / 算力弱</text>
+              </g>
+              <g transform="translate(428 80)">
+                <rect x="0" y="0" width="148" height="70" rx="14" fill="rgba(139,123,255,0.14)" stroke="#8b7bff" stroke-width="2" />
+                <text x="74" y="30" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">资金退潮</text>
+                <text x="74" y="52" text-anchor="middle" fill="#b6c5e1" font-size="11">寒冬</text>
+              </g>
+              <g transform="translate(618 80)">
+                <rect x="0" y="0" width="116" height="70" rx="14" fill="rgba(106,195,255,0.13)" stroke="#6ac3ff" stroke-width="2" />
+                <text x="58" y="30" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">积累</text>
+                <text x="58" y="52" text-anchor="middle" fill="#b6c5e1" font-size="11">继续研究</text>
+              </g>
+
+              <g stroke="#8499bd" stroke-width="2" fill="none">
+                <path d="M196 115 H238" /><path d="M386 115 H428" /><path d="M576 115 H618" />
+              </g>
+              <g fill="#8499bd">
+                <polygon points="238,115 226,109 226,121" />
+                <polygon points="428,115 416,109 416,121" />
+                <polygon points="618,115 606,109 606,121" />
+              </g>
+
+              <rect x="94" y="230" width="592" height="54" rx="18" fill="rgba(142,240,209,0.12)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="390" y="254" text-anchor="middle" fill="#8ef0d1" font-size="14" font-weight="700">复苏条件:数据变多 + GPU 变强 + 算法变稳 + 真实场景出现</text>
+              <text x="390" y="274" text-anchor="middle" fill="#b6c5e1" font-size="11">互联网数据、ImageNet、反向传播/初始化/归一化、CUDA、云计算、移动互联网应用</text>
+              <path d="M676 230 C720 188 720 142 734 116" stroke="#8ef0d1" stroke-width="2" fill="none" stroke-dasharray="5 5" />
+              <polygon points="734,116 724,126 738,130" fill="#8ef0d1" />
+            </svg>
+          </div>
+          <p class="figure__cap">AI 寒冬的本质:愿景没有消失,但当时的工程条件撑不起愿景。等数据、算力、算法和场景补齐,同一类想法会重新活过来。</p>
+        </div>
+
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">为什么 2012 以后不一样?</span>
+          <p>
+            因为这一次不是单点突破,而是<strong>四件事同时成熟</strong>:互联网和传感器带来海量数据,GPU/CUDA 带来并行算力,
+            反向传播、初始化、ReLU、归一化、优化器让深层网络训得动,ImageNet、语音识别、推荐和广告这些真实场景又能立刻验证价值。
+            这就是深度学习从“老想法”变成“产业主力”的原因。
+          </p>
+        </div>
+
+        <h2>8. 别只看 demo:判断一个 AI 项目是否靠谱</h2>
         <p>
           以后看到一个模型、产品、论文或创业项目,
           先别急着被演示效果带走,按下面五个问题过一遍:
@@ -446,7 +800,7 @@
           </p>
         </div>
 
-        <h2>7. 以后看到新名词,用这四个问题定位</h2>
+        <h2>9. 以后看到新名词,用这四个问题定位</h2>
         <p>
           AI 名词更新太快,硬背会很累。更好的办法是用四个问题给它“归档”:
         </p>
@@ -526,10 +880,13 @@
           <h2>小结</h2>
           <ul>
             <li><strong>AI ⊃ 机器学习 ⊃ 深度学习</strong>;生成式 AI 和大模型主要是深度学习规模化后的重要分支。</li>
+            <li>AI 历史上有两条重要路线:<strong>符号主义</strong>靠规则、逻辑和知识表示,<strong>连接主义</strong>靠神经网络从数据里调权重;今天很多系统正在把二者重新合流。</li>
             <li>按学习信号看,有监督、无监督/自监督、强化学习;真实系统常常混合使用。</li>
             <li>按任务看,有分类、回归、排序/推荐、序列预测、生成、决策控制、异常检测等。</li>
             <li>模型家族长期并存:规则、线性模型、树模型、核方法、神经网络(及其规模化形态大模型)、概率/因果模型各有位置;深度学习靠“自动学特征 + 越大越强 + 赶上算力数据”在感知类任务上脱颖而出,但没有取代经典模型。</li>
+            <li>AI 不是单一路线胜利,而是 Turing、McCarthy、Rosenblatt、Minsky、Hinton、LeCun、Bengio、Fei-Fei Li、DeepMind、Transformer 团队等一代代人把问题、数据、算法、工程逐块补齐。</li>
             <li>关键时间线:1956 AI 命名,1957/58 感知机,1986 反向传播,2012 AlexNet,2016 AlphaGo,2017 Transformer,2022 ChatGPT,2025–2026 走向多模态、Agent、科学和真实工作流。</li>
+            <li>AI 寒冬来自“承诺太高、落地太弱、成本太贵”;复苏来自数据、算力、算法和真实场景同时成熟。</li>
             <li>看 AI 产品不能只看 demo:要追问准不准、稳不稳、贵不贵、安不安全、能不能接进真实流程。</li>
             <li>看到新名词,先问学习信号、输出任务、模型结构和解决的瓶颈,再把它放回地图里。</li>
           </ul>
@@ -544,19 +901,43 @@
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 2:为什么说自监督是大模型时代的关键?</summary>
+            <summary class="quiz__q">问题 2:符号主义和连接主义最核心的区别是什么?</summary>
+            <div class="quiz__a">
+              <p>符号主义把知识写成明确规则、逻辑和符号,适合可解释、边界清楚的问题;连接主义让大量简单单元从数据里调整连接权重,适合图像、语音、语言这类规则写不完的开放问题。今天的大模型偏连接主义,但 RAG、工具调用、规则约束又把符号路线接了回来。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:为什么会出现 AI 寒冬?</summary>
+            <div class="quiz__a">
+              <p>不是因为“智能机器”这个方向彻底错了,而是因为当时的承诺超过了能力:规则系统知识写不完,神经网络缺数据缺算力缺训练技巧,很多 demo 换到真实场景就失败。投资和信心退潮,就形成了寒冬。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:ImageNet 这类数据集为什么也算“伟大贡献”?</summary>
+            <div class="quiz__a">
+              <p>因为算法需要真实数据和统一评测来证明自己。没有足够大的公开数据集,很多模型只能在小玩具上自说自话;ImageNet 给视觉任务提供了大规模训练和公平比较的舞台,AlexNet 才能清楚地证明“深度网络 + GPU + 大数据”确实赢了。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 5:为什么 2012 年以后深度学习能走出来?</summary>
+            <div class="quiz__a">
+              <p>因为数据、算力、算法和场景同时成熟:互联网和 ImageNet 提供大数据,GPU/CUDA 提供并行算力,反向传播配合 ReLU、初始化、归一化、优化器让深层网络训得稳,视觉、语音、推荐等真实任务又能马上验证价值。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 6:为什么说自监督是大模型时代的关键?</summary>
             <div class="quiz__a">
               <p>因为它能从无标注数据里自动造训练目标,比如“预测下一个 token”。这样模型就能利用海量文本、图像和代码,不必等人类逐条标注答案。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 3:传统机器学习在大模型时代还有用吗?</summary>
+            <summary class="quiz__q">问题 7:传统机器学习在大模型时代还有用吗?</summary>
             <div class="quiz__a">
               <p>有。表格数据、风控、广告排序、工业规则、低成本部署等场景里,线性模型、树模型、规则系统仍然很强。大模型提供了新的通用接口,但不会把所有旧工具一夜清空。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 4:看到一个新 AI 名词,最该先问什么?</summary>
+            <summary class="quiz__q">问题 8:看到一个新 AI 名词,最该先问什么?</summary>
             <div class="quiz__a">
               <p>先问四件事:它靠什么学习信号?输出什么?用什么模型结构?解决什么瓶颈?这四个问题能把大多数新概念放回地图里。</p>
             </div>

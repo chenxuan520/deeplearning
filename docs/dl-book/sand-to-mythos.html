@@ -20,6 +20,7 @@
       <span class="reel__code" id="reel-code">00 / 00</span>
     </div>
     <div class="deck-progress" aria-hidden="true"></div>
+    <p class="story-credit">作者 · chenxuan</p>
 
     <main class="deck" id="deck">
 
@@ -29,14 +30,12 @@
           <div class="slide__meta"><span class="slide__act">一部编年史</span><span class="slide__era">物质 → 智能</span></div>
           <h1 class="hero__title">从沙子到 <span class="accent">Mythos</span></h1>
           <p class="slide__lead">
-            智能不是凭空出现的。它从一粒最普通的<strong>沙子</strong>里,一步一步长出来:
-            先是可控的<strong>开关</strong>,然后是会记忆的<strong>机器</strong>,再是会学习的<strong>网络</strong>,
-            最后成为 2026 年那个最强的大模型——<strong>Claude Mythos</strong>。
+            人类把<strong>沙子</strong>提纯成晶体,把晶体刻成<strong>开关</strong>,把开关连接成<strong>机器</strong>,
+            又让机器在海量数据与算力中学会<strong>语言</strong>。2026 年,这条从物质到智能的漫漫长路,终成<strong>神话</strong>。
           </p>
           <div class="button-row">
             <a class="mbtn mbtn--primary" href="#slide-overview">开始旅程</a>
           </div>
-          <p class="hero__hint">向下滚动 ↓</p>
         </div>
       </section>
 
@@ -154,7 +153,7 @@
           <p class="slide__lead">把 N 和 P 贴在一起,交界处诞生了第一个"规则"。</p>
           <div class="facets">
             <div class="facet"><span class="facet__k">何时</span><span class="facet__v">1904 年真空管二极管问世;后来半导体 PN 结二极管取而代之,更小更省电。</span></div>
-            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">PN 交界形成"内建电场"。外加电压方向与它一致 → <strong>导通</strong>;相反 → <strong>阻断</strong>。这就是"正向通、反向断"。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">PN 交界形成"内建电场"。正向偏置会<strong>削弱势垒</strong> → 容易导通;反向偏置会<strong>加宽耗尽层</strong> → 近似阻断。这就是"正向通、反向断"。</span></div>
             <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">电流第一次被物理规则"驯服"成单行道。但它只会认死方向,<strong>不能被外部信号控制</strong>——还差一只"手"。</span></div>
           </div>
         </div>
@@ -162,6 +161,7 @@
           <figure class="frame">
             <svg viewBox="0 0 360 210" role="img" aria-label="二极管单向">
               <line x1="40" y1="70" x2="320" y2="70" class="s-c" stroke-width="2"/><polygon points="150,55 150,85 180,70" class="s-cf"/><line x1="180" y1="53" x2="180" y2="87" class="s-c" stroke-width="2"/>
+              <text x="145" y="102" text-anchor="end" class="s-tc" style="font-size:10px">P / 阳极 +</text><text x="186" y="102" class="s-tc" style="font-size:10px">N / 阴极 -</text>
               <polygon points="60,70 78,64 78,76" class="s-cf"/><text x="180" y="45" text-anchor="middle" class="s-tc">正向 · 通 ✓</text>
               <line x1="40" y1="150" x2="320" y2="150" class="s-stroke" stroke-width="2"/><polygon points="150,135 150,165 180,150" class="s-stroke"/><line x1="180" y1="133" x2="180" y2="167" class="s-stroke" stroke-width="2"/>
               <line x1="205" y1="142" x2="220" y2="158" class="s-dim" stroke-width="2"/><line x1="220" y1="142" x2="205" y2="158" class="s-dim" stroke-width="2"/><text x="180" y="190" text-anchor="middle" class="s-t">反向 · 断 ✕</text>
@@ -421,6 +421,37 @@
               <text x="180" y="180" text-anchor="middle" class="s-t">上万晶体管,一块硅</text>
             </svg>
             <figcaption class="frame__cap">FIG.12 — 微处理器诞生</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 14 并行 -->
+      <section class="slide act-2" id="slide-parallel" data-era="表示层" data-label="并行">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第二幕 → 第三幕</span><span class="slide__era">表示层</span></div>
+          <h2 class="slide__title">并行:机器开始<span class="accent">吞吐</span></h2>
+          <p class="slide__lead">一台机器不只要会执行指令,还要能把同一种运算铺开来同时做。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">从流水线、向量处理器到 GPU,计算机逐渐从"单条指令跑得快"走向<strong>海量任务一起跑</strong>。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">把大任务拆成许多彼此独立的小乘加,交给大量计算单元同时执行。时间不再只靠主频压缩,也靠<strong>并行度</strong>摊薄。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">神经网络最吃的正是重复、规整、可并行的矩阵运算。机器结构在这里转化成了真正的<strong>算力</strong>。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 190" role="img" aria-label="并行计算">
+              <g class="s-stroke" stroke-width="1.2">
+                <line x1="65" y1="46" x2="295" y2="46"/><line x1="65" y1="86" x2="295" y2="86"/><line x1="65" y1="126" x2="295" y2="126"/>
+              </g>
+              <g class="s-c" stroke-width="1.5" fill="none">
+                <rect x="72" y="34" width="42" height="24" rx="3"/><rect x="132" y="34" width="42" height="24" rx="3"/><rect x="192" y="34" width="42" height="24" rx="3"/><rect x="252" y="34" width="42" height="24" rx="3"/>
+                <rect x="72" y="74" width="42" height="24" rx="3"/><rect x="132" y="74" width="42" height="24" rx="3"/><rect x="192" y="74" width="42" height="24" rx="3"/><rect x="252" y="74" width="42" height="24" rx="3"/>
+                <rect x="72" y="114" width="42" height="24" rx="3"/><rect x="132" y="114" width="42" height="24" rx="3"/><rect x="192" y="114" width="42" height="24" rx="3"/><rect x="252" y="114" width="42" height="24" rx="3"/>
+              </g>
+              <g class="s-tc" text-anchor="middle" style="font-size:9px"><text x="93" y="50">×+</text><text x="153" y="50">×+</text><text x="213" y="50">×+</text><text x="273" y="50">×+</text><text x="93" y="90">×+</text><text x="153" y="90">×+</text><text x="213" y="90">×+</text><text x="273" y="90">×+</text><text x="93" y="130">×+</text><text x="153" y="130">×+</text><text x="213" y="130">×+</text><text x="273" y="130">×+</text></g>
+              <text x="180" y="170" text-anchor="middle" class="s-t">同一种小运算,同时铺满</text>
+            </svg>
+            <figcaption class="frame__cap">BRIDGE.02 — 机器结构 → 算力吞吐</figcaption>
           </figure>
         </div>
       </section>
@@ -703,6 +734,33 @@
         </div>
       </section>
 
+      <!-- 23 Token -->
+      <section class="slide act-6" id="slide-token" data-era="表示层" data-label="Token">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第四幕 → 第五幕</span><span class="slide__era">表示层</span></div>
+          <h2 class="slide__title">Token:语言切成<span class="accent">积木</span></h2>
+          <p class="slide__lead">机器不能直接读"意思"。它先把语言切开,再把每一块映射成数字。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">何时</span><span class="facet__v">从词向量到现代语言模型,文本都要先被分词或切成 <strong>token</strong>,再进入神经网络。</span></div>
+            <div class="facet"><span class="facet__k">原理</span><span class="facet__v">一句话被拆成 token ID,每个 ID 查表得到向量。模型真正处理的不是汉字或英文单词,而是一串<strong>可计算的向量积木</strong>。</span></div>
+            <div class="facet"><span class="facet__k">为什么</span><span class="facet__v">Token 把开放的语言世界压成有限词表,又保留组合能力。学习到这里,终于能迈进<strong>语言</strong>这一幕。</span></div>
+          </div>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 190" role="img" aria-label="Token 化">
+              <text x="180" y="42" text-anchor="middle" class="s-paper" style="font-size:16px">今天天气很好</text>
+              <g class="s-c" stroke-width="1.4" fill="none"><rect x="55" y="70" width="48" height="28" rx="4"/><rect x="116" y="70" width="48" height="28" rx="4"/><rect x="177" y="70" width="48" height="28" rx="4"/><rect x="238" y="70" width="48" height="28" rx="4"/></g>
+              <g class="s-tc" text-anchor="middle" style="font-size:10px"><text x="79" y="88">今天</text><text x="140" y="88">天气</text><text x="201" y="88">很</text><text x="262" y="88">好</text></g>
+              <g class="s-stroke"><line x1="79" y1="98" x2="79" y2="124"/><line x1="140" y1="98" x2="140" y2="124"/><line x1="201" y1="98" x2="201" y2="124"/><line x1="262" y1="98" x2="262" y2="124"/></g>
+              <g class="s-cf" opacity="0.45"><rect x="55" y="124" width="48" height="18"/><rect x="116" y="124" width="48" height="18"/><rect x="177" y="124" width="48" height="18"/><rect x="238" y="124" width="48" height="18"/></g>
+              <text x="180" y="170" text-anchor="middle" class="s-t">文字 → token → 向量</text>
+            </svg>
+            <figcaption class="frame__cap">BRIDGE.04 — 语言进入向量空间</figcaption>
+          </figure>
+        </div>
+      </section>
+
       <!-- ══════════════ 第五幕 分幕卡 ══════════════ -->
       <section class="slide slide--act act-4" id="slide-act-5" data-era="第五幕" data-label="第五幕 · 语言">
         <div class="actcard">
@@ -905,6 +963,44 @@
         </div>
       </section>
 
+      <!-- ══════════════ 群星过场 ══════════════ -->
+      <section class="slide slide--constellation act-5" id="slide-constellation" data-era="终章" data-label="群星闪耀">
+        <div class="constellation" aria-label="AI 发展星图">
+          <button type="button" class="constellation-star" style="--x:9%;--y:16%;--s:0.76" data-title="McCulloch & Pitts" data-kind="人物 · 1943" data-work="1943 年发表《神经活动中内在思想的逻辑演算》,提出第一个人工神经元数学模型。" data-meaning="他们把“神经元、逻辑、计算”焊在了一起:AI 的神经网络谱系,从这里开始有了可写成公式的起点。"><i></i><span>McCulloch</span></button>
+          <button type="button" class="constellation-star" style="--x:28%;--y:23%;--s:0.7" data-title="Pitts" data-kind="人物 · 1943" data-work="年仅二十岁左右就参与《神经活动中内在思想的逻辑演算》,把逻辑学带进神经活动的数学描述。" data-meaning="他的名字常被 McCulloch 合在一起提及,但这条线真正伟大的地方,正是把心智第一次推进了可计算的语言。"><i></i><span>Pitts</span></button>
+          <button type="button" class="constellation-star" style="--x:8%;--y:76%;--s:0.82" data-title="Rosenblatt" data-kind="人物 · 1958" data-work="提出感知机并做出 Mark I 感知机,让机器通过样本自动调整权重。" data-meaning="他把“学习”从写死规则改成从数据中形成权重,是神经网络从想法走向机器的第一束强光。"><i></i><span>Rosenblatt</span></button>
+          <button type="button" class="constellation-star" style="--x:34%;--y:10%;--s:0.84" data-title="Hopfield" data-kind="人物 · 1982" data-work="1982 年提出 Hopfield Network,用物理里的能量函数解释神经网络如何存储和恢复模式。" data-meaning="他证明大量简单单元能涌现出联想记忆,让神经网络重新获得严肃科学地位,并因此成为现代 AI 的关键奠基者之一。"><i></i><span>Hopfield</span></button>
+          <button type="button" class="constellation-star" style="--x:24%;--y:86%;--s:0.84" data-title="Rumelhart" data-kind="人物 · 1986" data-work="与 Hinton、Williams 在 1986 年推广反向传播训练多层网络,让隐藏层可以学习内部表示。" data-meaning="这篇工作把神经网络从单层感知机的困境里拉出来,给深度学习留下了最核心的训练方法。"><i></i><span>Rumelhart</span></button>
+          <button type="button" class="constellation-star constellation-star--major" style="--x:42%;--y:20%;--s:1" data-title="Hinton" data-kind="人物 · 深度学习" data-work="现代深度学习的奠基人之一。长期坚持神经网络路线,推动反向传播、分布式表示、深度网络复兴和 2012 年 ImageNet 爆发。" data-meaning="在神经网络低潮期仍坚持这条路,最终让深度神经网络成为现代 AI 的核心基础;他与 LeCun、Bengio 因此获得 2018 年图灵奖。"><i></i><span>Hinton</span></button>
+          <button type="button" class="constellation-star" style="--x:43%;--y:81%;--s:0.76" data-title="Williams" data-kind="人物 · 1986" data-work="参与 1986 年反向传播经典论文,把多层网络的误差回流训练方法推到主流视野。" data-meaning="他所在的这篇论文让“隐藏层也能被训练”成为现实,深度学习后来的一切训练管线都站在这条路上。"><i></i><span>Williams</span></button>
+          <button type="button" class="constellation-star constellation-star--major" style="--x:61%;--y:18%;--s:0.96" data-title="LeCun" data-kind="人物 · CNN" data-work="深度学习奠基人之一。推动卷积神经网络、LeNet、手写数字识别和视觉表示学习。" data-meaning="他让神经网络在真实视觉任务中证明自己,把“局部连接、权重共享、层级特征”变成现代视觉模型的底层直觉。"><i></i><span>LeCun</span></button>
+          <button type="button" class="constellation-star constellation-star--major constellation-star--west" style="--x:74%;--y:32%;--s:0.9" data-title="Bengio" data-kind="人物 · 表示学习" data-work="深度学习奠基人之一。长期推动表示学习、神经语言模型、词向量和深层网络训练。" data-meaning="他的贡献让模型从人工设计特征转向自动学习表示,也是大模型能理解语言结构的思想源头之一。"><i></i><span>Bengio</span></button>
+          <button type="button" class="constellation-star constellation-star--west" style="--x:82%;--y:12%;--s:0.72" data-title="Hochreiter" data-kind="人物 · LSTM" data-work="系统分析梯度消失问题,并与 Schmidhuber 在 1997 年提出 LSTM。" data-meaning="他指出普通 RNN 难以跨长时间传递误差信号,这个判断直接改变了序列学习的发展路线。"><i></i><span>Hochreiter</span></button>
+          <button type="button" class="constellation-star constellation-star--west" style="--x:76%;--y:86%;--s:0.74" data-title="Schmidhuber" data-kind="人物 · LSTM" data-work="与 Hochreiter 提出 LSTM,长期推动循环网络、序列学习和更广义的机器智能研究。" data-meaning="在 Transformer 之前,LSTM 是处理语言、语音和时间序列的核心工具,承接了大模型时代前的序列建模经验。"><i></i><span>Schmidhuber</span></button>
+          <button type="button" class="constellation-star" style="--x:13%;--y:46%;--s:0.72" data-title="Mikolov" data-kind="人物 · word2vec" data-work="2013 年推动 word2vec,用高效训练把词向量从研究想法变成大规模可用工具。" data-meaning="它让“词的意义”在向量空间中显形,把语言处理从离散符号推向连续表示。"><i></i><span>Mikolov</span></button>
+          <button type="button" class="constellation-star" style="--x:22%;--y:36%;--s:0.76" data-title="Backprop" data-kind="方法 · 反向传播" data-work="把输出误差沿计算图反向传播,高效计算每个参数该往哪个方向调整。" data-meaning="它是神经网络训练的发动机:没有反向传播,深层网络很难成为可工程化扩展的技术。"><i></i><span>Backprop</span></button>
+          <button type="button" class="constellation-star constellation-star--west" style="--x:84%;--y:44%;--s:0.7" data-title="Shazeer" data-kind="人物 · Transformer/MoE" data-work="Transformer 论文作者之一,也推动稀疏专家模型等大规模模型效率路线。" data-meaning="他的工作代表大模型时代的关键问题:不只是把模型做大,还要让巨大模型能以可承受的计算运行。"><i></i><span>Shazeer</span></button>
+          <button type="button" class="constellation-star" style="--x:48%;--y:76%;--s:0.84" data-title="Vaswani" data-kind="人物 · Transformer" data-work="Transformer 论文第一作者之一,共同提出 Attention Is All You Need。" data-meaning="这篇论文改变了 NLP 的主架构:去掉循环主干,用自注意力打开并行训练和规模化的大门。"><i></i><span>Vaswani</span></button>
+          <button type="button" class="constellation-star" style="--x:57%;--y:86%;--s:0.66" data-title="Uszkoreit" data-kind="人物 · Transformer" data-work="Transformer 论文作者之一,参与把注意力机制组织成完整、可扩展的序列建模架构。" data-meaning="这让机器翻译中的结构突破变成通往 GPT、BERT 和现代大语言模型的通用骨架。"><i></i><span>Uszkoreit</span></button>
+          <button type="button" class="constellation-star constellation-star--west" style="--x:86%;--y:66%;--s:0.68" data-title="Polosukhin" data-kind="人物 · Transformer" data-work="Transformer 论文作者之一,参与奠定自注意力架构在语言建模中的核心地位。" data-meaning="当注意力成为主干,模型终于能高效吃下更大的数据和算力,大模型时代由此真正打开。"><i></i><span>Polosukhin</span></button>
+          <button type="button" class="constellation-star constellation-star--major" style="--x:33%;--y:42%;--s:1.02" data-title="Transformer" data-kind="架构 · 2017" data-work="2017 年提出的架构,用自注意力建模任意 token 间关系,并天然适合并行训练。" data-meaning="它是 GPT、BERT、Claude 等现代大模型的共同骨架,相当于大模型时代的发动机舱结构。"><i></i><span>Transformer</span></button>
+          <button type="button" class="constellation-star constellation-star--west" style="--x:72%;--y:72%;--s:0.9" data-title="Attention" data-kind="机制 · 注意力" data-work="让模型在处理一个 token 时按相关性查看其它 token,动态决定“该看哪里”。" data-meaning="注意力把“意义来自上下文关系”变成可训练的计算操作,是 Transformer 能取代循环模型的关键。"><i></i><span>Attention</span></button>
+          <button type="button" class="constellation-star" style="--x:31%;--y:74%;--s:0.78" data-title="GPU" data-kind="硬件 · 并行计算" data-work="用大量并行核心加速矩阵乘法和卷积,正好击中深度学习最耗时的计算形态。" data-meaning="GPU 把神经网络从“理论上可训练”推到“现实中训练得动”,是深度学习爆发的硬件地基。"><i></i><span>GPU</span></button>
+          <button type="button" class="constellation-star" style="--x:36%;--y:90%;--s:0.7" data-title="CUDA" data-kind="平台 · NVIDIA" data-work="NVIDIA 在 2006 年推出的通用 GPU 编程平台,让开发者可以直接调用显卡做并行计算。" data-meaning="CUDA 把显卡变成 AI 研究者可编程的算力工厂,也是 AlexNet 和后续深度学习工程化的重要前提。"><i></i><span>CUDA</span></button>
+          <button type="button" class="constellation-star constellation-star--west" style="--x:90%;--y:54%;--s:0.84" data-title="NVIDIA" data-kind="机构 · 算力基础设施" data-work="用 GPU、CUDA、高速互联和 AI 软件生态支撑了深度学习与大模型训练。" data-meaning="如果说算法给了大模型灵魂,NVIDIA 代表的算力基础设施让这些模型真正能被训练、部署和迭代。"><i></i><span>NVIDIA</span></button>
+          <button type="button" class="constellation-star" style="--x:9%;--y:90%;--s:0.7" data-title="ImageNet" data-kind="数据集 · 视觉时代" data-work="大规模图像识别数据集和竞赛,为 AlexNet 等模型提供了证明深度学习的战场。" data-meaning="它让数据规模、GPU 和深度网络第一次形成压倒性胜利,直接点燃 2012 年后的 AI 复兴。"><i></i><span>ImageNet</span></button>
+          <button type="button" class="constellation-star constellation-star--west" style="--x:88%;--y:90%;--s:0.7" data-title="Scaling Law" data-kind="规律 · 规模化" data-work="揭示语言模型损失会随参数量、数据量和计算量按可预测规律下降。" data-meaning="它把“做大模型”从豪赌变成工程路线图,解释了为什么行业会沿着更大数据、更大算力、更大模型一路推进。"><i></i><span>Scaling Law</span></button>
+          <button type="button" class="constellation-star constellation-star--west" style="--x:92%;--y:22%;--s:0.68" data-title="OpenAI" data-kind="机构 · GPT 路线" data-work="推动 GPT 路线、指令微调、RLHF 和 ChatGPT,把大语言模型带到大众面前。" data-meaning="它让语言模型从实验室系统变成社会级产品,也让全世界重新理解通用 AI 的速度。"><i></i><span>OpenAI</span></button>
+          <button type="button" class="constellation-star constellation-star--west" style="--x:94%;--y:78%;--s:0.7" data-title="Anthropic" data-kind="机构 · Claude" data-work="推动 Claude 系列、宪法式 AI、安全评估和面向复杂任务的可靠助手形态。" data-meaning="它代表大模型时代的另一条主线:能力越强,越要把可控性、可解释的规范和安全边界一起推上去。"><i></i><span>Anthropic</span></button>
+        </div>
+        <div class="constellation-card">
+          <p class="actcard__no">终 章</p>
+          <h2 class="actcard__title">群星<span class="accent">闪耀</span></h2>
+          <p class="actcard__line">他们不是注脚,而是这条路上的星光。</p>
+          <div class="actcard__rule"></div>
+        </div>
+      </section>
+
       <!-- ══════════════ 终点 Mythos ══════════════ -->
       <section class="slide slide--finale act-5" id="slide-mythos" data-era="2026 · Anthropic" data-label="Mythos">
         <div class="slide__text">
@@ -916,10 +1012,10 @@
           </p>
           <p class="finale__note">
             它的底层,仍是这一路走来的那块 <strong>Transformer</strong> 积木——只是规模、训练与评估被推到极致,
-            能力出现质变:SWE-bench Verified <strong>93.9%</strong>、USAMO 数学 <strong>97.6%</strong>,
-            七周内自主发现 <strong>2000+</strong> 未知漏洞,还能把弱点<strong>链成可用 exploit</strong>。
+            能力出现质变:SWE-bench Verified <strong>93.9%</strong>、SWE-bench Pro <strong>77.8%</strong>,
+            USAMO 数学 <strong>97.6%</strong>,七周内自主发现 <strong>2000+</strong> 未知漏洞。
             <br /><br />从一粒沙,到一个会思考的模型,人类把物质一层层驯化成计算,
-            又把计算一层层推向语言与推理。这一路终于像它的名字一样,几乎成了神话。
+            又把计算一层层推向语言与推理。这一路终于像它的名字一样,终成神话。
           </p>
           <div class="button-row">
             <a class="mbtn mbtn--primary" href="index.html">走进《从神经元到大模型》</a>

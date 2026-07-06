@@ -481,6 +481,45 @@
             而不是把指令当普通文本接着往下续。这里<strong>质量远比数量重要</strong>——几万条精挑细选的,常胜过几百万条粗制滥造的。
           </p>
         </div>
+        <h4>为什么少量 SFT 数据,能把模型“掰”得这么明显?</h4>
+        <p>
+          这听起来反直觉:预训练吃了几万亿 token,SFT 可能只有几十万到几百万条样本,凭什么能让模型行为大变?
+          关键在于,SFT 不是从零教模型知识,而是在<strong>已经很会续写、很懂语言的底座</strong>上,重新校准它的“使用接口”。
+        </p>
+        <p>
+          预训练模型早就见过解释、教程、代码、问答、论文、论坛讨论,所以它并不是不会回答;问题是它的默认目标只是“把文本接得像”。
+          你输入“解释一下梯度下降”,底座可能续写成百科、课堂笔记、论坛回复,也可能只是顺着你的话往下编。
+          SFT 把训练分布集中改成:
+        </p>
+        <div class="mathblock reveal">
+          用户给指令 → 助手给出有用、完整、按要求的回答
+          <span class="label">它改的重点是“面对用户时该怎么输出”,不是重新灌一遍互联网知识</span>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>阶段</th><th>主要学什么</th><th>为什么影响不同</th></tr></thead>
+            <tbody>
+              <tr><td><strong>预训练</strong></td><td>语言规律、世界知识、代码模式、推理痕迹</td><td>范围极宽,决定“会什么”</td></tr>
+              <tr><td><strong>SFT</strong></td><td>看到指令后,应该怎样组织答案、遵守格式、完成任务</td><td>正好打在上线时最常见的用户交互分布上,决定“怎么把会的东西拿出来”</td></tr>
+              <tr><td><strong>RLHF / DPO</strong></td><td>同一个问题下,哪种回答更有帮助、更安全、更符合人类偏好</td><td>继续把输出风格从“能回答”推向“更像好回答”</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">所以数据量小不等于影响小:后训练样本少,但它们正好覆盖模型最终被调用的入口。</p>
+        </div>
+        <p>
+          还要记住一个训练顺序上的事实:<strong>后训练发生在预训练之后</strong>。同一批参数已经被预训练塑好大体能力,
+          SFT 再用更小的学习率、更新更短的时间,把“指令区域”的输出往范文方向拉。
+          它不必重写整个模型,只要把常见 prompt 附近的行为调顺,用户体感就会非常明显。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">一个更准确的说法</span>
+          <p>
+            预训练决定模型<strong>会什么</strong>;SFT 决定模型<strong>怎么听指令地调用这些能力</strong>;
+            偏好优化决定模型<strong>两个可行答案里更该选哪一个</strong>。
+            所以 SFT 很强,但不是魔法:如果底座完全没学过中文、数学或代码,少量 SFT 很难凭空造出这些能力。
+            反过来,如果底座已经接近会做,SFT 就像一次岗前培训,能把“博学但散漫”的模型迅速调成“会接任务”的助手。
+          </p>
+        </div>
         <h4>训练时,哪部分 token 真正在计分?</h4>
         <p>
           很多人第一次听说 SFT 会困惑:既然还是“预测下一个 token”,那是不是整段
@@ -1091,7 +1130,7 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
             <li>真实分词用 BPE/子词:高频组合合并成一个 token,存进词表;词表大小是权衡。</li>
             <li>词嵌入把词变成“语义坐标”,<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦相似度衡量语义远近;词向量可迁移复用。</li>
             <li>Scaling Law:参数、数据、算力一起放大,性能可预测提升;超过门槛会“涌现”新能力。</li>
-            <li>预训练(自监督)练出底座能力;后训练(SFT → RLHF/DPO → 蒸馏)把它调成好用的助手。SFT 常常仍是交叉熵训练,但通常<strong>只对 assistant/completion 部分计 loss</strong>,prompt 更多是作为条件输入。</li>
+            <li>预训练(自监督)练出底座能力;后训练(SFT → RLHF/DPO → 蒸馏)把它调成好用的助手。SFT 数据量远小于预训练,但正好打在“用户指令 → 助手回答”的使用入口上,所以能显著改变体感;它常常仍是交叉熵训练,但通常<strong>只对 assistant/completion 部分计 loss</strong>,prompt 更多是作为条件输入。</li>
             <li>最近方向:推理模型、多模态(patch→ViT→投影→拼序列)、长上下文、MoE——内核仍是 token + Transformer。上下文窗口由<strong>位置编码 × 训练长度 × 算力显存</strong>三关中最紧的一关决定,且标称长度≠有效长度。</li>
             <li>降智/对齐税/遗忘等多半发生在<strong>后训练、蒸馏、量化、MoE 压 k、截断、产品护栏</strong>等环节,先定位链路再判断能力。</li>
             <li>它本质是概率预测器,所以会幻觉、有知识截止和偏见——要理性使用,并靠 RAG/工具补救。</li>
@@ -1133,7 +1172,7 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           <details class="quiz__item">
             <summary class="quiz__q">问题 6:“预训练”和“后训练”分工是什么?为什么 <code>-base</code> 模型不好直接聊天?</summary>
             <div class="quiz__a">
-              <p>预训练在海量文本上自监督地学到通用语言能力和世界知识,给出一个“博学但只会接话”的底座模型(base)。后训练(SFT → RLHF/DPO → 蒸馏)在底座之上加工,教它听指令、按人类偏好回答。<code>-base</code> 没做后训练,所以往往只会顺着你的话往下写,而不是好好回答——要 <code>-chat</code>/<code>-instruct</code> 那样做过后训练的版本才好用。</p>
+              <p>预训练在海量文本上自监督地学到通用语言能力和世界知识,给出一个“博学但只会接话”的底座模型(base)。后训练(SFT → RLHF/DPO → 蒸馏)在底座之上加工,教它听指令、按人类偏好回答。SFT 数据量虽然远小于预训练,但它正好覆盖最终用户最常见的交互入口,而且不是重新教知识,只是把已有能力校准成“指令 → 助手回答”的模式。<code>-base</code> 没做后训练,所以往往只会顺着你的话往下写,而不是好好回答——要 <code>-chat</code>/<code>-instruct</code> 那样做过后训练的版本才好用。</p>
             </div>
           </details>
           <details class="quiz__item">

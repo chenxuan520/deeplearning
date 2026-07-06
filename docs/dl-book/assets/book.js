@@ -643,20 +643,126 @@
       });
     }
 
-    function makeSnippet(text, terms) {
-      var lower = text.toLowerCase();
-      var pos = -1;
-      terms.forEach(function (t) { var p = lower.indexOf(t); if (p !== -1 && (pos === -1 || p < pos)) pos = p; });
-      if (pos < 0) pos = 0;
+    function uniqueSortedPositions(list) {
+      var seen = {}, out = [];
+      list.forEach(function (p) {
+        if (p == null || p < 0 || seen[p]) return;
+        seen[p] = true;
+        out.push(p);
+      });
+      out.sort(function (a, b) { return a - b; });
+      return out;
+    }
+
+    function highlightFuzzy(text, positions) {
+      var set = {};
+      uniqueSortedPositions(positions || []).forEach(function (p) { set[p] = true; });
+      var html = "", open = false;
+      for (var i = 0; i < text.length; i++) {
+        if (set[i] && !open) { html += "<mark>"; open = true; }
+        if (!set[i] && open) { html += "</mark>"; open = false; }
+        html += escapeHtml(text.charAt(i));
+      }
+      if (open) html += "</mark>";
+      return html;
+    }
+
+    function fuzzyMatchText(text, query) {
+      var rawQuery = String(query || "").trim();
+      if (!rawQuery) return null;
+      var hay = String(text || "").toLowerCase();
+      var q = rawQuery.toLowerCase();
+      var exactAt = hay.indexOf(q);
+      var positions = [];
+
+      if (exactAt >= 0) {
+        for (var e = 0; e < q.length; e++) positions.push(exactAt + e);
+        return {
+          positions: positions,
+          score: 1200 + q.length * 45 - exactAt * 0.04
+        };
+      }
+
+      var cursor = 0;
+      for (var i = 0; i < q.length; i++) {
+        var ch = q.charAt(i);
+        var at = hay.indexOf(ch, cursor);
+        if (at < 0) return null;
+        positions.push(at);
+        cursor = at + 1;
+      }
+
+      var first = positions[0];
+      var last = positions[positions.length - 1];
+      var span = last - first + 1;
+      var gaps = span - positions.length;
+      var maxSpan = Math.max(64, q.length * 18);
+      if (span > maxSpan) return null;
+
+      var score = 520 + q.length * 32 - gaps * 7 - first * 0.035;
+      for (var j = 1; j < positions.length; j++) {
+        if (positions[j] === positions[j - 1] + 1) score += 28;
+      }
+      if (first === 0 || /[\s\-_/.:：·,，;；()（）[\]【】]/.test(text.charAt(first - 1))) score += 35;
+      return { positions: positions, score: score };
+    }
+
+    function tokenizeSearchQuery(query) {
+      var chunks = String(query || "").trim().split(/\s+/).filter(Boolean);
+      var terms = [];
+      chunks.forEach(function (chunk) {
+        var current = "", mode = "";
+        for (var i = 0; i < chunk.length; i++) {
+          var ch = chunk.charAt(i);
+          var nextMode = /[a-z0-9_+#.-]/i.test(ch) ? "latin" : (/[\u4e00-\u9fff]/.test(ch) ? "han" : "other");
+          if (nextMode === "other") {
+            if (current) terms.push(current);
+            current = ""; mode = "";
+            continue;
+          }
+          if (current && mode !== nextMode) {
+            terms.push(current);
+            current = ch;
+          } else {
+            current += ch;
+          }
+          mode = nextMode;
+        }
+        if (current) terms.push(current);
+      });
+      return terms;
+    }
+
+    function searchSection(sec, terms) {
+      var headingPositions = [], bodyPositions = [], score = 0;
+      for (var i = 0; i < terms.length; i++) {
+        var term = terms[i];
+        var head = fuzzyMatchText(sec.heading, term);
+        var body = fuzzyMatchText(sec.text, term);
+        if (!head && !body) return null;
+        if (head && (!body || head.score + 420 >= body.score)) {
+          score += head.score + 420;
+          headingPositions = headingPositions.concat(head.positions);
+        } else {
+          score += body.score;
+          bodyPositions = bodyPositions.concat(body.positions);
+        }
+      }
+      return {
+        sec: sec,
+        score: score,
+        headingPositions: uniqueSortedPositions(headingPositions),
+        bodyPositions: uniqueSortedPositions(bodyPositions)
+      };
+    }
+
+    function makeSnippet(text, positions) {
+      var hits = uniqueSortedPositions(positions || []).filter(function (p) { return p >= 0 && p < text.length; });
+      var pos = hits.length ? hits[0] : 0;
       var start = Math.max(0, pos - 32);
       var end = Math.min(text.length, pos + 100);
-      var raw = (start > 0 ? "…" : "") + text.slice(start, end) + (end < text.length ? "…" : "");
-      var html = escapeHtml(raw);
-      terms.forEach(function (t) {
-        if (!t) return;
-        html = html.replace(new RegExp("(" + escapeRegExp(escapeHtml(t)) + ")", "ig"), "<mark>$1</mark>");
-      });
-      return html;
+      var localHits = hits.filter(function (p) { return p >= start && p < end; }).map(function (p) { return p - start; });
+      return (start > 0 ? "…" : "") + highlightFuzzy(text.slice(start, end), localHits) + (end < text.length ? "…" : "");
     }
 
     function runSearch(query) {
@@ -665,20 +771,12 @@
       persistSearchQuery(query);
       if (!q) { resultsEl.innerHTML = ""; if (indexReady) setStatus(READY_HINT); return; }
       if (!indexReady) { pending = query; return; }
-      var terms = q.split(/\s+/).filter(Boolean);
+      var terms = tokenizeSearchQuery(query);
+      if (!terms.length) { resultsEl.innerHTML = ""; if (indexReady) setStatus(READY_HINT); return; }
       var results = [];
       INDEX.forEach(function (sec) {
-        var headLower = sec.heading.toLowerCase();
-        var hay = (sec.heading + " " + sec.text).toLowerCase();
-        if (!terms.every(function (t) { return hay.indexOf(t) !== -1; })) return;
-        var score = 0;
-        terms.forEach(function (t) {
-          if (headLower.indexOf(t) !== -1) score += 6;
-          var idx = 0, count = 0;
-          while ((idx = hay.indexOf(t, idx)) !== -1) { count++; idx += t.length; }
-          score += count;
-        });
-        results.push({ sec: sec, score: score });
+        var match = searchSection(sec, terms);
+        if (match) results.push(match);
       });
       results.sort(function (a, b) { return b.score - a.score || a.sec.chIdx - b.sec.chIdx; });
       results = results.slice(0, 40);
@@ -692,8 +790,8 @@
         var href = sec.file + (sec.headingId ? "#" + sec.headingId : "");
         return '<a class="book-search__result" href="' + href + '" data-ri="' + i + '">' +
           '<span class="book-search__result-chapter">第 ' + sec.num + ' 章 · ' + escapeHtml(sec.chTitle) + '</span>' +
-          '<span class="book-search__result-heading">' + escapeHtml(sec.heading) + '</span>' +
-          '<span class="book-search__result-snippet">' + makeSnippet(sec.text, terms) + '</span>' +
+          '<span class="book-search__result-heading">' + highlightFuzzy(sec.heading, r.headingPositions) + '</span>' +
+          '<span class="book-search__result-snippet">' + makeSnippet(sec.text, r.bodyPositions) + '</span>' +
           '</a>';
       }).join("");
     }
