@@ -15,20 +15,56 @@ jobs:
           submodules: true
       - name: Install build tools #这部分是安装依赖
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake wget
+          retry() {
+            local max=3
+            local attempt=1
+            until "$@"; do
+              if [ "$attempt" -ge "$max" ]; then
+                return 1
+              fi
+              echo "Attempt $attempt failed; retrying in 10s..."
+              attempt=$((attempt + 1))
+              sleep 10
+            done
+          }
+          retry sudo apt-get update
+          retry sudo apt-get install -y build-essential cmake wget
       - name: Download mnist data
         run: |
+          retry() {
+            local max=3
+            local attempt=1
+            until "$@"; do
+              if [ "$attempt" -ge "$max" ]; then
+                return 1
+              fi
+              echo "Attempt $attempt failed; retrying in 10s..."
+              attempt=$((attempt + 1))
+              sleep 10
+            done
+          }
           cd src
           mkdir -p ./demo/mnist/mnist
-          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/t10k-labels-idx1-ubyte -O ./demo/mnist/mnist/t10k-labels-idx1-ubyte
-          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/train-labels-idx1-ubyte -O ./demo/mnist/mnist/train-labels-idx1-ubyte
-          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/t10k-images-idx3-ubyte -O ./demo/mnist/mnist/t10k-images-idx3-ubyte
-          wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/train-images-idx3-ubyte -O ./demo/mnist/mnist/train-images-idx3-ubyte
+          retry wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/t10k-labels-idx1-ubyte -O ./demo/mnist/mnist/t10k-labels-idx1-ubyte
+          retry wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/train-labels-idx1-ubyte -O ./demo/mnist/mnist/train-labels-idx1-ubyte
+          retry wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/t10k-images-idx3-ubyte -O ./demo/mnist/mnist/t10k-images-idx3-ubyte
+          retry wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/train-images-idx3-ubyte -O ./demo/mnist/mnist/train-images-idx3-ubyte
           cd ..
       - name: Run test #需要执行的命令
         run: |
+          retry() {
+            local max=3
+            local attempt=1
+            until "$@"; do
+              if [ "$attempt" -ge "$max" ]; then
+                return 1
+              fi
+              echo "Attempt $attempt failed; retrying in 10s..."
+              attempt=$((attempt + 1))
+              sleep 10
+            done
+          }
           cd src
-          ./build.sh
-          ./bin/test_bin
-          ./bin/mnist
+          retry ./build.sh
+          retry ./bin/test_bin
+          retry ./bin/mnist

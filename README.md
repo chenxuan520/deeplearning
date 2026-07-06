@@ -9,12 +9,28 @@
 </p>
 <p align="center"><sub>《从神经元到大模型》· 用 C++ 从零写懂深度学习</sub></p>
 
-| | |
-|---|---|
-| **在线阅读** | [**deeplearning.011203.xyz**](https://deeplearning.011203.xyz/) |
-| **GitHub Pages** | [chenxuan520.github.io/deeplearning](https://chenxuan520.github.io/deeplearning/) |
-| **GitHub** | [github.com/chenxuan520/deeplearning](https://github.com/chenxuan520/deeplearning) |
-| **Gitee** | [gitee.com/chenxuan520/deeplearning](https://gitee.com/chenxuan520/deeplearning) |
+<table>
+  <tr>
+    <td><strong>在线阅读</strong></td>
+    <td><a href="https://deeplearning.011203.xyz/"><strong>deeplearning.011203.xyz</strong></a></td>
+  </tr>
+  <tr>
+    <td><strong>技术史诗</strong></td>
+    <td><a href="https://deeplearning.011203.xyz/sand-to-mythos.html">从沙子到 Mythos</a></td>
+  </tr>
+  <tr>
+    <td><strong>GitHub Pages</strong></td>
+    <td><a href="https://chenxuan520.github.io/deeplearning/">chenxuan520.github.io/deeplearning</a></td>
+  </tr>
+  <tr>
+    <td><strong>GitHub</strong></td>
+    <td><a href="https://github.com/chenxuan520/deeplearning">github.com/chenxuan520/deeplearning</a></td>
+  </tr>
+  <tr>
+    <td><strong>Gitee</strong></td>
+    <td><a href="https://gitee.com/chenxuan520/deeplearning">gitee.com/chenxuan520/deeplearning</a></td>
+  </tr>
+</table>
 
 ---
 
@@ -107,6 +123,7 @@ cd src/build && cmake .. && make && sudo make install
 
 - **源码目录**：[`docs/dl-book/`](./docs/dl-book/)
 - **线上地址**：<https://deeplearning.011203.xyz/>（备用：<https://chenxuan520.github.io/deeplearning/>）
+- **技术史诗**：[`从沙子到 Mythos`](https://deeplearning.011203.xyz/sand-to-mythos.html)
 - **结构**：7 大部分、30 章 + 术语表；含神经元 / 传播 / 注意力等交互实验，章节间可点击跳转到对应小节。
 - **作者与版权**：见 [`docs/dl-book/about.html`](./docs/dl-book/about.html)；电子书内容采用 CC BY-NC-SA 4.0 授权，代码按根目录 [`LICENSE`](./LICENSE) 的 MIT License 开源。
 

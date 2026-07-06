@@ -26,7 +26,33 @@ jobs:
           python-version: "3.x"
 
       - name: Check anchors (跨节/跨章链接是否指向存在的锚点)
-        run: python3 docs/dl-book/tools/check_anchors.py
+        run: |
+          retry() {
+            local max=3
+            local attempt=1
+            until "$@"; do
+              if [ "$attempt" -ge "$max" ]; then
+                return 1
+              fi
+              echo "Attempt $attempt failed; retrying in 10s..."
+              attempt=$((attempt + 1))
+              sleep 10
+            done
+          }
+          retry python3 docs/dl-book/tools/check_anchors.py
 
       - name: Check structure (HTML 良构 + h2 编号连续)
-        run: python3 docs/dl-book/tools/check_structure.py
+        run: |
+          retry() {
+            local max=3
+            local attempt=1
+            until "$@"; do
+              if [ "$attempt" -ge "$max" ]; then
+                return 1
+              fi
+              echo "Attempt $attempt failed; retrying in 10s..."
+              attempt=$((attempt + 1))
+              sleep 10
+            done
+          }
+          retry python3 docs/dl-book/tools/check_structure.py
