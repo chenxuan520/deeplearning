@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>机器学习群星史 · 从规则之争到模型星图</title>
+    <meta
+      name="description"
+      content="一部左右推进的机器学习编年史:从人工神经元、图灵测试、符号主义与连接主义之争,到统计学习、深度学习、Transformer、ChatGPT 和当代模型演化树。"
+    />
+    <meta property="og:title" content="机器学习群星史" />
+    <meta property="og:description" content="从规则之争到模型星图:一幕一幕看完机器学习的百年长夜与黎明。" />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/ml-history.css" />
+  </head>
+  <body data-theme="intro">
+    <div class="mh-grain" aria-hidden="true"></div>
+
+    <header class="mh-topbar">
+      <a class="mh-brand" href="index.html">
+        <span class="mh-brand__mark">ML · A HISTORY</span>
+        <span class="mh-brand__title">机器学习群星史</span>
+      </a>
+      <div class="mh-topbar__right">
+        <span class="mh-hint">← / → 翻幕 · 底部时间线可点</span>
+        <span class="mh-code" data-ml-history-code>00 / 00</span>
+        <a class="mh-link" href="sand-to-mythos.html">技术史前传</a>
+      </div>
+    </header>
+    <div class="mh-progress" data-ml-history-progress aria-hidden="true"></div>
+
+    <main class="mh-shell">
+      <div class="mh-scroll" data-ml-history-scroll>
+        <div class="mh-grid">
+          <section class="mh-hero" data-year="序" data-title="开场" data-era="从规则之争到模型星图" data-theme="intro">
+            <p class="mh-hero__kicker">A HISTORY OF MACHINE LEARNING</p>
+            <h1>机器学习<br />不是一条直线</h1>
+            <p class="mh-hero__lead">
+              它更像一条被反复改道的河。有人相信逻辑与规则,有人相信神经的连接,有人把概率、统计与泛化写成工程。
+              历经两度寒冬,直到<strong>数据、算力、模型规模与产品界面</strong>在同一刻成熟,这条河才终于漫过堤岸,涌进每个人的世界。
+            </p>
+            <div class="mh-legend" aria-label="路线图例">
+              <span class="tag tag--symbol">符号</span>
+              <span class="tag tag--connection">连接</span>
+              <span class="tag tag--stat">统计</span>
+              <span class="tag tag--data">数据</span>
+              <span class="tag tag--deep">深度</span>
+              <span class="tag tag--product">产品</span>
+            </div>
+          </section>
+
+          <article class="milestone" data-year="1943" data-title="人工神经元" data-era="连接主义的远点" data-theme="connection">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1943</span><span class="tag tag--connection">连接</span></div>
+              <h2>人工神经元</h2>
+              <p class="milestone__people">Warren McCulloch · Walter Pitts</p>
+              <p class="milestone__text">他们把神经元抽象成一个逻辑计算单元:输入累加超过阈值,输出就点亮。</p>
+              <p class="milestone__why">这是连接主义的远点——智能也许不必逐条写规则,而能由许多简单单元连接、涌现出来。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/342ac65c10385343454528d19913b07ecb8088bc?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="人工神经元与感知机结构示意" />
+              <span class="milestone__fallback">人工神经元</span>
+              <span class="milestone__caption">FIG · 感知机 / 神经元</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="1950" data-title="图灵测试" data-era="问题被提出" data-theme="symbol">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1950</span><span class="tag tag--symbol">问题</span></div>
+              <h2>机器能思考吗?</h2>
+              <p class="milestone__people">Alan Turing</p>
+              <p class="milestone__text">图灵没有直接定义“思考”,而是提出可观察的模仿游戏:若机器在对话中无法被分辨,我们又凭什么否认它?</p>
+              <p class="milestone__why">此后所有路线都在回答同一个问题:智能到底是规则、是经验,还是被表现出来的能力?</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/5bafa40f4bfbfbedab642febd6a7e036afc37931b152?x-bce-process=image/resize,m_lfit,w_536,limit_1/quality,Q_70" alt="艾伦·图灵肖像" />
+              <span class="milestone__fallback">Alan Turing</span>
+              <span class="milestone__caption">PORTRAIT · A. M. Turing</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="1956" data-title="达特茅斯会议" data-era="符号主义登场" data-theme="symbol">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1956</span><span class="tag tag--symbol">符号</span></div>
+              <h2>达特茅斯会议</h2>
+              <p class="milestone__people">John McCarthy · Marvin Minsky · Claude Shannon · Nathaniel Rochester</p>
+              <p class="milestone__text">“人工智能”这个名字在这里被钉下。早期主流更相信逻辑、搜索、定理证明与手写规则。</p>
+              <p class="milestone__why">这不是机器学习本身,却划定了最早的战场:智能,能不能被人类的规则写出来?</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/b812c8fcc3cec3fd6acab884dd88d43f8694274e?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="达特茅斯会议" />
+              <span class="milestone__fallback">Dartmouth</span>
+              <span class="milestone__caption">FIG · Dartmouth 1956</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="1957" data-title="感知机" data-era="连接主义爆发" data-theme="connection">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1957</span><span class="tag tag--connection">连接</span></div>
+              <h2>感知机点燃想象</h2>
+              <p class="milestone__people">Frank Rosenblatt</p>
+              <p class="milestone__text">感知机让机器通过样本自行调整权重,第一次把“从数据中学习”做成了能演示的真实机器。</p>
+              <p class="milestone__why">它让连接主义短暂站上聚光灯,也埋下了后来关于能力边界的争论。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/c2bce2032e172acbd43f7cb3?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="弗兰克·罗森布拉特与感知机" />
+              <span class="milestone__fallback">Perceptron</span>
+              <span class="milestone__caption">PORTRAIT · F. Rosenblatt</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="1966" data-title="ELIZA" data-era="规则系统的错觉" data-theme="symbol">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1966</span><span class="tag tag--symbol">符号</span></div>
+              <h2>ELIZA 的对话幻觉</h2>
+              <p class="milestone__people">Joseph Weizenbaum</p>
+              <p class="milestone__text">ELIZA 用模式匹配和模板回应,并不真的理解,却让许多人产生了“它懂我”的错觉。</p>
+              <p class="milestone__why">这提醒后来所有大模型使用者:会说话不等于会理解,交互界面本身就能制造智能感。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/d4628535e5dde71190efbd6002b6d91b9d16fcfacba9?x-bce-process=image/resize,m_lfit,w_536,limit_1/quality,Q_70" alt="约翰·麦卡锡肖像" />
+              <span class="milestone__fallback">ELIZA</span>
+              <span class="milestone__caption">PORTRAIT · J. McCarthy</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="1969" data-title="感知机受挫" data-era="路线之争" data-theme="winter">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1969</span><span class="tag tag--symbol">争论</span></div>
+              <h2>感知机受挫</h2>
+              <p class="milestone__people">Marvin Minsky · Seymour Papert</p>
+              <p class="milestone__text">《Perceptrons》指出单层感知机的表达能力有限,连 XOR 这类非线性问题都难以处理。</p>
+              <p class="milestone__why">连接主义退潮,符号主义占了上风。神经网络不是被证伪,而是当时还不会有效训练深层网络。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/9e3df8dcd100baa1cd11406d3e46ae12c8fcc2ce8095?x-bce-process=image/resize,m_lfit,w_536,limit_1/quality,Q_70" alt="马文·明斯基肖像" />
+              <span class="milestone__fallback">Perceptrons</span>
+              <span class="milestone__caption">PORTRAIT · M. Minsky</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="1974" data-title="第一次寒冬" data-era="第一次 AI 寒冬" data-theme="winter">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1974</span><span class="tag tag--symbol">寒冬</span></div>
+              <h2>第一次 AI 寒冬</h2>
+              <p class="milestone__people">Lighthill Report · ALPAC 余波</p>
+              <p class="milestone__text">机器翻译、通用智能、机器人的承诺纷纷落空,政府资金开始退潮。</p>
+              <p class="milestone__why">寒冬不是某个算法失败,而是“过度承诺 + 缺数据 + 缺算力 + 缺工程闭环”的共同结果。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/b812c8fcc3cec3fd93e3c70ad188d43f869427eb?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="反向传播/连接主义示意" />
+              <span class="milestone__fallback">AI Winter</span>
+              <span class="milestone__caption">FIG · 反思与退潮</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="1980" data-title="专家系统" data-era="专家系统繁荣" data-theme="expert">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1980</span><span class="tag tag--symbol">符号</span></div>
+              <h2>专家系统繁荣</h2>
+              <p class="milestone__people">MYCIN · XCON · LISP machines</p>
+              <p class="milestone__text">规则系统在医疗诊断、设备配置等窄领域取得商业成功,企业争相把专家知识写进系统。</p>
+              <p class="milestone__why">它证明了规则有价值,也暴露了瓶颈:知识获取难、维护昂贵、遇到新情况就失灵。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/b21c8701a18b87d616c87c35050828381f30fd16?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="专家系统/贝叶斯规则示意" />
+              <span class="milestone__fallback">Expert Systems</span>
+              <span class="milestone__caption">FIG · 专家系统</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="1986" data-title="反向传播" data-era="连接主义复兴" data-theme="connection">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1986</span><span class="tag tag--connection">连接</span></div>
+              <h2>反向传播复兴</h2>
+              <p class="milestone__people">Rumelhart · Hinton · Williams</p>
+              <p class="milestone__text">误差从输出层一路反传,用链式法则更新每一层权重,多层网络终于有了主流训练方法。</p>
+              <p class="milestone__why">它回答了 1969 年留下的问题:不是多层网络不行,而是过去还不会训练它。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/d000baa1cd11728b4710ce50feb5d4cec3fdfc038622?x-bce-process=image/resize,m_lfit,w_536,limit_1/quality,Q_70" alt="杰弗里·辛顿肖像" />
+              <span class="milestone__fallback">Backprop</span>
+              <span class="milestone__caption">PORTRAIT · G. Hinton</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="1987" data-title="第二次寒冬" data-era="第二次 AI 寒冬" data-theme="winter">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1987</span><span class="tag tag--symbol">寒冬</span></div>
+              <h2>第二次 AI 寒冬</h2>
+              <p class="milestone__people">Expert-system bust · LISP 机器崩盘</p>
+              <p class="milestone__text">专家系统与专用 LISP 机器市场崩塌,规则系统没能像预期那样扩展到广阔世界。</p>
+              <p class="milestone__why">AI 再次学到同一个教训:写规则能解决窄问题,但世界太大,规则永远写不完。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/b812c8fcc3cec3fd93e3c70ad188d43f869427eb?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="神经网络训练示意" />
+              <span class="milestone__fallback">AI Winter II</span>
+              <span class="milestone__caption">FIG · 又一次退潮</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="1988" data-title="贝叶斯网络" data-era="统计学习抬头" data-theme="stat">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1988</span><span class="tag tag--stat">统计</span></div>
+              <h2>贝叶斯网络</h2>
+              <p class="milestone__people">Judea Pearl</p>
+              <p class="milestone__text">概率图模型把不确定性、依赖关系与因果推理拉进同一张图里。</p>
+              <p class="milestone__why">统计学习开始成为机器学习的硬骨架:不再只问“规则是什么”,更问“证据有多强”。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/a044ad345982b2b7d0a21c0677f1dcef76094a362de7?x-bce-process=image/resize,m_lfit,w_536,limit_1/quality,Q_70" alt="约书亚·本吉奥肖像" />
+              <span class="milestone__fallback">Bayes Net</span>
+              <span class="milestone__caption">PORTRAIT · Y. Bengio</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="1989" data-title="CNN 手写识别" data-era="连接主义落地" data-theme="connection">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1989</span><span class="tag tag--connection">连接</span></div>
+              <h2>CNN 识别手写数字</h2>
+              <p class="milestone__people">Yann LeCun</p>
+              <p class="milestone__text">卷积网络用局部感受野与权重共享处理图像,手写数字识别成为最早的真实落地场景。</p>
+              <p class="milestone__why">神经网络不再只是概念演示,而是在银行支票、邮政 OCR 这类真实系统里工作。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/1f178a82b9014a90f603145a2d3e2e12b31bb1514088?x-bce-process=image/resize,m_lfit,w_536,limit_1/quality,Q_70" alt="杨立昆肖像" />
+              <span class="milestone__fallback">CNN</span>
+              <span class="milestone__caption">PORTRAIT · Y. LeCun</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="1995" data-title="SVM" data-era="统计学习主导" data-theme="stat">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1995</span><span class="tag tag--stat">统计</span></div>
+              <h2>SVM 与最大间隔</h2>
+              <p class="milestone__people">Vladimir Vapnik · Corinna Cortes</p>
+              <p class="milestone__text">支持向量机用最大间隔与核方法处理分类,在小数据、高维任务上极其强势。</p>
+              <p class="milestone__why">这是传统机器学习的高峰之一:优雅的几何直觉、严密的泛化理论、扎实的工程效果。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/8b82b9014a90f603ec48f0cd3412b31bb151ed44?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="支持向量机最大间隔示意" />
+              <span class="milestone__fallback">SVM</span>
+              <span class="milestone__caption">FIG · 最大间隔</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="1997" data-title="LSTM" data-era="序列记忆" data-theme="connection">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1997</span><span class="tag tag--connection">连接</span></div>
+              <h2>LSTM 记住更远的东西</h2>
+              <p class="milestone__people">Sepp Hochreiter · Jürgen Schmidhuber</p>
+              <p class="milestone__text">门控结构让循环网络缓解长距离依赖与梯度消失,序列建模向前迈了一大步。</p>
+              <p class="milestone__why">Transformer 之前,大量语音、翻译、语言任务都靠 RNN / LSTM 这条线撑住。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/c2fdfc039245d688b0ade180a0c27d1ed21b2462?x-bce-process=image/resize,m_lfit,w_536,limit_1/quality,Q_70" alt="弗拉基米尔·万普尼克肖像" />
+              <span class="milestone__fallback">LSTM</span>
+              <span class="milestone__caption">PORTRAIT · V. Vapnik</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="1998" data-title="LeNet-5" data-era="神经网络落地" data-theme="connection">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">1998</span><span class="tag tag--connection">连接</span></div>
+              <h2>LeNet-5 与 MNIST</h2>
+              <p class="milestone__people">Yann LeCun · Léon Bottou · Yoshua Bengio · Patrick Haffner</p>
+              <p class="milestone__text">LeNet-5 把卷积、池化、全连接组合成现代 CNN 的雏形,MNIST 成为教学与基准的入口。</p>
+              <p class="milestone__why">这条线直接连到本书的 MNIST 实战:从手写数字开始,理解神经网络如何学习。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/1f178a82b9014a90f603145a2d3e2e12b31bb1514088?x-bce-process=image/resize,m_lfit,w_536,limit_1/quality,Q_70" alt="杨立昆与 LeNet" />
+              <span class="milestone__fallback">LeNet-5</span>
+              <span class="milestone__caption">PORTRAIT · Y. LeCun</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="2001" data-title="随机森林" data-era="统计学习工程化" data-theme="stat">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">2001</span><span class="tag tag--stat">统计</span></div>
+              <h2>随机森林</h2>
+              <p class="milestone__people">Leo Breiman</p>
+              <p class="milestone__text">许多棵随机化决策树一起投票,把单棵树的方差压下去,同时保持强悍的工程鲁棒性。</p>
+              <p class="milestone__why">若没有随机森林,机器学习史就会窄成神经网络史。传统 ML 这一支真的长期很强。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/b812c8fcc3cec3fd9667c06ad988d43f87942757?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="随机森林集成示意" />
+              <span class="milestone__fallback">Random Forest</span>
+              <span class="milestone__caption">FIG · 随机森林</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="2006" data-title="深度学习回归" data-era="深度学习回归" data-theme="deep">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">2006</span><span class="tag tag--deep">深度</span></div>
+              <h2>深度学习回归</h2>
+              <p class="milestone__people">Geoffrey Hinton · Yoshua Bengio · Yann LeCun</p>
+              <p class="milestone__text">深层网络、逐层预训练与更好的训练经验,让“deep learning”重新成为可认真下注的路线。</p>
+              <p class="milestone__why">这不是突然的胜利,而是连接主义在寒冬里积累几十年后,重新抬起了头。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/d000baa1cd11728b4710ce50feb5d4cec3fdfc038622?x-bce-process=image/resize,m_lfit,w_536,limit_1/quality,Q_70" alt="杰弗里·辛顿肖像" />
+              <span class="milestone__fallback">Deep Learning</span>
+              <span class="milestone__caption">PORTRAIT · G. Hinton</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="2009" data-title="ImageNet" data-era="数据时代" data-theme="data">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">2009</span><span class="tag tag--data">数据</span></div>
+              <h2>ImageNet 点燃数据时代</h2>
+              <p class="milestone__people">Fei-Fei Li · Stanford Vision Lab</p>
+              <p class="milestone__text">大规模标注图像集把视觉识别变成可比较、可竞赛、可持续推进的工程战场。</p>
+              <p class="milestone__why">深度学习的爆发不只靠算法,更靠数据集把问题的规模真正拉大。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/f2deb48f8c5494ee72f4328a27f5e0fe98257e4a?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="ImageNet 大规模图像数据集" />
+              <span class="milestone__fallback">ImageNet</span>
+              <span class="milestone__caption">FIG · ImageNet</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="2012" data-title="AlexNet" data-era="深度学习黎明" data-theme="deep">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">2012</span><span class="tag tag--deep">深度</span></div>
+              <h2>AlexNet 碾压 ImageNet</h2>
+              <p class="milestone__people">Alex Krizhevsky · Ilya Sutskever · Geoffrey Hinton</p>
+              <p class="milestone__text">GPU 上训练的大型 CNN 把 ImageNet top-5 错误率大幅打下来,传统视觉方法一夜失势。</p>
+              <p class="milestone__why">这是现代深度学习的引爆点:数据、GPU 与网络结构,在同一刻对齐。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/c83d70cf3bc79f3df8dc9070ddedda11728b47108315?x-bce-process=image/resize,m_lfit,w_536,limit_1/quality,Q_70" alt="李飞飞肖像" />
+              <span class="milestone__fallback">AlexNet</span>
+              <span class="milestone__caption">PORTRAIT · Fei-Fei Li</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="2013" data-title="word2vec" data-era="表示学习" data-theme="deep">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">2013</span><span class="tag tag--deep">表示</span></div>
+              <h2>word2vec</h2>
+              <p class="milestone__people">Tomas Mikolov · Google</p>
+              <p class="milestone__text">词不再只是一个 ID,而是连续空间里的向量;语义关系可以在向量空间里显出形状。</p>
+              <p class="milestone__why">从 one-hot 到 embedding,语言进入了神经网络真正能处理的几何世界。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/f2deb48f8c5494ee4339ef9c21f5e0fe99257e18?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="word2vec 词向量空间" />
+              <span class="milestone__fallback">word2vec</span>
+              <span class="milestone__caption">FIG · 词向量空间</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="2014" data-title="GAN" data-era="生成模型" data-theme="deep">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">2014</span><span class="tag tag--deep">生成</span></div>
+              <h2>GAN:两个网络的博弈</h2>
+              <p class="milestone__people">Ian Goodfellow</p>
+              <p class="milestone__text">生成器造假,判别器识真,二者对抗训练,让生成式模型第一次进入公众视野。</p>
+              <p class="milestone__why">它把“模型能不能生成逼真样本”变成了深度学习的核心问题之一。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/a71ea8d3fd1f41345d42eeaa291f95cad0c85ee9?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="生成对抗网络示意" />
+              <span class="milestone__fallback">GAN</span>
+              <span class="milestone__caption">FIG · 对抗生成</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="2016" data-title="AlphaGo" data-era="强化学习高光" data-theme="deep">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">2016</span><span class="tag tag--deep">强化</span></div>
+              <h2>AlphaGo 击穿围棋</h2>
+              <p class="milestone__people">DeepMind · Lee Sedol</p>
+              <p class="milestone__text">深度网络、蒙特卡洛树搜索与强化学习结合,击败了顶尖人类棋手。</p>
+              <p class="milestone__why">它展示了另一条路:不止靠模仿数据,还能靠搜索、环境与自我对弈变强。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/b90e7bec54e736d12f2ecfd1690a58c2d5628435c3ed?x-bce-process=image/resize,m_lfit,w_536,limit_1/quality,Q_70" alt="李世石对弈 AlphaGo" />
+              <span class="milestone__fallback">AlphaGo</span>
+              <span class="milestone__caption">PORTRAIT · Lee Sedol</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="2017" data-title="Transformer" data-era="注意力统一天下" data-theme="deep">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">2017</span><span class="tag tag--deep">注意力</span></div>
+              <h2>Transformer</h2>
+              <p class="milestone__people">Vaswani 等 · Attention Is All You Need</p>
+              <p class="milestone__text">自注意力取代循环结构,让序列里所有 token 可以直接彼此相望。</p>
+              <p class="milestone__why">大模型时代的底座在这里成型:并行、可扩展、天生适合规模化训练。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/b812c8fcc3cec3fd93e3c70ad188d43f869427eb?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="Transformer 注意力示意" />
+              <span class="milestone__fallback">Transformer</span>
+              <span class="milestone__caption">FIG · Self-Attention</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="2018" data-title="BERT / GPT" data-era="预训练时代" data-theme="deep">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">2018</span><span class="tag tag--deep">预训练</span></div>
+              <h2>BERT 与 GPT</h2>
+              <p class="milestone__people">Google · OpenAI</p>
+              <p class="milestone__text">大规模预训练再迁移到下游任务,语言模型从“任务专用”转向“通用底座”。</p>
+              <p class="milestone__why">从这里开始,模型不再只学一个任务,而是先去学习整个语言世界本身。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/f2deb48f8c5494eef01f5fde3badf7fe9925bd31d0e6?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="GPT 预训练语言模型" />
+              <span class="milestone__fallback">BERT / GPT</span>
+              <span class="milestone__caption">FIG · 预训练底座</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="2020" data-title="GPT-3" data-era="规模的信仰" data-theme="product">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">2020</span><span class="tag tag--product">规模</span></div>
+              <h2>GPT-3 与 Scaling</h2>
+              <p class="milestone__people">OpenAI</p>
+              <p class="milestone__text">1750 亿参数的语言模型展示 few-shot 能力:许多任务不再单独训练,给几个例子就能做。</p>
+              <p class="milestone__why">它让整个行业真正相信:规模本身,就会改变能力的边界。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/f2deb48f8c5494eef01f5fde3badf7fe9925bd31d0e6?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="GPT-3 大规模语言模型" />
+              <span class="milestone__fallback">GPT-3</span>
+              <span class="milestone__caption">FIG · Scaling Law</span>
+            </div>
+          </article>
+
+          <article class="milestone" data-year="2022" data-title="ChatGPT" data-era="产品引爆世界" data-theme="product">
+            <div class="milestone__body">
+              <div class="milestone__head"><span class="milestone__year">2022</span><span class="tag tag--product">产品</span></div>
+              <h2>ChatGPT 引爆大众世界</h2>
+              <p class="milestone__people">OpenAI · InstructGPT · RLHF</p>
+              <p class="milestone__text">底座模型经指令微调与人类反馈对齐,被放进一个人人会用的对话界面。</p>
+              <p class="milestone__why">机器学习第一次不再只是研究者的工具,而成了普通人日常的入口。</p>
+            </div>
+            <div class="milestone__media">
+              <img referrerpolicy="no-referrer" src="https://bkimg.cdn.bcebos.com/pic/83025aafa40f4bfbfbededd890136ff0f736aec3b2b1?x-bce-process=image/resize,m_lfit,w_640,limit_1/quality,Q_80" alt="ChatGPT 对话界面" />
+              <span class="milestone__fallback">ChatGPT</span>
+              <span class="milestone__caption">FIG · 对话界面</span>
+            </div>
+          </article>
+
+          <section class="constellation" data-year="2023—" data-title="模型星图" data-era="一条线,裂成一片星图" data-theme="stars">
+            <div class="constellation__intro">
+              <p class="mh-card__kicker">2023 — 至今</p>
+              <h2>一条线,裂成一片星图</h2>
+              <p>
+                ChatGPT 之后,历史不再是单线接力。公司、开源社区、研究实验室与云平台同时开火——
+                有人追最强推理,有人押注开源生态,有人深耕长上下文、Agent、代码、语音与多模态。这是一棵还在生长的树。
+              </p>
+            </div>
+            <div class="tree-scroll" aria-label="当代大模型演化树">
+              <div class="model-tree">
+                <svg class="tree-canvas" viewBox="0 0 1180 560" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                  <!-- 年份基线 -->
+                  <g class="tree-grid">
+                    <line x1="70" y1="500" x2="1150" y2="500" /><text x="60" y="504">2022</text>
+                    <line x1="70" y1="392" x2="1150" y2="392" /><text x="60" y="396">2023</text>
+                    <line x1="70" y1="284" x2="1150" y2="284" /><text x="60" y="288">2024</text>
+                    <line x1="70" y1="176" x2="1150" y2="176" /><text x="60" y="180">2025</text>
+                    <line x1="70" y1="72"  x2="1150" y2="72"  /><text x="60" y="76">2026</text>
+                  </g>
+                  <!-- 主干: 从底部升起到 GPT-3(561,500) -->
+                  <path class="tree-limb tree-limb--trunk" d="M561 560 L561 500" />
+                  <!-- OpenAI 支: GPT-3 → ChatGPT(250,300) → GPT-4/o(214,96) -->
+                  <path class="tree-limb tree-limb--openai" d="M561 500 C440 480 250 430 250 300" />
+                  <path class="tree-limb tree-limb--openai" d="M250 300 C232 232 220 160 214 96" />
+                  <!-- OpenAI 旁支: ChatGPT → Codex(936,96) -->
+                  <path class="tree-limb tree-limb--openai" d="M250 300 C360 210 780 150 936 96" />
+                  <!-- Google 支: GPT-3 → Bard(452,320) → Gemini(470,96) -->
+                  <path class="tree-limb tree-limb--google" d="M561 500 C520 456 452 400 452 320" />
+                  <path class="tree-limb tree-limb--google" d="M452 320 C452 240 462 160 470 96" />
+                  <!-- Anthropic 支: GPT-3 → Claude(742,96) -->
+                  <path class="tree-limb tree-limb--anthropic" d="M561 500 C640 420 742 260 742 96" />
+                  <!-- Meta 支: GPT-3 → Llama(360,200) → Mistral(336,404) 同源开源 -->
+                  <path class="tree-limb tree-limb--meta" d="M561 500 C480 458 360 300 360 200" />
+                  <path class="tree-limb tree-limb--meta" d="M360 200 C352 280 340 350 336 404" />
+                  <!-- 东方支: GPT-3 → DeepSeek(792,200) → Qwen(852,404) -->
+                  <path class="tree-limb tree-limb--china" d="M561 500 C660 452 792 320 792 200" />
+                  <path class="tree-limb tree-limb--china" d="M792 200 C808 280 840 350 852 404" />
+                </svg>
+
+                <span class="tree-node tree-node--closed" style="left: 47.5%; top: 89.3%">
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/openai.svg" alt="OpenAI logo" /><b class="tree-node__fallback">OAI</b>GPT-3
+                </span>
+                <span class="tree-node tree-node--closed" style="left: 21.2%; top: 53.6%">
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/openai.svg" alt="OpenAI logo" /><b class="tree-node__fallback">OAI</b>ChatGPT
+                </span>
+                <span class="tree-node tree-node--closed" style="left: 18.1%; top: 17.1%">
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/openai.svg" alt="OpenAI logo" /><b class="tree-node__fallback">OAI</b>GPT-4 / o
+                </span>
+                <span class="tree-node tree-node--closed" style="left: 39.8%; top: 17.1%">
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/google.svg" alt="Google logo" /><b class="tree-node__fallback">G</b>Gemini
+                </span>
+                <span class="tree-node tree-node--closed" style="left: 38.3%; top: 57.1%">
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/google.svg" alt="Google logo" /><b class="tree-node__fallback">G</b>Bard
+                </span>
+                <span class="tree-node tree-node--open" style="left: 30.5%; top: 35.7%">
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/meta.svg" alt="Meta logo" /><b class="tree-node__fallback">M</b>Llama
+                </span>
+                <span class="tree-node tree-node--closed" style="left: 62.9%; top: 17.1%">
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/anthropic.svg" alt="Anthropic logo" /><b class="tree-node__fallback">A</b>Claude
+                </span>
+                <span class="tree-node tree-node--closed" style="left: 79.3%; top: 17.1%">
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/openai.svg" alt="OpenAI logo" /><b class="tree-node__fallback">OAI</b>Codex
+                </span>
+                <span class="tree-node tree-node--open tree-node--china" style="left: 67.1%; top: 35.7%">
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/deepseek.svg" alt="DeepSeek logo" /><b class="tree-node__fallback">DS</b>DeepSeek
+                </span>
+                <span class="tree-node tree-node--open tree-node--china" style="left: 72.2%; top: 72.1%">
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/alibabadotcom.svg" alt="Qwen logo" /><b class="tree-node__fallback">Q</b>Qwen
+                </span>
+                <span class="tree-node tree-node--open" style="left: 28.5%; top: 72.1%">
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/mistralai.svg" alt="Mistral AI logo" /><b class="tree-node__fallback">M</b>Mistral
+                </span>
+
+                <div class="tree-legend">
+                  <span><i class="tree-legend__open"></i>开放权重 / 开源生态</span>
+                  <span><i class="tree-legend__closed"></i>闭源产品 / 实验室路线</span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <nav class="mh-timelinebar" aria-label="机器学习历史时间轴">
+      <div class="mh-era-chip" data-ml-history-era>从规则之争到模型星图</div>
+      <div class="mh-timelinebar__viewport">
+        <div class="mh-timelinebar__track" data-ml-history-timeline></div>
+      </div>
+    </nav>
+
+    <p class="mh-signature">written with Mythos</p>
+    <div class="mh-controls" aria-label="翻幕控制">
+      <button class="mh-control" type="button" data-ml-history-prev aria-label="上一幕">←</button>
+      <button class="mh-control" type="button" data-ml-history-next aria-label="下一幕">→</button>
+    </div>
+
+    <script src="assets/ml-history.js"></script>
+  </body>
+</html>
