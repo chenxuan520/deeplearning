@@ -48,7 +48,7 @@
             <li>为什么<strong>显存</strong>是训练大模型最先撞上的墙,以及混合精度/量化怎么省显存;</li>
             <li>数据并行、张量并行、流水线并行分别把什么“切开”了;</li>
             <li>AllReduce、NCCL、NVLink 这些通信黑话在干嘛;</li>
-            <li>推理提速的关键:KV cache、批处理、量化,以及量化与“降智”体感的关系;</li>
+            <li>推理提速的关键:KV cache、批处理、量化,以及为什么服务链路一压缩就会造成“降智”体感;</li>
             <li><strong>MoE(混合专家)</strong>把什么换成并列专家、<code>N</code>/<code>k</code> 怎么定、Attention 是否共用、<strong>路由器和专家怎么一起训</strong>、负载均衡,以及<strong>压 k/缩专家会不会降智</strong>;</li>
             <li><strong>稀疏注意力</strong>的几种套路(滑动窗口 / 全局 / 动态 top-k),以及它和 FlashAttention 的区别;</li>
             <li><strong>1M 上下文到底怎么做到</strong>:RoPE 外推 + 位置插值/NTK/YaRN,再叠加少算 / 缓存 / 分块 / 并行 / 长训练的组合拳;并用 GLM-5.2 / DeepSeek-V4 看 IndexShare、CSA/HCA、MTP 与 effort level 如何落地;</li>
@@ -301,23 +301,6 @@
             量化同理:用一点点几乎察觉不到的精度损失,换来<strong>好几倍</strong>的显存和速度收益,让大模型能“瘦身”下沉到消费级设备。
           </p>
         </div>
-        <div class="callout callout--warn reveal">
-          <span class="callout__title">“模型降智”最常发生在这里(推理压缩)</span>
-          <p>
-            网上说的“<strong>降智</strong>”,很多发生在<strong>推理部署</strong>环节,而不是预训练把参数改坏了:
-          </p>
-          <ul>
-            <li><strong>低比特量化</strong>(INT8/INT4/GGUF 等):权重精度变粗,难题、长尾知识、细腻推理最先掉链子。</li>
-            <li><strong>蒸馏后的小模型</strong>(<a class="xref" href="chapter-20.html">第 20 章</a>):容量上限更低,不是同一档聪明。</li>
-            <li><strong>上下文被截断</strong>:KV cache 或产品限制只保留短窗口,模型“看不见”完整材料。</li>
-            <li><strong>对齐过猛</strong>(<a class="xref" href="chapter-20.html">对齐税</a>):更安全、更拒答,体感像“不敢想、不会答”。</li>
-            <li><strong>MoE 激活过少</strong>(<a class="xref" href="chapter-21.html#8-moe-不是每次都动用全部参数">第 8 节</a>):为省算力把 top-k、专家规模压得太狠,每步实际用的“脑子”变小。</li>
-          </ul>
-          <p>
-            同一套权重,用 FP16 云端跑和用 4-bit 本地跑,<strong>不是同一个体验</strong>——降智往往是<strong>工程权衡</strong>(速度/成本/安全)的副产品,先查部署配置再怀疑“模型本身”。
-          </p>
-        </div>
-
         <h2>5. 把模型切到多卡:三种并行</h2>
         <p>既然单卡放不下、也算不快,就得把活儿拆给很多卡。主流有三种拆法,常常混着用。</p>
 
@@ -1577,12 +1560,85 @@ context &gt;= 1M   → k = 4096</code></pre>
           真实系统会盯着两个指标调:<strong>TTFT</strong>(Time To First Token,多久蹦出第一个字,主要受 prefill 影响)和 <strong>TPOT</strong>(Time Per Output Token,之后每个字的间隔,主要受 decode 批大小影响)。你感觉某个模型“想一下才开口、然后飞快”或“立刻开口、但吐字慢”,背后就是这套调度在做取舍。
         </p>
 
+        <h3>⑥ 为什么会觉得模型降智了?</h3>
+        <p>
+          网上说的“<strong>降智</strong>”,很多发生在<strong>推理服务</strong>环节,不是预训练把参数改坏了。
+          真正要抓住的是:<strong>一次模型调用链路被压缩了</strong>。真实产品里,你点到的往往只是一个模型名;服务端还有一层
+          <span class="term">serving policy</span>(推理服务策略),会根据请求复杂度、套餐、负载、延迟目标和安全规则,
+          决定这次到底给模型多少上下文、多少推理预算、多少工具能力,是否走低比特量化 / 蒸馏小模型 / fallback 后端,以及安全壳要收多紧。
+        </p>
+        <pre class="code-walk__code reveal" style="margin:0.8rem 0" aria-label="同名模型背后的推理服务策略示意"><code>用户请求
+  ↓
+Router / Policy Engine
+  ↓
+模型变体 + 推理预算 + 上下文策略 + 工具策略 + 批处理/超时/安全策略
+  ↓
+真正执行</code></pre>
+        <p>
+          UI 里看到的仍然可能是“老模型 A”,但后面这几处一变,用户就会觉得它“变笨”:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>降智原因</th><th>服务端怎么省</th><th>为什么像变笨</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>路由到便宜后端</strong></td>
+                <td>同名模型走 fast / quantized / distilled / fallback backend</td>
+                <td>简单问答差别小,复杂任务突然不稳</td>
+              </tr>
+              <tr>
+                <td><strong>权重或 KV 低精度</strong></td>
+                <td>INT8/INT4 权重量化,或 FP8 KV cache 降显存</td>
+                <td>多数问题还行,难题、长尾知识和细腻推理先掉</td>
+              </tr>
+              <tr>
+                <td><strong>推理预算变短</strong></td>
+                <td>降低 reasoning effort、内部步数、输出长度、自检和重试次数</td>
+                <td>代码漏边界、数学少推几步、回答更短更浅</td>
+              </tr>
+              <tr>
+                <td><strong>上下文给少了</strong></td>
+                <td>截断历史、提前摘要、检索 top-k 变小、工具轨迹压缩</td>
+                <td>不是不会,而是没看到关键材料</td>
+              </tr>
+              <tr>
+                <td><strong>工具链被剪短</strong></td>
+                <td>少读文件、少跑代码、少 verifier / reviewer、少子 Agent</td>
+                <td>Agent 少试错、少验证,表现像“懒了”</td>
+              </tr>
+              <tr>
+                <td><strong>吞吐优先与超时</strong></td>
+                <td>更激进 batching、排队、early stop、超时 fallback</td>
+                <td>首字慢、输出短、中途草草收尾</td>
+              </tr>
+              <tr>
+                <td><strong>安全壳更保守</strong></td>
+                <td>输入/输出 classifier、policy rewrite、拒答模板更强,也就是<a class="xref" href="chapter-20.html">对齐税</a>变高</td>
+                <td>更少细节、更爱免责声明,像“不敢答”</td>
+              </tr>
+              <tr>
+                <td><strong>MoE 激活过少</strong></td>
+                <td>压 top-k 或缩专家规模,每步实际激活的子网络变小</td>
+                <td>总参数看着很大,但当次动用的能力变少</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          所以“降智”的真实原因,往往不是单独某项优化技术有问题,而是几项策略叠在一起:
+          <strong>少看上下文 + 少想几步 + 少用工具 + 更快超时 + 更保守安全壳</strong>。MoE 少开专家当然可能掉能力,
+          但它通常不是线上最先怀疑的开关;更常见、更好控的是 router、预算、上下文、工具链和调度策略。
+        </p>
+
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
             <li>大模型工程的三座大山:算力、显存、通信。</li>
             <li>GPU 靠上万个 CUDA 核并行,天然适合矩阵乘法;CUDA 平台负责调度。</li>
             <li>显存是第一堵墙(要放参数+梯度+优化器状态+激活);混合精度、量化能大幅省显存。</li>
+            <li>很多“降智”体感来自推理调用链路被压缩:serving policy 可能把请求路由到便宜后端,并收紧推理预算、上下文、工具链、超时和安全策略。</li>
             <li>三种并行:数据并行(人手一份模型,AllReduce 同步梯度)、张量并行(切开单层矩阵,AllGather 拼接)、流水线并行(不同层放不同卡)。</li>
             <li>NCCL 管通信,NVLink/NVSwitch 是卡间高速公路;推理靠 KV cache、批处理、量化提速。</li>
             <li>MoE:FFN 换成 <strong>N 个并列专家</strong>(<code>N</code>/<code>k</code> 设计时定死),Attention <strong>共用 1 套</strong>;路由器 softmax 打分 + top-k 门控加权,与专家<strong>端到端</strong>同训;还得靠负载均衡防专家坍缩。参数多但算得少;全部专家仍要常驻显存。<strong>压 k/缩专家会掉能力</strong>,是另一类「降智」来源。</li>
@@ -1600,75 +1656,57 @@ context &gt;= 1M   → k = 4096</code></pre>
         <h2>动手与思考</h2>
         <div class="quiz reveal">
           <details class="quiz__item">
-            <summary class="quiz__q">问题 1:为什么深度学习用 GPU 而不是 CPU?</summary>
+            <summary class="quiz__q">问题 1:为什么深度学习用 GPU 而不是 CPU?显存为什么又会先撞墙?</summary>
             <div class="quiz__a">
-              <p>因为训练/推理的核心是海量互不依赖的简单乘加(矩阵运算)。CPU 核心少但强,擅长复杂串行任务;GPU 有上万个简单核心,能把这些乘加同时并行做完,吞吐高得多。</p>
+              <p>因为训练/推理的核心是海量互不依赖的简单乘加(矩阵运算)。CPU 核心少但强,擅长复杂串行任务;GPU 有上万个简单核心,能把这些乘加同时并行做完,吞吐高得多。但模型一大,参数、梯度、优化器状态和激活值都要进显存,容量很快不够,所以显存常常比算力更早成为第一堵墙。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 2:数据并行和张量并行,切开的分别是什么?</summary>
+            <summary class="quiz__q">问题 2:混合精度和量化都在省显存,区别是什么?</summary>
             <div class="quiz__a">
-              <p>数据并行切的是<strong>数据</strong>:每卡放完整模型、各吃一部分数据,再用 AllReduce 平均梯度同步。张量并行切的是<strong>模型本身</strong>(单层权重矩阵太大放不下),把矩阵分块到多卡再拼接。</p>
+              <p>混合精度主要发生在训练中:大部分数值用 FP16/BF16 存和算,少数敏感位置用 FP32 兜底。量化主要发生在推理中:把权重、激活甚至 KV cache 压到 INT8、FP8、INT4 等更低精度。前者是训练时的折中,后者更像把模型部署得更小、更便宜,压得太狠就可能影响细节任务。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 3:KV cache 为什么能加速生成?它依赖哪一章的知识?</summary>
+            <summary class="quiz__q">问题 3:数据并行、张量并行、流水线并行分别切开的是什么?</summary>
             <div class="quiz__a">
-              <p>自回归生成时,已经出现的词的 Key/Value 不会改变,缓存起来就不必每步重算,新词只算自己的部分。它直接建立在<a class="xref" href="chapter-17.html">第 17 章</a>注意力的 Q/K/V 机制之上。</p>
+              <p>数据并行切的是<strong>数据</strong>:每卡放完整模型、各吃一部分样本,再用 AllReduce 同步梯度。张量并行切的是<strong>单层大矩阵</strong>:一层太大,就把权重矩阵分块放到多卡再拼接结果。流水线并行切的是<strong>层</strong>:前几层放一组卡、后几层放另一组卡,像流水线一样接力。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 4:MoE“6710 亿参数只激活 370 亿”是什么意思?好处是什么?</summary>
+            <summary class="quiz__q">问题 4:KV cache 和连续批处理分别解决推理里的什么浪费?</summary>
             <div class="quiz__a">
-              <p>模型里有很多“专家”子网络(其实是并排的多个 FFN),每个 token 只被路由到最相关的少数几个专家计算,其余不参与。于是总参数(知识容量)可以很大,但每次实际算的量不大——用较小的算力代价换更大更强的模型。</p>
+              <p>KV cache 解决的是<strong>重复计算</strong>:自回归生成时,历史 token 的 Key/Value 不变,缓存起来后每步只算新 token。连续批处理解决的是<strong>GPU 空转</strong>:单个用户 decode 一次只算一个 token,喂不饱 GPU;把很多用户的“下一个字”动态拼成一批,吞吐就上来了。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 5:MoE 每次只激活一小部分参数,那是不是显存也跟着省了?</summary>
+            <summary class="quiz__q">问题 5:MoE“总参数很大、每次只激活一小部分”到底是什么意思?</summary>
             <div class="quiz__a">
-              <p>不省。因为事先不知道每个 token 会用到哪些专家,<strong>全部专家都得常驻显存待命</strong>。所以 MoE 是“显存开销 ≈ 总参数,算力开销 ≈ 激活参数”——它<strong>用显存换算力</strong>,省的是计算量,不是显存。</p>
+              <p>MoE 把每层 FFN 换成很多并列专家。每个 token 只被路由到少数几个专家计算,其余专家本步不参与,所以<strong>总参数</strong>可以很大,但<strong>激活参数</strong>较小。它省的是计算量,不是显存:因为事先不知道 token 会找哪些专家,全部专家仍要常驻显存待命。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 6:为省算力把 MoE 的 top-k 压得很小,会不会“降智”?和量化降智一样吗?</summary>
+            <summary class="quiz__q">问题 6:MoE 的路由器怎么训练?Attention 也要复制 N 份吗?</summary>
             <div class="quiz__a">
-              <p>会掉能力,但机制不同。量化是<strong>同一网络权重精度变粗</strong>;压 k/缩专家是<strong>每步只走更窄的子网络</strong>(更少专家 × 更小专家),激活算力变小。简单题可能差不多,难题、代码、多步推理更容易露怯。总参数量大不代表每一步都动用那么多能力——看的是当次激活算力。</p>
+              <p>路由器先 <code>softmax</code> 得到门控分,再 top-k 选出专家,用门控分加权被选中的 FFN 输出。top-k 的“谁入围”是离散的,但入围前的打分器可微,入围后的加权路径也能从主 loss 回传梯度,所以路由器和被选中的专家能端到端训练。Attention 通常仍是共用 1 套,不会随专家复制 N 份;并列的是 FFN。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 7:MoE 的路由器像硬开关,梯度怎么训?Attention 也要复制 N 份吗?</summary>
+            <summary class="quiz__q">问题 7:MTP 对训练和推理分别有什么帮助?它是不是一步直接吐多个 token?</summary>
             <div class="quiz__a">
-              <p>路由器先 <code>softmax</code> 得到门控分,再 top-k 选出专家,用<strong>门控分加权</strong> k 个 FFN 输出。top-k 的“谁入围”本身是离散的,但入围前的打分器可微,入围后的加权路径也能从主 loss 回传梯度,所以 <code>W_gate</code> 和被选中的专家都能端到端更新;没被选中的专家本轮通常没有直接梯度。Attention <strong>仍是 1 套共用</strong>,不会随专家变成 N 份;并列的是 FFN。难点在负载均衡,防止只宠少数专家。</p>
+              <p>不是无条件“一步吐多个 token”。训练时,MTP 让同一个 hidden state 预测多个未来 token,监督更密,也逼表示携带后面几步的规划信息。推理时,MTP 只当草稿器,先猜一串候选;主模型再批量验证。连续通过的 token 可以一次接受,不通过就回到主模型正常生成。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 8:MTP 对推理有什么帮助?它是不是一步直接吐多个 token?</summary>
+            <summary class="quiz__q">问题 8:一个模型号称支持 1M 上下文,靠的是把 RoPE 直接编到 100 万吗?</summary>
             <div class="quiz__a">
-              <p>不是无条件“一步吐多个 token”。训练时,MTP 给同一个 hidden state 加多个未来 token 的辅助 loss,监督更密,也逼表示携带后面几步的规划信息。推理时,MTP 头/模块只当草稿器,先猜 <code>y1,y2,y3...</code>;主模型再用一次 causal forward 批量验证这些位置的分布。连续通过的 token 一次接受并保留 KV cache;遇到不通过的位置就丢掉后续草稿,从主模型分布继续生成。代价是草稿和验证都要额外算力,接受率低时可能不赚,服务端还要处理 KV cache 回退和采样接受规则。</p>
+              <p>不是,是组合拳:位置编码要靠 PI/NTK/YaRN 等方法把 RoPE 拉伸到更远;注意力要靠稀疏连接少算,而 FlashAttention 负责把仍需计算的块更高效地精确算完;KV cache 要靠量化和分页管理存得下;prefill 要分块、多卡并行算得动;模型还要真的在长序列上续训过。缺哪层都撑不到真正可用的 1M。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 9:稀疏注意力和 FlashAttention 都能让注意力更快,区别在哪?</summary>
+            <summary class="quiz__q">问题 9:为什么同一个模型名下,用户有时会觉得模型“降智”?</summary>
             <div class="quiz__a">
-              <p>稀疏注意力是<strong>近似</strong>:干脆<strong>少算</strong>一些 token 对(只保留窗口/全局/top-k 的连接),用极小精度损失换速度。FlashAttention 是<strong>精确</strong>:一个都不少算,只是把计算重排、减少显存读写,让同样的稠密注意力更快更省显存。前者“少做题”,后者“做题更利索”,可叠加。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 10:一个模型号称支持 1M 上下文,靠的是把 RoPE 的位置直接编到 100 万吗?</summary>
-            <div class="quiz__a">
-              <p>不是,是<strong>五层同时到位</strong>的组合拳:①<strong>位置编码</strong>——RoPE 只依赖相对角度差、天生能外推一点,但硬编到百万会崩,得靠<strong>位置插值/NTK/YaRN</strong>把旋转角度“拉伸”回可用范围,再少量长文本微调;②<strong>少算</strong>——稀疏注意力(窗口/全局/top-k)把 O(n²) 压下来;③<strong>存得下</strong>——量化 + PagedAttention 分页复用 KV cache;④<strong>算得动</strong>——分块 prefill + 多卡并行;⑤<strong>真训过</strong>——在长序列上续训。缺哪层都撑不到 1M。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 11:为什么长上下文常常更贵?稀疏注意力是不是让它免费了?</summary>
-            <div class="quiz__a">
-              <p>不会免费。长 prompt 的 prefill 更长,KV cache 更大;decode 每生成一个 token,也要访问更多历史 KV、压缩块或索引结果。稀疏注意力把 full attention 的成本压下去,但它仍然要维护更长历史、跑索引/压缩、占更多显存,还会让批处理更难做。所以厂商常按上下文档位收费。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 12:一个用户逐字生成时明明用不满 GPU,为什么服务上亿用户反而扛得住?</summary>
-            <div class="quiz__a">
-              <p>正因为单个请求(尤其 decode 阶段)喂不饱 GPU,才有空间<strong>把很多请求拼一起算</strong>。<strong>连续批处理</strong>让不同用户的“下一个字”凑成一次大计算、谁完成谁下车、新请求随时插入,把 GPU 榨满;<strong>PagedAttention</strong> 把 KV cache 分页管理、消除碎片还能复用公共前缀,让一批塞下更多并发;真到亿级再用<strong>多副本 + 负载均衡</strong>横向扩展。代价是攒批会增加单人延迟,所以要在吞吐(TPOT)和首字延迟(TTFT)之间按场景权衡。</p>
+              <p>因为前端显示的是模型名,后端执行的是一条服务链路。serving policy 可能把请求路由到更便宜的 backend,收紧 reasoning budget、上下文长度、工具调用、自检重试、输出长度和超时策略,再叠加量化、小模型 fallback 或更保守的安全壳。模型不一定是权重坏了,而是这次调用<strong>少看、少想、少用工具、结束更早</strong>。</p>
             </div>
           </details>
         </div>

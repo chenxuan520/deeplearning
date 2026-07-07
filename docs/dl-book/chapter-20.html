@@ -516,10 +516,16 @@
         <div class="callout callout--note reveal">
           <span class="callout__title">一个更准确的说法</span>
           <p>
-            预训练决定模型<strong>会什么</strong>;SFT 决定模型<strong>怎么听指令地调用这些能力</strong>;
+            预训练像长期读书:模型在海量文本、代码和图像里形成语感、知识底座、世界模型和基本推理痕迹;
+            后训练像进入真实工作:用范文、偏好、工具结果和任务反馈,教它<strong>在具体场景里怎样把事做对、怎样回答才算合格</strong>。
+            更短地说,预训练决定模型<strong>会什么</strong>;SFT 决定模型<strong>怎么听指令地调用这些能力</strong>;
             偏好优化决定模型<strong>两个可行答案里更该选哪一个</strong>。
-            所以 SFT 很强,但不是魔法:如果底座完全没学过中文、数学或代码,少量 SFT 很难凭空造出这些能力。
-            反过来,如果底座已经接近会做,SFT 就像一次岗前培训,能把“博学但散漫”的模型迅速调成“会接任务”的助手。
+          </p>
+          <p>
+            这也解释了小模型和大模型的差别。粗略类比,小模型像受过专门训练的中专/技工,大模型更像知识面更宽、抽象能力更强的博士。
+            前者在熟悉工位上可以练得非常熟,甚至超过更大的通用模型;但任务一旦跨领域、跨模态、需要融会贯通,
+            底座容量和预训练见识的差距就会重新显现。后训练能把“博学但散漫”的底座调成“会接任务”的助手,
+            但如果底座完全没学过中文、数学或代码,少量 SFT 很难凭空造出这些能力。
           </p>
         </div>
         <h4>训练时,哪部分 token 真正在计分?</h4>
@@ -717,6 +723,19 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
             蒸馏和直接做小模型,换的是<strong>体积与速度</strong>,付的是<strong>能力上限</strong>。学生很难 100% 复制教师的“暗知识”,
             复杂推理、长尾知识、细腻概率偏好最容易丢——用起来就像“同款但没那么聪明”。这和<a class="xref" href="chapter-21.html#4-省显存两招-混合精度与量化">量化</a>、<a class="xref" href="chapter-21.html#8-moe-不是每次都动用全部参数">MoE 压 k</a>导致的降智是不同环节,
             但体感类似:<strong>不是不会,而是浅了、窄了</strong>。
+          </p>
+          <p>
+            一个小模型在编程、数学或某个 Agent 评测里接近大模型,也不等于“堆参数没用了”。它往往是拿几样东西来换:
+          </p>
+          <ul>
+            <li><strong>更长的推理时间</strong>:小模型一步看不出的题,靠更长思维链、多候选搜索、测试和修复慢慢逼近;单步便宜,整次任务未必便宜。</li>
+            <li><strong>更窄的能力范围</strong>:专门练编程、数学或工具轨迹后,这个工位上很能打;但常识、写作、科学、多语言或跨领域迁移可能弱很多。</li>
+            <li><strong>更少的模态和体验</strong>:砍掉视觉、音频、视频能省参数和训练成本,但前端设计、图表理解、真实世界任务会吃亏。</li>
+          </ul>
+          <p>
+            所以看“小模型打大模型”的结果,不能只看分数,还要看<strong>任务范围、推理预算、延迟、多模态能力和通用性</strong>。
+            更准确的结论是:底座规模决定上限,后训练决定能不能把上限用出来;小模型可以靠专精和更多推理预算追上某些任务,
+            但它通常牺牲了宽度、速度或跨场景鲁棒性。
           </p>
         </div>
         <div class="callout callout--note reveal">
@@ -925,6 +944,63 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           <li><strong>测试时算力(test-time compute)</strong>:让模型在回答时“多花时间思考”(生成更多中间推理),难题正确率明显提升——花的不再只是训练算力,还有<strong>推理时</strong>的算力。</li>
           <li><strong>怎么训出来的</strong>:很多用一种“<strong>可验证奖励</strong>”的强化学习(RLVR)——数学、代码这类<strong>有标准答案</strong>的任务,答对给正奖励、答错给负奖励,让模型自己摸索出好的推理套路。这是 RLHF 之后后训练的新玩法。</li>
         </ul>
+        <p>
+          那模型推理时<strong>怎么知道该想多久</strong>?它不是凭空有个“自知之明”开关,而是三件事叠在一起:
+        </p>
+        <ul>
+          <li><strong>外部预算</strong>:产品或 API 会给这次请求一个思考档位,比如 <code>low / medium / high</code>、<code>reasoning_effort</code>、<code>thinking_budget</code> 或最大 reasoning token 数。服务端再把它变成模型能感知的控制信号,例如特殊 token、系统指令、解码配置或内部路由策略。</li>
+          <li><strong>模型策略</strong>:训练和强化学习会让模型见到“简单题短想、难题多想”的样本与奖励。久而久之,模型会学到一种停机策略:什么时候继续推演、什么时候检查、什么时候转入最终回答。</li>
+          <li><strong>运行时截断</strong>:就算模型还想继续生成中间推理,一旦 reasoning token、总输出 token、工具调用轮数或超时达到上限,服务端也会强制停止或转入最终回答。</li>
+        </ul>
+        <p>
+          所以“思考深度”更准确地说是<strong>外部预算 + 模型学到的停机策略 + runtime 硬限制</strong>共同决定的。
+          调高它不会改变模型权重,只是允许同一个模型在推理阶段花更多 token、更多候选或更多验证轮次。简单题可能只是变慢变贵;难题才更可能因此做对。
+        </p>
+        <p>
+          真正难的是:<strong>推理长度本身不好直接监督</strong>。训练时通常不是教模型“这题必须想 137 个 token”,
+          而是让它学会在预算内判断<strong>继续想是否值得</strong>。
+        </p>
+        <ul>
+          <li><strong>SFT 给长度示范</strong>:数据里可以放“简单题 → 短推理”“难题 → 长推理 / 多次检查”的样本,让模型先模仿不同题型下的展开方式。</li>
+          <li><strong>RL 奖励正确性</strong>:数学、代码、逻辑题可以用最终答案、测试用例或 verifier 判断对错。模型如果靠更长推理把题做对,就会得到更高奖励。</li>
+          <li><strong>成本项惩罚磨蹭</strong>:只奖励答对会鼓励模型无限展开,所以奖励里常会扣掉 reasoning token、工具调用或耗时成本,逼它学会“能短想就短想,难题才多想”。</li>
+          <li><strong>effort 条件控制</strong>:训练时把 <code>low / medium / high</code> 这类档位也作为条件喂给模型,让同一类题在低档更简短,高档更愿意检查和尝试。</li>
+          <li><strong>runtime 兜底</strong>:训练只能塑造倾向,不能保证每次都停得刚好;线上仍要靠 max reasoning tokens、超时和工具轮数上限兜住成本。</li>
+        </ul>
+        <p>
+          <strong>effort 条件控制</strong>可以理解成“给同一个模型装一个推理预算旋钮”。训练样本不只长这样:
+        </p>
+        <pre class="code-walk__code reveal" style="margin:0.8rem 0"><code>题目 → 推理过程 → 答案</code></pre>
+        <p>
+          而是会把预算档位也放进条件里,像这样:
+        </p>
+        <pre class="code-walk__code reveal" style="margin:0.8rem 0"><code>[effort=low]   题目 → 短推理 / 少检查 → 答案
+[effort=high]  题目 → 更完整推理 / 多检查 / 可尝试备选解法 → 答案</code></pre>
+        <p>
+          这里的 <code>[effort=high]</code> 不一定真是用户能看到的文字,也可能是服务端插入的特殊 token、隐藏控制字段或路由配置。
+          关键是模型在训练时反复见到“同类问题 + 不同 effort 条件 → 不同长度和细致程度的推理轨迹”。
+          到推理时,产品 UI 里的“快速 / 深度思考”或 API 里的 <code>reasoning_effort</code>,就会被服务端翻译成类似的控制信号。
+        </p>
+        <p>
+          这不是精确控制“必须想 512 个 token”。它控制的是<strong>分布倾向</strong>:
+          low 档更倾向于少展开、快给答案;high 档更倾向于拆步骤、做检查、必要时换一种解法。
+          最终长度仍由题目难度、模型停机策略和 runtime 上限共同决定。
+        </p>
+        <div class="mathblock reveal">
+          <var>R</var>
+          =
+          <var>R</var><sub>correct</sub>
+          -
+          <var>α</var> · <var>T</var><sub>reason</sub>
+          -
+          <var>β</var> · <var>T</var><sub>tool</sub>
+          <span class="label">一种直觉化奖励:答对加分,推理 token 和工具轮数扣成本;真实系统会更复杂</span>
+        </div>
+        <p>
+          所以 reasoning 模型学到的不是精确计时器,而是一种策略:
+          <strong>这道题继续推演带来的正确率收益,值不值得多花这些 token。</strong>
+          这也是为什么高 effort 往往更强但更慢、更贵,而且不是所有问题都会明显受益。
+        </p>
 
         <h3>多模态:不只吃文字</h3>
         <p>
@@ -1166,7 +1242,7 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
         <div class="callout callout--warn reveal">
           <span class="callout__title">大模型并不“无所不知”</span>
           <p>
-            <strong>幻觉(hallucination)</strong>:它的目标是“预测最像样、最连贯的下一个词”,而不是“说真话”。(顶级模型怎么系统性地对抗幻觉,见<a class="xref" href="chapter-22.html#3-顶级模型怎么系统性地对抗幻觉">第 22 章</a>。)
+            <strong>幻觉(hallucination)</strong>:它的目标是“预测最像样、最连贯的下一个词”,而不是“说真话”。(如何靠证据与验证缓解幻觉,见<a class="xref" href="chapter-22.html#22-可靠回答-幻觉证据与验证">第 22 章</a>。)
             当它对某事没有可靠依据时,照样会生成通顺合理、却是<strong>编造</strong>的内容。<br />
             <strong>知识截止</strong>:参数一旦训练完就固定,它的知识停在训练数据那一刻,不知道今天的新闻、天气、股价。<br />
             <strong>偏见</strong>:训练数据里的偏见会被它一并学进去。<br />
@@ -1202,9 +1278,9 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
             <li>真实分词用 BPE/子词:高频组合合并成一个 token,存进词表;词表大小是权衡。</li>
             <li>词嵌入把词变成“语义坐标”,<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦相似度衡量语义远近;词向量可迁移复用。</li>
             <li>Scaling Law:参数、数据、算力一起放大,性能可预测提升;超过门槛会“涌现”新能力。</li>
-            <li>预训练(自监督)练出底座能力;后训练(SFT → RLHF/DPO → 蒸馏)把它调成好用的助手。SFT 数据量远小于预训练,但正好打在“用户指令 → 助手回答”的使用入口上,所以能显著改变体感;它常常仍是交叉熵训练,但通常<strong>只对 assistant/completion 部分计 loss</strong>,prompt 更多是作为条件输入。新的后训练还会用<strong>多教师在线蒸馏</strong>,把数学、代码、Agent 等专项老师的能力压进一个统一模型。</li>
-            <li>最近方向:推理模型、多模态(patch→ViT→投影→拼序列)、长上下文、MoE——内核仍是 token + Transformer。上下文窗口由<strong>位置编码 × 训练长度 × 算力显存</strong>三关中最紧的一关决定,且标称长度≠有效长度。</li>
-            <li>降智/对齐税/遗忘等多半发生在<strong>后训练、蒸馏、量化、MoE 压 k、截断、产品护栏</strong>等环节,先定位链路再判断能力。</li>
+            <li>预训练(自监督)像长期读书,练出语言、知识和世界模型底座;后训练(SFT → RLHF/DPO → 蒸馏)像进入真实工作,把它调成好用的助手。SFT 数据量远小于预训练,但正好打在“用户指令 → 助手回答”的使用入口上,所以能显著改变体感;它常常仍是交叉熵训练,但通常<strong>只对 assistant/completion 部分计 loss</strong>,prompt 更多是作为条件输入。新的后训练还会用<strong>多教师在线蒸馏</strong>,把数学、代码、Agent 等专项老师的能力压进一个统一模型。</li>
+            <li>最近方向:推理模型、多模态(patch→ViT→投影→拼序列)、长上下文、MoE——内核仍是 token + Transformer。推理模型的“思考深度”由 effort 条件训练、外部预算、模型学到的停机策略和 runtime 硬限制共同决定;上下文窗口由<strong>位置编码 × 训练长度 × 算力显存</strong>三关中最紧的一关决定,且标称长度≠有效长度。</li>
+            <li>降智/对齐税/遗忘等多半发生在<strong>后训练、蒸馏、量化、MoE 压 k、截断、产品护栏</strong>等环节,先定位链路再判断能力。小模型追上大模型通常靠专精、更长推理或砍掉多模态来换分数,不能只看 benchmark,还要看任务范围、延迟和通用性。</li>
             <li>它本质是概率预测器,所以会幻觉、有知识截止和偏见——要理性使用,并靠 RAG/工具补救。</li>
           </ul>
         </section>
@@ -1244,7 +1320,7 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           <details class="quiz__item">
             <summary class="quiz__q">问题 6:“预训练”和“后训练”分工是什么?为什么 <code>-base</code> 模型不好直接聊天?</summary>
             <div class="quiz__a">
-              <p>预训练在海量文本上自监督地学到通用语言能力和世界知识,给出一个“博学但只会接话”的底座模型(base)。后训练(SFT → RLHF/DPO → 蒸馏)在底座之上加工,教它听指令、按人类偏好回答。SFT 数据量虽然远小于预训练,但它正好覆盖最终用户最常见的交互入口,而且不是重新教知识,只是把已有能力校准成“指令 → 助手回答”的模式。<code>-base</code> 没做后训练,所以往往只会顺着你的话往下写,而不是好好回答——要 <code>-chat</code>/<code>-instruct</code> 那样做过后训练的版本才好用。</p>
+              <p>预训练像长期读书:在海量文本上自监督地学到语言能力、世界知识和代码/推理模式,给出一个“博学但只会接话”的底座模型(base)。后训练像进入真实工作:在底座之上用 SFT → RLHF/DPO → 蒸馏加工,教它听指令、按人类偏好回答、在具体任务里把事做对。SFT 数据量虽然远小于预训练,但它正好覆盖最终用户最常见的交互入口,而且不是重新教知识,只是把已有能力校准成“指令 → 助手回答”的模式。<code>-base</code> 没做后训练,所以往往只会顺着你的话往下写,而不是好好回答——要 <code>-chat</code>/<code>-instruct</code> 那样做过后训练的版本才好用。</p>
             </div>
           </details>
           <details class="quiz__item">
@@ -1257,6 +1333,12 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
             <summary class="quiz__q">问题 8:一个模型的上下文窗口(比如 128K)到底是由什么决定的?</summary>
             <div class="quiz__a">
               <p>由三道关卡里<strong>最紧的那个</strong>决定:①<strong>位置编码</strong>能表示多远(可学习绝对位置是硬墙,RoPE/ALiBi 才能外推);②训练时<strong>真的在多长的序列上练过</strong>(没练过就用不好远处信息,可用位置插值/YaRN 事后拉长);③推理时的<strong>算力与显存</strong>(注意力随长度平方增长,KV cache 随长度线性膨胀)。此外<strong>标称长度 ≠ 有效长度</strong>,存在“迷失在中间”,关键材料放开头或结尾更可靠。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 9:推理模型怎么知道自己该“想多久”?</summary>
+            <div class="quiz__a">
+              <p>不是模型凭空知道,而是几层机制合起来:训练时可以把 <code>[effort=low]</code>、<code>[effort=high]</code> 这类条件放进样本,让模型学到同类题在低档短推理、高档多检查;RL 再用正确性奖励和 token 成本惩罚,塑造“继续想是否值得”的策略;服务端推理时给外部预算,并用 max reasoning tokens / 工具轮数 / 时间做硬截断。调高思考深度不改权重,只是给同一个模型更多推理阶段计算。</p>
             </div>
           </details>
         </div>

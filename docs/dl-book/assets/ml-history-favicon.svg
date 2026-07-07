@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#15100a" />
+      <stop offset=".52" stop-color="#080d16" />
+      <stop offset="1" stop-color="#050506" />
+    </linearGradient>
+    <linearGradient id="thread" x1="5" y1="24" x2="26" y2="8" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e0a24e" />
+      <stop offset=".48" stop-color="#8fb3e6" />
+      <stop offset="1" stop-color="#e3b15c" />
+    </linearGradient>
+    <radialGradient id="dawn" cx="0" cy="0" r="1" gradientTransform="translate(24.5 8.7) rotate(90) scale(7.5)">
+      <stop offset="0" stop-color="#f2d38a" />
+      <stop offset=".55" stop-color="#e3b15c" stop-opacity=".5" />
+      <stop offset="1" stop-color="#e3b15c" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <rect width="32" height="32" rx="7" fill="url(#bg)" />
+  <path d="M4.8 25.2h21.8" stroke="#efe7d6" stroke-width=".8" stroke-linecap="round" opacity=".24" />
+  <path d="M7.4 23.1v3.4M13.8 23.1v3.4M20.2 23.1v3.4M26.6 23.1v3.4" stroke="#efe7d6" stroke-width=".75" stroke-linecap="round" opacity=".34" />
+
+  <circle cx="24.5" cy="8.7" r="7.4" fill="url(#dawn)" />
+  <path d="M6.4 22.6C10.2 16.7 14.1 20.1 16.2 15.7c1.6-3.3 4.7-5.7 8.3-7" fill="none" stroke="url(#thread)" stroke-width="2.15" stroke-linecap="round" />
+  <path d="M9.7 12.1h5M9.7 15.1h5" stroke="#8fb3e6" stroke-width="1.25" stroke-linecap="round" opacity=".82" />
+  <path d="M16.2 15.7 20.3 20.1M16.2 15.7 12.2 19.3" stroke="#b9ad98" stroke-width="1.05" stroke-linecap="round" opacity=".58" />
+
+  <g stroke="#fff1c6" stroke-width=".55">
+    <circle cx="6.4" cy="22.6" r="2.15" fill="#e0a24e" />
+    <circle cx="16.2" cy="15.7" r="2.25" fill="#8fb3e6" />
+    <circle cx="24.5" cy="8.7" r="2.65" fill="#e3b15c" />
+  </g>
+  <g fill="#efe7d6" opacity=".62">
+    <circle cx="12.2" cy="19.3" r=".9" />
+    <circle cx="20.3" cy="20.1" r=".9" />
+    <circle cx="24.2" cy="18.3" r=".65" />
+  </g>
+</svg>

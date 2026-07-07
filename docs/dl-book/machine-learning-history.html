@@ -11,7 +11,7 @@
     <meta property="og:title" content="百年长夜与黎明" />
     <meta property="og:description" content="一幕一幕看完机器学习的百年长夜与黎明:从规则之争到模型星图。" />
     <meta property="og:type" content="website" />
-    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="icon" href="assets/ml-history-favicon.svg" />
     <link rel="stylesheet" href="assets/ml-history.css" />
   </head>
   <body data-theme="intro">
@@ -440,6 +440,7 @@
                 ChatGPT 之后,历史不再是单线接力。公司、开源社区、研究实验室与云平台同时开火——
                 有人追最强推理,有人押注开源生态,有人深耕长上下文、Agent、代码、语音与多模态。这是一棵还在生长的树。
               </p>
+              <p class="constellation__note">左侧年份只表示大致演化阶段,不是每个节点的精确发布日期。</p>
             </div>
             <div class="tree-scroll" aria-label="当代大模型演化树">
               <div class="model-tree">
@@ -457,8 +458,6 @@
                   <!-- OpenAI 支: GPT-3 → ChatGPT(250,300) → GPT-4/o(214,96) -->
                   <path class="tree-limb tree-limb--openai" d="M561 500 C440 480 250 430 250 300" />
                   <path class="tree-limb tree-limb--openai" d="M250 300 C232 232 220 160 214 96" />
-                  <!-- OpenAI 旁支: ChatGPT → Codex(936,96) -->
-                  <path class="tree-limb tree-limb--openai" d="M250 300 C360 210 780 150 936 96" />
                   <!-- Google 支: GPT-3 → Bard(452,320) → Gemini(470,96) -->
                   <path class="tree-limb tree-limb--google" d="M561 500 C520 456 452 400 452 320" />
                   <path class="tree-limb tree-limb--google" d="M452 320 C452 240 462 160 470 96" />
@@ -479,33 +478,29 @@
                   <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/openai.svg" alt="OpenAI logo" /><b class="tree-node__fallback">OAI</b>ChatGPT
                 </span>
                 <span class="tree-node tree-node--closed" style="left: 18.1%; top: 17.1%">
-                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/openai.svg" alt="OpenAI logo" /><b class="tree-node__fallback">OAI</b>GPT-4 / o
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/openai.svg" alt="OpenAI logo" /><b class="tree-node__fallback">OAI</b>GPT-5.4
                 </span>
                 <span class="tree-node tree-node--closed" style="left: 39.8%; top: 17.1%">
-                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/google.svg" alt="Google logo" /><b class="tree-node__fallback">G</b>Gemini
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/google.svg" alt="Google logo" /><b class="tree-node__fallback">G</b>Gemini 3.5
                 </span>
                 <span class="tree-node tree-node--closed" style="left: 38.3%; top: 57.1%">
                   <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/google.svg" alt="Google logo" /><b class="tree-node__fallback">G</b>Bard
                 </span>
+                <span class="tree-node tree-node--closed" style="left: 62.9%; top: 17.1%">
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/anthropic.svg" alt="Anthropic logo" /><b class="tree-node__fallback">A</b>Claude 5
+                </span>
                 <span class="tree-node tree-node--open" style="left: 30.5%; top: 35.7%">
                   <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/meta.svg" alt="Meta logo" /><b class="tree-node__fallback">M</b>Llama
-                </span>
-                <span class="tree-node tree-node--closed" style="left: 62.9%; top: 17.1%">
-                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/anthropic.svg" alt="Anthropic logo" /><b class="tree-node__fallback">A</b>Claude
-                </span>
-                <span class="tree-node tree-node--closed" style="left: 79.3%; top: 17.1%">
-                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/openai.svg" alt="OpenAI logo" /><b class="tree-node__fallback">OAI</b>Codex
-                </span>
-                <span class="tree-node tree-node--open tree-node--china" style="left: 67.1%; top: 35.7%">
-                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/deepseek.svg" alt="DeepSeek logo" /><b class="tree-node__fallback">DS</b>DeepSeek
-                </span>
-                <span class="tree-node tree-node--open tree-node--china" style="left: 72.2%; top: 72.1%">
-                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/alibabadotcom.svg" alt="Qwen logo" /><b class="tree-node__fallback">Q</b>Qwen
                 </span>
                 <span class="tree-node tree-node--open" style="left: 28.5%; top: 72.1%">
                   <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/mistralai.svg" alt="Mistral AI logo" /><b class="tree-node__fallback">M</b>Mistral
                 </span>
-
+                <span class="tree-node tree-node--open tree-node--china" style="left: 72.2%; top: 72.1%">
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/alibabadotcom.svg" alt="Qwen logo" /><b class="tree-node__fallback">Q</b>Qwen
+                </span>
+                <span class="tree-node tree-node--open tree-node--china" style="left: 67.1%; top: 35.7%">
+                  <img referrerpolicy="no-referrer" src="https://fastly.jsdelivr.net/npm/simple-icons/icons/deepseek.svg" alt="DeepSeek logo" /><b class="tree-node__fallback">DS</b>DeepSeek
+                </span>
                 <div class="tree-legend">
                   <span><i class="tree-legend__open"></i>开放权重 / 开源生态</span>
                   <span><i class="tree-legend__closed"></i>闭源产品 / 实验室路线</span>

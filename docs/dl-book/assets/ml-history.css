@@ -340,6 +340,12 @@ body[data-theme="winter"]::before {
   margin: 0.9rem 0 0; color: var(--paper-dim);
   font-size: clamp(0.95rem, 1.35vw, 1.08rem); line-height: 1.8; max-width: 44rem;
 }
+.constellation__note {
+  color: var(--paper-faint) !important;
+  font-family: var(--font-mono);
+  font-size: 0.72rem !important;
+  letter-spacing: 0.08em;
+}
 .tree-scroll {
   position: relative; align-self: stretch;
   overflow-x: auto; overflow-y: hidden;

@@ -209,7 +209,10 @@
       if (current === link) return;
       if (current) current.classList.remove("is-current");
       current = link;
-      if (current) current.classList.add("is-current");
+      if (current) {
+        current.classList.add("is-current");
+        scrollRailToCurrent(current.closest(".book-rail"), current);
+      }
     }
     // 点击右侧目录: 把该小标题滚到视口偏上位置, 并立即高亮它。
     // 这样即使小节内容很少, 也不会误定位/误高亮到它下面的标题。

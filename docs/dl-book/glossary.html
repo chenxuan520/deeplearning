@@ -118,12 +118,13 @@
           <li id="g-align-tax"><strong>对齐税 alignment tax</strong> — RLHF 后更安全听话,但部分能力/创造性可能下降。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-forget"><strong>灾难性遗忘</strong> — 微调新任务时旧本领丢失;可用 LoRA/混训缓解。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-lora" data-aliases="LoRA,lora,PEFT,peft,参数高效微调,低秩,adapter"><strong>LoRA / PEFT</strong> — 参数高效微调:冻住底座大矩阵 <var>W</var>,只在旁边训练一对低秩小矩阵 <var>A</var>/<var>B</var>(<var>y</var>=<var>Wx</var>+<var>BAx</var>);可训练参数与显存省几十上百倍,产出的 adapter 才几 MB、可热插拔。<a href="chapter-20.html#②-指令微调sft-把博学调教成听话">→ 第 20 章</a></li>
+          <li id="g-reasoning-model" data-aliases="reasoning model,推理模型,reasoning_effort,thinking budget,test-time compute,思考深度"><strong>推理模型 reasoning model</strong> — 回答前用额外 reasoning token / 候选 / 验证轮次做测试时计算;思考深度由 effort 条件训练、外部预算、模型停机策略和 runtime 截断共同决定。<a href="chapter-20.html#推理模型-先想很久再作答">→ 第 20 章</a></li>
           <li id="g-multimodal"><strong>多模态 multimodal</strong> — 图/音 patch→编码→投影,与文字拼序列进 Transformer。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-diffusion" data-aliases="扩散模型,Diffusion Model,diffusion,去噪,文生图,文生视频"><strong>扩散模型 Diffusion Model</strong> — 文生图/视频主流:训练学“去噪”,生成时从纯噪声反复去噪显影出图;文字用交叉注意力掌舵。<a href="chapter-20.html#反过来-文生图与文生视频扩散模型">→ 第 20 章</a></li>
           <li id="g-distill" data-aliases="distillation,知识蒸馏,多教师蒸馏,MOPD,teacher,student"><strong>知识蒸馏 distillation</strong> — 让学生模型模仿教师模型的输出分布;新做法会用多个领域老师在线批改学生轨迹。<a href="chapter-20.html">→ 第 20 章</a></li>
-          <li id="g-dumb"><strong>模型降智</strong> — 多因 INT 量化、MoE 压 k/缩专家、截断、小模型、对齐过猛等链路权衡。<a href="chapter-21.html">→ 第 21 章</a></li>
-          <li id="g-hallucination" data-aliases="hallucination,幻觉,编造,不确定,IDK"><strong>幻觉 hallucination</strong> — 一本正经地生成通顺却编造的内容;常来自概率续写、知识缺口和“不会也猜”的评测激励。<a href="chapter-20.html">→ 第 20 章</a> · <a href="chapter-22.html#34-评测也会塑造模型-别把不知道判成错">评测激励 → 第 22 章</a></li>
-          <li id="g-attr-graph" data-aliases="归因图,attribution graph,机制可解释性,mechanistic interpretability,circuit tracing"><strong>归因图 attribution graph</strong> — 机制可解释性工具:把一次回答中被激活的特征及其影响关系画成图,再用干预实验验证模型内部电路。<a href="chapter-22.html#35-可解释性-不只看输出还看内部电路">→ 第 22 章</a></li>
+          <li id="g-dumb" data-aliases="serving policy,执行 profile,推理服务策略,便宜路径"><strong>模型降智</strong> — 常不是权重突然坏了,而是调用链路被压缩:同名模型被路由到便宜后端,推理预算更低、上下文更短、工具更少,再叠加量化、小模型和更保守安全壳。<a href="chapter-21.html#⑥-为什么会觉得模型降智了">→ 第 21 章</a></li>
+          <li id="g-hallucination" data-aliases="hallucination,幻觉,编造,不确定,IDK"><strong>幻觉 hallucination</strong> — 一本正经地生成通顺却编造的内容;常来自概率续写、知识缺口和“不会也猜”的评测激励。<a href="chapter-20.html">→ 第 20 章</a> · <a href="chapter-22.html#22-可靠回答-幻觉证据与验证">可靠回答 → 第 22 章</a></li>
+          <li id="g-attr-graph" data-aliases="归因图,attribution graph,机制可解释性,mechanistic interpretability,circuit tracing"><strong>归因图 attribution graph</strong> — 机制可解释性工具:把一次回答中被激活的特征及其影响关系画成图,再用干预实验验证模型内部电路。<a href="chapter-22.html#22-可靠回答-幻觉证据与验证">→ 第 22 章</a></li>
           <li id="g-gpu" data-aliases="GPU,CPU,显卡,graphics card,gpu,cpu,TPU,NPU,tpu,npu,CUDA,cuda"><strong>GPU / CPU</strong> — 芯片面积预算花法相反:CPU 把大半面积给控制/缓存,少数强核追<strong>低延迟</strong>(擅长复杂串行逻辑);GPU 几乎全铺 ALU,上万弱核追<strong>高吞吐</strong>(擅长海量独立乘加)。神经网络恰好是后者,故 GPU 快几十上百倍。更专一的 TPU / NPU 则干脆把电路直接做成矩阵乘法机。<a href="chapter-29.html#11-cpu-为通用程序而生">→ 第 29 章</a> · <a href="chapter-21.html#2-gpu-为并行而生">大模型工程 → 第 21 章</a></li>
           <li id="g-vram" data-aliases="显存,VRAM,vram,video memory"><strong>显存 VRAM</strong> — GPU 自带的高速内存,要同时装下参数 + 梯度 + 优化器状态 + 激活值;常是“放不下”这堵墙先于“算得慢”撞上,逼出量化与多卡切分。<a href="chapter-21.html#3-显存-第一堵墙">→ 第 21 章 §3</a></li>
           <li id="g-simt" data-aliases="SIMT,simt,单指令多线程,warp"><strong>SIMT 单指令多线程</strong> — GPU 省面积的关键:一组核心共享一套控制、齐步走同一条指令,只是各处理不同数据。省下控制电路能多塞 ALU,代价是<strong>最怕分支</strong>(遇 if-else 只能先全走 A 再全走 B)。矩阵乘法无分支,完美适配。<a href="chapter-29.html#121-gpu-的诀窍-一条指令很多数据一起走">→ 第 29 章 §12.1</a></li>
@@ -133,12 +134,12 @@
           <li id="g-sparseattn"><strong>稀疏注意力</strong> — 只算部分 token 对,把 O(n²) 降下来。<a href="chapter-21.html">→ 第 21 章</a></li>
           <li id="g-lightning-indexer" data-aliases="lightning indexer,闪电索引器,DSA indexer"><strong>闪电索引器 lightning indexer</strong> — 稀疏注意力里的轻量打分器:先估当前 query 与历史 token 的相关性,取 top-k,再让真正 attention 精算。<a href="chapter-21.html#9-稀疏注意力-不必人人都聊">→ 第 21 章 §9</a></li>
           <li id="g-mtp" data-aliases="MTP,Multi-Token Prediction,多token预测,多 token 预测,推测解码,speculative decoding"><strong>MTP / 推测解码</strong> — 训练时让同一隐藏状态预测多个未来 token,增加前瞻训练信号;推理时草稿器先提案,主模型批量验证并接受连续通过的 token,但接受率低时不一定加速。<a href="chapter-21.html#7-推理提速-让它回答得快">→ 第 21 章</a></li>
-          <li id="g-generate-verify" data-aliases="生成验证修复选择,verifier,refiner,ranker,MaxProof,test-time scaling"><strong>生成-验证-修复-选择</strong> — 复杂任务的推理系统范式:多候选搜索、验证器挑错、修复器改稿、排序器选最终答案。<a href="chapter-22.html#3-顶级模型怎么系统性地对抗幻觉">→ 第 22 章</a></li>
+          <li id="g-generate-verify" data-aliases="生成验证修复选择,verifier,refiner,ranker,MaxProof,test-time scaling"><strong>生成-验证-修复-选择</strong> — 复杂任务的推理系统范式:多候选搜索、验证器挑错、修复器改稿、排序器选最终答案。<a href="chapter-22.html#22-可靠回答-幻觉证据与验证">→ 第 22 章</a></li>
           <li id="g-prompt"><strong>提示工程 / 思维链</strong> — 把话说清楚 / 让它“一步步想”提升推理。<a href="chapter-22.html">→ 第 22 章</a></li>
           <li id="g-rag"><strong>RAG 检索增强</strong> — 先检索资料再让模型基于资料回答,治幻觉、补新知。<a href="chapter-22.html">→ 第 22 章</a></li>
-          <li id="g-agent"><strong>function calling / Agent</strong> — 让模型调用工具、多步做事,从“会聊”变“能办”。<a href="chapter-22.html#6-agent-把大模型变成会做事的智能体">→ 第 22 章</a></li>
-          <li id="g-context-engineering" data-aliases="上下文工程,context engineering,context rot,compaction,memory,agent memory,上下文压缩"><strong>上下文工程</strong> — 每步为 Agent 选择最小高信号上下文;靠动态压缩、外部 memory、经验手册和子 Agent 隔离噪声。<a href="chapter-22.html#7-上下文工程-agent-的工作记忆">→ 第 22 章</a></li>
-          <li id="g-harness" data-aliases="Harness,harness engineering,Harness 工程,Agent harness,外骨骼,工程壳"><strong>Harness 工程</strong> — 模型外面的工程外壳:文件系统、沙箱、工具执行、评测器、hooks、可观测性和后台清理。<a href="chapter-22.html#8-harness-工程-给-agent-装上外骨骼">→ 第 22 章</a></li>
+          <li id="g-agent"><strong>function calling / Agent</strong> — 让模型调用工具、多步做事,从“会聊”变“能办”。<a href="chapter-22.html#25-agent-从回答问题到循环做事">→ 第 22 章</a></li>
+          <li id="g-context-engineering" data-aliases="上下文工程,context engineering,context rot,compaction,memory,agent memory,上下文压缩"><strong>上下文工程</strong> — 每步为 Agent 选择最小高信号上下文;靠动态压缩、外部 memory、经验手册和子 Agent 隔离噪声。<a href="chapter-22.html#2-context-engineering-让模型看见该看的">→ 第 22 章</a></li>
+          <li id="g-harness" data-aliases="Harness,harness engineering,Harness 工程,Agent harness,外骨骼,工程壳"><strong>Harness 工程</strong> — 模型外面的工程外壳:文件系统、沙箱、工具执行、评测器、hooks、可观测性和后台清理。<a href="chapter-22.html#3-harness-engineering-让模型可靠做事">→ 第 22 章</a></li>
         </ul>
 
         <p class="muted">

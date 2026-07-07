@@ -17,7 +17,7 @@
         <p class="lead">
           绝大多数人既不训练也不部署大模型,而是<strong>直接使用</strong>别人训练好的那个。
           这一章把“用”这件事讲透:从 <strong>prompt engineering</strong> 到 <strong>context engineering</strong>,
-          再到 <strong>harness engineering</strong>。你会看到:提示词、RAG、工具调用、memory、MCP/A2A、Agent
+          再到 <strong>harness engineering</strong>。你会看到:提示词、RAG、工具调用、memory、MCP、Agent
           并不是一堆散乱热词,而是在一步步给模型接上上下文、工具、状态、验证和工程护栏。
         </p>
 
@@ -46,12 +46,11 @@
           <ul>
             <li>为什么“用好模型”的重心正在从 <strong>prompt engineering → context engineering → harness engineering</strong> 迁移;</li>
             <li>提示词(prompt)、上下文学习、few-shot、思维链(CoT)分别是什么;</li>
-            <li>RAG 怎么用“外挂知识库”治好幻觉和知识截止;</li>
-            <li>顶级模型对抗幻觉的<strong>四道防线</strong>:训练倾向诚实、推理锚定证据、输出后自检、系统层兜底;</li>
+            <li>RAG、工具调用和 MCP 怎样把外部知识、工具说明和执行结果放进上下文;</li>
+            <li>为什么幻觉只能靠证据、工具、自检和系统兜底层层压低,不能靠一句提示词根除;</li>
             <li>为什么很多评测会奖励“不会也猜”,以及机制可解释性怎样开始解剖模型内部电路;</li>
             <li>提示、RAG、微调三招各自改什么、该在什么时候用;</li>
-            <li>function calling / 工具调用怎么让模型学会“借外力”;</li>
-            <li>Agent 是什么,MCP 和 A2A 又想解决什么问题;</li>
+            <li>Agent 为什么会把“上下文管理”和“外部护栏”变成系统问题;</li>
             <li><strong>上下文工程</strong>为什么是 Agent 的工作记忆:动态压缩、外部 memory、经验手册、子 Agent 隔离上下文;</li>
             <li><strong>Harness 工程</strong>怎样用文件系统、沙箱、评测器、hooks 和后台清理,把模型变成稳定工作系统;</li>
             <li>用大模型时该守的安全与常识底线;</li>
@@ -115,7 +114,7 @@
           </table>
         </div>
 
-        <h2>1. 提示词:你和模型之间唯一的旋钮</h2>
+        <h2>1. Prompt engineering:把话说清楚</h2>
         <p>
           模型参数固定了,你唯一能调的就是<strong>输入</strong>——也就是<span class="term">提示词(prompt)</span>。
           回忆第 17、19 章:模型会把你给的整段文字当上下文,一路影响它对“下一个词”的预测。所以
@@ -147,7 +146,13 @@
           </p>
         </div>
 
-        <h2>2. RAG:给模型接一块“外挂知识库”</h2>
+        <h2>2. Context engineering:让模型看见该看的</h2>
+        <p>
+          Context engineering 不是“把所有东西都塞进去”,而是为这一步选择<strong>最该看的材料、工具结果、长期记忆和任务状态</strong>。
+          RAG、工具调用、memory、AGENTS.md、playbook、MCP,本质上都在回答同一个问题:这次调用模型时,上下文窗口里应该放什么?
+        </p>
+
+        <h3>2.1 RAG:把外部知识放进上下文</h3>
         <p>
           <a class="xref" href="chapter-20.html">第 20 章</a>说过大模型的两个硬伤:<strong>知识截止</strong>(不知道最新的事)和<strong>幻觉</strong>(没依据也敢编)。
           最实用的解药叫 <span class="term">RAG(检索增强生成)</span>——不重新训练,而是<strong>先查资料,再让它带着资料回答</strong>。
@@ -181,7 +186,7 @@
           </p>
         </div>
 
-        <h2>3. 顶级模型怎么系统性地对抗幻觉</h2>
+        <h3>2.2 可靠回答:幻觉、证据与验证</h3>
         <p>
           RAG 是最实用的一招,但它只是<strong>一道</strong>防线。你可能会问:那今天最顶级的模型,是怎么把幻觉压到“少见且可控”的?
           先接受一个前提——<strong>幻觉无法被彻底消除,只能层层拦截</strong>。根因在<a class="xref" href="chapter-20.html">第 20 章</a>说过:模型本质是概率续写器,
@@ -228,23 +233,23 @@
           <p class="figure__cap">对抗幻觉是<strong>组合拳</strong>而非单一银弹:从训练、推理、输出后到系统层,四道防线层层收窄,把幻觉率一级级压低。</p>
         </div>
 
-        <h3>3.1 训练阶段:让它倾向于“诚实”</h3>
+        <h4>训练阶段:让它倾向于“诚实”</h4>
         <ul>
           <li><strong>RLHF 对齐</strong>(<a class="xref" href="chapter-20.html">第 20 章</a>):人类反馈里明确<strong>惩罚“自信地胡说”、奖励“不确定就坦白”</strong>,让模型学会<strong>校准语气</strong>——没把握时说“可能 / 据我所知”,而不是一口咬定。</li>
           <li><strong>教它说“我不知道”</strong>:很多幻觉来自“被问到知识边界外还硬答”。训练时特意加入“该拒答 / 该表示不确定”的样本,让<strong>弃权成为一个合法选项</strong>,而不是硬憋一个答案。</li>
           <li><strong>事实性专项偏好</strong>:用“有据可查 vs 凭空编造”的对比数据做偏好训练,把说真话的倾向直接拉高。</li>
         </ul>
 
-        <h3>3.2 推理阶段:给它外挂和草稿纸</h3>
+        <h4>推理阶段:给它外挂和草稿纸</h4>
         <p>这一阶段是<strong>效果最立竿见影</strong>的,核心思路是:别让它只靠“脑内记忆”硬答,而是把答案<strong>锚定到外部的真实证据</strong>上。</p>
         <ul>
           <li><strong>RAG 检索增强</strong>(上一节):回答前先捞真实资料,让它<strong>照着材料答</strong>。这是性价比最高、最主流的一招。</li>
-          <li><strong>工具调用</strong>(见 <a class="xref" href="chapter-22.html#5-工具调用-让模型学会借外力">下文 §5</a>):算数用计算器、查实时信息调 API、跑代码验证——把“需要精确”的事外包给<strong>确定性工具</strong>,不靠脑补。</li>
-          <li><strong>先推理再答</strong>(思维链 / reasoning 模型):像先在草稿纸上<a class="xref" href="chapter-22.html#1-提示词-你和模型之间唯一的旋钮">分步推演</a>再下结论,能显著减少“一步硬猜”导致的推理型幻觉。</li>
+          <li><strong>工具调用</strong>(见 <a class="xref" href="chapter-22.html#24-工具调用-把工具说明和结果放进上下文">下文 §2.4</a>):算数用计算器、查实时信息调 API、跑代码验证——把“需要精确”的事外包给<strong>确定性工具</strong>,不靠脑补。</li>
+          <li><strong>先推理再答</strong>(思维链 / reasoning 模型):像先在草稿纸上<a class="xref" href="chapter-22.html#1-prompt-engineering-把话说清楚">分步推演</a>再下结论,能显著减少“一步硬猜”导致的推理型幻觉。</li>
           <li><strong>要求给出处</strong>:让答案<strong>附引用</strong>。一旦被逼着给来源,模型编造的空间就小了,用户也能顺着链接核对。</li>
         </ul>
 
-        <h3>3.3 输出后:自检与交叉验证</h3>
+        <h4>输出后:自检与交叉验证</h4>
         <ul>
           <li><strong>多次采样自检(self-consistency)</strong>:同一问题采样多个答案,<strong>互相不一致的地方</strong>往往就是模型没把握之处,取多数或触发复查。</li>
           <li><strong>让另一个模型当“事实核查员”</strong>:用一个校验模型逐句核对“生成内容 vs 检索到的证据”是否吻合(RAG 里叫 <em>groundedness / 忠实度</em>检查),对不上就打回重来。</li>
@@ -303,7 +308,7 @@
           </p>
         </div>
 
-        <h3>3.4 评测也会塑造模型:别把“不知道”判成错</h3>
+        <h4>评测也会塑造模型:别把“不知道”判成错</h4>
         <p>
           很多事实没有规律可推,比如某个人的生日、冷门论文标题、一个小项目的真实配置。
           训练集中没见过,模型就不能靠“更聪明”凭空算出来。此时最可靠的行为应该是<strong>承认不确定</strong>,
@@ -340,7 +345,7 @@
           模型才会更像一个可信助手。
         </p>
 
-        <h3>3.5 可解释性:不只看输出,还看内部电路</h3>
+        <h4>可解释性:不只看输出,还看内部电路</h4>
         <p>
           另一条正在发展的路线,是<strong>机制可解释性</strong>:不只问“模型答了什么”,还追问“它内部为什么这么答”。
           Anthropic 2025 年的
@@ -388,7 +393,7 @@
           它还远不是完整解剖,但方向很重要:可信模型不只要输出正确,还要逐步变得<strong>可检查、可干预、可追责</strong>。
         </p>
 
-        <h2>4. 提示、RAG 还是微调:三招该用哪个?</h2>
+        <h3>2.3 提示、RAG 还是微调:三招该用哪个?</h3>
         <p>
           讲完提示和 RAG,一个很自然的问题冒出来了:要让模型在我的场景里表现更好,到底是<strong>改提示</strong>、<strong>接 RAG</strong>,
           还是干脆<strong>微调</strong>(fine-tune,拿你的数据接着训一小段,属于<a class="xref" href="chapter-20.html">第 20 章</a>后训练的范畴)?
@@ -439,7 +444,7 @@
           </p>
         </div>
 
-        <h2>5. 工具调用:让模型学会“借外力”</h2>
+        <h3>2.4 工具调用:把工具说明和结果放进上下文</h3>
         <p>
           大模型不擅长精确计算,也查不到实时数据(<a class="xref" href="chapter-20.html">第 20 章</a>)。那就<strong>别让它硬算</strong>——让它调用外部工具。
           这套机制最早叫 <span class="term">function calling(函数调用)</span>:
@@ -455,7 +460,12 @@
           模型从“一张嘴”升级成了“会用工具的手”。
         </p>
 
-        <h2>6. Agent:把大模型变成会做事的“智能体”</h2>
+        <h3>2.5 Agent:从回答问题到循环做事</h3>
+        <p>
+          当模型从“一次回答”升级成循环做事的 Agent,context engineering 就不再只是“塞几段资料”,
+          而是变成工作记忆问题:每一步该看什么、工具结果怎么回流、哪些探索噪声该隔离出去。
+        </p>
+
         <p>
           当一个系统能<strong>感知环境 → 思考决策 → 执行动作</strong>,还能看着结果继续下一步,它就成了一个
           <span class="term">Agent(智能体)</span>。如果负责“思考决策”的大脑是一个大模型,那它就是我们现在常说的 AI Agent。
@@ -479,7 +489,7 @@
           真正去编辑和执行(执行),再根据报错继续修(循环)。RAG 和工具调用,都是喂给这个“大脑”的能力。
         </p>
 
-        <h2>7. 上下文工程:Agent 的工作记忆</h2>
+        <h3>2.6 Agent 的工作记忆:动态压缩、memory 与子 Agent</h3>
         <p>
           到这里,你可能会觉得 Agent 的关键是“会不会调用工具”。其实还差一块更底层的东西:
           <span class="term">上下文工程(context engineering)</span>。它关心的不是“提示词怎么写得漂亮”,
@@ -539,7 +549,7 @@
           <p class="figure__cap">Agent 不是把所有历史都塞给模型,而是每一步都重新组织一份“刚好够用”的上下文。</p>
         </div>
 
-        <h3>7.1 动态压缩:保留状态,丢掉噪声</h3>
+        <h4>动态压缩:保留状态,丢掉噪声</h4>
         <p>
           长任务做着做着,对话历史、工具输出和中间尝试会迅速膨胀。最直接的办法叫
           <span class="term">compaction(上下文压缩)</span>:当窗口接近上限时,把历史压缩成一份高保真状态摘要,
@@ -566,7 +576,7 @@
           而不是把历史改写成一段漂亮短文。
         </p>
 
-        <h3>7.2 Memory:把长期经验放在窗口外</h3>
+        <h4>Memory:把长期经验放在窗口外</h4>
         <p>
           <span class="term">memory</span> 是另一种思路:别把所有信息一直留在上下文里,而是让 Agent 把关键状态写到外部,
           需要时再读回来。它可以很简单,比如一个 <code>TODO.md</code>、<code>NOTES.md</code>、项目记忆文件,
@@ -590,7 +600,7 @@
           <li><strong>经验手册</strong>:反复踩坑后的规则,如“改章节后跑锚点检查”“工具输出太长先摘要再读”。</li>
         </ul>
 
-        <h3>7.3 可演化 playbook:从执行反馈里长经验</h3>
+        <h4>可演化 playbook:从执行反馈里长经验</h4>
         <p>
           ACE 论文把上下文看成一份会演化的 <strong>playbook</strong>,而不是一段每次整体重写的 prompt。
           它把过程拆成三种角色:
@@ -622,7 +632,7 @@
           只需要取回相关条目,不必重读全部历史。
         </p>
 
-        <h3>7.4 子 Agent:把探索噪声隔离出去</h3>
+        <h4>子 Agent:把探索噪声隔离出去</h4>
         <p>
           还有一种重要技巧是<strong>隔离上下文</strong>。复杂研究或大代码库排查时,一个主 Agent 如果亲自读完所有文件、日志和网页,
           很快会把自己的上下文塞满。更稳的做法是让子 Agent 在独立窗口里深挖一个局部问题,最后只返回一份高密度摘要。
@@ -644,7 +654,19 @@
           会管理上下文的 Agent,才能在很长的任务里保持方向感。
         </p>
 
-        <h2>8. Harness 工程:给 Agent 装上外骨骼</h2>
+        <h3>2.7 MCP:工具和数据源的标准上下文接口</h3>
+        <p>
+          Agent 要调用各种外部工具和数据源,如果每接一个都要定制一套对接,就太乱了。
+          <span class="pill">MCP 模型上下文协议</span>由 Anthropic 提出,给“Agent ↔ 外部工具/数据源”定义了一套<strong>标准插头</strong>:
+          工具说明、资源、数据和调用结果都能用统一方式进入上下文。有了它,任何遵守协议的工具都能被任何 Agent 即插即用,
+          不用一个个定制(可以类比 USB 之于外设)。
+        </p>
+        <p>
+          A2A 也曾试图规范 Agent 与 Agent 之间怎么通信、协作,但这条线还不如 MCP 稳定,本章只点到这里,不展开成主线。
+          你只需要记住一个方向:<strong>大模型正从“一个聊天框”,长成一个能连接工具、数据源和专职 Agent 的工作生态。</strong>
+        </p>
+
+        <h2>3. Harness engineering:让模型可靠做事</h2>
         <p>
           如果说上下文工程解决的是“模型每一步看什么”,那 <span class="term">Harness 工程(harness engineering)</span>
           解决的是“模型怎么在真实环境里长期、安全、可恢复地做事”。LangChain 有个很干脆的说法:
@@ -703,8 +725,66 @@
           </div>
           <p class="figure__cap">Harness 把模型包进一个可执行系统:状态能落盘,工具能调用,风险有边界,结果能验证,长任务能交接。</p>
         </div>
+        <p>
+          还可以把 Harness 理解成一座<strong>约束金字塔</strong>。越往下越便宜、越普及,但越依赖模型自己记住规则;
+          越往上越少见、成本越高,却越像外部系统给模型加的硬护栏。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 720 420" role="img" aria-label="Harness 约束金字塔:prompt context agent hook 从软约束到硬护栏">
+              <defs>
+                <linearGradient id="pyramidPrompt" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="rgba(106,195,255,0.20)" />
+                  <stop offset="1" stop-color="rgba(106,195,255,0.08)" />
+                </linearGradient>
+                <linearGradient id="pyramidContext" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="rgba(181,143,255,0.22)" />
+                  <stop offset="1" stop-color="rgba(181,143,255,0.08)" />
+                </linearGradient>
+                <linearGradient id="pyramidAgent" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="rgba(142,240,209,0.22)" />
+                  <stop offset="1" stop-color="rgba(142,240,209,0.08)" />
+                </linearGradient>
+                <linearGradient id="pyramidHook" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="rgba(255,207,114,0.26)" />
+                  <stop offset="1" stop-color="rgba(255,207,114,0.10)" />
+                </linearGradient>
+              </defs>
+              <g stroke="#0b1220" stroke-width="2.4" stroke-linejoin="round">
+                <polygon points="70,370 650,370 568,280 152,280" fill="url(#pyramidPrompt)" />
+                <polygon points="152,280 568,280 496,200 224,200" fill="url(#pyramidContext)" />
+                <polygon points="224,200 496,200 424,120 296,120" fill="url(#pyramidAgent)" />
+                <polygon points="296,120 424,120 360,50" fill="url(#pyramidHook)" />
+              </g>
+              <path d="M70 370 L360 50 L650 370 Z" fill="none" stroke="#dfe7ff" stroke-width="2.2" opacity="0.72" />
+              <g fill="#eef4ff" text-anchor="middle">
+                <text x="360" y="326" font-size="22" font-weight="800">prompt</text>
+                <text x="360" y="352" fill="#b6c5e1" font-size="13">在 chat 里说清任务、格式和临时限制</text>
+                <text x="360" y="236" font-size="22" font-weight="800">context</text>
+                <text x="360" y="262" fill="#c9bbf5" font-size="13">AGENTS.md / memory / playbook 持续塑造行为</text>
+                <text x="360" y="154" font-size="22" font-weight="800">agent</text>
+                <text x="360" y="180" fill="#bcebdc" font-size="13">独立上下文审查、测试、复核交付结果</text>
+                <text x="360" y="88" font-size="22" font-weight="800">hook</text>
+                <text x="360" y="112" fill="#ffe3a5" font-size="12">程序化检测与拦截危险动作</text>
+              </g>
+            </svg>
+          </div>
+          <p class="figure__cap">Harness 的约束从下到上越来越硬:prompt 和 context 让模型“记住规则”,独立 Agent 负责复核,hook / sandbox / CI 则用程序直接拦截高风险行为。</p>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">从软规则到硬护栏</span>
+          <p>
+            Prompt 和 context 很有用,但它们本质上仍是软约束:上下文一长,规则会被稀释,模型可能忘记早先的限制。
+            所以关键边界不能只押在模型记忆上。独立 reviewer / tester / evaluator 用另一个上下文检查结果,
+            能减少模型既当运动员又当裁判的问题;hooks、权限、沙箱和 CI 则是不靠模型“记得”的最后防线。
+          </p>
+          <p>
+            注意,hook 也不是神谕。它不会因为注意力涣散而忘规则,但它可能写漏、误杀或接错位置,所以仍然要被测试和维护。
+            真正可靠的 Harness,是把软规则、独立审查和硬拦截叠在一起。
+          </p>
+        </div>
 
-        <h3>8.1 长任务 Harness:Planner、Generator、Evaluator</h3>
+        <h3>3.1 长任务 Harness:Planner、Generator、Evaluator</h3>
         <p>
           Anthropic 在长时间应用开发实验里,把单个“全能 Agent”拆成三个角色:
         </p>
@@ -719,7 +799,7 @@
           通过结构化 handoff artifact 把当前状态和下一步交给新 Agent,而不是让同一个 Agent 背着越来越重的历史继续硬撑。
         </p>
 
-        <h3>8.2 Harness 里的确定性护栏</h3>
+        <h3>3.2 Harness 里的确定性护栏</h3>
         <p>
           Harness 还要处理模型不擅长但工程系统很擅长的事:确定性约束。比如 OpenAI 的 Harness Engineering 讨论里,
           他们让 Codex 从空仓库开始生成应用逻辑、测试、CI、文档、可观测性和内部工具;人的主要工作从“写代码”转成
@@ -758,19 +838,7 @@
           所以这条演进线可以这样记:<strong>Prompt 让模型听懂你;Context 让模型看见该看的;Harness 让模型在真实系统里可靠地做完。</strong>
         </p>
 
-        <h2>9. MCP 与 A2A:让 Agent 能“接万物”“互相通话”</h2>
-        <p>
-          Agent 要调用各种外部工具和数据源,如果每接一个都要定制一套对接,就太乱了。于是出现了协议来<strong>统一接口</strong>:
-        </p>
-        <ul>
-          <li><span class="pill">MCP 模型上下文协议</span>由 Anthropic 提出,给“Agent ↔ 外部工具/数据源”定义了一套<strong>标准插头</strong>。
-          有了它,任何遵守协议的工具都能被任何 Agent 即插即用,不用一个个定制(可以类比 USB 之于外设)。</li>
-          <li><span class="pill">A2A(Agent to Agent)</span>由 Google 提出,解决<strong>Agent 与 Agent 之间</strong>怎么通信、协作。
-          未来多个专职 Agent(订机票的、查资料的、写代码的)要组队干活,就需要这种“Agent 之间的普通话”。</li>
-        </ul>
-        <p>这两个协议都在走向行业标准。你不需要记细节,只要建立一个认知:<strong>大模型正从“一个聊天框”,长成一个能连接工具、彼此协作的生态。</strong></p>
-
-        <h2>10. 用它,但别全信它</h2>
+        <h2>4. 用它,但别全信它</h2>
         <div class="callout callout--warn reveal">
           <span class="callout__title">几条实用底线</span>
           <p>
@@ -794,9 +862,8 @@
             <li>幻觉也来自评测激励:如果“不知道”永远 0 分、猜测有机会得分,模型就会被塑造成爱猜的考生;机制可解释性则尝试用归因图追踪内部特征和电路。</li>
             <li>提示 / RAG / 微调是成本递增的三层:先改提示,缺知识上 RAG,只有要固化风格才微调——别拿微调补知识。</li>
             <li>function calling 让模型调用计算器/搜索/API,补上它不会算、查不到的短板。</li>
-            <li>Agent = 大模型当大脑 + 感知与执行 + 多步循环;上下文工程负责管理它的工作记忆:压缩历史、写外部 memory、维护经验手册、用子 Agent 隔离噪声。</li>
-            <li>Harness 工程把模型包进工作系统:文件系统保存状态,沙箱限制风险,测试/评测器提供反馈,hooks 和后台任务持续清理熵。</li>
-            <li>MCP 统一“接工具”、A2A 规范“Agent 互联”。</li>
+            <li>Agent = 大模型当大脑 + 感知与执行 + 多步循环;上下文工程负责管理它的工作记忆:压缩历史、写外部 memory、维护经验手册、用子 Agent 隔离噪声;MCP 则把工具和数据源变成标准上下文接口。</li>
+            <li>Harness 工程把模型包进工作系统:文件系统保存状态,沙箱限制风险,测试/评测器提供反馈,hooks 和后台任务持续清理熵;它的约束从 prompt/context 的软规则,到 reviewer/tester 的独立审查,再到 hook/sandbox/CI 的硬拦截。</li>
             <li>始终核对关键事实、防提示注入、护隐私——理解原理才能用得稳。</li>
           </ul>
         </section>
