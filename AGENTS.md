@@ -1,5 +1,10 @@
 # AGENTS.md
 
+## 仓库规则补充
+
+- Git commit message 一律使用英文。
+- 写 commit message 之前,必须先查看当前仓库最近的提交历史(至少 `git log --oneline -n 10`),严格沿用本仓库已有的格式与措辞风格(如 `docs:` / `docs(scope):` 等),不要自己发明不符合仓库历史的 subject。
+
 本仓库是一个小型的 C++ 深度学习 / 神经网络学习项目。
 当前仓库已经不是纯头文件库：`src/deeplearning/` 下同时包含头文件和 `.cpp` 实现，并通过 CMake 构建静态库。
 除原有的 MLP / MNIST 路线外，仓库现在还包含最小 CNN / RNN / Transformer 实验链路。
