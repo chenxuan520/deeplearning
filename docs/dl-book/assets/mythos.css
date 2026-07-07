@@ -220,7 +220,7 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
 .slide__lead strong { color: var(--paper); font-weight: 600; }
 
 /* 何时 / 原理 / 为什么 三段块 */
-/* 正文: 三段顺读叙事(原 何时/原理/为什么 标签隐藏, 只留自然段落流) */
+/* 正文: 三段顺读叙事(原 何时/原理/为什么 标签已移除, 只留自然段落流) */
 .facets { display: block; margin: 0 0 0.4rem; max-width: 37rem; }
 .facet {
   display: block;
@@ -235,7 +235,6 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
   width: 3px; height: 1.05em; border-radius: 2px;
   background: var(--c, var(--amber)); opacity: 0.55;
 }
-.facet__k { display: none; }
 .facet__v { font-size: 1rem; line-height: 1.82; color: var(--paper-dim); }
 .facet__v strong { color: var(--paper); font-weight: 600; }
 
@@ -611,6 +610,44 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
 .ov-act__era { font-family: var(--font-mono); font-size: 0.66rem; color: var(--paper-faint); margin: 0 0 0.5rem; }
 .ov-act__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.2rem; }
 .ov-act__list li { font-size: 0.8rem; color: var(--paper-dim); line-height: 1.5; }
+
+/* 编年注: 总览五幕卡下方一行克制脚注, 说明"逻辑递进 ≠ 严格编年"。
+   幕色 mono 小标签 + 暗金细线 + 低调正文, 像史料页边的一条注脚。 */
+.overview__note {
+  position: relative;
+  max-width: 40rem;
+  margin: 1.5rem auto 0;
+  padding-top: 1.1rem;
+  color: var(--paper-faint);
+  font-family: var(--font-serif);
+  font-size: clamp(0.78rem, 1.25vw, 0.9rem);
+  line-height: 1.9;
+  letter-spacing: 0.01em;
+  text-align: center;
+}
+.overview__note::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 50%; transform: translateX(-50%);
+  width: 46px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--amber-soft), transparent);
+  opacity: 0.6;
+}
+.overview__note-k {
+  display: inline-block;
+  margin-right: 0.5rem;
+  color: var(--amber);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.overview__note em {
+  font-style: normal;
+  color: var(--paper-dim);
+  border-bottom: 1px solid rgba(230, 169, 92, 0.32);
+}
 
 /* ============================================================= */
 /* 左侧半圆转盘时间轴                                             */

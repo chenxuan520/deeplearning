@@ -382,13 +382,147 @@
         </div>
 
         <h2>7. 推理提速:让它“回答得快”</h2>
-        <p>训练是一次性的苦工,推理(你每次提问)却要天天做、追求又快又省。几个关键招数:</p>
+        <p>
+          训练是一次性的苦工,推理(你每次提问)却要天天做、追求又快又省。
+          推理提速不是单靠一个魔法开关,而是几类技巧叠起来:少重算、攒一起算、低精度算、先猜再验。
+        </p>
+
+        <h3>① KV cache:旧上下文的 K/V 不要反复算</h3>
+        <p>
+          <span class="term">KV cache</span> 是生成提速里最基础的一招。自回归生成时(<a class="xref" href="chapter-19.html#9-kv-cache-别让自回归每步都重算前文">第 19 章</a>),
+          每多写一个 token,前面那些 token 的 Key、Value 并不会变(<a class="xref" href="chapter-17.html#7-不能偷看未来-causal-mask">第 17 章</a>)。
+          所以第一步算出的历史 K/V 可以存下来,下一步只算新 token 的 Q/K/V,再拿新 Q 去看缓存里的历史 K/V。
+        </p>
+        <pre class="code-walk__code reveal" style="margin:0.8rem 0"><code>不缓存:
+每生成 1 个 token → 重新算整段 prompt + 已生成内容
+
+KV cache:
+历史 K/V 存起来
+每生成 1 个 token → 只算新 token,再读历史 K/V</code></pre>
+        <p>
+          它省掉的是<strong>重复前向计算</strong>,代价是显存里要长期放着每个请求的历史 K/V。
+          所以后面第 10 节会继续讲:真正服务大量用户时,KV cache 反而会变成最难搬的“大件行李”。
+        </p>
+
+        <h3>② 批处理:把很多人的“下一步”拼成一次计算</h3>
+        <p>
+          单个用户 decode 时每次只生成一个 token,矩阵很小,GPU 往往吃不饱。
+          <span class="term">批处理(batching)</span> 的想法就是把很多用户的请求攒在一起:
+          多个 prompt 可以一起 prefill,多个用户的“下一个 token”也可以凑成一个大 batch 去 decode。
+          GPU 一次做更大的矩阵乘法,吞吐就上来了。
+        </p>
+        <p>
+          批处理省的是<strong>单位请求摊到的 GPU 空转</strong>,但会带来调度权衡:
+          攒批越大,总体吞吐越高;等批越久,单个用户越容易觉得“首字慢”。
+          这一点在在线服务里会进一步演化成连续批处理,也放到第 10 节细讲。
+        </p>
+
+        <h3>③ 量化:用更低精度换速度和显存</h3>
+        <p>
+          推理阶段通常不需要像训练那样保留高精度梯度,所以可以把权重、激活,甚至 KV cache 用更低精度表示。
+          这就是第 4 节讲过的<span class="term">量化</span>:原来用 FP16/BF16 存的数,可以压到 INT8、FP8、INT4 等格式。
+          好处很直接:显存少占一点,显存带宽少搬一点,某些硬件上矩阵乘也更快。
+        </p>
+        <p>
+          但量化不是免费午餐。精度压得太狠,小误差会在层间传递,尤其容易影响代码、数学、多步推理这些对细节敏感的任务。
+          所以产品里你感到的<a class="xref" href="chapter-21.html#4-省显存两招-混合精度与量化">“降智”</a>,很多时候不是模型忽然变笨,
+          而是推理服务为了成本和速度启用了更激进的低精度路径。
+        </p>
+
+        <h3>④ 推测解码:草稿模型先猜,主模型再验</h3>
+        <p>
+          <span class="term">推测解码(speculative decoding)</span> 解决的是 decode 天生串行的问题。
+          正常生成必须等主模型一步一步吐 token;推测解码则让一个更便宜的草稿器先猜一小串,
+          再让主模型一次性验证这串草稿。猜对的 token 直接收下,猜错的位置再回到主模型正常生成。
+        </p>
+        <p>
+          草稿器可以是外部小模型,也可以是模型内部的 MTP 层。关键原则是:
+          <strong>草稿器只负责提案,最终接受什么仍由主模型决定。</strong>
+          因此它的目标不是降低能力,而是用一点额外草稿计算换更少的等待轮数。
+        </p>
+
+        <h3>⑤ MTP:训练时多预测,推理时少等几步</h3>
+        <p>
+          <span class="term">MTP(Multi-Token Prediction,多 token 预测)</span> 横跨<strong>训练</strong>和<strong>推理</strong>两端:
+          训练时让模型同时预测后面多个 token,推理时则可以把这些预测能力变成一段候选草稿。
+          它不是让模型“跳过中间 token 直接乱吐一串”,而是把生成拆成两件事:<strong>先猜一小段草稿</strong>,再让主路径<strong>批量验收</strong>。
+        </p>
+        <p>
+          <strong>训练时怎么助力?</strong> 普通语言模型在位置 <var>t</var> 只预测下一个 token:
+          hidden state <var>h</var><sub><var>t</var></sub> 经过 LM head 得到
+          <var>P</var>(<var>x</var><sub><var>t</var>+1</sub>|<var>x</var><sub>≤<var>t</var></sub>),loss 也只盯着
+          <var>x</var><sub><var>t</var>+1</sub>。MTP 会额外加几个“未来预测”目标,让同一个状态也去预测
+          <var>x</var><sub><var>t</var>+2</sub>、<var>x</var><sub><var>t</var>+3</sub>……实现上可以是多个辅助 head,
+          也可以是几层轻量 MTP 模块,但训练信号的本质一样:一个位置不只问“下一步是什么”,还问“后面几步大概要往哪走”。
+        </p>
+        <div class="mathblock reveal">
+          <var>ℒ</var><sub>NTP</sub>(<var>t</var>)
+          =
+          CE(
+          <var>p</var><sup>(1)</sup><sub><var>t</var></sub>,
+          <var>x</var><sub><var>t</var>+1</sub>
+          )
+          <span class="label">普通 next-token:只用当前位置预测下一个 token</span>
+        </div>
+        <div class="mathblock reveal">
+          <var>ℒ</var><sub>MTP</sub>(<var>t</var>)
+          =
+          Σ<sub><var>r</var>=1</sub><sup><var>R</var></sup>
+          <var>λ</var><sub><var>r</var></sub>
+          ·
+          CE(
+          <var>p</var><sup>(<var>r</var>)</sup><sub><var>t</var></sub>,
+          <var>x</var><sub><var>t</var>+<var>r</var></sub>
+          )
+          <span class="label">MTP:同一个位置同时监督后面 R 个 token;通常令 <var>λ</var><sub>1</sub>=1,后面的 <var>λ</var> 控制辅助目标权重</span>
+        </div>
+        <p>
+          这会带来三层训练收益:第一,监督更密,每个位置能贡献多份未来 token 的训练信号;
+          第二,表示更前瞻,因为 <var>h</var><sub><var>t</var></sub> 不能只服务于眼前一个 token,还要对后续几步有一点规划;
+          第三,MTP head / MTP 模块本身学会了“便宜地猜一小段”,这正好可以拿到推理阶段当草稿器。
+          它对代码、数学推导、格式化输出这类“后面几步结构比较强”的任务尤其有价值。
+        </p>
+        <p>
+          <strong>推理时怎么加速?</strong> 自回归生成慢,是因为正常路径必须一格一格走:
+          先生成 <var>x</var><sub><var>t</var>+1</sub>,它变成上下文后,才能再生成 <var>x</var><sub><var>t</var>+2</sub>。
+          MTP 的草稿器先给出一串候选,比如 <code>y1 y2 y3 y4</code>;主模型不盲信它,而是把这串候选接到上下文后,
+          用一次带 causal mask 的前向计算<strong>同时</strong>算出多个位置的主模型分布。
+        </p>
+        <p>
+          如果当前上下文是 <var>C</var>,草稿器提出 <var>y</var><sub>1</sub>,<var>y</var><sub>2</sub>,<var>y</var><sub>3</sub>,<var>y</var><sub>4</sub>,
+          主模型一次验证时看的就是下面这些分布:
+        </p>
+        <div class="mathblock reveal">
+          <var>P</var><sub><var>i</var></sub>
+          =
+          <var>P</var>(
+          <var>x</var><sub><var>t</var>+<var>i</var></sub>
+          |
+          <var>C</var>,
+          <var>y</var><sub>1</sub>,
+          …,
+          <var>y</var><sub><var>i</var>-1</sub>
+          ),
+          &nbsp;
+          <var>i</var> = 1,2,3,4
+          <span class="label">第 i 个草稿 token 是否接受,看主模型在“前面草稿已当作临时上下文”时给出的分布</span>
+        </div>
+        <p>
+          <strong>主模型怎么“验证”?</strong> 直觉版可以理解成:从左到右检查草稿 token 是否符合主模型在对应位置的分布。
+          贪心解码时,可以近似理解为“草稿 token 是否等于主模型此处最想选的 token”;采样解码时,实际系统会用概率接受 / 拒绝规则,
+          尽量保持主模型原本的采样分布不被草稿器改变。连续通过验证的 token 会被一次性接受,并且这次验证前向已经顺手建好了它们的 KV cache;
+          一旦某个位置没通过,后面的草稿就丢掉,从主模型在这个位置给出的分布继续生成。
+        </p>
+        <p>
+          所以 MTP 的原则是:<strong>草稿器只负责提案,主模型负责裁决。</strong>
+          它加速的是 decode 轮数,不是降低主模型标准。若平均每次能接受 3 个 token,原来 3 轮 decode 的进度可能 1 轮就推进完;
+          若草稿经常猜错,加速就会变小,甚至被额外草稿计算抵消。越是确定性强、格式稳定的输出,越容易吃到这类收益。
+        </p>
+        <p><strong>MTP 的代价也很实在。</strong> 它不是白送的加速,主要有三类成本:</p>
         <ul>
-          <li><span class="pill">KV cache</span>最重要的一招。自回归生成时(<a class="xref" href="chapter-19.html#9-kv-cache-别让自回归每步都重算前文">第 19 章</a>),每多写一个词,<strong>前面那些词的 Key、Value 并不会变</strong>
-          (<a class="xref" href="chapter-17.html#7-不能偷看未来-causal-mask">第 17 章</a>)。把它们缓存下来,新词只算自己的部分,省掉海量重复计算,生成因此快很多。它直接建立在你学过的 Q/K/V 之上。</li>
-          <li><span class="pill">批处理(batching)</span>把很多用户的请求<strong>攒成一批</strong>一起算,充分喂饱 GPU 的上万个核,提高吞吐。</li>
-          <li><span class="pill">量化</span>推理用低精度权重(第 4 节),又快又省显存——也最容易带来<a class="xref" href="chapter-21.html#4-省显存两招-混合精度与量化">“降智”体感</a>。</li>
-          <li><span class="pill">推测解码(speculative decoding)</span>用小模型或 MTP 层先“猜”一串 token,大模型再批量验证,猜对就白赚速度;猜错再回退。不降低能力,是<strong>用额外算力换延迟</strong>的推理技巧。</li>
+          <li><strong>训练更贵</strong>:多出来的 MTP head / MTP 模块要参与前向和反向,loss 里还要多算几个未来 token 的交叉熵;预测越远,目标越不确定,辅助 loss 权重 <var>λ</var> 还得调,否则可能干扰主 next-token 目标。</li>
+          <li><strong>推理不一定稳赚</strong>:草稿器先猜也要算力,主模型验证草稿也要算力。只有“平均接受长度”足够大时,省下的 decode 轮数才抵得过这些额外计算;如果开放式创作、随机采样很强、草稿经常错,收益会明显下降。</li>
+          <li><strong>服务实现更复杂</strong>:系统要同时管理草稿 token、验证位置、被接受 token 的 KV cache、被拒绝后的回退;采样模式下还要用更严谨的概率接受规则,不能为了速度破坏主模型原本的输出分布。</li>
         </ul>
         <div class="callout callout--tip reveal">
           <span class="callout__title">案例:快模型不是只靠“变小”</span>
@@ -508,7 +642,7 @@
                 <line x1="240" y1="88" x2="240" y2="118" />
                 <line x1="240" y1="152" x2="240" y2="178" />
                 <line x1="240" y1="210" x2="240" y2="232" />
-                <line x1="240" y1="378" x2="240" y2="400" />
+                <line x1="240" y1="384" x2="240" y2="400" />
                 <line x1="240" y1="432" x2="240" y2="448" />
               </g>
               <rect x="120" y="52" width="240" height="36" rx="9" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2" />
@@ -517,7 +651,7 @@
               <circle cx="240" cy="134" r="14" fill="rgba(142,240,209,0.2)" stroke="#8ef0d1" stroke-width="2" /><text x="240" y="139" text-anchor="middle" fill="#eef4ff" font-size="14">＋</text>
               <rect x="120" y="178" width="240" height="28" rx="8" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="1.8" />
               <text x="240" y="196" text-anchor="middle" fill="#eef4ff" font-size="12">LayerNorm</text>
-              <rect x="48" y="232" width="384" height="146" rx="14" fill="none" stroke="rgba(255,207,114,0.45)" stroke-width="1.8" stroke-dasharray="6 4" />
+              <rect x="52" y="232" width="360" height="162" rx="14" fill="none" stroke="rgba(255,207,114,0.45)" stroke-width="1.8" stroke-dasharray="6 4" />
               <text x="60" y="252" fill="#ffcf72" font-size="11">MoE 层 · N 个并列专家(示意 N=4, k=2)</text>
               <rect x="168" y="264" width="104" height="40" rx="8" fill="rgba(139,123,255,0.22)" stroke="#8b7bff" stroke-width="2" />
               <text x="220" y="282" text-anchor="middle" fill="#eef4ff" font-size="12">Router</text>
@@ -532,13 +666,13 @@
               <text x="360" y="336" text-anchor="middle" fill="#eef4ff" font-size="10">FFN④✓</text>
               <line x1="220" y1="304" x2="192" y2="316" stroke="#ffcf72" stroke-width="1.6" />
               <line x1="220" y1="304" x2="360" y2="316" stroke="#ffcf72" stroke-width="1.6" />
-              <rect x="156" y="356" width="168" height="26" rx="7" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="1.6" />
+              <rect x="96" y="356" width="288" height="26" rx="7" fill="rgba(142,240,209,0.14)" stroke="#8ef0d1" stroke-width="1.6" />
               <text x="240" y="374" text-anchor="middle" fill="#eef4ff" font-size="11">加权求和 → 每个 token 一个输出向量</text>
               <circle cx="240" cy="414" r="14" fill="rgba(142,240,209,0.2)" stroke="#8ef0d1" stroke-width="2" /><text x="240" y="419" text-anchor="middle" fill="#eef4ff" font-size="14">＋</text>
               <rect x="120" y="448" width="240" height="28" rx="8" fill="rgba(106,195,255,0.14)" stroke="#6ac3ff" stroke-width="1.8" />
               <text x="240" y="466" text-anchor="middle" fill="#eef4ff" font-size="12">LayerNorm → 输出 [n×d]</text>
               <path d="M 240 40 L 72 40 L 72 134 L 224 134" fill="none" stroke="#8ef0d1" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#moe-blk-b)" />
-              <path d="M 240 206 L 400 206 L 400 414 L 254 414" fill="none" stroke="#8ef0d1" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#moe-blk-b)" />
+              <path d="M 240 206 L 440 206 L 440 414 L 254 414" fill="none" stroke="#8ef0d1" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#moe-blk-b)" />
               <text x="82" y="88" fill="#8ef0d1" font-size="10">残差</text>
             </svg>
           </div>
@@ -753,6 +887,11 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           <strong>离散的是「谁进 top-k」</strong>,但进了之后,<code>scores[e]</code> 仍是 softmax 的软权重,会乘在专家输出上——
           loss 对 <code>out</code> 求导时,<strong>梯度既能改被选中的 FFN,也能改 W_gate</strong>(「这类 token 该不该多分点给专家 ②」)。
           所以路由层虽小,却和 MNIST 里一层全连接 W 一样,走同一条反传链,并不是不可训的黑箱。
+        </p>
+        <p>
+          这个结论后面还会反复出现:<strong>挑选本身可以是离散的,但挑选前的打分器是可微的,挑选后的加权计算也能从主 loss 回传梯度。</strong>
+          MoE 是“先给专家打分,再挑 FFN”;稀疏注意力是“先给历史 token / 压缩块打分,再挑该看的位置”。
+          真正麻烦的是没被选中的分支本轮通常拿不到直接梯度,所以系统还要靠负载均衡、预训练、蒸馏或逐步切换等办法,避免一开始就只宠少数路径。
         </p>
         <div class="callout callout--analogy reveal">
           <span class="callout__title">反传分两路(直觉版)</span>
@@ -1159,20 +1298,54 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           不按位置死板划定,而是<strong>当场挑出最相关的那几个</strong>。做法通常是:先用一个<strong>廉价的打分器</strong>快速估一下
           每个历史 token 跟当前 query 有多相关,只留下 <strong>top-k</strong> 个,再对这 top-k 做精确注意力。
         </p>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">DeepSeek-V3.2 的稀疏注意力(DSA)</span>
-          <p>
-            它用一个叫<strong>“闪电索引器(lightning indexer)”</strong>的小模块,为每个 query 飞快选出 top-k 个最该看的历史 token,
-            只对这 top-k 算注意力。说白了,就是把<a class="xref" href="chapter-19.html">第 19 章</a>的 <strong>top-k</strong> 思想从“挑下一个字”搬到了“挑该关注的 token”上,
-            让长上下文推理成本大幅下降。
-          </p>
+        <p>
+          <strong>DeepSeek-V3.2 的稀疏注意力(DSA)</strong>就是这个思路:它用一个叫<strong>“闪电索引器(lightning indexer)”</strong>的小模块,
+          为每个 query 飞快选出 top-k 个最该看的历史 token,只对这 top-k 算注意力。说白了,就是把<a class="xref" href="chapter-19.html">第 19 章</a>的
+          <strong>top-k</strong> 思想从“挑下一个字”搬到了“挑该关注的 token”上。
+        </p>
+        <p>
+          这里的<strong>“动态”</strong>先别理解成“每个 query 自己临时决定 <var>k</var> 多大”。工程上常见的是先给模型或服务档位定一个预算,
+          比如长上下文档位用更大的 <var>k</var>;真正动态的是<strong>这次到底选中哪些历史位置</strong>。换句话说,
+          <var>k</var> 多半是配置,被选进来的 token / 压缩块才是每个 query 现场决定的。
+        </p>
+
+        <h3>③ 闪电索引器:top-k 到底怎么选出来?</h3>
+        <p>
+          不是人工写规则,也不是先把完整注意力算完再裁剪。论文里的做法是:索引器给“当前 query token”和每个“历史 token”
+          算一个很便宜的索引分 <var>I</var>(<var>t</var>,<var>s</var>),再按这个分数排序取前 <var>k</var> 个。
+        </p>
+        <div class="mathblock reveal">
+          <var>I</var><sub><var>t</var>,<var>s</var></sub>
+          =
+          Σ<sub><var>j</var></sub>
+          <var>w</var><sup>I</sup><sub><var>t</var>,<var>j</var></sub>
+          ·
+          ReLU(
+          <var>q</var><sup>I</sup><sub><var>t</var>,<var>j</var></sub>
+          ·
+          <var>k</var><sup>I</sup><sub><var>s</var></sub>
+          )
+          <span class="label">索引分 = 多个索引头的“正相关点积”加权求和;分数越高,这个历史 token 越可能被选进 top-k</span>
         </div>
-        <div class="callout callout--tip reveal">
-          <span class="callout__title">案例:GLM-5.2 与 DeepSeek-V4 的百万上下文路线</span>
-          <p>
-            先别记名词。把 1M 上下文想成一本<strong>一百万页的书</strong>:模型每生成一个新 token,都要决定“该回头看哪些页”。
-            真正的优化,不是假装能把整本书逐页重读,而是想办法<strong>少翻页、复用目录、把远处内容压成摘要</strong>。
-          </p>
+        <p>
+          这里 <var>q</var><sup>I</sup><sub><var>t</var>,<var>j</var></sub> 是当前 token 投影出的“小 query”,
+          <var>k</var><sup>I</sup><sub><var>s</var></sub> 是历史 token 投影出的“小 key”,
+          <var>w</var><sup>I</sup><sub><var>t</var>,<var>j</var></sub> 是当前 token 给各个索引头的权重。<code>ReLU</code> 只保留正相关的点积分数;
+          多个索引头加权求和后,就得到“这个历史 token 值不值得看”的粗评分。
+        </p>
+        <p>
+          取 top-k 这一步本身像“排序截断”,确实不是光滑可微的。但索引器前面的<strong>打分函数</strong>是可微的:
+          训练时可以先在完整注意力还开着的时候学习模仿原本的注意力分布,完整注意力本来会重看的位置,索引器就要给高分;
+          进了 top-k 的位置之后仍会进入真正的 softmax attention 和最终 loss,梯度也会回到产生这些分数的参数。
+          没进 top-k 的位置这一步拿不到直接梯度,所以这类系统通常还要靠预训练、蒸馏、逐步切换到稀疏路径等办法,
+          避免索引器一开始就学歪。推理时才用它先粗筛,把非 top-k 位置遮掉,再让真正的 Q/K/V 注意力只在留下来的 token 上精算。
+        </p>
+
+        <h3>④ 案例:百万上下文路线怎么继续省?</h3>
+        <p>
+          先别记名词。把 1M 上下文想成一本<strong>一百万页的书</strong>:模型每生成一个新 token,都要决定“该回头看哪些页”。
+          真正的优化,不是假装能把整本书逐页重读,而是想办法<strong>少翻页、复用目录、把远处内容压成摘要</strong>。
+        </p>
           <div class="figure figure--reading reveal">
             <svg viewBox="0 0 760 320" role="img" aria-label="GLM-5.2 IndexShare:四层共用一次索引">
               <text x="380" y="30" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">GLM-5.2:四层共用一次“目录”</text>
@@ -1288,28 +1461,20 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
             论文给出的 1M context 设置下,DeepSeek-V4-Pro 相比 DeepSeek-V3.2 只需要约 <strong>27%</strong> 的单 token 推理 FLOPs 和 <strong>10%</strong> 的 KV cache。
           </p>
           <p>
+            所以 V4 不是“从 1M 个原始 token 里直接挑几千个”这么粗暴。更准确地说,它先把历史变成不同粒度的资料:
+            近处原样保留,中距离压缩成小摘要后再 top-k,远处压得更狠只留全局轮廓。这样一来,top-k 选的是<strong>压缩后的历史块</strong>,
+            而不是整条 1M 序列里的每个原始 token。
+          </p>
+          <p>
             这两条路线说到底都在回答同一个问题:
             <strong>面对一百万个 token,模型不能每层都重新翻完整资料,也不能把所有历史原样存在显存里。</strong>
             它必须学会建目录、做摘要、复用缓存,再配合真正的长上下文训练。
           </p>
-        </div>
-        <div class="callout callout--tip reveal">
-          <span class="callout__title">别混:稀疏注意力 ≠ FlashAttention</span>
-          <p>
-            让注意力更快有<strong>两条不同的路</strong>,常被搞混:<br />
-            <strong>· 稀疏注意力</strong>:<strong>少算一些</strong>(近似)——用极小的精度损失换大幅提速。<br />
-            <strong>· FlashAttention</strong>:<strong>一个都不少算</strong>(精确),但把计算重新编排、大幅减少显存读写,让同样的稠密注意力跑得更快更省显存。<br />
-            前者是“<strong>少做题</strong>”,后者是“<strong>做题更利索</strong>”,两者还能叠加使用。
-          </p>
-        </div>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">两种“稀疏”别搞混</span>
-          <p>
-            <strong>MoE</strong> 稀疏的是<strong>参数 / 计算路径</strong>——每个 token 只走部分专家 FFN(第 8 节)。<br />
-            <strong>稀疏注意力</strong>稀疏的是<strong>token 两两连接</strong>——每个 token 只和部分 token 打分。<br />
-            一个省在“<strong>哪些参数参与</strong>”,一个省在“<strong>哪些 token 互动</strong>”,超大模型里常常两个一起上。
-          </p>
-        </div>
+        <p>
+          最后把两种“稀疏”分清:<strong>MoE</strong> 稀疏的是<strong>参数 / 计算路径</strong>——每个 token 只走部分专家 FFN(第 8 节);
+          <strong>稀疏注意力</strong>稀疏的是<strong>token 两两连接</strong>——每个 token 只和部分 token 打分。
+          一个省在“<strong>哪些参数参与</strong>”,一个省在“<strong>哪些 token 互动</strong>”,超大模型里常常两个一起上。
+        </p>
 
         <h2>10. 推理服务:几亿用户同时问,怎么扛得住</h2>
         <p>
@@ -1368,6 +1533,20 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
             更妙的是,多个请求<strong>共享的前缀</strong>(比如同一条超长 system prompt)可以<strong>共用同一批页</strong>,不必各存一份——这就是<strong>前缀复用</strong>,既省显存又省掉重复的 prefill。
           </p>
         </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">为什么长上下文常常按档收费?</span>
+          <p>
+            不是因为 attention “吐出来的 token”变了,而是每生成一个新 token,背后要维护、读取、搬运的历史信息变多了。
+            即使用稀疏 / 压缩注意力,服务侧也可能按上下文档位给更大的历史预算。下面只是一个简化示意,不是某家厂商的公开公式:
+          </p>
+          <pre class="code-walk__code" style="margin:0.8rem 0"><code>context &lt; 32K   → k = 512
+context &lt; 128K  → k = 2048
+context &gt;= 1M   → k = 4096</code></pre>
+          <p>
+            上下文越长,prefill 要读的 prompt 越长,decode 每步要访问的 KV cache / 压缩历史 / 索引结果也越多;
+            同时超长请求更占显存、更难批处理。分段收费本质上是在给这些额外计算、显存占用和调度难度买单。
+          </p>
+        </div>
 
         <h3>④ 再不够,就多副本 + 负载均衡</h3>
         <p>
@@ -1407,11 +1586,14 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
             <li>三种并行:数据并行(人手一份模型,AllReduce 同步梯度)、张量并行(切开单层矩阵,AllGather 拼接)、流水线并行(不同层放不同卡)。</li>
             <li>NCCL 管通信,NVLink/NVSwitch 是卡间高速公路;推理靠 KV cache、批处理、量化提速。</li>
             <li>MoE:FFN 换成 <strong>N 个并列专家</strong>(<code>N</code>/<code>k</code> 设计时定死),Attention <strong>共用 1 套</strong>;路由器 softmax 打分 + top-k 门控加权,与专家<strong>端到端</strong>同训;还得靠负载均衡防专家坍缩。参数多但算得少;全部专家仍要常驻显存。<strong>压 k/缩专家会掉能力</strong>,是另一类「降智」来源。</li>
+            <li>离散 top-k 能训练的关键:不可微的是“谁入围”,可微的是<strong>入围前的打分器</strong>和<strong>入围后的加权路径</strong>;没入围的专家或 token 本轮通常没有直接梯度。</li>
             <li>稀疏注意力:只算部分 token 对——固定套路(滑动窗口 + 全局)或动态挑 top-k,把 O(n²) 压下来;它是“少算”(近似),区别于 FlashAttention 的“精确加速”。</li>
             <li><var>n</var>×<var>n</var> 注意力矩阵在 <var>n</var>=1M 时高达一万亿个数(单头单层就 ~2TB),但它<strong>从不被整个物化</strong>:FlashAttention 分块流式算(精确、不写出大矩阵、省显存),稀疏注意力干脆少算(近似、降复杂度)。</li>
+            <li>动态 top-k 的“动态”通常是<strong>选中哪些历史位置</strong>,不是每个 query 自己决定 <var>k</var> 多大;<var>k</var> 多半是模型或服务档位里的预算。</li>
             <li>百万级长上下文是<strong>五层组合拳</strong>:位置编码(RoPE + PI/NTK/YaRN 拉伸)编得到远处、稀疏注意力少算、量化/分页缓存存得下、分块 prefill+多卡算得动、长上下文续训真学过——不是把 full attention 的窗口数字改成 1M。</li>
+            <li>MTP 训练时让同一隐藏状态预测多个未来 token,提供更密训练信号并逼表示更前瞻;推理时当内置草稿器先猜一串,主模型批量验证,连续通过的 token 一次接受。代价是训练/验证额外计算、接受率不稳和服务实现复杂度。</li>
             <li>快模型也是组合拳:MoE 少激活专家、混合滑窗/全局注意力少看 token、MTP 既辅助训练又能做推测解码,一起把成本压下来。</li>
-            <li>推理服务扛海量用户:分 prefill(并行、算得饱)/ decode(逐字、喂不饱)两阶段;用连续批处理把多请求拼一起、PagedAttention 分页复用 KV cache、多副本 + 负载均衡横向扩展;吞吐与延迟(TTFT/TPOT)之间要按场景取舍。</li>
+            <li>推理服务扛海量用户:分 prefill(并行、算得饱)/ decode(逐字、喂不饱)两阶段;用连续批处理把多请求拼一起、PagedAttention 分页复用 KV cache、多副本 + 负载均衡横向扩展;长上下文更占计算、显存和调度资源,所以常会按上下文档位收费。</li>
           </ul>
         </section>
 
@@ -1456,23 +1638,35 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           <details class="quiz__item">
             <summary class="quiz__q">问题 7:MoE 的路由器像硬开关,梯度怎么训?Attention 也要复制 N 份吗?</summary>
             <div class="quiz__a">
-              <p>路由器先 <code>softmax</code> 得到门控分,再 top-k 选出专家,用<strong>门控分加权</strong> k 个 FFN 输出——软权重让梯度能回传到 <code>W_gate</code> 和被选中的专家,和主 loss 端到端同训,没有单独的路由算法。Attention <strong>仍是 1 套共用</strong>,不会随专家变成 N 份;并列的是 FFN。<code>N</code> 和 <code>k</code> 是设计时定死的超参数。难点在负载均衡,防止只宠少数专家。</p>
+              <p>路由器先 <code>softmax</code> 得到门控分,再 top-k 选出专家,用<strong>门控分加权</strong> k 个 FFN 输出。top-k 的“谁入围”本身是离散的,但入围前的打分器可微,入围后的加权路径也能从主 loss 回传梯度,所以 <code>W_gate</code> 和被选中的专家都能端到端更新;没被选中的专家本轮通常没有直接梯度。Attention <strong>仍是 1 套共用</strong>,不会随专家变成 N 份;并列的是 FFN。难点在负载均衡,防止只宠少数专家。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 8:稀疏注意力和 FlashAttention 都能让注意力更快,区别在哪?</summary>
+            <summary class="quiz__q">问题 8:MTP 对推理有什么帮助?它是不是一步直接吐多个 token?</summary>
+            <div class="quiz__a">
+              <p>不是无条件“一步吐多个 token”。训练时,MTP 给同一个 hidden state 加多个未来 token 的辅助 loss,监督更密,也逼表示携带后面几步的规划信息。推理时,MTP 头/模块只当草稿器,先猜 <code>y1,y2,y3...</code>;主模型再用一次 causal forward 批量验证这些位置的分布。连续通过的 token 一次接受并保留 KV cache;遇到不通过的位置就丢掉后续草稿,从主模型分布继续生成。代价是草稿和验证都要额外算力,接受率低时可能不赚,服务端还要处理 KV cache 回退和采样接受规则。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 9:稀疏注意力和 FlashAttention 都能让注意力更快,区别在哪?</summary>
             <div class="quiz__a">
               <p>稀疏注意力是<strong>近似</strong>:干脆<strong>少算</strong>一些 token 对(只保留窗口/全局/top-k 的连接),用极小精度损失换速度。FlashAttention 是<strong>精确</strong>:一个都不少算,只是把计算重排、减少显存读写,让同样的稠密注意力更快更省显存。前者“少做题”,后者“做题更利索”,可叠加。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 9:一个模型号称支持 1M 上下文,靠的是把 RoPE 的位置直接编到 100 万吗?</summary>
+            <summary class="quiz__q">问题 10:一个模型号称支持 1M 上下文,靠的是把 RoPE 的位置直接编到 100 万吗?</summary>
             <div class="quiz__a">
               <p>不是,是<strong>五层同时到位</strong>的组合拳:①<strong>位置编码</strong>——RoPE 只依赖相对角度差、天生能外推一点,但硬编到百万会崩,得靠<strong>位置插值/NTK/YaRN</strong>把旋转角度“拉伸”回可用范围,再少量长文本微调;②<strong>少算</strong>——稀疏注意力(窗口/全局/top-k)把 O(n²) 压下来;③<strong>存得下</strong>——量化 + PagedAttention 分页复用 KV cache;④<strong>算得动</strong>——分块 prefill + 多卡并行;⑤<strong>真训过</strong>——在长序列上续训。缺哪层都撑不到 1M。</p>
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 10:一个用户逐字生成时明明用不满 GPU,为什么服务上亿用户反而扛得住?</summary>
+            <summary class="quiz__q">问题 11:为什么长上下文常常更贵?稀疏注意力是不是让它免费了?</summary>
+            <div class="quiz__a">
+              <p>不会免费。长 prompt 的 prefill 更长,KV cache 更大;decode 每生成一个 token,也要访问更多历史 KV、压缩块或索引结果。稀疏注意力把 full attention 的成本压下去,但它仍然要维护更长历史、跑索引/压缩、占更多显存,还会让批处理更难做。所以厂商常按上下文档位收费。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 12:一个用户逐字生成时明明用不满 GPU,为什么服务上亿用户反而扛得住?</summary>
             <div class="quiz__a">
               <p>正因为单个请求(尤其 decode 阶段)喂不饱 GPU,才有空间<strong>把很多请求拼一起算</strong>。<strong>连续批处理</strong>让不同用户的“下一个字”凑成一次大计算、谁完成谁下车、新请求随时插入,把 GPU 榨满;<strong>PagedAttention</strong> 把 KV cache 分页管理、消除碎片还能复用公共前缀,让一批塞下更多并发;真到亿级再用<strong>多副本 + 负载均衡</strong>横向扩展。代价是攒批会增加单人延迟,所以要在吞吐(TPOT)和首字延迟(TTFT)之间按场景权衡。</p>
             </div>

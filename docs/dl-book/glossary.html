@@ -131,7 +131,8 @@
           <li id="g-parallel" data-aliases="数据并行,流水线并行,张量并行"><strong>分布式并行训练</strong> — 把训练切到多卡:数据并行 / 流水线并行 / 张量并行三种拆法。<a href="chapter-21.html">→ 第 21 章</a></li>
           <li id="g-moe"><strong>MoE 混合专家</strong> — N 个并列 FFN 专家 + 路由器 top-k 门控;与专家端到端同训;总参多、算得少。<a href="chapter-21.html#8-moe-不是每次都动用全部参数">→ 第 21 章</a></li>
           <li id="g-sparseattn"><strong>稀疏注意力</strong> — 只算部分 token 对,把 O(n²) 降下来。<a href="chapter-21.html">→ 第 21 章</a></li>
-          <li id="g-mtp" data-aliases="MTP,Multi-Token Prediction,多token预测,多 token 预测,推测解码,speculative decoding"><strong>MTP / 推测解码</strong> — 训练时预测多个未来 token;推理时可当草稿模型先猜一串,主模型批量验证以提速。<a href="chapter-21.html#7-推理提速-让它回答得快">→ 第 21 章</a></li>
+          <li id="g-lightning-indexer" data-aliases="lightning indexer,闪电索引器,DSA indexer"><strong>闪电索引器 lightning indexer</strong> — 稀疏注意力里的轻量打分器:先估当前 query 与历史 token 的相关性,取 top-k,再让真正 attention 精算。<a href="chapter-21.html#9-稀疏注意力-不必人人都聊">→ 第 21 章 §9</a></li>
+          <li id="g-mtp" data-aliases="MTP,Multi-Token Prediction,多token预测,多 token 预测,推测解码,speculative decoding"><strong>MTP / 推测解码</strong> — 训练时让同一隐藏状态预测多个未来 token,增加前瞻训练信号;推理时草稿器先提案,主模型批量验证并接受连续通过的 token,但接受率低时不一定加速。<a href="chapter-21.html#7-推理提速-让它回答得快">→ 第 21 章</a></li>
           <li id="g-generate-verify" data-aliases="生成验证修复选择,verifier,refiner,ranker,MaxProof,test-time scaling"><strong>生成-验证-修复-选择</strong> — 复杂任务的推理系统范式:多候选搜索、验证器挑错、修复器改稿、排序器选最终答案。<a href="chapter-22.html#3-顶级模型怎么系统性地对抗幻觉">→ 第 22 章</a></li>
           <li id="g-prompt"><strong>提示工程 / 思维链</strong> — 把话说清楚 / 让它“一步步想”提升推理。<a href="chapter-22.html">→ 第 22 章</a></li>
           <li id="g-rag"><strong>RAG 检索增强</strong> — 先检索资料再让模型基于资料回答,治幻觉、补新知。<a href="chapter-22.html">→ 第 22 章</a></li>
