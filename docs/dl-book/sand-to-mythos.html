@@ -28,6 +28,7 @@
       <section class="slide slide--hero act-1" id="slide-hero" data-era="序" data-label="序幕">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">一部编年史</span><span class="slide__era">物质 → 智能</span></div>
+          <p class="hero__dedication">谨以此篇 · 致敬人工智能走过的七十年 · 1956—2026</p>
           <h1 class="hero__title">从沙子到 <span class="accent">Mythos</span></h1>
           <p class="slide__lead">
             人类把<strong>沙子</strong>提纯成晶体,把晶体刻成<strong>开关</strong>,把开关连接成<strong>机器</strong>,
@@ -52,7 +53,7 @@
             <div class="ov-act act-2"><p class="ov-act__name">二 · 开关变成机器</p><p class="ov-act__era">1950s – 1971</p><ul class="ov-act__list"><li>门电路 · 加法器</li><li>锁存器 · 触发器 · 时钟</li><li>流水线 · 冯诺依曼 · 芯片</li></ul></div>
             <div class="ov-act act-3"><p class="ov-act__name">三 · 机器变成算力</p><p class="ov-act__era">1980s – 2012</p><ul class="ov-act__list"><li>CPU · GPU</li><li>CUDA</li><li>矩阵</li></ul></div>
             <div class="ov-act act-6"><p class="ov-act__name">四 · 算力变成学习</p><p class="ov-act__era">1943 – 2016</p><ul class="ov-act__list"><li>神经元 · 反向传播</li><li>MNIST · AlexNet</li><li>词嵌入 · 序列模型</li></ul></div>
-            <div class="ov-act act-4"><p class="ov-act__name">五 · 学习变成语言</p><p class="ov-act__era">2017 – 2026</p><ul class="ov-act__list"><li>注意力 · Transformer</li><li>语言模型 · Scaling Law</li><li>训练 · 工程 · Mythos</li></ul></div>
+            <div class="ov-act act-4"><p class="ov-act__name">五 · 学习变成语言</p><p class="ov-act__era">2017 – 2026</p><ul class="ov-act__list"><li>注意力 · Transformer</li><li>语言模型 · Scaling Law</li><li>数据 · 算法 · 算力 · 工程</li></ul></div>
           </div>
         </div>
       </section>
@@ -963,6 +964,57 @@
         </div>
       </section>
 
+      <!-- 29 四要素会合 -->
+      <section class="slide act-4" id="slide-convergence" data-era="爆发前夜" data-label="四要素会合">
+        <div class="slide__text">
+          <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2023–2026 · 爆发前夜</span></div>
+          <h2 class="slide__title">条件,<span class="accent">终于凑齐</span></h2>
+          <p class="slide__lead">Web 数据能喂,Transformer 能放大,GPU 集群能训,工程系统能上线。大模型由此走出实验室。</p>
+          <div class="facets">
+            <div class="facet"><span class="facet__k">数据</span><span class="facet__v"><strong>数据</strong>:Web、代码、指令和偏好反馈,给预训练与后训练持续供料。</span></div>
+            <div class="facet"><span class="facet__k">算法</span><span class="facet__v"><strong>算法</strong>:Transformer 适合并行放大,规模定律让放大变成可规划路线。</span></div>
+            <div class="facet"><span class="facet__k">算力</span><span class="facet__v"><strong>算力</strong>:GPU 集群把巨量矩阵乘压进可承受的训练周期。</span></div>
+            <div class="facet"><span class="facet__k">工程</span><span class="facet__v"><strong>工程</strong>:分布式训练、KV cache 和连续批处理,把模型变成可用服务。</span></div>
+          </div>
+          <a class="slide__xref" href="chapter-20.html" target="_blank" rel="noopener">第 20 章 · 通往大模型</a>
+          <a class="slide__xref" href="chapter-21.html" target="_blank" rel="noopener">第 21 章 · 工程与基础设施</a>
+        </div>
+        <div class="slide__stage">
+          <figure class="frame">
+            <svg viewBox="0 0 360 210" role="img" aria-label="前文四条线解决数据算法算力工程卡点后汇成大模型爆发">
+              <line x1="186" y1="32" x2="186" y2="168" class="s-stroke" stroke-dasharray="4 4"/>
+              <text x="186" y="26" text-anchor="middle" class="s-t" style="font-size:9px">2020s 临界点</text>
+              <g class="s-stroke" stroke-width="1.35" fill="none">
+                <path d="M124 44 C142 52 154 78 178 91"/>
+                <path d="M124 78 C145 82 158 93 178 98"/>
+                <path d="M124 112 C145 111 158 106 178 105"/>
+                <path d="M124 146 C142 138 154 122 178 113"/>
+              </g>
+              <g style="font-size:9px">
+                <text x="22" y="38" class="s-t">Web / Code / Feedback</text>
+                <text x="22" y="51" class="s-tc" style="font-size:12px">数据够喂</text>
+                <text x="22" y="72" class="s-t">Backprop / Transformer</text>
+                <text x="22" y="85" class="s-tc" style="font-size:12px">算法能学</text>
+                <text x="22" y="106" class="s-t">GPU / CUDA / 矩阵</text>
+                <text x="22" y="119" class="s-tc" style="font-size:12px">算力能训</text>
+                <text x="22" y="140" class="s-t">切分 / KV cache</text>
+                <text x="22" y="153" class="s-tc" style="font-size:12px">工程能用</text>
+              </g>
+              <g class="s-dim">
+                <circle cx="124" cy="44" r="3"/><circle cx="124" cy="78" r="3"/><circle cx="124" cy="112" r="3"/><circle cx="124" cy="146" r="3"/>
+              </g>
+              <circle cx="186" cy="102" r="9" class="s-cf"/>
+              <circle cx="186" cy="102" r="20" class="s-c" opacity="0.35"/>
+              <path d="M196 102 C236 96 274 70 322 42" class="s-c" stroke-width="2.5" fill="none"/>
+              <polygon points="322,42 312,42 317,51" class="s-cf"/>
+              <text x="322" y="34" text-anchor="end" class="s-tc" style="font-size:11px">能力跃迁</text>
+              <text x="186" y="190" text-anchor="middle" class="s-t">数据 + 算法 + 算力 + 工程 同时到位</text>
+            </svg>
+            <figcaption class="frame__cap">BRIDGE.05 — 前文四条线汇成爆发</figcaption>
+          </figure>
+        </div>
+      </section>
+
       <!-- ══════════════ 群星过场 ══════════════ -->
       <section class="slide slide--constellation act-5" id="slide-constellation" data-era="终章" data-label="群星闪耀">
         <div class="constellation" aria-label="AI 发展星图">
@@ -979,6 +1031,7 @@
           <button type="button" class="constellation-star constellation-star--west" style="--x:76%;--y:86%;--s:0.74" data-title="Schmidhuber" data-kind="人物 · LSTM" data-work="与 Hochreiter 提出 LSTM,长期推动循环网络、序列学习和更广义的机器智能研究。" data-meaning="在 Transformer 之前,LSTM 是处理语言、语音和时间序列的核心工具,承接了大模型时代前的序列建模经验。"><i></i><span>Schmidhuber</span></button>
           <button type="button" class="constellation-star" style="--x:13%;--y:46%;--s:0.72" data-title="Mikolov" data-kind="人物 · word2vec" data-work="2013 年推动 word2vec,用高效训练把词向量从研究想法变成大规模可用工具。" data-meaning="它让“词的意义”在向量空间中显形,把语言处理从离散符号推向连续表示。"><i></i><span>Mikolov</span></button>
           <button type="button" class="constellation-star" style="--x:22%;--y:36%;--s:0.76" data-title="Backprop" data-kind="方法 · 反向传播" data-work="把输出误差沿计算图反向传播,高效计算每个参数该往哪个方向调整。" data-meaning="它是神经网络训练的发动机:没有反向传播,深层网络很难成为可工程化扩展的技术。"><i></i><span>Backprop</span></button>
+          <button type="button" class="constellation-star" style="--x:14%;--y:62%;--s:0.82" data-title="达特茅斯会议" data-kind="会议 · 1956" data-work="1956 年夏,McCarthy、Minsky、Shannon、Rochester 等人在达特茅斯学院举办暑期研讨会,第一次正式提出并使用“Artificial Intelligence(人工智能)”这个名字。" data-meaning="这是“人工智能”作为一门学科的正式起点——散落的想法从此有了共同的名字与目标。2026 年,正是它走过的第七十年。"><i></i><span>Dartmouth</span></button>
           <button type="button" class="constellation-star constellation-star--west" style="--x:84%;--y:44%;--s:0.7" data-title="Shazeer" data-kind="人物 · Transformer/MoE" data-work="Transformer 论文作者之一,也推动稀疏专家模型等大规模模型效率路线。" data-meaning="他的工作代表大模型时代的关键问题:不只是把模型做大,还要让巨大模型能以可承受的计算运行。"><i></i><span>Shazeer</span></button>
           <button type="button" class="constellation-star" style="--x:48%;--y:76%;--s:0.84" data-title="Vaswani" data-kind="人物 · Transformer" data-work="Transformer 论文第一作者之一,共同提出 Attention Is All You Need。" data-meaning="这篇论文改变了 NLP 的主架构:去掉循环主干,用自注意力打开并行训练和规模化的大门。"><i></i><span>Vaswani</span></button>
           <button type="button" class="constellation-star" style="--x:57%;--y:86%;--s:0.66" data-title="Uszkoreit" data-kind="人物 · Transformer" data-work="Transformer 论文作者之一,参与把注意力机制组织成完整、可扩展的序列建模架构。" data-meaning="这让机器翻译中的结构突破变成通往 GPT、BERT 和现代大语言模型的通用骨架。"><i></i><span>Uszkoreit</span></button>
@@ -997,6 +1050,7 @@
           <p class="actcard__no">终 章</p>
           <h2 class="actcard__title">群星<span class="accent">闪耀</span></h2>
           <p class="actcard__line">他们不是注脚,而是这条路上的星光。</p>
+          <p class="constellation-epilogue">从 1956 年那个夏天算起,七十年,无数个名字,一条从公式到智能的路。</p>
           <div class="actcard__rule"></div>
         </div>
       </section>

@@ -63,6 +63,43 @@ body {
 a { color: var(--amber); text-decoration: none; }
 
 /* ============================================================= */
+/* 固定背景底: 一整块不随内容滚动的底, 只在跨幕时平滑换主题色。      */
+/* 背景不再写在各幕盒子里(那样会跟着滚, 相邻幕又不同色 → 交界有痕迹)。 */
+/* 用 @property 注册可插值变量, 颜色才能 transition 平滑过渡。        */
+/* 只覆盖 act-1~act-4/act-6; 群星幕与终章幕(act-5)保留各自背景, 不动。 */
+/* ============================================================= */
+@property --bg-glow { syntax: "<color>"; inherits: true; initial-value: rgba(230,169,92,0.12); }
+@property --bg-top  { syntax: "<color>"; inherits: true; initial-value: #1b130b; }
+@property --bg-bot  { syntax: "<color>"; inherits: true; initial-value: #0b0906; }
+@property --bg-glow-x { syntax: "<percentage>"; inherits: true; initial-value: 42%; }
+
+body {
+  --bg-glow: rgba(230,169,92,0.12);
+  --bg-top: #1b130b;
+  --bg-bot: #0b0906;
+  --bg-glow-x: 42%;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(130% 110% at 50% 45%, transparent 46%, rgba(0,0,0,0.6)),
+    radial-gradient(120% 95% at var(--bg-glow-x) 42%, var(--bg-glow), transparent 55%),
+    linear-gradient(180deg, var(--bg-top), var(--bg-bot));
+  transition: --bg-glow 620ms ease, --bg-top 620ms ease, --bg-bot 620ms ease, --bg-glow-x 620ms ease;
+}
+@media (prefers-reduced-motion: reduce) { body::before { transition: none; } }
+/* 每幕主题色: JS 把当前幕的 act-N 写到 body[data-act]。act-5 不设, 保留原背景。 */
+body[data-act="act-1"] { --bg-glow: rgba(230,169,92,0.13); --bg-top:#1b130b; --bg-bot:#0b0906; --bg-glow-x:40%; }
+body[data-act="act-2"] { --bg-glow: rgba(120,150,170,0.11); --bg-top:#0d1210; --bg-bot:#0a0e0c; --bg-glow-x:56%; }
+body[data-act="act-3"] { --bg-glow: rgba(166,180,137,0.11); --bg-top:#0d100e; --bg-bot:#090c0b; --bg-glow-x:54%; }
+body[data-act="act-4"] { --bg-glow: rgba(240,205,131,0.12); --bg-top:#0e0d12; --bg-bot:#0a090e; --bg-glow-x:52%; }
+body[data-act="act-6"] { --bg-glow: rgba(111,190,201,0.12); --bg-top:#0a1113; --bg-bot:#07100f; --bg-glow-x:53%; }
+
+/* ============================================================= */
 /* 胶片氛围: 颗粒 + 上下黑边 + 片名/时间码                        */
 /* ============================================================= */
 
@@ -129,15 +166,13 @@ a { color: var(--amber); text-decoration: none; }
 
 /* 每幕氛围: 胶片 → 蓝图 → 数字 → 未来 */
 .slide::before { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; }
-.slide.act-1 { background: radial-gradient(120% 95% at 40% 42%, rgba(230,169,92,0.11), transparent 55%), linear-gradient(180deg,#1b130b,#100b06); }
-.slide.act-1::before { background: repeating-linear-gradient(90deg, transparent 0 38px, rgba(0,0,0,0.15) 38px 39px), radial-gradient(130% 110% at 50% 45%, transparent 46%, rgba(0,0,0,0.66)); }
-.slide.act-2 { background: radial-gradient(120% 95% at 58% 45%, rgba(120,150,170,0.08), transparent 55%), linear-gradient(180deg,#0d1210,#0a0e0c); }
+/* act-1~act-4/act-6 内容幕: 背景交给固定底(body::before), 幕自身透明、不跟滚。
+   保留各幕 ::before 的轻纹理(胶片/网格/点阵), 但去掉会造成交界暗角的遮罩。 */
+.slide.act-1, .slide.act-2, .slide.act-3, .slide.act-4, .slide.act-6 { background: transparent; }
+.slide.act-1::before { background: repeating-linear-gradient(90deg, transparent 0 38px, rgba(0,0,0,0.10) 38px 39px); opacity: 0.6; }
 .slide.act-2::before { background-image: linear-gradient(rgba(150,175,150,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(150,175,150,0.06) 1px, transparent 1px); background-size: 30px 30px; -webkit-mask-image: radial-gradient(120% 100% at 58% 50%, #000 55%, transparent); mask-image: radial-gradient(120% 100% at 58% 50%, #000 55%, transparent); }
-.slide.act-3 { background: radial-gradient(120% 95% at 55% 45%, rgba(166,180,137,0.08), transparent 52%), linear-gradient(180deg,#0d100e,#090c0b); }
 .slide.act-3::before { background-image: radial-gradient(rgba(200,220,200,0.10) 1px, transparent 1.4px); background-size: 24px 24px; -webkit-mask-image: radial-gradient(120% 100% at 55% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 55% 50%, #000 45%, transparent); }
-.slide.act-4 { background: radial-gradient(110% 90% at 52% 42%, rgba(240,205,131,0.10), transparent 54%), linear-gradient(180deg,#0e0d12,#0a090e); }
 .slide.act-4::before { background-image: radial-gradient(rgba(240,205,131,0.10) 1px, transparent 1.4px); background-size: 26px 26px; -webkit-mask-image: radial-gradient(120% 100% at 52% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 52% 50%, #000 45%, transparent); }
-.slide.act-6 { background: radial-gradient(112% 90% at 53% 43%, rgba(111,190,201,0.10), transparent 53%), linear-gradient(180deg,#0a1113,#07100f); }
 .slide.act-6::before { background-image: radial-gradient(rgba(111,190,201,0.11) 1px, transparent 1.4px); background-size: 25px 25px; -webkit-mask-image: radial-gradient(120% 100% at 53% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 53% 50%, #000 45%, transparent); }
 .slide.act-5 { background: radial-gradient(85% 75% at 48% 42%, rgba(230,169,92,0.18), transparent 55%), radial-gradient(70% 90% at 78% 72%, rgba(154,139,255,0.16), transparent 60%), linear-gradient(180deg,#0b0a14,#08070d); }
 .slide.act-5::before { background: repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 4px); opacity: 0.5; }
@@ -240,9 +275,9 @@ a { color: var(--amber); text-decoration: none; }
   grid-template-columns: 1fr; justify-items: center; text-align: center;
   padding-left: calc(var(--dial-width) + clamp(1rem, 2.5vw, 3rem));
 }
-/* 分幕卡不再纯黑, 保留所属幕的底色, 只额外压暗做"暗场仪式感", 让前后过渡顺滑 */
+/* 分幕卡背景走固定底(与本幕同色同主题), 这里只留极淡暗角聚焦标题, 不再压一大片黑 */
 .slide--act::before {
-  background: radial-gradient(70% 60% at 50% 45%, transparent 30%, rgba(0,0,0,0.78));
+  background: radial-gradient(75% 65% at 50% 45%, transparent 55%, rgba(0,0,0,0.22));
   -webkit-mask-image: none; mask-image: none;
   opacity: 1;
 }
@@ -308,6 +343,16 @@ a { color: var(--amber); text-decoration: none; }
   position: relative;
   z-index: 4;
   max-width: 44rem;
+}
+/* 群星幕收尾小字: 主句与紫色分隔线之间的片尾感落款, 比正文暗、字号小, 不抢主句 */
+.constellation-epilogue {
+  margin: 1.2rem auto 0.2rem;
+  max-width: 30rem;
+  color: rgba(226,238,255,0.5);
+  font-family: var(--font-serif);
+  font-size: clamp(0.8rem, 1.3vw, 0.94rem);
+  line-height: 1.85;
+  letter-spacing: 0.04em;
 }
 .constellation {
   position: absolute;
@@ -443,6 +488,16 @@ a { color: var(--amber); text-decoration: none; }
 .slide--hero .slide__lead, .slide--finale .slide__lead { margin-left: auto; margin-right: auto; }
 .slide--hero .slide__meta, .slide--finale .slide__meta { justify-content: center; }
 
+/* 封面题记: 主标题上方一行开场献词, 极淡暖金、宽字距, 像电影开场前的献辞 */
+.hero__dedication {
+  margin: 0 0 1.2rem;
+  color: var(--amber-soft);
+  font-family: var(--font-mono);
+  font-size: clamp(0.66rem, 1.15vw, 0.8rem);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  opacity: 0.62;
+}
 .hero__title {
   font-family: var(--font-serif); font-weight: 700;
   font-size: clamp(3rem, 9vw, 6rem); line-height: 1.02; margin: 0 0 1.5rem;

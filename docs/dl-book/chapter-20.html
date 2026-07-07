@@ -18,6 +18,7 @@
           你已经亲手把一个完整的语言模型从一个神经元拆到了底。现在我们站远一点,看看把<a class="xref" href="chapter-19.html">第 19 章</a>那个小模型
           <strong>放大一万倍</strong>会发生什么。这一章讲清楚三件事:大模型<strong>怎么读懂文字</strong>(分词与词嵌入)、
           <strong>为什么越大越强</strong>(规模定律与涌现)、以及<strong>是怎么“炼”出来的</strong>(预训练 → 微调 → 对齐 → 蒸馏)。
+          讲完训练链路后,我们还会把“为什么偏偏是这几年爆发”拆成<strong>数据、算法、算力、工程</strong>四个卡点来看。
           至于它靠什么硬件跑起来、你又该怎么用好它,留给第 21、22 章。
         </p>
 
@@ -49,6 +50,7 @@
             <li>“词嵌入”把词变成<strong>语义坐标</strong>,为什么向量夹角能表示“意思相近”;</li>
             <li>规模定律(Scaling Law)和涌现能力,到底在说什么;</li>
             <li><strong>预训练</strong>与<strong>后训练</strong>(SFT、RLHF、蒸馏)的分工,以及“底座模型”和“对话模型”的区别;</li>
+            <li>为什么大模型不是单点奇迹,而是<strong>数据、算法、算力、工程</strong>四个卡点同时解开后的结果;</li>
             <li>模型是怎么<strong>一代代迭代升级</strong>的——GPT-4 到 GPT-5 是不是“重新训一个”,大版本和小更新差在哪;</li>
             <li>推理模型、多模态(图像/语音怎么进 Transformer)、长上下文(窗口大小由什么决定、为何标称≠有效)等最近的新方向,大致是怎么回事;</li>
             <li>常见“体感”问题:<strong>模型降智</strong>、<strong>对齐税</strong>、<strong>灾难性遗忘</strong>各自发生在训练链路的哪一环;</li>
@@ -727,15 +729,76 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           </p>
         </div>
 
-        <div class="callout callout--note reveal">
-          <span class="callout__title">训练黑话速查(这些词在哪都会遇到)</span>
+        <h3>⑤ 为什么这几年才爆发:四个卡点同时解开</h3>
+        <p>
+          到这里,我们已经把大模型的核心训练流程拆开了。现在补一个更宏观、但很关键的问题:
+          <strong>神经网络、反向传播、GPU、互联网都不是今天才出现,为什么大模型偏偏在最近几年爆发?</strong>
+          答案不是某个单点突然神了,而是四个长期卡住的条件第一次同时接上:数据够喂、算法能学、算力能训、工程能用。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>卡点</th><th>前文伏笔</th><th>怎么被解决</th><th>少了它会怎样</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>数据</strong><br />能喂</td>
+                <td><a class="xref" href="chapter-19.html">第 19 章</a>的语言模型目标:预测下一个 token</td>
+                <td>
+                  Web 文本和代码本身就带着“下一个 token”答案,不需要人工逐条标注;
+                  <strong>自监督预训练</strong>把海量文本变成训练题库。后训练再用指令数据和偏好反馈,把底座模型推向可用助手。
+                </td>
+                <td>模型容量再大也吃不饱;只会在小语料上背模板,学不到广泛知识、代码模式和真实表达方式。</td>
+              </tr>
+              <tr>
+                <td><strong>算法</strong><br />能学</td>
+                <td>
+                  <a class="xref" href="chapter-06.html">反向传播</a>解决调参;
+                  <a class="xref" href="chapter-16.html">RNN 的问题</a>引出注意力;
+                  <a class="xref" href="chapter-18.html">Transformer</a>成为可堆叠骨架
+                </td>
+                <td>
+                  反向传播 + 交叉熵让“预测下一个 token”能端到端优化;
+                  自注意力解决长距离关系,Transformer 让训练天然并行;
+                  <a class="xref" href="chapter-20.html#5-规模化scaling-law-大力真的出奇迹">规模定律</a>又把“继续放大是否值得”变成可估算的工程判断。
+                </td>
+                <td>有数据也学不动;模型要么串行太慢,要么长距离信息丢失,要么不知道该怎样按比例放大。</td>
+              </tr>
+              <tr>
+                <td><strong>算力</strong><br />能训</td>
+                <td>
+                  <a class="xref" href="chapter-01.html">矩阵</a>是神经网络的计算形状;
+                  <a class="xref" href="chapter-21.html#2-gpu-为并行而生">GPU</a>擅长海量并行乘加
+                </td>
+                <td>
+                  GPU/CUDA 把矩阵洪流跑起来,HBM 提供高带宽显存,高速互联让多卡像一台更大的机器协同。
+                  训练成本仍然巨大,但从“根本算不完”变成“可以预算、可以排期、可以复现”。
+                </td>
+                <td>曲线再漂亮也只是纸面路线图;一次训练要拖到不可接受的时间,模型迭代速度跟不上。</td>
+              </tr>
+              <tr>
+                <td><strong>工程</strong><br />能用</td>
+                <td>
+                  下一章<a class="xref" href="chapter-21.html">第 21 章</a>会展开:显存、并行、通信、推理服务
+                </td>
+                <td>
+                  数据清洗与去重保证“喂进去的东西别太脏”;数据/张量/流水线并行解决“单卡装不下”;
+                  checkpoint、容错和监控让长训练不中途白费;推理侧靠 KV cache、连续批处理、量化和负载均衡把模型送到真实用户面前。
+                </td>
+                <td>模型可能训得出,但服务不了:延迟太高、成本太贵、显存爆掉、线上不稳定,最终只能停在实验室指标。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          所以“大模型爆发”更像四道闸门同时打开:Web/Code/Feedback 提供可扩展的数据,
+          Transformer + 规模定律给出可扩展的算法路线,GPU 集群提供可扩展的训练能力,
+          工程系统把训练和服务做成可持续迭代的流水线。只有其中一块成熟,最多产生漂亮 demo;
+          四块同时成熟,才会出现 ChatGPT 之后这种社会级应用扩散。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">一句话记住</span>
           <p>
-            <strong>· epoch(轮次)</strong>:把全部训练数据完整过一遍叫一个 epoch;要读好几遍(常读常新),但每遍会打乱顺序防“死记硬背”。<br />
-            <strong>· batch(批)</strong>:一次喂进去的一小撮样本(<a class="xref" href="chapter-05.html">第 5 章</a>)。<br />
-            <strong>· step(步)/迭代</strong>:用一个 batch 更新一次参数,叫一步。<br />
-            <strong>· 超参数</strong>:不是模型自己学的参数,而是<strong>你手动设定</strong>的旋钮——学习率、层数、batch 大小等(第 5、9 章)。“超”只是“在模型参数之外”的意思,不神秘。<br />
-            <strong>· 泛化</strong>:在<strong>没见过</strong>的数据上也表现好,就叫泛化能力强(适应力强)。<br />
-            <strong>· 过拟合 / 欠拟合</strong>:过拟合 = 训练集很好、测试集很差(“死记硬背”);欠拟合 = 训练集都学不好(模型太弱或没训够)。<a class="xref" href="chapter-09.html">第 9 章</a>讲过怎么缓解。
+            <strong>数据</strong>解决“学什么”,<strong>算法</strong>解决“怎么学”,<strong>算力</strong>解决“训不训得动”,
+            <strong>工程</strong>解决“能不能稳定给人用”。大模型时代不是把其中一个做到极致,而是四个环节都跨过了最低门槛。
           </p>
         </div>
 

@@ -132,6 +132,9 @@
       currentIdx = i;
       if (reelCode) reelCode.textContent = String(i + 1).padStart(2, "0") + " / " + total;
       updateHash(i);
+      // 当前幕的 act-N 写到 body: 固定背景底据此平滑过渡主题色(见 mythos.css body::before)。
+      // act-5(群星/终章)保留各自盒子内背景, 固定底不设 act-5, 不影响它们。
+      document.body.setAttribute("data-act", actClassOf(slides[i]));
     }
     layout(i);
   }

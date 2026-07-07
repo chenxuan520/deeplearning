@@ -607,6 +607,14 @@ encoding[pos][i + 1] = std::cos(angle);
             这就是图中那条<strong>从左塔顶伸到右塔中部的蓝线</strong>——原始 Transformer 本来就是为“机器翻译”设计的,cross-attention 正是连接“原文”和“译文”的那座桥。
           </p>
         </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">左右两边的 N× 不要求一一配对</span>
+          <p>
+            图里左塔和右塔都写 <code>N×</code>,是因为原始论文里 encoder 和 decoder 都堆了 6 层,不是因为 cross-attention 必须“第 1 层对第 1 层、第 2 层对第 2 层”。
+            标准做法是:<strong>左边 encoder 先跑完整座塔</strong>,得到最终输出 <code>H_enc</code>;右边 decoder 的<strong>每一层</strong> cross-attention 都拿这份 <code>H_enc</code> 作为 K / V 的来源。
+            所以 encoder 可以是 12 层、decoder 可以是 6 层;这时 cross-attention 通常有 6 个,因为它跟着 decoder 层数走,但每个都在查阅同一份最终 encoder 输出,只是各自有自己的投影矩阵。
+          </p>
+        </div>
 
         <h3>三种家族:后来的模型只取半张图</h3>
         <p>这张全图是“编码器 + 解码器”的完整版。后来的模型常常<strong>只取其中一半</strong>:</p>
