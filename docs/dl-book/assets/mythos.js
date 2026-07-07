@@ -126,6 +126,9 @@
     var url = i === 0 ? location.pathname + location.search : "#" + id;
     try { history.replaceState(null, "", url); } catch (e) {}
   }
+  var creditEgg = document.querySelector(".story-credit__egg");
+  var constellationSlide = document.getElementById("slide-constellation");
+
   function setActive(i) {
     if (i < 0 || i >= items.length) return;
     if (i !== currentIdx) {
@@ -133,8 +136,14 @@
       if (reelCode) reelCode.textContent = String(i + 1).padStart(2, "0") + " / " + total;
       updateHash(i);
       // 当前幕的 act-N 写到 body: 固定背景底据此平滑过渡主题色(见 mythos.css body::before)。
-      // act-5(群星/终章)保留各自盒子内背景, 固定底不设 act-5, 不影响它们。
+      // act-6(群星/高峰)保留各自盒子内背景, 固定底不设 act-6, 不影响它们。
       document.body.setAttribute("data-act", actClassOf(slides[i]));
+      if (creditEgg) {
+        var onConstellation = slides[i] === constellationSlide;
+        creditEgg.classList.toggle("is-live", onConstellation);
+        creditEgg.setAttribute("aria-disabled", onConstellation ? "false" : "true");
+        if (!onConstellation && typeof closeConstellationPopover === "function") closeConstellationPopover();
+      }
     }
     layout(i);
   }
@@ -236,10 +245,11 @@
     scrollDialTo((dialScrolling ? dialTargetIdx : (currentIdx < 0 ? 0 : currentIdx)) + step);
   }, { passive: false });
 
-  // ---------- 群星弹窗 ----------
+  // ---------- 群星弹窗 + 作者彩蛋(仅群星幕) ----------
+  var closeConstellationPopover = function () {};
   function buildConstellationPopover() {
     var stars = [].slice.call(document.querySelectorAll(".constellation-star"));
-    if (!stars.length) return;
+    if (!stars.length && !creditEgg) return;
 
     var pop = document.createElement("aside");
     pop.className = "constellation-popover";
@@ -262,7 +272,8 @@
       stars.forEach(function (s) { s.classList.remove("is-selected"); });
       pop.classList.remove("is-open");
     }
-    function placeNear(star) {
+    closeConstellationPopover = close;
+    function placeNear(anchor) {
       if (window.matchMedia("(max-width: 920px)").matches) {
         pop.style.left = "";
         pop.style.top = "";
@@ -270,7 +281,7 @@
       }
       var gap = 14;
       var pad = 14;
-      var rect = star.getBoundingClientRect();
+      var rect = anchor.getBoundingClientRect();
       pop.classList.add("is-open");
       var popRect = pop.getBoundingClientRect();
       var left = rect.right + gap;
@@ -281,25 +292,48 @@
       pop.style.left = left + "px";
       pop.style.top = top + "px";
     }
+    function openFrom(anchor, data) {
+      stars.forEach(function (s) { s.classList.remove("is-selected"); });
+      if (anchor.classList && anchor.classList.contains("constellation-star")) {
+        anchor.classList.add("is-selected");
+      }
+      kind.textContent = data.kind || "";
+      title.textContent = data.title || "";
+      work.textContent = data.work || "";
+      meaning.textContent = data.meaning || "";
+      meaning.style.display = meaning.textContent ? "" : "none";
+      placeNear(anchor);
+    }
     function open(star) {
-      stars.forEach(function (s) { s.classList.toggle("is-selected", s === star); });
-      kind.textContent = star.getAttribute("data-kind") || "";
-      title.textContent = star.getAttribute("data-title") || star.textContent.trim();
-      work.textContent = star.getAttribute("data-work") || "";
-      meaning.textContent = star.getAttribute("data-meaning") || "";
-      placeNear(star);
+      openFrom(star, {
+        kind: star.getAttribute("data-kind") || "",
+        title: star.getAttribute("data-title") || star.textContent.trim(),
+        work: star.getAttribute("data-work") || "",
+        meaning: star.getAttribute("data-meaning") || ""
+      });
     }
 
     stars.forEach(function (star) {
       star.addEventListener("click", function () { open(star); });
     });
+    if (creditEgg) {
+      creditEgg.addEventListener("click", function () {
+        if (!creditEgg.classList.contains("is-live")) return;
+        openFrom(creditEgg, {
+          kind: "彩蛋 · 作者",
+          title: "chenxuan",
+          work: "在 2026 年制作《从沙子到 Mythos》这份致敬文档。",
+          meaning: ""
+        });
+      });
+    }
     closeBtn.addEventListener("click", close);
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") close();
     });
     document.addEventListener("click", function (e) {
       if (!pop.classList.contains("is-open")) return;
-      if (pop.contains(e.target) || e.target.closest(".constellation-star")) return;
+      if (pop.contains(e.target) || e.target.closest(".constellation-star") || e.target.closest(".story-credit__egg")) return;
       close();
     });
   }

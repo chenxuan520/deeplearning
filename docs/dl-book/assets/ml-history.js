@@ -1,5 +1,5 @@
 /*
- * ml-history.js — 专题页《机器学习群星史》
+ * ml-history.js — 专题页《百年长夜与黎明》(机器学习群星史)
  * 横向一屏一幕 (scroll-snap x)。底部胶片时间线随当前幕居中聚焦;
  * 顶部时间码 + 进度条; 幕内元素进屏淡入; 键盘/滚轮/按钮翻幕。
  * 图片外链失败时回退到 .is-broken 文字占位。纯静态零依赖。
@@ -23,19 +23,31 @@
   var currentIdx = -1;
   var lockTimer = 0;
   var locked = false;
+  var timelineDragging = false;
+  var timelinePointer = 0;
+  var timelineStartLeft = 0;
+  var timelineMoved = false;
+  var suppressTimelineClick = false;
+  var timelinePointerId = null;
+  var timelineProgrammatic = false;
+  var timelineProgrammaticTimer = 0;
+  var timelineSnapTimer = 0;
 
-  // ---------- 底部弧形时间线刻度 ----------
-  // 节点沿一段"上凸的弧"排布: 弧顶(当前项)最高, 两侧渐低渐淡。
+  // ---------- 底部路线热度时间线刻度 ----------
+  // 节点仍按 slide index 一格一格移动; SVG 同时画符号/连接两条热度曲线。
+  // 纵向高度统一表示热度: 谁更高, 谁在那个时间点更热。
   var STEP = 92;   // 相邻刻度水平间距(px)
-  var LIFT = 26;   // 弧顶相对两端抬高的幅度(px)
-  var SPAN = 6;    // 单侧参与弧形抬升的刻度数(超出压平)
-  var arcSvg = null, arcPath = null;
+  var SPAN = 6;    // 单侧最多强调几个邻近刻度
+  var railSvg = null;
+  var symbolPath = null;
+  var connectionPath = null;
 
   if (timeline) {
     slides.forEach(function (slide, i) {
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "mh-timepoint";
+      btn.className = "mh-timepoint mh-timepoint--" + (slide.dataset.line || "bridge");
+      btn.dataset.line = slide.dataset.line || "bridge";
       btn.setAttribute(
         "aria-label",
         (slide.dataset.year || "") + " " + (slide.dataset.title || "")
@@ -51,55 +63,110 @@
     var PAD = (tlView ? tlView.clientWidth : window.innerWidth) / 2;
     timeline.dataset.pad = PAD;
     timeline.style.width = (PAD * 2 + STEP * (total - 1) + 16) + "px";
-    arcSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    arcSvg.setAttribute("class", "mh-arc");
-    arcPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    arcPath.setAttribute("class", "mh-arc__line");
-    arcSvg.appendChild(arcPath);
-    timeline.appendChild(arcSvg);
+    railSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    railSvg.setAttribute("class", "mh-rails");
+    symbolPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    symbolPath.setAttribute("class", "mh-rail mh-rail--symbol");
+    connectionPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    connectionPath.setAttribute("class", "mh-rail mh-rail--connection");
+    railSvg.appendChild(symbolPath);
+    railSvg.appendChild(connectionPath);
+    timeline.appendChild(railSvg);
   }
 
-  // 依据"当前项"重排弧: 当前项落在弧顶, 相邻按 cos 曲线下沉
+  function heatOf(slide, line) {
+    var attr = line === "symbol" ? "symbolHeat" : "connectionHeat";
+    var fallback = slide.dataset.heat || "2";
+    return Math.max(0, Math.min(5, parseFloat(slide.dataset[attr] || fallback)));
+  }
+
+  function heatY(heat, h) {
+    var top = 12;
+    var bottom = h - 22;
+    return bottom - (heat / 5) * (bottom - top);
+  }
+
+  function pointX(i) {
+    var PAD = parseFloat(timeline ? timeline.dataset.pad || "0" : "0");
+    return PAD + i * STEP;
+  }
+
+  function pointY(slide, h) {
+    var line = slide.dataset.line || "bridge";
+    if (line === "symbol") return heatY(heatOf(slide, "symbol"), h);
+    if (line === "connection") return heatY(heatOf(slide, "connection"), h);
+    if (line === "winter") return heatY(Math.max(heatOf(slide, "symbol"), heatOf(slide, "connection")), h);
+    return heatY(Math.max(heatOf(slide, "symbol"), heatOf(slide, "connection")), h);
+  }
+
+  function pathFromPoints(pts) {
+    if (!pts.length) return "";
+    var dstr = "M " + pts[0][0] + " " + pts[0][1];
+    for (var k = 1; k < pts.length; k++) {
+      var x0 = pts[k - 1][0], y0 = pts[k - 1][1], x1 = pts[k][0], y1 = pts[k][1];
+      var cx = (x0 + x1) / 2;
+      dstr += " C " + cx + " " + y0 + " " + cx + " " + y1 + " " + x1 + " " + y1;
+    }
+    return dstr;
+  }
+
+  // 依据"当前项"重排双轨: 横向仍按年份顺序, 纵向显示路线与热度。
   function layoutArc(active) {
     if (!timeline) return;
     var h = timeline.clientHeight || 90;
     var PAD = parseFloat(timeline.dataset.pad || "0");
-    var baseY = h - 20;          // 弧两端基线
-    var pts = [];
+    var symbolPts = [];
+    var connectionPts = [];
     for (var i = 0; i < total; i++) {
-      var x = PAD + i * STEP + 8;
+      var x = pointX(i);
       var d = Math.abs(i - active);
-      var lift = d >= SPAN ? 0 : Math.cos((d / SPAN) * (Math.PI / 2));
-      var y = baseY - lift * LIFT;
+      var focus = d >= SPAN ? 0 : Math.cos((d / SPAN) * (Math.PI / 2));
+      var y = pointY(slides[i], h);
       points[i].style.left = x + "px";
       points[i].style.top = y + "px";
-      pts.push([x, y]);
+      points[i].style.opacity = String(0.34 + focus * 0.66);
+      symbolPts.push([x, heatY(heatOf(slides[i], "symbol"), h)]);
+      connectionPts.push([x, heatY(heatOf(slides[i], "connection"), h)]);
     }
-    // 平滑弧线路径
-    if (arcPath && pts.length) {
-      var dstr = "M " + pts[0][0] + " " + pts[0][1];
-      for (var k = 1; k < pts.length; k++) {
-        var x0 = pts[k - 1][0], y0 = pts[k - 1][1], x1 = pts[k][0], y1 = pts[k][1];
-        var cx = (x0 + x1) / 2;
-        dstr += " C " + cx + " " + y0 + " " + cx + " " + y1 + " " + x1 + " " + y1;
-      }
-      arcPath.setAttribute("d", dstr);
-      arcSvg.setAttribute("width", (PAD * 2 + STEP * (total - 1) + 16));
-      arcSvg.setAttribute("height", h);
+    if (railSvg) {
+      var w = PAD * 2 + STEP * (total - 1) + 16;
+      railSvg.setAttribute("width", w);
+      railSvg.setAttribute("height", h);
+      if (symbolPath) symbolPath.setAttribute("d", pathFromPoints(symbolPts));
+      if (connectionPath) connectionPath.setAttribute("d", pathFromPoints(connectionPts));
     }
   }
 
   // ---------- 幕定位 ----------
+  function pointCenterX(i) {
+    if (!points[i]) return 0;
+    var left = parseFloat(points[i].style.left || "0");
+    return isNaN(left) ? pointX(i) : left;
+  }
+
+  function centerTimeline(i, behavior) {
+    if (tlView && points[i]) {
+      var target = pointCenterX(i) - tlView.clientWidth / 2;
+      timelineProgrammatic = true;
+      clearTimeout(timelineProgrammaticTimer);
+      tlView.scrollTo({ left: target, behavior: behavior || "smooth" });
+      timelineProgrammaticTimer = setTimeout(function () {
+        timelineProgrammatic = false;
+      }, behavior === "auto" ? 40 : 520);
+    }
+  }
+
   function goTo(i) {
     i = Math.max(0, Math.min(total - 1, i));
     locked = true;
-    setActive(i);
+    setActive(i, false);
+    centerTimeline(i, "auto");
     scroller.scrollTo({ left: slides[i].offsetLeft, behavior: "smooth" });
     clearTimeout(lockTimer);
     lockTimer = setTimeout(function () { locked = false; }, 700);
   }
 
-  function setActive(i) {
+  function setActive(i, syncTimeline) {
     if (i === currentIdx) return;
     currentIdx = i;
     var slide = slides[i];
@@ -115,13 +182,71 @@
 
     // 重排弧形 + 把当前刻度滑到弧顶(视口中央)
     layoutArc(i);
-    if (tlView && points[i]) {
-      var target = points[i].offsetLeft - tlView.clientWidth / 2;
-      tlView.scrollTo({ left: target, behavior: "smooth" });
-    }
+    if (syncTimeline !== false) centerTimeline(i, "auto");
   }
 
   function pad(n) { return (n < 10 ? "0" : "") + n; }
+
+  function nearestTimelineIndex() {
+    if (!tlView || !points.length) return currentIdx < 0 ? 0 : currentIdx;
+    var center = tlView.scrollLeft + tlView.clientWidth / 2;
+    var idx = 0;
+    var best = Infinity;
+    for (var i = 0; i < points.length; i++) {
+      var d = Math.abs(pointCenterX(i) - center);
+      if (d < best) { best = d; idx = i; }
+    }
+    return idx;
+  }
+
+  if (tlView) {
+    tlView.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0) return;
+      timelineDragging = false;
+      timelineMoved = false;
+      timelinePointerId = e.pointerId;
+      timelinePointer = e.clientX;
+      timelineStartLeft = tlView.scrollLeft;
+    });
+    tlView.addEventListener("pointermove", function (e) {
+      if (timelinePointerId !== e.pointerId) return;
+      var dx = e.clientX - timelinePointer;
+      if (!timelineDragging && Math.abs(dx) > 5) {
+        timelineDragging = true;
+        timelineMoved = true;
+        tlView.classList.add("is-dragging");
+        try { tlView.setPointerCapture(e.pointerId); } catch (_) {}
+      }
+      if (!timelineDragging) return;
+      tlView.scrollLeft = timelineStartLeft - dx;
+    });
+    function endTimelineDrag(e) {
+      if (timelinePointerId !== e.pointerId) return;
+      timelinePointerId = null;
+      if (!timelineDragging) return;
+      timelineDragging = false;
+      tlView.classList.remove("is-dragging");
+      try { tlView.releasePointerCapture(e.pointerId); } catch (_) {}
+      if (timelineMoved) {
+        suppressTimelineClick = true;
+        setTimeout(function () { suppressTimelineClick = false; }, 80);
+      }
+    }
+    tlView.addEventListener("pointerup", endTimelineDrag);
+    tlView.addEventListener("pointercancel", endTimelineDrag);
+    tlView.addEventListener("scroll", function () {
+      if (timelineProgrammatic) return;
+      clearTimeout(timelineSnapTimer);
+      timelineSnapTimer = setTimeout(function () {
+        goTo(nearestTimelineIndex());
+      }, 160);
+    }, { passive: true });
+    tlView.addEventListener("click", function (e) {
+      if (!suppressTimelineClick) return;
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+  }
 
   // ---------- 滚动 → 判定当前幕 + 进度条 ----------
   function onScroll() {

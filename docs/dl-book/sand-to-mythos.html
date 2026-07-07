@@ -20,7 +20,7 @@
       <span class="reel__code" id="reel-code">00 / 00</span>
     </div>
     <div class="deck-progress" aria-hidden="true"></div>
-    <p class="story-credit">作者 · chenxuan</p>
+    <p class="story-credit">作者 · <button type="button" class="story-credit__egg" aria-disabled="true" aria-label="chenxuan">chenxuan</button></p>
 
     <main class="deck" id="deck">
 
@@ -52,8 +52,8 @@
             <div class="ov-act act-1"><p class="ov-act__name">一 · 物质变成开关</p><p class="ov-act__era">数十亿年前 – 1947</p><ul class="ov-act__list"><li>沙子 · 半导体</li><li>掺杂 · 二极管</li><li>三极管 · 0/1</li></ul></div>
             <div class="ov-act act-2"><p class="ov-act__name">二 · 开关变成机器</p><p class="ov-act__era">1950s – 1971</p><ul class="ov-act__list"><li>门电路 · 加法器</li><li>锁存器 · 触发器 · 时钟</li><li>流水线 · 冯诺依曼 · 芯片</li></ul></div>
             <div class="ov-act act-3"><p class="ov-act__name">三 · 机器变成算力</p><p class="ov-act__era">1980s – 2012</p><ul class="ov-act__list"><li>CPU · GPU</li><li>CUDA</li><li>矩阵</li></ul></div>
-            <div class="ov-act act-6"><p class="ov-act__name">四 · 算力变成学习</p><p class="ov-act__era">1943 – 2016</p><ul class="ov-act__list"><li>神经元 · 反向传播</li><li>MNIST · AlexNet</li><li>词嵌入 · 序列模型</li></ul></div>
-            <div class="ov-act act-4"><p class="ov-act__name">五 · 学习变成语言</p><p class="ov-act__era">2017 – 2026</p><ul class="ov-act__list"><li>注意力 · Transformer</li><li>语言模型 · Scaling Law</li><li>数据 · 算法 · 算力 · 工程</li></ul></div>
+            <div class="ov-act act-4"><p class="ov-act__name">四 · 算力变成学习</p><p class="ov-act__era">1943 – 2016</p><ul class="ov-act__list"><li>神经元 · 反向传播</li><li>MNIST · AlexNet</li><li>词嵌入 · 序列模型</li></ul></div>
+            <div class="ov-act act-5"><p class="ov-act__name">五 · 学习变成语言</p><p class="ov-act__era">2017 – 2026</p><ul class="ov-act__list"><li>注意力 · Transformer</li><li>语言模型 · Scaling Law</li><li>数据 · 算法 · 算力 · 工程</li></ul></div>
           </div>
         </div>
       </section>
@@ -563,7 +563,7 @@
       </section>
 
       <!-- ══════════════ 第四幕 分幕卡 ══════════════ -->
-      <section class="slide slide--act act-6" id="slide-act-4" data-era="第四幕" data-label="第四幕 · 学习">
+      <section class="slide slide--act act-4" id="slide-act-4" data-era="第四幕" data-label="第四幕 · 学习">
         <div class="actcard">
           <p class="actcard__no">第 四 幕</p>
           <h2 class="actcard__title">算力,变成<span class="accent">学习</span></h2>
@@ -573,7 +573,7 @@
       </section>
 
       <!-- 18 神经元 -->
-      <section class="slide act-6" id="slide-neuron" data-era="1943 / 1958" data-label="神经元">
+      <section class="slide act-4" id="slide-neuron" data-era="1943 / 1958" data-label="神经元">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">1943 / 1958</span></div>
           <h2 class="slide__title">神经元:数字有了<span class="accent">倾向</span></h2>
@@ -602,7 +602,7 @@
       </section>
 
       <!-- 19 反向传播 -->
-      <section class="slide act-6" id="slide-backprop" data-era="1986" data-label="反向传播">
+      <section class="slide act-4" id="slide-backprop" data-era="1986" data-label="反向传播">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">1986 · Rumelhart 等</span></div>
           <h2 class="slide__title">反向传播:让错误<span class="accent">回流</span></h2>
@@ -628,7 +628,7 @@
       </section>
 
       <!-- 20 MNIST -->
-      <section class="slide act-6" id="slide-mnist" data-era="1998" data-label="MNIST">
+      <section class="slide act-4" id="slide-mnist" data-era="1998" data-label="MNIST">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">1998</span></div>
           <h2 class="slide__title">MNIST:让训练<span class="accent">看得见</span></h2>
@@ -656,7 +656,7 @@
       </section>
 
       <!-- 21 AlexNet · 深度学习引爆 -->
-      <section class="slide act-6" id="slide-alexnet" data-era="2012 · AlexNet" data-label="AlexNet">
+      <section class="slide act-4" id="slide-alexnet" data-era="2012 · AlexNet" data-label="AlexNet">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">2012 · ImageNet</span></div>
           <h2 class="slide__title">AlexNet:深度学习<span class="accent">引爆</span></h2>
@@ -681,7 +681,7 @@
       </section>
 
       <!-- 22 词嵌入 -->
-      <section class="slide act-6" id="slide-word2vec" data-era="2013 · word2vec" data-label="词嵌入">
+      <section class="slide act-4" id="slide-word2vec" data-era="2013 · word2vec" data-label="词嵌入">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第四幕 · 学习</span><span class="slide__era">2013 · word2vec</span></div>
           <h2 class="slide__title">词嵌入:词有了<span class="accent">坐标</span></h2>
@@ -710,9 +710,9 @@
       </section>
 
       <!-- 22 序列模型 -->
-      <section class="slide act-6" id="slide-rnn" data-era="1997 / 2014" data-label="序列模型">
+      <section class="slide act-4" id="slide-rnn" data-era="1997 · LSTM" data-label="序列模型">
         <div class="slide__text">
-          <div class="slide__meta"><span class="slide__act">第四幕 → 第五幕</span><span class="slide__era">1997 · LSTM / 2014</span></div>
+          <div class="slide__meta"><span class="slide__act">第四幕 → 第五幕</span><span class="slide__era">1997 · LSTM</span></div>
           <h2 class="slide__title">序列模型:按<span class="accent">时间</span>读句子</h2>
           <p class="slide__lead">一句话有先后顺序。怎么让机器"边读边记"?</p>
           <div class="facets">
@@ -736,7 +736,7 @@
       </section>
 
       <!-- 23 Token -->
-      <section class="slide act-6" id="slide-token" data-era="表示层" data-label="Token">
+      <section class="slide act-4" id="slide-token" data-era="表示层" data-label="Token">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第四幕 → 第五幕</span><span class="slide__era">表示层</span></div>
           <h2 class="slide__title">Token:语言切成<span class="accent">积木</span></h2>
@@ -763,7 +763,7 @@
       </section>
 
       <!-- ══════════════ 第五幕 分幕卡 ══════════════ -->
-      <section class="slide slide--act act-4" id="slide-act-5" data-era="第五幕" data-label="第五幕 · 语言">
+      <section class="slide slide--act act-5" id="slide-act-5" data-era="第五幕" data-label="第五幕 · 语言">
         <div class="actcard">
           <p class="actcard__no">第 五 幕</p>
           <h2 class="actcard__title">学习,变成<span class="accent">语言</span></h2>
@@ -773,7 +773,7 @@
       </section>
 
       <!-- 23 注意力 -->
-      <section class="slide act-4" id="slide-attention" data-era="2017 · Attention" data-label="注意力">
+      <section class="slide act-5" id="slide-attention" data-era="2017 · Attention" data-label="注意力">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2017 · Attention Is All You Need</span></div>
           <h2 class="slide__title">注意力:意义来自<span class="accent">关系</span></h2>
@@ -803,7 +803,7 @@
       </section>
 
       <!-- 24 Transformer -->
-      <section class="slide act-4" id="slide-transformer" data-era="2017" data-label="Transformer">
+      <section class="slide act-5" id="slide-transformer" data-era="2017" data-label="Transformer">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2017</span></div>
           <h2 class="slide__title">Transformer:可堆叠的<span class="accent">积木</span></h2>
@@ -830,7 +830,7 @@
       </section>
 
       <!-- 25 语言模型 -->
-      <section class="slide act-4" id="slide-language-model" data-era="2018–2019" data-label="语言模型">
+      <section class="slide act-5" id="slide-language-model" data-era="2018–2019" data-label="语言模型">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2018–2019 · GPT / BERT</span></div>
           <h2 class="slide__title">语言模型:预测<span class="accent">下一个词</span></h2>
@@ -857,7 +857,7 @@
       </section>
 
       <!-- 26 GPT 横空出世 -->
-      <section class="slide act-4" id="slide-gpt" data-era="2018 → 2022" data-label="GPT">
+      <section class="slide act-5" id="slide-gpt" data-era="2018 → 2022" data-label="GPT">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2018 → 2022 · OpenAI</span></div>
           <h2 class="slide__title">GPT:把这条路<span class="accent">推到底</span></h2>
@@ -885,7 +885,7 @@
       </section>
 
       <!-- 27 Scaling Law -->
-      <section class="slide act-4" id="slide-scaling-law" data-era="2020 · Scaling Law" data-label="规模定律">
+      <section class="slide act-5" id="slide-scaling-law" data-era="2020 · Scaling Law" data-label="规模定律">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2020 · Kaplan / Chinchilla</span></div>
           <h2 class="slide__title">规模定律:大力<span class="accent">真的出奇迹</span></h2>
@@ -912,7 +912,7 @@
       </section>
 
       <!-- 27 大规模训练 -->
-      <section class="slide act-4" id="slide-training" data-era="2022 起" data-label="大规模训练">
+      <section class="slide act-5" id="slide-training" data-era="2022 起" data-label="大规模训练">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2022 起</span></div>
           <h2 class="slide__title">大规模训练:模型是<span class="accent">"炼"出来的</span></h2>
@@ -939,7 +939,7 @@
       </section>
 
       <!-- 28 工程 -->
-      <section class="slide act-4" id="slide-infra" data-era="2023 起" data-label="大模型工程">
+      <section class="slide act-5" id="slide-infra" data-era="2023 起" data-label="大模型工程">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2023 起</span></div>
           <h2 class="slide__title">工程:让它真的<span class="accent">跑得起来</span></h2>
@@ -965,7 +965,7 @@
       </section>
 
       <!-- 29 四要素会合 -->
-      <section class="slide act-4" id="slide-convergence" data-era="爆发前夜" data-label="四要素会合">
+      <section class="slide act-5" id="slide-convergence" data-era="爆发前夜" data-label="四要素会合">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">第五幕 · 语言</span><span class="slide__era">2023–2026 · 爆发前夜</span></div>
           <h2 class="slide__title">条件,<span class="accent">终于凑齐</span></h2>
@@ -1016,7 +1016,7 @@
       </section>
 
       <!-- ══════════════ 群星过场 ══════════════ -->
-      <section class="slide slide--constellation act-5" id="slide-constellation" data-era="终章" data-label="群星闪耀">
+      <section class="slide slide--constellation act-6" id="slide-constellation" data-era="终章" data-label="群星闪耀">
         <div class="constellation" aria-label="AI 发展星图">
           <button type="button" class="constellation-star" style="--x:9%;--y:16%;--s:0.76" data-title="McCulloch & Pitts" data-kind="人物 · 1943" data-work="1943 年发表《神经活动中内在思想的逻辑演算》,提出第一个人工神经元数学模型。" data-meaning="他们把“神经元、逻辑、计算”焊在了一起:AI 的神经网络谱系,从这里开始有了可写成公式的起点。"><i></i><span>McCulloch</span></button>
           <button type="button" class="constellation-star" style="--x:28%;--y:23%;--s:0.7" data-title="Pitts" data-kind="人物 · 1943" data-work="年仅二十岁左右就参与《神经活动中内在思想的逻辑演算》,把逻辑学带进神经活动的数学描述。" data-meaning="他的名字常被 McCulloch 合在一起提及,但这条线真正伟大的地方,正是把心智第一次推进了可计算的语言。"><i></i><span>Pitts</span></button>
@@ -1048,7 +1048,7 @@
         </div>
         <div class="constellation-card">
           <p class="actcard__no">终 章</p>
-          <h2 class="actcard__title">群星<span class="accent">闪耀</span></h2>
+          <h2 class="actcard__title"><a class="actcard__title-link" href="machine-learning-history.html">群星<span class="accent">闪耀</span></a></h2>
           <p class="actcard__line">他们不是注脚,而是这条路上的星光。</p>
           <p class="constellation-epilogue">从 1956 年那个夏天算起,七十年,无数个名字,一条从公式到智能的路。</p>
           <div class="actcard__rule"></div>
@@ -1056,7 +1056,7 @@
       </section>
 
       <!-- ══════════════ 高峰 Mythos ══════════════ -->
-      <section class="slide slide--finale act-5" id="slide-mythos" data-era="2026 · Anthropic" data-label="Mythos">
+      <section class="slide slide--finale act-6" id="slide-mythos" data-era="2026 · Anthropic" data-label="Mythos">
         <div class="slide__text">
           <div class="slide__meta"><span class="slide__act">高峰 · Claude Mythos</span><span class="slide__era">2026 · Anthropic</span></div>
           <h2 class="hero__title"><span class="accent">Mythos</span></h2>

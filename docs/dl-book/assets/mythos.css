@@ -36,9 +36,9 @@
   --c1: var(--amber);
   --c2: var(--rust);
   --c3: var(--sage);
-  --c4: var(--sun);
-  --c5: var(--violet);
-  --c6: var(--teal);
+  --c4: var(--teal);
+  --c5: var(--sun);
+  --c6: var(--violet);
   --c7: var(--dawn);
 }
 
@@ -69,7 +69,7 @@ a { color: var(--amber); text-decoration: none; }
 /* 固定背景底: 一整块不随内容滚动的底, 只在跨幕时平滑换主题色。      */
 /* 背景不再写在各幕盒子里(那样会跟着滚, 相邻幕又不同色 → 交界有痕迹)。 */
 /* 用 @property 注册可插值变量, 颜色才能 transition 平滑过渡。        */
-/* 只覆盖 act-1~act-4/act-6; 群星幕与终章幕(act-5)保留各自背景, 不动。 */
+/* 只覆盖 act-1~act-5; 群星幕与高峰幕(act-6)保留各自背景, 不动。 */
 /* ============================================================= */
 @property --bg-glow { syntax: "<color>"; inherits: true; initial-value: rgba(230,169,92,0.12); }
 @property --bg-top  { syntax: "<color>"; inherits: true; initial-value: #1b130b; }
@@ -95,13 +95,13 @@ body::before {
   transition: --bg-glow 620ms ease, --bg-top 620ms ease, --bg-bot 620ms ease, --bg-glow-x 620ms ease;
 }
 @media (prefers-reduced-motion: reduce) { body::before { transition: none; } }
-/* 每幕主题色: JS 把当前幕的 act-N 写到 body[data-act]。act-5 不设, 保留原背景。 */
+/* 每幕主题色: JS 把当前幕的 act-N 写到 body[data-act]。act-6 保留原背景。 */
 body[data-act="act-1"] { --bg-glow: rgba(230,169,92,0.13); --bg-top:#1b130b; --bg-bot:#0b0906; --bg-glow-x:40%; --theme-accent: var(--amber); }
 body[data-act="act-2"] { --bg-glow: rgba(120,150,170,0.11); --bg-top:#0d1210; --bg-bot:#0a0e0c; --bg-glow-x:56%; --theme-accent: var(--rust); }
 body[data-act="act-3"] { --bg-glow: rgba(166,180,137,0.11); --bg-top:#0d100e; --bg-bot:#090c0b; --bg-glow-x:54%; --theme-accent: var(--sage); }
-body[data-act="act-4"] { --bg-glow: rgba(240,205,131,0.12); --bg-top:#0e0d12; --bg-bot:#0a090e; --bg-glow-x:52%; --theme-accent: var(--sun); }
-body[data-act="act-5"] { --theme-accent: var(--violet); }
-body[data-act="act-6"] { --bg-glow: rgba(111,190,201,0.12); --bg-top:#0a1113; --bg-bot:#07100f; --bg-glow-x:53%; --theme-accent: var(--teal); }
+body[data-act="act-4"] { --bg-glow: rgba(111,190,201,0.12); --bg-top:#0a1113; --bg-bot:#07100f; --bg-glow-x:53%; --theme-accent: var(--teal); }
+body[data-act="act-5"] { --bg-glow: rgba(240,205,131,0.12); --bg-top:#0e0d12; --bg-bot:#0a090e; --bg-glow-x:52%; --theme-accent: var(--sun); }
+body[data-act="act-6"] { --theme-accent: var(--violet); }
 body[data-act="act-7"] { --theme-accent: var(--dawn); }
 
 /* ============================================================= */
@@ -171,16 +171,16 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
 
 /* 每幕氛围: 胶片 → 蓝图 → 数字 → 未来 */
 .slide::before { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; }
-/* act-1~act-4/act-6 内容幕: 背景交给固定底(body::before), 幕自身透明、不跟滚。
+/* act-1~act-5 内容幕: 背景交给固定底(body::before), 幕自身透明、不跟滚。
    保留各幕 ::before 的轻纹理(胶片/网格/点阵), 但去掉会造成交界暗角的遮罩。 */
-.slide.act-1, .slide.act-2, .slide.act-3, .slide.act-4, .slide.act-6 { background: transparent; }
+.slide.act-1, .slide.act-2, .slide.act-3, .slide.act-4, .slide.act-5 { background: transparent; }
 .slide.act-1::before { background: repeating-linear-gradient(90deg, transparent 0 38px, rgba(0,0,0,0.10) 38px 39px); opacity: 0.6; }
 .slide.act-2::before { background-image: linear-gradient(rgba(150,175,150,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(150,175,150,0.06) 1px, transparent 1px); background-size: 30px 30px; -webkit-mask-image: radial-gradient(120% 100% at 58% 50%, #000 55%, transparent); mask-image: radial-gradient(120% 100% at 58% 50%, #000 55%, transparent); }
 .slide.act-3::before { background-image: radial-gradient(rgba(200,220,200,0.10) 1px, transparent 1.4px); background-size: 24px 24px; -webkit-mask-image: radial-gradient(120% 100% at 55% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 55% 50%, #000 45%, transparent); }
-.slide.act-4::before { background-image: radial-gradient(rgba(240,205,131,0.10) 1px, transparent 1.4px); background-size: 26px 26px; -webkit-mask-image: radial-gradient(120% 100% at 52% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 52% 50%, #000 45%, transparent); }
-.slide.act-6::before { background-image: radial-gradient(rgba(111,190,201,0.11) 1px, transparent 1.4px); background-size: 25px 25px; -webkit-mask-image: radial-gradient(120% 100% at 53% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 53% 50%, #000 45%, transparent); }
-.slide.act-5 { background: radial-gradient(85% 75% at 48% 42%, rgba(230,169,92,0.18), transparent 55%), radial-gradient(70% 90% at 78% 72%, rgba(154,139,255,0.16), transparent 60%), linear-gradient(180deg,#0b0a14,#08070d); }
-.slide.act-5::before { background: repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 4px); opacity: 0.5; }
+.slide.act-4::before { background-image: radial-gradient(rgba(111,190,201,0.11) 1px, transparent 1.4px); background-size: 25px 25px; -webkit-mask-image: radial-gradient(120% 100% at 53% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 53% 50%, #000 45%, transparent); }
+.slide.act-5::before { background-image: radial-gradient(rgba(240,205,131,0.10) 1px, transparent 1.4px); background-size: 26px 26px; -webkit-mask-image: radial-gradient(120% 100% at 52% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 52% 50%, #000 45%, transparent); }
+.slide.act-6 { background: radial-gradient(85% 75% at 48% 42%, rgba(230,169,92,0.18), transparent 55%), radial-gradient(70% 90% at 78% 72%, rgba(154,139,255,0.16), transparent 60%), linear-gradient(180deg,#0b0a14,#08070d); }
+.slide.act-6::before { background: repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 4px); opacity: 0.5; }
 
 /* 进屏淡入 */
 .slide__text > *, .slide__stage { opacity: 0; transform: translateY(22px); transition: opacity 900ms ease, transform 900ms ease; }
@@ -296,6 +296,13 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
   font-size: clamp(2.6rem, 7vw, 5rem); line-height: 1.08; margin: 0 0 1.4rem; color: var(--paper);
 }
 .actcard__title .accent { color: var(--c, var(--amber)); font-style: italic; }
+.actcard__title-link {
+  color: inherit;
+  text-decoration: none;
+  font: inherit;
+  cursor: pointer;
+}
+.actcard__title-link .accent { color: var(--c, var(--amber)); font-style: italic; }
 .actcard__line { font-size: clamp(1rem, 1.9vw, 1.28rem); line-height: 1.8; color: var(--paper-dim); max-width: 34rem; margin: 0 auto; }
 .actcard__rule { width: 60px; height: 2px; background: var(--c, var(--amber)); margin: 1.8rem auto 0; }
 
@@ -552,6 +559,28 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
   letter-spacing: 0.14em;
   opacity: 0.42;
   text-transform: uppercase;
+}
+.story-credit__egg {
+  display: inline;
+  font: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: default;
+  pointer-events: none;
+}
+.story-credit__egg.is-live {
+  cursor: pointer;
+  pointer-events: auto;
 }
 .finale__credit {
   margin: 1rem auto 0;

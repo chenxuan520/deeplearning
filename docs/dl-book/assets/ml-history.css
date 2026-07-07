@@ -1,5 +1,5 @@
 /*
- * ml-history.css — 专题页《机器学习群星史》
+ * ml-history.css — 专题页《百年长夜与黎明》(机器学习群星史)
  * 电影质感 · 横向一屏一幕 · 底部胶片时间线随滚动聚焦。
  * 视觉随时代推进: 蓝图 → 寒冬 → 统计网格 → 深度光谱 → 群星。
  * 图片走外链, 不在仓库内存图。纯静态零依赖, 不复用 book.css。
@@ -35,12 +35,6 @@ body[data-theme="intro"]      { --accent:#e3b15c; --glow-1:rgba(227,177,92,.16);
 body[data-theme="symbol"]     { --accent:#8fb3e6; --glow-1:rgba(143,179,230,.15); --glow-2:rgba(239,231,214,.05); --base:#080d16; }
 body[data-theme="connection"] { --accent:#e0a24e; --glow-1:rgba(224,162,78,.17);  --glow-2:rgba(224,110,88,.08);  --base:#120f0a; }
 body[data-theme="winter"]     { --accent:#93a6bd; --glow-1:rgba(120,140,168,.13); --glow-2:rgba(200,214,235,.04); --base:#070a0f; }
-body[data-theme="expert"]     { --accent:#b8c07a; --glow-1:rgba(184,192,122,.12); --glow-2:rgba(143,179,230,.06); --base:#0d0f0a; }
-body[data-theme="stat"]       { --accent:#86bd97; --glow-1:rgba(134,189,151,.15); --glow-2:rgba(111,190,201,.07); --base:#081210; }
-body[data-theme="data"]       { --accent:#6fbec9; --glow-1:rgba(111,190,201,.17); --glow-2:rgba(227,177,92,.06);  --base:#071215; }
-body[data-theme="deep"]       { --accent:#9a8bff; --glow-1:rgba(154,139,255,.19); --glow-2:rgba(111,190,201,.08); --base:#0a0914; }
-body[data-theme="product"]    { --accent:#e6a06f; --glow-1:rgba(230,160,111,.17); --glow-2:rgba(154,139,255,.10); --base:#120b0e; }
-body[data-theme="stars"]      { --accent:#b7cdf0; --glow-1:rgba(80,130,215,.20);  --glow-2:rgba(120,90,220,.14);  --base:#05070f; }
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -95,43 +89,6 @@ body[data-theme="winter"]::before {
     repeating-linear-gradient(180deg, rgba(210,224,245,.028) 0 1px, transparent 1px 11px),
     radial-gradient(120% 95% at 50% 50%, transparent 30%, rgba(0,0,0,.74));
 }
-body[data-theme="expert"]::before {
-  background-image:
-    repeating-linear-gradient(0deg, transparent 0 21px, rgba(184,192,122,.05) 21px 22px),
-    linear-gradient(90deg, rgba(184,192,122,.04) 1px, transparent 1px);
-  background-size: auto, 46px 46px;
-  opacity: 0.7;
-}
-body[data-theme="stat"]::before {
-  background-image:
-    radial-gradient(circle at 18% 30%, rgba(134,189,151,.13) 0 1px, transparent 1.7px),
-    linear-gradient(90deg, rgba(134,189,151,.05) 1px, transparent 1px),
-    linear-gradient(rgba(134,189,151,.05) 1px, transparent 1px);
-  background-size: 48px 48px, 60px 60px, 60px 60px;
-  -webkit-mask-image: radial-gradient(125% 95% at 52% 50%, #000 48%, transparent);
-          mask-image: radial-gradient(125% 95% at 52% 50%, #000 48%, transparent);
-}
-body[data-theme="data"]::before,
-body[data-theme="deep"]::before {
-  background:
-    radial-gradient(circle at 24% 30%, rgba(154,139,255,.12) 0 1px, transparent 1.8px),
-    radial-gradient(circle at 66% 72%, rgba(111,190,201,.10) 0 1px, transparent 1.8px);
-  background-size: 30px 30px, 48px 48px;
-  -webkit-mask-image: radial-gradient(120% 95% at 50% 50%, #000 44%, transparent);
-          mask-image: radial-gradient(120% 95% at 50% 50%, #000 44%, transparent);
-}
-body[data-theme="product"]::before {
-  background: radial-gradient(120% 92% at 50% 46%, transparent 42%, rgba(0,0,0,.62));
-}
-body[data-theme="stars"]::before {
-  background:
-    radial-gradient(circle at 16% 26%, rgba(255,255,255,.5) 0 1px, transparent 1.9px),
-    radial-gradient(circle at 72% 32%, rgba(190,215,255,.4) 0 1px, transparent 1.9px),
-    radial-gradient(circle at 44% 74%, rgba(255,255,255,.3) 0 1px, transparent 1.9px),
-    radial-gradient(circle at 88% 66%, rgba(190,215,255,.34) 0 1px, transparent 1.9px),
-    radial-gradient(120% 95% at 50% 50%, transparent 40%, rgba(0,0,0,.6));
-  background-size: 150px 150px, 210px 210px, 270px 270px, 320px 320px, auto;
-}
 
 /* 胶片颗粒 */
 .mh-grain {
@@ -164,7 +121,7 @@ body[data-theme="stars"]::before {
   transition: color 620ms ease;
 }
 .mh-brand__title {
-  font-family: var(--font-serif); font-size: clamp(0.95rem, 1.7vw, 1.24rem);
+  font-family: var(--font-serif); font-size: clamp(0.78rem, 1.2vw, 0.95rem);
   color: var(--paper); white-space: nowrap;
 }
 .mh-topbar__right {
@@ -270,8 +227,7 @@ body[data-theme="stars"]::before {
   background: color-mix(in srgb, var(--tag), transparent 90%);
   font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.12em; white-space: nowrap;
 }
-.tag--symbol{ --tag:#8fb3e6; } .tag--connection{ --tag:#e0a24e; } .tag--stat{ --tag:#86bd97; }
-.tag--data{ --tag:#6fbec9; } .tag--deep{ --tag:#9a8bff; } .tag--product{ --tag:#e6a06f; }
+.tag--symbol{ --tag:#8fb3e6; } .tag--connection{ --tag:#e0a24e; }
 
 /* ============================================================= */
 /* 里程碑幕                                                       */
@@ -481,10 +437,21 @@ body[data-theme="stars"]::before {
 .mh-timelinebar__viewport {
   position: relative; overflow-x: auto; overflow-y: hidden;
   scrollbar-width: none;
+  cursor: grab; touch-action: pan-x; user-select: none;
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
           mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
 }
+.mh-timelinebar__viewport.is-dragging { cursor: grabbing; }
 .mh-timelinebar__viewport::-webkit-scrollbar { display: none; }
+.mh-rail-labels {
+  position: absolute; left: clamp(1rem, 4vw, 3.8rem);
+  top: 3.05rem; z-index: 4;
+  display: grid; gap: 1.05rem; pointer-events: none;
+  font-family: var(--font-mono); font-size: 0.56rem; letter-spacing: 0.15em;
+  text-transform: uppercase; opacity: 0.72;
+}
+.mh-rail-label--symbol { color: rgba(143,179,230,.72); }
+.mh-rail-label--connection { color: rgba(224,162,78,.72); }
 /* 居中定位指针 (playhead): 指向弧顶当前节点 */
 .mh-timelinebar::after {
   content: ""; position: absolute; left: 50%; bottom: 0.7rem; z-index: 3;
@@ -499,36 +466,48 @@ body[data-theme="stars"]::before {
   height: calc(var(--strip-h) - 2.1rem);
   width: max-content; min-width: 100%;
 }
-.mh-arc {
+.mh-rails {
   position: absolute; left: 0; top: 0; height: 100%;
   pointer-events: none; overflow: visible;
 }
-.mh-arc__line {
-  fill: none; stroke: rgba(239,231,214,.16); stroke-width: 1;
+.mh-rail {
+  fill: none; stroke-width: 1.5; stroke-linecap: round;
+  stroke-dasharray: 4 9;
+  opacity: 0.54;
 }
+.mh-rail--symbol { stroke: rgba(143,179,230,.66); }
+.mh-rail--connection { stroke: rgba(224,162,78,.64); }
 
 .mh-timepoint {
+  --track: rgba(239,231,214,.5);
   position: absolute; top: 0; left: 0;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   border: 0; background: transparent; cursor: pointer;
-  display: grid; justify-items: center; gap: 0.3rem;
+  display: grid; justify-items: center;
   white-space: nowrap;
 }
 .mh-timepoint__dot {
   width: 8px; height: 8px; border-radius: 50%;
-  border: 1px solid rgba(239,231,214,.4); background: #0a0b0f;
+  border: 1px solid color-mix(in srgb, var(--track), transparent 22%); background: #0a0b0f;
   box-shadow: 0 0 0 3px rgba(0,0,0,.8);
+  transform: translateY(-50%);
   transition: all 220ms ease;
 }
 .mh-timepoint__year {
+  position: absolute;
+  top: 0.54rem;
   font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.05em;
   color: rgba(239,231,214,.4); transition: color 220ms ease, opacity 220ms ease;
 }
+.mh-timepoint--symbol { --track: #8fb3e6; }
+.mh-timepoint--connection { --track: #e0a24e; }
+.mh-timepoint--winter { --track: #93a6bd; }
+.mh-timepoint--bridge { --track: #efe7d6; }
 .mh-timepoint:hover .mh-timepoint__year { color: var(--paper-dim); }
 .mh-timepoint:hover .mh-timepoint__dot { border-color: var(--paper-dim); }
 .mh-timepoint.is-active .mh-timepoint__dot {
-  width: 14px; height: 14px; background: var(--accent);
-  border-color: var(--accent); box-shadow: 0 0 0 4px rgba(0,0,0,.82), 0 0 22px var(--accent);
+  width: 14px; height: 14px; background: var(--track);
+  border-color: var(--track); box-shadow: 0 0 0 4px rgba(0,0,0,.82), 0 0 22px var(--track);
 }
 .mh-timepoint.is-active .mh-timepoint__year {
   color: #fff4dc; font-size: 0.74rem;
@@ -551,14 +530,6 @@ body[data-theme="stars"]::before {
 }
 .mh-control:hover { border-color: var(--accent); color: #fff3d7; transform: translateY(-1px); }
 
-/* 署名 */
-.mh-signature {
-  position: fixed; left: clamp(0.9rem, 3vw, 2rem);
-  bottom: calc(var(--strip-h) + clamp(0.7rem, 2vh, 1.2rem)); z-index: 45;
-  margin: 0; color: var(--paper-faint); font-family: var(--font-mono);
-  font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; opacity: 0.5;
-}
-
 /* ============================================================= */
 /* 移动端                                                         */
 /* ============================================================= */
@@ -572,6 +543,5 @@ body[data-theme="stars"]::before {
   .milestone__media { width: min(72vw, 320px); aspect-ratio: 4/3; justify-self: start; order: -1; }
   .milestone::after { font-size: 40vw; top: auto; bottom: 2%; opacity: 0.8; }
   .milestone__body { max-width: none; }
-  .mh-signature { display: none; }
   .model-tree { min-width: 960px; }
 }
