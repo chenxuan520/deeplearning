@@ -20,6 +20,7 @@
   --sage: #a6b489;
   --violet: #9a8bff;
   --teal: #6fbec9;
+  --dawn: #7fb3e6;
   --line: rgba(239, 231, 214, 0.14);
   --line-strong: rgba(239, 231, 214, 0.3);
   --dial-width: clamp(120px, 15vw, 190px); /* 左侧转盘窄带宽度 */
@@ -38,6 +39,7 @@
   --c4: var(--sun);
   --c5: var(--violet);
   --c6: var(--teal);
+  --c7: var(--dawn);
 }
 
 * { box-sizing: border-box; }
@@ -48,6 +50,7 @@
 .act-4 { --c: var(--c4); }
 .act-5 { --c: var(--c5); }
 .act-6 { --c: var(--c6); }
+.act-7 { --c: var(--c7); }
 
 html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
@@ -93,11 +96,13 @@ body::before {
 }
 @media (prefers-reduced-motion: reduce) { body::before { transition: none; } }
 /* 每幕主题色: JS 把当前幕的 act-N 写到 body[data-act]。act-5 不设, 保留原背景。 */
-body[data-act="act-1"] { --bg-glow: rgba(230,169,92,0.13); --bg-top:#1b130b; --bg-bot:#0b0906; --bg-glow-x:40%; }
-body[data-act="act-2"] { --bg-glow: rgba(120,150,170,0.11); --bg-top:#0d1210; --bg-bot:#0a0e0c; --bg-glow-x:56%; }
-body[data-act="act-3"] { --bg-glow: rgba(166,180,137,0.11); --bg-top:#0d100e; --bg-bot:#090c0b; --bg-glow-x:54%; }
-body[data-act="act-4"] { --bg-glow: rgba(240,205,131,0.12); --bg-top:#0e0d12; --bg-bot:#0a090e; --bg-glow-x:52%; }
-body[data-act="act-6"] { --bg-glow: rgba(111,190,201,0.12); --bg-top:#0a1113; --bg-bot:#07100f; --bg-glow-x:53%; }
+body[data-act="act-1"] { --bg-glow: rgba(230,169,92,0.13); --bg-top:#1b130b; --bg-bot:#0b0906; --bg-glow-x:40%; --theme-accent: var(--amber); }
+body[data-act="act-2"] { --bg-glow: rgba(120,150,170,0.11); --bg-top:#0d1210; --bg-bot:#0a0e0c; --bg-glow-x:56%; --theme-accent: var(--rust); }
+body[data-act="act-3"] { --bg-glow: rgba(166,180,137,0.11); --bg-top:#0d100e; --bg-bot:#090c0b; --bg-glow-x:54%; --theme-accent: var(--sage); }
+body[data-act="act-4"] { --bg-glow: rgba(240,205,131,0.12); --bg-top:#0e0d12; --bg-bot:#0a090e; --bg-glow-x:52%; --theme-accent: var(--sun); }
+body[data-act="act-5"] { --theme-accent: var(--violet); }
+body[data-act="act-6"] { --bg-glow: rgba(111,190,201,0.12); --bg-top:#0a1113; --bg-bot:#07100f; --bg-glow-x:53%; --theme-accent: var(--teal); }
+body[data-act="act-7"] { --theme-accent: var(--dawn); }
 
 /* ============================================================= */
 /* 胶片氛围: 颗粒 + 上下黑边 + 片名/时间码                        */
@@ -136,8 +141,8 @@ body[data-act="act-6"] { --bg-glow: rgba(111,190,201,0.12); --bg-top:#0a1113; --
 .deck-progress {
   position: fixed; top: var(--bar-height); left: 0; z-index: 82;
   height: 2px; width: 0%;
-  background: linear-gradient(90deg, var(--amber), var(--rust));
-  transition: width 140ms linear;
+  background: linear-gradient(90deg, var(--theme-accent, var(--amber)), color-mix(in srgb, var(--theme-accent, var(--amber)) 55%, white));
+  transition: width 140ms linear, background 320ms ease;
 }
 
 /* ============================================================= */
@@ -480,13 +485,13 @@ body[data-act="act-6"] { --bg-glow: rgba(111,190,201,0.12); --bg-top:#0a1113; --
 /* 封面 & 终点                                                    */
 /* ============================================================= */
 
-.slide--hero, .slide--finale {
+.slide--hero, .slide--finale, .slide--future {
   grid-template-columns: 1fr; justify-items: center; text-align: center;
   padding-left: calc(var(--dial-width) + clamp(1rem, 2.5vw, 3rem));
 }
-.slide--hero .slide__text, .slide--finale .slide__text { max-width: 48rem; }
-.slide--hero .slide__lead, .slide--finale .slide__lead { margin-left: auto; margin-right: auto; }
-.slide--hero .slide__meta, .slide--finale .slide__meta { justify-content: center; }
+.slide--hero .slide__text, .slide--finale .slide__text, .slide--future .slide__text { max-width: 48rem; }
+.slide--hero .slide__lead, .slide--finale .slide__lead, .slide--future .slide__lead { margin-left: auto; margin-right: auto; }
+.slide--hero .slide__meta, .slide--finale .slide__meta, .slide--future .slide__meta { justify-content: center; }
 
 /* 封面题记: 主标题上方一行开场献词, 极淡暖金、宽字距, 像电影开场前的献辞 */
 .hero__dedication {
@@ -506,6 +511,35 @@ body[data-act="act-6"] { --bg-glow: rgba(111,190,201,0.12); --bg-top:#0a1113; --
 .hero__title .accent { color: var(--amber); font-style: italic; }
 .finale__note { font-size: 0.96rem; line-height: 1.85; color: var(--paper-faint); max-width: 40rem; margin: 0 auto; }
 .finale__note strong { color: var(--paper); }
+.slide--future {
+  background:
+    radial-gradient(90% 72% at 50% 40%, rgba(127, 179, 230, 0.12), transparent 60%),
+    radial-gradient(62% 66% at 76% 72%, rgba(230, 169, 92, 0.07), transparent 68%),
+    linear-gradient(180deg, #05080f 0%, #050710 42%, #04050a 100%);
+}
+.slide--future::before {
+  background:
+    radial-gradient(circle at 18% 22%, rgba(255,255,255,0.42) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 78% 28%, rgba(196,222,255,0.34) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 38% 76%, rgba(255,255,255,0.28) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 66% 66%, rgba(196,222,255,0.22) 0 1px, transparent 1.7px);
+  background-size: 240px 220px, 280px 240px, 210px 190px, 310px 260px;
+  opacity: 0.62;
+}
+.future__note {
+  margin: 0.6rem auto 0;
+  max-width: 42rem;
+  color: rgba(226,238,255,0.72);
+  font-size: 0.98rem;
+  line-height: 1.9;
+}
+.future__note strong { color: var(--paper); }
+.future__rule {
+  width: 84px;
+  height: 1px;
+  margin: 2rem auto 0;
+  background: linear-gradient(90deg, transparent, rgba(196,222,255,0.82), transparent);
+}
 .story-credit {
   position: fixed;
   right: clamp(0.8rem, 2vw, 1.5rem);
@@ -649,7 +683,7 @@ body[data-act="act-6"] { --bg-glow: rgba(111,190,201,0.12); --bg-top:#0a1113; --
     grid-template-columns: 1fr; justify-items: start; gap: 1.5rem;
     padding: calc(var(--bar-height) + 2rem) 1.5rem calc(var(--bar-height) + 2.2rem);
   }
-  .slide--act, .slide--hero, .slide--finale, .slide--constellation { padding-left: 1.5rem; justify-items: center; }
+  .slide--act, .slide--hero, .slide--finale, .slide--future, .slide--constellation { padding-left: 1.5rem; justify-items: center; }
   .story-credit {
     right: 0.75rem;
     bottom: calc(var(--bar-height) + 3.45rem);
