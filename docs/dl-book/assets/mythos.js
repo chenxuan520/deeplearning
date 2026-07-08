@@ -344,7 +344,6 @@
       return i === 0 ||
         s.id === "slide-overview" ||
         s.classList.contains("slide--act") ||
-        s.classList.contains("slide--constellation") ||
         s.classList.contains("slide--finale");
     });
     if (!targets.length) return;
