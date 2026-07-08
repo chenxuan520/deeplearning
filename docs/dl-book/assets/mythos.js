@@ -365,11 +365,16 @@
     var btn = wrap.querySelector(".mobile-jump__btn");
     var list = wrap.querySelector(".mobile-jump__list");
     targets.forEach(function (slide) {
+      var targetSlide = slide.id === "slide-mythos" ? document.getElementById("slide-constellation") || slide : slide;
       var item = document.createElement("button");
       item.type = "button";
       item.className = "mobile-jump__item " + actClassOf(slide);
-      var era = slide.getAttribute("data-era") || "";
-      var label = slide.getAttribute("data-label") || slide.id;
+      var era = targetSlide.getAttribute("data-era") || slide.getAttribute("data-era") || "";
+      var label = targetSlide.getAttribute("data-label") || slide.getAttribute("data-label") || slide.id;
+      if (slide.id === "slide-mythos" && era && label) {
+        label = era + " · " + label;
+        era = "";
+      }
       if (slide.classList.contains("slide--act")) era = "";
       if (/^(序|全景)$/.test(era)) era = "";
       if (!era) item.classList.add("mobile-jump__item--no-era");
@@ -378,7 +383,7 @@
         '<span class="mobile-jump__label">' + label + '</span>';
       item.addEventListener("click", function () {
         close();
-        scrollToSlide(slide, "smooth");
+        scrollToSlide(targetSlide, "smooth");
       });
       list.appendChild(item);
     });
