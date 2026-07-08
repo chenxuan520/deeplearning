@@ -21,6 +21,7 @@
   --violet: #9a8bff;
   --teal: #6fbec9;
   --dawn: #7fb3e6;
+  --dawn-deep: #5f8fc8;
   --line: rgba(239, 231, 214, 0.14);
   --line-strong: rgba(239, 231, 214, 0.3);
   --dial-width: clamp(120px, 15vw, 190px); /* 左侧转盘窄带宽度 */
@@ -174,13 +175,13 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
 /* act-1~act-5 内容幕: 背景交给固定底(body::before), 幕自身透明、不跟滚。
    保留各幕 ::before 的轻纹理(胶片/网格/点阵), 但去掉会造成交界暗角的遮罩。 */
 .slide.act-1, .slide.act-2, .slide.act-3, .slide.act-4, .slide.act-5 { background: transparent; }
-.slide.act-1::before { background: repeating-linear-gradient(90deg, transparent 0 38px, rgba(0,0,0,0.10) 38px 39px); opacity: 0.6; }
-.slide.act-2::before { background-image: linear-gradient(rgba(150,175,150,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(150,175,150,0.06) 1px, transparent 1px); background-size: 30px 30px; -webkit-mask-image: radial-gradient(120% 100% at 58% 50%, #000 55%, transparent); mask-image: radial-gradient(120% 100% at 58% 50%, #000 55%, transparent); }
-.slide.act-3::before { background-image: radial-gradient(rgba(200,220,200,0.10) 1px, transparent 1.4px); background-size: 24px 24px; -webkit-mask-image: radial-gradient(120% 100% at 55% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 55% 50%, #000 45%, transparent); }
-.slide.act-4::before { background-image: radial-gradient(rgba(111,190,201,0.11) 1px, transparent 1.4px); background-size: 25px 25px; -webkit-mask-image: radial-gradient(120% 100% at 53% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 53% 50%, #000 45%, transparent); }
-.slide.act-5::before { background-image: radial-gradient(rgba(240,205,131,0.10) 1px, transparent 1.4px); background-size: 26px 26px; -webkit-mask-image: radial-gradient(120% 100% at 52% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 52% 50%, #000 45%, transparent); }
-.slide.act-6 { background: radial-gradient(85% 75% at 48% 42%, rgba(230,169,92,0.18), transparent 55%), radial-gradient(70% 90% at 78% 72%, rgba(154,139,255,0.16), transparent 60%), linear-gradient(180deg,#0b0a14,#08070d); }
-.slide.act-6::before { background: repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 4px); opacity: 0.5; }
+.slide.act-1::before { background: repeating-linear-gradient(90deg, transparent 0 38px, rgba(0,0,0,0.10) 38px 39px); opacity: 0.6; background-attachment: fixed; }
+.slide.act-2::before { background-image: linear-gradient(rgba(150,175,150,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(150,175,150,0.06) 1px, transparent 1px); background-size: 30px 30px; -webkit-mask-image: radial-gradient(120% 100% at 58% 50%, #000 55%, transparent); mask-image: radial-gradient(120% 100% at 58% 50%, #000 55%, transparent); background-attachment: fixed; }
+.slide.act-3::before { background-image: radial-gradient(rgba(200,220,200,0.10) 1px, transparent 1.4px); background-size: 24px 24px; -webkit-mask-image: radial-gradient(120% 100% at 55% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 55% 50%, #000 45%, transparent); background-attachment: fixed; }
+.slide.act-4::before { background-image: radial-gradient(rgba(111,190,201,0.11) 1px, transparent 1.4px); background-size: 25px 25px; -webkit-mask-image: radial-gradient(120% 100% at 53% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 53% 50%, #000 45%, transparent); background-attachment: fixed; }
+.slide.act-5::before { background-image: radial-gradient(rgba(240,205,131,0.10) 1px, transparent 1.4px); background-size: 26px 26px; -webkit-mask-image: radial-gradient(120% 100% at 52% 50%, #000 45%, transparent); mask-image: radial-gradient(120% 100% at 52% 50%, #000 45%, transparent); background-attachment: fixed; }
+.slide.act-6 { background: radial-gradient(85% 75% at 48% 42%, rgba(230,169,92,0.18), transparent 55%), radial-gradient(70% 90% at 78% 72%, rgba(154,139,255,0.16), transparent 60%), linear-gradient(180deg,#0b0a14,#08070d); background-attachment: fixed; }
+.slide.act-6::before { background: repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 4px); opacity: 0.5; background-attachment: fixed; }
 
 /* 进屏淡入 */
 .slide__text > *, .slide__stage { opacity: 0; transform: translateY(22px); transition: opacity 900ms ease, transform 900ms ease; }
@@ -314,6 +315,7 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
     radial-gradient(95% 75% at 50% 42%, rgba(31,76,140,0.28), transparent 58%),
     radial-gradient(80% 70% at 72% 70%, rgba(102,168,255,0.14), transparent 62%),
     linear-gradient(180deg, #030813 0%, #07142a 46%, #02050c 100%);
+  background-attachment: fixed;
 }
 .slide--constellation::before {
   background:
@@ -335,6 +337,7 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
   -webkit-mask-image: none;
   mask-image: none;
   opacity: 1;
+  background-attachment: fixed;
 }
 .slide--constellation::after {
   content: "";
@@ -349,6 +352,7 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
     linear-gradient(180deg, rgba(0,0,0,0.16), rgba(0,0,0,0.38));
   background-size: 140px 120px, 190px 170px, 260px 220px, auto;
   opacity: 0.92;
+  background-attachment: fixed;
 }
 .constellation-card {
   position: relative;
@@ -522,6 +526,7 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
     radial-gradient(90% 72% at 50% 40%, rgba(127, 179, 230, 0.12), transparent 60%),
     radial-gradient(62% 66% at 76% 72%, rgba(230, 169, 92, 0.07), transparent 68%),
     linear-gradient(180deg, #05080f 0%, #050710 42%, #04050a 100%);
+  background-attachment: fixed;
 }
 .slide--future::before {
   background:
@@ -531,6 +536,7 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
     radial-gradient(circle at 66% 66%, rgba(196,222,255,0.22) 0 1px, transparent 1.7px);
   background-size: 240px 220px, 280px 240px, 210px 190px, 310px 260px;
   opacity: 0.62;
+  background-attachment: fixed;
 }
 .future__note {
   margin: 0.6rem auto 0;
@@ -714,6 +720,12 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
 }
 .dial-item.is-active .dial-item__era { color: var(--paper-dim); }
 .dial-item.is-active .dial-item__label { color: var(--c, var(--amber)); font-size: 1.16rem; }
+.dial-item.act-7.is-active .dial-item__dot {
+  background: var(--dawn-deep);
+  border-color: var(--dawn-deep);
+  box-shadow: 0 0 12px var(--dawn-deep);
+}
+.dial-item.act-7.is-active .dial-item__label { color: var(--dawn-deep); }
 .dial-item.is-near { opacity: 0.85; }
 
 .dial__corner {

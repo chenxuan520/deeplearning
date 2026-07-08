@@ -78,7 +78,7 @@
           <li id="g-attention" data-aliases="self-attention,self attention,自注意力"><strong>注意力 attention</strong> — 让每个词直接看全序列,按相关性做加权平均。<a href="chapter-17.html">→ 第 17 章</a></li>
           <li id="g-qkv" data-aliases="Query,Key,Value,WQ,WK,WV,W_Q,W_K,W_V,query_weight_,key_weight_,value_weight_"><strong>Q / K / V(查询/键/值)</strong> — 同一个词的三副面孔,来自三个可训练矩阵。<a href="chapter-17.html">→ 第 17 章</a></li>
           <li id="g-causal" data-aliases="causal mask,causal_mask,masked"><strong>causal mask 因果掩码</strong> — 屏蔽未来位置,保证生成时只看前文。<a href="chapter-17.html">→ 第 17 章</a></li>
-          <li id="g-multihead" data-aliases="multi-head,multihead,multi_head,多头注意力"><strong>多头注意力</strong> — 请几位“专家”各看一遍再拼接,一次看清多种关系。<a href="chapter-17.html">→ 第 17 章</a></li>
+          <li id="g-multihead" data-aliases="multi-head,multihead,multi_head,多头注意力"><strong>多头注意力</strong> — 同一输入先投影成 Q/K/V,再让多个头各自算一张 token×token 注意力表并拼接。<a href="chapter-17.html">→ 第 17 章</a></li>
           <li id="g-residual" data-aliases="残差连接,residual connection"><strong>残差连接 residual</strong> — 输出 = x + 子层(x),给梯度修高速公路。<a href="chapter-18.html">→ 第 18 章</a></li>
           <li id="g-layernorm" data-aliases="LayerNorm,layernorm,layer norm"><strong>LayerNorm</strong> — 对每个词向量减均值除标准差,稳住训练。<a href="chapter-18.html">→ 第 18 章</a></li>
           <li id="g-ffn" data-aliases="FFN,Feed Forward,feed-forward,前馈网络"><strong>FFN 前馈网络</strong> — 对每个 token 向量独立做“升维→激活→降维”,不跨词通信。<a href="chapter-18.html">→ 第 18 章</a></li>
@@ -94,7 +94,7 @@
           <li id="g-model-dim" data-aliases="model_dim,model_dim_,d_model,hidden_size,hidden_dim,embedding dim"><strong>model_dim 模型宽度</strong> — <strong>每个 token 用多宽的一条向量表示</strong>(一串有多少个数)。从 embedding 进、Transformer 层间传、LM Head 进,宽度都不变;决定大部分矩阵是 d×d。也叫 d_model、hidden size。<a href="chapter-19.html">→ 第 19 章</a></li>
           <li id="g-vocab-size" data-aliases="vocab_size,vocab_size_"><strong>vocab_size 词表大小</strong> — 模型认识多少个不同的 token;嵌入表行数、LM Head 输出行数都由它决定。<a href="chapter-19.html">→ 第 19 章</a></li>
           <li id="g-context-size" data-aliases="context_size,context_size_,max_context_size,context window,context_window"><strong>context_size 上下文长度</strong> — 一次前向最多塞进多少个 token(上限);实际行数 n≤它。<a href="chapter-19.html#44-每一步矩阵有多大-n2-走一遍">→ 第 19 章 §4.4</a></li>
-          <li id="g-head-num" data-aliases="head_num,head_num_,num_heads"><strong>head_num 注意力头数</strong> — 把 model_dim 切成几份,并行算多套注意力。<a href="chapter-17.html">→ 第 17 章</a></li>
+          <li id="g-head-num" data-aliases="head_num,head_num_,num_heads"><strong>head_num 注意力头数</strong> — 把投影后的 Q/K/V 维度分成几段,并行算多套注意力。<a href="chapter-17.html">→ 第 17 章</a></li>
           <li id="g-head-dim" data-aliases="head_dim,head_dim_"><strong>head_dim 每头宽度</strong> — 每个头分到的维度,通常 = model_dim ÷ head_num。<a href="chapter-17.html">→ 第 17 章</a></li>
           <li id="g-ff-dim" data-aliases="feed_forward_dim,feed_forward_dim_,ff_dim,d_ff"><strong>feed_forward_dim FFN 中间层宽度</strong> — FFN 先把每个 token 向量升到这个宽度(常为 4×model_dim),再压回 model_dim。<a href="chapter-18.html">→ 第 18 章</a></li>
           <li id="g-block-num" data-aliases="block_num,block_num_,num_layers,n_layers"><strong>block_num 层数</strong> — Transformer Block 堆叠多少层;每层各有一套 attention/FFN 参数。<a href="chapter-18.html">→ 第 18 章</a> · <a href="chapter-20.html#2-参数地图-1750-亿个旋钮装在哪儿gpt-举例">参数量 → 第 20 章 §2</a></li>

@@ -491,22 +491,75 @@
           每位读者(每个“头”)独立走一遍上面的四步流程,给出自己的一套注意力权重和结果,最后把大家的结论<strong>拼起来</strong>。
         </p>
         <div class="callout callout--note reveal">
-          <span class="callout__title">维度怎么分给各个头</span>
+          <span class="callout__title">别误会:不是先把原始词向量硬切开</span>
           <p>
-            做法是把每个词的向量<strong>切成几段</strong>,每段交给一个头。
-            如果模型维度是 <var>d</var> = 64、头数是 8,那每个头分到 <var>d</var> / 8 = 8 维,
-            在自己那 8 维上独立算注意力,互不干扰。代码里就是一句
-            <code>head_dim_ = model_dim_ / head_num_</code>。
+            更准确的顺序是:先让<strong>完整输入</strong> <var>X</var> 分别乘
+            <var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub>,
+            得到完整的 <var>Q</var>/<var>K</var>/<var>V</var>;然后每个头只取
+            <var>Q</var>/<var>K</var>/<var>V</var> 里的一个维度段去算注意力。
+            所以“切”发生在<strong>投影后的 Q/K/V 表示</strong>上,不是把原始词向量
+            <code>[a,b,c,d]</code> 直接切成两半就完事。代码里的
+            <code>head_dim_ = model_dim_ / head_num_</code>,说的是每个头在 Q/K/V 里负责多少维。
           </p>
         </div>
         <div class="callout callout--analogy reveal">
-          <span class="callout__title">拿 4 维、2 个头走一遍“切分 → 各算 → 拼接”</span>
+          <span class="callout__title">拿矩阵形状走一遍:每个头都有一张 n×n 注意力表</span>
           <p>
-            设每个词是 4 维向量 <code>[a, b, c, d]</code>、头数 = 2,则每个头分 4 / 2 = 2 维:
-            <strong>头 1</strong> 只在前两维 <code>[a, b]</code> 上独立走完“打分 → softmax → 加权求和”那四步,
-            <strong>头 2</strong> 只在后两维 <code>[c, d]</code> 上走一遍;两头<strong>互不干扰</strong>,可能关注完全不同的词。
-            各自得到一个 2 维结果后,按原样<strong>拼回</strong> 4 维 <code>[头1两维 ｜ 头2两维]</code>,最后乘输出矩阵 <var>W</var><sub>O</sub> 把两位“读者”的意见融合。
-            <strong>进去 4 维、出来还是 4 维</strong>,只是中途兵分两路、各看各的。
+            假设一句话有 <var>n</var> 个 token,模型宽度 <var>d</var>=4,头数 <var>h</var>=2,
+            那每头宽度 <var>d</var><sub>head</sub>=2。本仓库的写法是先算
+            <var>Q</var>=<var>XW</var><sub>Q</sub>,
+            <var>K</var>=<var>XW</var><sub>K</sub>,
+            <var>V</var>=<var>XW</var><sub>V</sub>,三者形状都是 <var>n</var>×4。
+            头 1 取第 1-2 维:得到 <var>Q</var><sub>1</sub>/<var>K</var><sub>1</sub>/<var>V</var><sub>1</sub>
+            (形状 <var>n</var>×2),算出
+            <var>A</var><sub>1</sub>=softmax(<var>Q</var><sub>1</sub><var>K</var><sub>1</sub><sup>T</sup>/√2),
+            形状是 <strong><var>n</var>×<var>n</var></strong>;头 2 取第 3-4 维,同样算出另一张
+            <var>A</var><sub>2</sub>(也是 <strong><var>n</var>×<var>n</var></strong>)。两头分别得到
+            <var>O</var><sub>1</sub>/<var>O</var><sub>2</sub>(各 <var>n</var>×2),拼成 <var>n</var>×4,
+            最后再乘 <var>W</var><sub>O</sub> 融合。真正不同的是:
+            <strong>同一句话被多套 Q/K/V 子空间算出多张不同的 token-to-token 注意力表</strong>。
+          </p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>写法</th><th>矩阵形状</th><th>怎么理解</th></tr></thead>
+            <tbody>
+              <tr><td><strong>教材常见写法</strong></td><td><var>W</var><sub>Q1</sub>: 4×2, <var>W</var><sub>Q2</sub>: 4×2</td><td>每个头各有一张小投影矩阵:完整 4 维输入 → 这个头自己的 2 维 Q。K/V 同理。</td></tr>
+              <tr><td><strong>本仓库代码写法</strong></td><td><var>W</var><sub>Q</sub>: 4×4, 再按 <code>head_start</code> 切成两段</td><td>把两个 4×2 小矩阵打包成一张 4×4 大矩阵,先一次投影出完整 Q,再让每个头取自己的 2 维段。</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">
+            两种写法等价。你问“为什么 <var>W</var><sub>Q1</sub> 是 4×2”:因为输入每个 token 是 4 维,而这个头只要输出 2 维 Query,
+            所以形状只能是 <code>(n×4) × (4×2) = n×2</code>。不是拍脑袋选的,是矩阵乘法的中间维度必须对齐。
+          </p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>小数字例子</th><th>Head 1</th><th>Head 2</th></tr></thead>
+            <tbody>
+              <tr><td>输入 <var>X</var></td><td colspan="2"><code>[[1,0,1,0], [0,1,1,0], [1,1,0,1]]</code>,形状 3×4。也就是 3 个 token,每个 token 4 维。</td></tr>
+              <tr><td>投影后的 Q/K/V</td><td><code>Q1=K1=V1=[[1,0],[0,1],[1,1]]</code></td><td><code>Q2=[[2,0],[1,1],[1,2]]</code><br><code>K2=[[0,0],[-1,1],[1,2]]</code><br><code>V2=[[1,1],[0,2],[2,1]]</code></td></tr>
+              <tr><td>打分 <var>S</var>=<var>QK</var><sup>T</sup>/√2</td><td><code>[[0.707,0,0.707], [0,0.707,0.707], [0.707,0.707,1.414]]</code></td><td><code>[[0,-1.414,1.414], [0,0,2.121], [0,0.707,3.536]]</code></td></tr>
+              <tr><td>softmax 后的注意力表 <var>A</var></td><td><code>[[0.401,0.198,0.401], [0.198,0.401,0.401], [0.248,0.248,0.503]]</code></td><td><code>[[0.187,0.045,0.768], [0.097,0.097,0.807], [0.027,0.054,0.919]]</code></td></tr>
+              <tr><td>各头输出 <var>O</var>=<var>AV</var></td><td><code>O1=[[0.802,0.599], [0.599,0.802], [0.752,0.752]]</code></td><td><code>O2=[[1.723,1.045], [1.710,1.097], [1.865,1.054]]</code></td></tr>
+              <tr><td>拼接</td><td colspan="2"><code>Concat(O1,O2)=[[0.802,0.599,1.723,1.045], [0.599,0.802,1.710,1.097], [0.752,0.752,1.865,1.054]]</code>,形状从 <code>3×2 + 3×2</code> 回到 <code>3×4</code>。</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">
+            重点看 <var>A</var><sub>1</sub> 和 <var>A</var><sub>2</sub>:它们都是 <strong>3×3</strong>,因为注意力表描述的是 token 与 token 的关系;
+            但两张表的数字明显不同,因为两头用了不同的 Q/K/V 子空间。多头的价值就在这里,不是把一张注意力表切成两半。
+          </p>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">拼起来到底拼的是什么?</span>
+          <p>
+            拼的<strong>不是</strong>两张 <var>n</var>×<var>n</var> 注意力表,也不是把两个头的结果相加或平均。
+            拼的是每个 token 的<strong>输出向量</strong>:第 1 个 token 拿到
+            <var>O</var><sub>1</sub> 的第 1 行 <code>[0.802,0.599]</code> 和
+            <var>O</var><sub>2</sub> 的第 1 行 <code>[1.723,1.045]</code>,
+            横着接成 <code>[0.802,0.599,1.723,1.045]</code>。
+            三个 token 都这么做,就得到一张 <var>n</var>×<var>d</var> 的表。最后再乘
+            <var>W</var><sub>O</sub>,让不同头的维度真正互相混合;否则它们只是并排放在一起。
           </p>
         </div>
         <div class="figure reveal">
@@ -546,7 +599,7 @@ last_value_ = ProjectSequence(input, value_weight_);   <b class="cw-tag">2</b></
 }</code></pre>
           <ol class="code-walk__notes">
             <li>如果有掩码且这个位置被屏蔽,直接把分数设成最小值(相当于 −∞),softmax 后它会变成 ≈0——就是第 7 节讲的 causal mask。</li>
-            <li>Query(第 <code>row</code> 个词)和 Key(第 <code>col</code> 个词)在当前头那段维度(<code>head_start</code> 起的 <code>head_dim_</code> 维)上做点积——正是我们手算的 <code>q · K</code>。</li>
+            <li>Query(第 <code>row</code> 个词)和 Key(第 <code>col</code> 个词)在<strong>投影后的</strong>当前头那段维度(<code>head_start</code> 起的 <code>head_dim_</code> 维)上做点积——正是我们手算的 <code>q · K</code>。</li>
             <li>除以 √<code>head_dim_</code> 做缩放。这就是公式里的 <var>QK</var><sup>T</sup> / √<var>d</var>,也就是手算里的“÷1.41”。</li>
           </ol>
         </figure>
@@ -561,7 +614,7 @@ for (int col = 0; col &lt; n; col++)
         += weight[col] * last_value_[col][head_start + i];   <b class="cw-tag">2</b></code></pre>
           <ol class="code-walk__notes">
             <li>把这一排分数过 softmax,变成加起来为 1 的注意力权重——就是我们手算出的 [0.93, 0.01, 0.06]。</li>
-            <li>用权重对所有词的 Value 加权求和,写进这个头负责的那段输出。权重大的词贡献大——这就是那句“按相关性做加权平均”落到代码里的样子。</li>
+            <li>用权重对所有词的 Value 加权求和,写进这个头负责的那段输出。每个头都有自己这一排权重;把所有 <code>row</code> 的权重排起来,就是这个头的一张 <var>n</var>×<var>n</var> 注意力矩阵。权重大的词贡献大——这就是那句“按相关性做加权平均”落到代码里的样子。</li>
           </ol>
         </figure>
 
@@ -570,7 +623,8 @@ for (int col = 0; col &lt; n; col++)
           <figcaption class="code-walk__file">src/deeplearning/transformer/self_attention.cpp · Forward ④输出</figcaption>
           <pre class="code-walk__code"><code>output = ProjectSequence(last_merged_output_, output_weight_);   <b class="cw-tag">1</b></code></pre>
           <ol class="code-walk__notes">
-            <li>所有头的输出已经按维度段拼在 <code>merged_output</code> 里;再乘一个输出权重矩阵 <var>W</var><sub>O</sub>,把多位“读者”的结论混合成最终结果。至此,每个词都得到了一个“看过全局”的新向量。</li>
+            <li>所有头的输出已经按维度段拼在 <code>merged_output</code> 里:第 1 个头写入 <code>[0, head_dim_)</code>,第 2 个头写入 <code>[head_dim_, 2*head_dim_)</code>,以此类推。这个阶段只是<strong>横向拼接</strong>,还没有让不同头互相交流。</li>
+            <li>再乘输出权重矩阵 <var>W</var><sub>O</sub>,才会把多位“读者”的结论混合成最终结果。至此,每个词都得到了一个“看过全局”的新向量。</li>
           </ol>
         </figure>
 
@@ -718,7 +772,7 @@ for (int col = 0; col &lt; n; col++)
             <li>四步:先 <var>x</var> 乘 <var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub> 得 Q/K/V → 点积打分 → ÷√d → softmax → 对 V 加权求和。</li>
             <li>手算例子:先投影出 Q/K/V,再让“它”把 0.93 的注意力给“猫”,新向量 ≈ 猫的 Value 方向。</li>
             <li><var>W</var><sub>Q</sub>/<var>W</var><sub>K</sub>/<var>W</var><sub>V</sub>/<var>W</var><sub>O</sub>:<strong>每层各一套</strong> <var>d</var>×<var>d</var> 参数;更新公式与 MNIST/FFN 相同,注意力权重本身不训练。</li>
-            <li>点积衡量“方向合不合拍”;causal mask 把未来位置分数设为 −∞;多头 = 几位专家各看一遍再拼接。</li>
+            <li>点积衡量“方向合不合拍”;causal mask 把未来位置分数设为 −∞;多头 = 先把完整输入投影成 Q/K/V,再让多个头各自算一张 <var>n</var>×<var>n</var> 注意力表,把各头输出按列拼回 <var>n</var>×<var>d</var>,最后用 <var>W</var><sub>O</sub> 融合。</li>
           </ul>
         </section>
 
