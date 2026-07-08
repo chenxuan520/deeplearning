@@ -39,6 +39,8 @@
           <li id="g-activation"><strong>激活函数 activation</strong> — 给神经元加“非线性的弯”,没它深度就白搭。<a href="chapter-07.html">→ 第 7 章</a></li>
           <li id="g-relu"><strong>ReLU</strong> — 负数砍成 0、正数放行;最常用的默认激活。<a href="chapter-07.html">→ 第 7 章</a></li>
           <li id="g-gelu"><strong>GELU</strong> — 平滑版 ReLU,Transformer / GPT 常用。<a href="chapter-07.html">→ 第 7 章</a></li>
+          <li id="g-silu" data-aliases="Swish,silu,swish"><strong>SiLU / Swish</strong> — <var>x</var> · sigmoid(<var>x</var>) 的平滑自门控激活,输入越大越放行。<a href="chapter-07.html#silu-和-swiglu-现代大模型里的门控激活">→ 第 7 章 §3</a></li>
+          <li id="g-swiglu" data-aliases="SwiGLU,GLU,门控激活,门控FFN"><strong>SwiGLU</strong> — 现代 LLM FFN 常用的门控结构,一路做内容、一路做开关,再逐元素相乘。<a href="chapter-07.html#silu-和-swiglu-现代大模型里的门控激活">→ 第 7 章 §3</a></li>
           <li id="g-vanish"><strong>梯度消失</strong> — 梯度反传时越乘越小、趋近 0,深层学不动(Sigmoid 易犯)。<a href="chapter-07.html">→ 第 7 章</a></li>
           <li id="g-optimizer"><strong>优化器 optimizer</strong> — 决定“拿到梯度后参数怎么挪”的策略。<a href="chapter-08.html">→ 第 8 章</a></li>
           <li id="g-adam"><strong>Adam / AdamW</strong> — Momentum + 自适应步长 + 偏差校正;训大模型的默认选择。<a href="chapter-08.html">→ 第 8 章</a></li>
@@ -139,7 +141,7 @@
           <li id="g-rag"><strong>RAG 检索增强</strong> — 先检索资料再让模型基于资料回答,治幻觉、补新知。<a href="chapter-22.html">→ 第 22 章</a></li>
           <li id="g-agent"><strong>function calling / Agent</strong> — 让模型调用工具、多步做事,从“会聊”变“能办”。<a href="chapter-22.html#25-agent-从回答问题到循环做事">→ 第 22 章</a></li>
           <li id="g-context-engineering" data-aliases="上下文工程,context engineering,context rot,compaction,memory,agent memory,上下文压缩"><strong>上下文工程</strong> — 每步为 Agent 选择最小高信号上下文;靠动态压缩、外部 memory、经验手册和子 Agent 隔离噪声。<a href="chapter-22.html#2-context-engineering-让模型看见该看的">→ 第 22 章</a></li>
-          <li id="g-harness" data-aliases="Harness,harness engineering,Harness 工程,Agent harness,外骨骼,工程壳"><strong>Harness 工程</strong> — 模型外面的工程外壳:文件系统、沙箱、工具执行、评测器、hooks、可观测性和后台清理。<a href="chapter-22.html#3-harness-engineering-让模型可靠做事">→ 第 22 章</a></li>
+          <li id="g-harness" data-aliases="Harness,harness engineering,Harness 工程,Agent harness,外骨骼,工程壳"><strong>Harness 工程</strong> — 模型外面的工程外壳:执行循环、工具注册表、上下文管理器、状态存储、生命周期 hooks 和验证接口共同把模型接成可靠系统。<a href="chapter-22.html#3-harness-engineering-让模型可靠做事">→ 第 22 章</a></li>
         </ul>
 
         <p class="muted">

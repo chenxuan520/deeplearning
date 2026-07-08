@@ -52,7 +52,7 @@
             <li>提示、RAG、微调三招各自改什么、该在什么时候用;</li>
             <li>Agent 为什么会把“上下文管理”和“外部护栏”变成系统问题;</li>
             <li><strong>上下文工程</strong>为什么是 Agent 的工作记忆:动态压缩、外部 memory、经验手册、子 Agent 隔离上下文;</li>
-            <li><strong>Harness 工程</strong>怎样用文件系统、沙箱、评测器、hooks 和后台清理,把模型变成稳定工作系统;</li>
+            <li><strong>Harness 工程</strong>怎样用执行循环、工具注册、上下文管理、状态存储、hooks 和评测接口,把模型变成稳定工作系统;</li>
             <li>用大模型时该守的安全与常识底线;</li>
             <li>为什么未来工程师的重点会从“写代码”转向“设计 Agent 的工作环境”。</li>
           </ul>
@@ -784,7 +784,40 @@
           </p>
         </div>
 
-        <h3>3.1 长任务 Harness:Planner、Generator、Evaluator</h3>
+        <h3>3.1 Harness 的六个部件</h3>
+        <p>
+          一篇 2026 年的 Agent Harness survey 把这层工程外壳写成一个很清楚的六元组:
+          <strong>H = (E, T, C, S, L, V)</strong>。它的意思不是让你背公式,而是提醒你:
+          Agent 的可靠性不只取决于模型多强,还取决于模型外面这六件事有没有被设计好。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>字母</th><th>部件</th><th>它负责什么</th><th>坏掉时的表现</th></tr></thead>
+            <tbody>
+              <tr><td><strong>E</strong></td><td>Execution loop 执行循环</td><td>观察环境、调用模型、执行动作、读回结果、进入下一步</td><td>做一步就停、失败不重试、状态和行动脱节</td></tr>
+              <tr><td><strong>T</strong></td><td>Tool registry 工具注册表</td><td>告诉模型有哪些工具、参数怎么填、权限和返回值是什么</td><td>工具太多选错、参数乱填、危险工具暴露给错误任务</td></tr>
+              <tr><td><strong>C</strong></td><td>Context manager 上下文管理器</td><td>决定每一步给模型看哪些需求、文件、检索结果、工具回执和历史摘要</td><td>关键事实被冲淡、旧错误反复回流、长上下文里抓不住重点</td></tr>
+              <tr><td><strong>S</strong></td><td>State store 状态存储</td><td>把计划、进度、文件、记忆、checkpoint 和交接产物放在窗口外</td><td>上下文一重置就失忆,长任务无法恢复或复现</td></tr>
+              <tr><td><strong>L</strong></td><td>Lifecycle hooks 生命周期钩子</td><td>在开始、工具调用前后、提交前、结束时做确定性检查和自动维护</td><td>危险命令没人拦、格式没人查、临时产物没人清理</td></tr>
+              <tr><td><strong>V</strong></td><td>Evaluation interface 验证接口</td><td>把测试、CI、截图、日志、reviewer、rubric evaluator 接进反馈回路</td><td>模型自己给自己打高分,结果看似完成但不可用</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          这也是为什么“换一个更强模型”不总能解决 Agent 的问题。模型像发动机,但执行循环、工具、上下文、状态、hook
+          和验证接口决定了它能不能把能力稳定地传到真实任务上。很多所谓“模型不行”,其实是工具接口混乱、上下文污染、
+          没有状态恢复,或者没有外部验证。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">把这篇 survey 当作工程框架,不要当作定论</span>
+          <p>
+            这篇文章目前还是 preprint,而且引用了不少产业报告和工程博客。它最有价值的地方不是某个单点数字,
+            而是把分散的经验归纳成一个可检查清单:一个 Agent 系统如果缺了执行、工具、上下文、状态、hook 或验证中的任何一层,
+            长任务可靠性就会很快掉下来。
+          </p>
+        </div>
+
+        <h3>3.2 长任务 Harness:Planner、Generator、Evaluator</h3>
         <p>
           Anthropic 在长时间应用开发实验里,把单个“全能 Agent”拆成三个角色:
         </p>
@@ -798,8 +831,32 @@
           评估者用独立上下文、明确标准和真实环境反馈来挑错。长任务中间如果上下文变脏,可以直接重置 Agent,
           通过结构化 handoff artifact 把当前状态和下一步交给新 Agent,而不是让同一个 Agent 背着越来越重的历史继续硬撑。
         </p>
+        <p>
+          多 Agent 协作在软件工程里还有一个更硬的版本。2026 年论文
+          <a class="xref" href="https://arxiv.org/abs/2603.21489">Effective Strategies for Asynchronous Software Engineering Agents</a> 提出
+          <strong>CAID</strong>(Centralized Asynchronous Isolated Delegation):一个中央 manager 先把任务拆成带依赖的子任务,
+          多个 engineer Agent 在各自隔离的 <code>git worktree</code> 里并行实现,完成后用 <code>git commit</code> / <code>git merge</code>
+          回到主线,并用可执行测试验证整合结果。它的重点不是“大家在同一个聊天里讨论”,而是把人类软件团队早就成熟的
+          <strong>branch-and-merge</strong> 搬给 Agent 用。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>协作问题</th><th>CAID 的做法</th><th>为什么重要</th></tr></thead>
+            <tbody>
+              <tr><td>任务怎么拆?</td><td>Manager 先建依赖图,只分配依赖已满足的任务</td><td>避免两个 Agent 各做各的,最后拼不起来</td></tr>
+              <tr><td>并行怎么不互相踩?</td><td>每个 engineer 使用独立 worktree,不要共用同一份工作区</td><td>指令里的“别改同一文件”是软约束,隔离 workspace 才是硬边界</td></tr>
+              <tr><td>进度怎么回主线?</td><td>完成后提交 commit,再显式 merge 到 main</td><td>冲突会在 merge 时暴露,不会悄悄污染最终代码</td></tr>
+              <tr><td>质量怎么判断?</td><td>Engineer 自测,manager 整合,测试和错误日志进入下一轮</td><td>把“我觉得做好了”变成可执行验证</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          这篇论文的实验也给了一个很实用的提醒:多 Agent 不是越多越好。并行度要匹配任务本身的模块化程度和 manager 的调度能力;
+          人数太多、切得太碎,反而会增加合并冲突、沟通成本和验证成本。对长代码任务来说,正确问题不是“要不要多个 Agent”,
+          而是<strong>哪些任务能隔离并行,哪些依赖必须先合并验证</strong>。
+        </p>
 
-        <h3>3.2 Harness 里的确定性护栏</h3>
+        <h3>3.3 Harness 里的确定性护栏</h3>
         <p>
           Harness 还要处理模型不擅长但工程系统很擅长的事:确定性约束。比如 OpenAI 的 Harness Engineering 讨论里,
           他们让 Codex 从空仓库开始生成应用逻辑、测试、CI、文档、可观测性和内部工具;人的主要工作从“写代码”转成
@@ -863,7 +920,7 @@
             <li>提示 / RAG / 微调是成本递增的三层:先改提示,缺知识上 RAG,只有要固化风格才微调——别拿微调补知识。</li>
             <li>function calling 让模型调用计算器/搜索/API,补上它不会算、查不到的短板。</li>
             <li>Agent = 大模型当大脑 + 感知与执行 + 多步循环;上下文工程负责管理它的工作记忆:压缩历史、写外部 memory、维护经验手册、用子 Agent 隔离噪声;MCP 则把工具和数据源变成标准上下文接口。</li>
-            <li>Harness 工程把模型包进工作系统:文件系统保存状态,沙箱限制风险,测试/评测器提供反馈,hooks 和后台任务持续清理熵;它的约束从 prompt/context 的软规则,到 reviewer/tester 的独立审查,再到 hook/sandbox/CI 的硬拦截。</li>
+            <li>Harness 工程把模型包进工作系统:执行循环负责多步推进,工具注册表治理可用能力,上下文管理器决定每步看什么,状态存储保存进度,hooks 提供硬拦截,测试/评测器提供外部反馈;多 Agent 协作还要靠依赖图、隔离工作区、显式 merge 和测试验证来避免互相踩踏。</li>
             <li>始终核对关键事实、防提示注入、护隐私——理解原理才能用得稳。</li>
           </ul>
         </section>

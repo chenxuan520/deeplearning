@@ -1026,6 +1026,7 @@
         if (p.classList.contains("chapter__eyebrow") || p.classList.contains("glossary-popover") ||
             p.classList.contains("glossary") || p.classList.contains("code-walk__code") ||
             p.classList.contains("code-walk") || p.classList.contains("diagram") ||
+            p.classList.contains("mathblock") ||
             p.classList.contains("term--glossary")) return true;
       }
       if (p.classList && p.classList.contains("chapter__inner")) return false;

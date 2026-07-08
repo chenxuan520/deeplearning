@@ -1319,7 +1319,8 @@ Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code>
         <p>
           <strong>真正的 GPT 家族会换配件,但骨架不变。</strong> 上图画的是最稳定的共通骨架。真实模型会在细节上换代:
           位置编码可能从论文里的 sin/cos 换成<strong>可学习位置向量</strong>或 <strong>RoPE</strong>;LayerNorm 可能换成
-          <strong>RMSNorm</strong>;FFN 里的激活可能从 ReLU / GELU 变成 <strong>SwiGLU</strong>。但它们都没改那件根本事实:
+          <strong>RMSNorm</strong>;FFN 里的激活可能从 ReLU / GELU 变成
+          <a class="xref" href="chapter-07.html#3-全家福-逐个认识"><strong>SwiGLU</strong></a>。但它们都没改那件根本事实:
           <strong>这是一个 decoder-only Transformer,目标仍是预测下一个 token</strong>。
         </p>
 

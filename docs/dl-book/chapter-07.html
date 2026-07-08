@@ -25,7 +25,7 @@
           <ul>
             <li>为什么<strong>必须有非线性</strong>——没有激活函数,堆一百层也等于一层;</li>
             <li>怎么“读”一张激活函数图,以及为什么<strong>导数(斜率)</strong>决定梯度好不好传;</li>
-            <li>Sigmoid / Tanh / ReLU / LeakyReLU / GELU 各自的样子和优缺点;</li>
+            <li>Sigmoid / Tanh / ReLU / LeakyReLU / GELU / SwiGLU 各自的样子和优缺点;</li>
             <li>两个经典毛病:<strong>梯度消失</strong> 与 <strong>死亡 ReLU</strong>;</li>
             <li>实战里<strong>到底该选哪个</strong>,以及它们在本仓库代码里长什么样。</li>
           </ul>
@@ -87,7 +87,7 @@
 
         <h2>3. 全家福:逐个认识</h2>
         <div class="table-wrap reveal">
-          <table class="calc-table">
+          <table class="calc-table calc-table--wrap">
             <thead>
               <tr><th>激活</th><th>公式</th><th>输出范围</th><th>脾气(优/缺)</th></tr>
             </thead>
@@ -98,6 +98,8 @@
               <tr><td>ReLU</td><td>max(0, x)</td><td>[0, ∞)</td><td>又快又好,正区不饱和;但负区恒 0 → <strong>死亡 ReLU</strong></td></tr>
               <tr><td>LeakyReLU</td><td>x&gt;0 ? x : 0.01x</td><td>(−∞, ∞)</td><td>负区留一条<strong>小斜率</strong>(默认 0.01),缓解死亡 ReLU</td></tr>
               <tr><td>GELU</td><td>x · Φ(x)</td><td>≈[−0.17, ∞)</td><td>ReLU 的<strong>平滑版</strong>,Transformer / GPT 类模型的常客</td></tr>
+              <tr><td>SiLU / Swish</td><td><var>x</var> · sigmoid(<var>x</var>)</td><td>≈[−0.28, ∞)</td><td>像一个<strong>平滑自门控</strong>:输入越大越放行,输入很负则慢慢压下去</td></tr>
+              <tr><td>SwiGLU</td><td>SiLU(<var>x</var> <var>W</var><sub>gate</sub>) ⊙ <var>x</var> <var>W</var><sub>up</sub></td><td>随 FFN 输出层而定</td><td>现代 LLM 常用的<strong>门控 FFN</strong>:一路做内容,一路做开关,两路相乘再降维</td></tr>
             </tbody>
           </table>
           <p class="calc-table__cap">Φ(x) 是标准正态分布的累积函数。本仓库的 GELU 用 <code>std::erf</code> 精确实现。</p>
@@ -133,11 +135,87 @@
           这类模型里几乎是标配,实践中往往比 ReLU 略好。代价是计算稍贵(要算正态分布的积分)。
         </p>
 
+        <h3>SiLU 和 SwiGLU:现代大模型里的门控激活</h3>
+        <p>
+          <span class="term">SiLU</span> 也常被叫作 <span class="term">Swish</span>,公式是
+          <strong><var>x</var> · sigmoid(<var>x</var>)</strong>。它不像 ReLU 那样把负数一刀切掉,而是让输入自己决定“放行多少”:
+          <var>x</var> 越大,乘上的 <code>sigmoid(x)</code> 越接近 1; <var>x</var> 很负时,这个系数接近 0,
+          输出就被温和地压下去。
+        </p>
+        <p>
+          <span class="term">SwiGLU</span> 则更进一步:它不是单纯替换 ReLU 的一条曲线,而是 FFN 里的
+          <strong>门控结构</strong>。普通 FFN 大致是“升维 → GELU/ReLU → 降维”,而 SwiGLU 会把升维拆成两路:
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 380" role="img" aria-label="SwiGLU 门控前馈网络示意图">
+              <defs>
+                <marker id="swiglu-arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+                  <path d="M0,0 L7,3 L0,6 Z" fill="#6f83aa" />
+                </marker>
+                <marker id="swiglu-gate-arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+                  <path d="M0,0 L7,3 L0,6 Z" fill="#8ef0d1" />
+                </marker>
+              </defs>
+
+              <text x="380" y="30" text-anchor="middle" fill="#c8d8f8" font-size="15" font-weight="700">SwiGLU:把 FFN 的中间层拆成“内容 × 门控”</text>
+
+              <rect x="34" y="146" width="112" height="72" rx="12" fill="rgba(106,195,255,0.13)" stroke="#6ac3ff" stroke-width="2" />
+              <text x="90" y="176" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">输入</text>
+              <text x="90" y="199" text-anchor="middle" fill="#b6c5e1" font-size="13">x</text>
+
+              <rect x="220" y="70" width="116" height="58" rx="11" fill="rgba(139,123,255,0.14)" stroke="#8b7bff" stroke-width="2" />
+              <text x="278" y="94" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">内容分支</text>
+              <text x="278" y="115" text-anchor="middle" fill="#b6c5e1" font-size="12">x · W<tspan baseline-shift="sub" font-size="10">up</tspan></text>
+
+              <rect x="220" y="236" width="116" height="58" rx="11" fill="rgba(255,207,114,0.13)" stroke="#ffcf72" stroke-width="2" />
+              <text x="278" y="260" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">门控分支</text>
+              <text x="278" y="281" text-anchor="middle" fill="#b6c5e1" font-size="12">x · W<tspan baseline-shift="sub" font-size="10">gate</tspan></text>
+
+              <rect x="396" y="236" width="96" height="58" rx="11" fill="rgba(142,240,209,0.13)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="444" y="260" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">SiLU</text>
+              <text x="444" y="281" text-anchor="middle" fill="#b6c5e1" font-size="12">得到门 g</text>
+
+              <circle cx="548" cy="182" r="28" fill="rgba(142,240,209,0.16)" stroke="#8ef0d1" stroke-width="2" />
+              <text x="548" y="190" text-anchor="middle" fill="#eef4ff" font-size="24" font-weight="700">⊙</text>
+              <text x="548" y="226" text-anchor="middle" fill="#8ef0d1" font-size="12">逐元素相乘</text>
+
+              <rect x="644" y="146" width="86" height="72" rx="12" fill="rgba(106,195,255,0.13)" stroke="#6ac3ff" stroke-width="2" />
+              <text x="687" y="176" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">输出</text>
+              <text x="687" y="199" text-anchor="middle" fill="#b6c5e1" font-size="12">再过 W<tspan baseline-shift="sub" font-size="10">down</tspan></text>
+
+              <g fill="none" stroke="#6f83aa" stroke-width="2.2" marker-end="url(#swiglu-arrow)">
+                <path d="M146 182 C170 182 178 99 216 99" />
+                <path d="M146 182 C170 182 178 265 216 265" />
+                <path d="M336 99 C436 99 462 182 518 182" />
+                <path d="M576 182 L638 182" />
+              </g>
+              <path d="M336 265 L390 265" fill="none" stroke="#8ef0d1" stroke-width="2.2" marker-end="url(#swiglu-gate-arrow)" />
+              <path d="M492 265 C522 265 520 207 531 196" fill="none" stroke="#8ef0d1" stroke-width="2.2" marker-end="url(#swiglu-gate-arrow)" />
+
+              <text x="380" y="336" text-anchor="middle" fill="#8499bd" font-size="13">上路给候选内容,下路给平滑开关;真正送出去的是两路相乘后的结果。</text>
+            </svg>
+          </div>
+          <p class="figure__cap">SwiGLU 的直觉:内容分支给出候选特征,门控分支给出一组平滑开关;两者逐元素相乘后,再用 <var>W</var><sub>down</sub> 压回模型宽度。</p>
+        </div>
+        <div class="mathblock reveal">
+          <var>u</var> = <var>x</var> <var>W</var><sub>up</sub>,&nbsp;
+          <var>g</var> = SiLU(<var>x</var> <var>W</var><sub>gate</sub>)<br />
+          SwiGLU(<var>x</var>) = <var>g</var> ⊙ <var>u</var><br />
+          FFN(<var>x</var>) = SwiGLU(<var>x</var>) <var>W</var><sub>down</sub>
+          <span class="label"><var>u</var> 是内容分支,<var>g</var> 是门控分支,⊙ 表示逐元素相乘</span>
+        </div>
+        <p>
+          直觉上,<var>u</var> 负责生成要加工的内容,<var>g</var> 负责决定哪些维度该通过、该通过多少。
+          所以它比“过一个 GELU”多了一层<strong>可学习的开关</strong>。LLaMA、PaLM、Qwen、DeepSeek 等现代大模型的
+          FFN 常见的就是这类门控激活。
+        </p>
+
         <h2>4. 到底用哪个?一张速查</h2>
         <ul>
           <li><strong>默认从 ReLU 开始</strong>:简单、快、够用,大多数情况先上它。</li>
           <li>担心<strong>死亡 ReLU</strong>(比如很深、或调大了学习率)→ 换 <strong>LeakyReLU</strong>。</li>
-          <li>做 <strong>Transformer / 语言模型</strong> → 用 <strong>GELU</strong>(和主流保持一致)。</li>
+          <li>做 <strong>Transformer / 语言模型</strong> → 早期 BERT / GPT 常见 <strong>GELU</strong>;现代 LLM 的 FFN 常见 <strong>SwiGLU</strong> 这类门控激活。</li>
           <li><strong>输出层</strong>要“概率”→ 用 Sigmoid(二分类)或 Softmax(多分类,<a class="xref" href="chapter-04.html">第 4 章</a>);<strong>隐藏层一般不用</strong> Sigmoid/Tanh(容易梯度消失)。</li>
         </ul>
 
@@ -165,6 +243,10 @@ class ActivateFunction {
             <li><code>DerivActivate</code> 是求导,反向传播要用它。Sigmoid/ReLU 用输出就能算导数;<strong>GELU 需要额外知道输入 <var>z</var></strong>,所以多了一个 2 参版本(<a class="xref" href="chapter-06.html">第 6 章</a>埋过这个伏笔)。</li>
           </ol>
         </figure>
+        <p>
+          注意:SwiGLU 这种门控 FFN 不太适合塞进这里的 <code>ActivateFunction</code> 接口,因为它不是“一个数进、一个数出”的普通激活,
+          而是两路线性投影加逐元素相乘。真要在本仓库实现它,更自然的位置会是 Transformer 的 FFN 模块,而不是单独加一个普通激活函数子类。
+        </p>
         <div class="callout callout--note reveal">
           <span class="callout__title">和梯度的关系,一句话串起来</span>
           <p>
@@ -180,7 +262,8 @@ class ActivateFunction {
             <li>看激活函数,重点看两件事:<strong>形状</strong>和<strong>斜率(导数)</strong>;斜率≈0 的地方梯度会断流。</li>
             <li>Sigmoid/Tanh 平滑但会<strong>饱和 → 梯度消失</strong>;ReLU 又快又不饱和,但有<strong>死亡 ReLU</strong>。</li>
             <li>LeakyReLU 给负区留小斜率救活;GELU 是平滑版 ReLU,Transformer 常用。</li>
-            <li>实战默认 ReLU;深网络/大学习率考虑 LeakyReLU;Transformer 用 GELU;输出层才用 Sigmoid/Softmax。</li>
+            <li>SiLU 是 <var>x</var> · sigmoid(<var>x</var>) 的平滑自门控;SwiGLU 把 FFN 拆成“内容 × 门控”,是现代 LLM 常见配件。</li>
+            <li>实战默认 ReLU;深网络/大学习率考虑 LeakyReLU;早期 Transformer 常用 GELU,现代 LLM 常见 SwiGLU;输出层才用 Sigmoid/Softmax。</li>
           </ul>
         </section>
 
