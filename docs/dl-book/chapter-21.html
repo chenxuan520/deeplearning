@@ -1043,7 +1043,8 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           激活算力 ∝ <var>k</var> × 单个专家的 FFN 规模(宽度/深度)
           <span class="label"><var>k</var> = 路由器点亮的专家个数;和专家总数 <var>N</var> 不是一回事</span>
         </div>
-        <table class="reveal">
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
           <thead>
             <tr><th>为了省算力常做的收紧</th><th>会发生什么</th><th>谁最先吃亏</th></tr>
           </thead>
@@ -1070,6 +1071,7 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
             </tr>
           </tbody>
         </table>
+        </div>
         <div class="callout callout--analogy reveal">
           <span class="callout__title">总参数 ≠ 这一步有多聪明</span>
           <p>

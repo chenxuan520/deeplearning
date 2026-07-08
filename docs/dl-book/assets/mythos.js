@@ -322,7 +322,7 @@
         openFrom(creditEgg, {
           kind: "彩蛋 · 作者",
           title: "chenxuan",
-          work: "在 2026 年制作《从沙子到 Mythos》这份致敬文档。",
+          work: "2026 年制作《从沙子到 Mythos》该致敬编年史。",
           meaning: ""
         });
       });

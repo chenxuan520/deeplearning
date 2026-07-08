@@ -334,8 +334,8 @@
           给栅极一个合适电压,下面就形成一条可通电的“沟道”;撤掉这个电压,沟道消失,电流被切断。
           于是一个晶体管就有了两种稳定姿态:
         </p>
-        <div class="calc-table reveal">
-          <table>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
             <thead><tr><th>栅极信号</th><th>源极到漏极</th><th>数字抽象</th></tr></thead>
             <tbody>
               <tr><td>低电压</td><td>不导通</td><td>0</td></tr>
@@ -415,8 +415,8 @@
           一个晶体管只能控制通断,但多个晶体管连起来,就能做逻辑。
           最基本的逻辑门有三类:NOT、AND、OR。
         </p>
-        <div class="calc-table reveal">
-          <table>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
             <thead><tr><th>逻辑门</th><th>输入和输出关系</th><th>直觉</th></tr></thead>
             <tbody>
               <tr><td>NOT</td><td>输入 0 输出 1,输入 1 输出 0</td><td>反过来</td></tr>
@@ -562,8 +562,8 @@
         <p>
           计算机里的加法也不是魔法。先看一位二进制加法:
         </p>
-        <div class="calc-table reveal">
-          <table>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
             <thead><tr><th>A</th><th>B</th><th>本位结果 S</th><th>进位 C</th></tr></thead>
             <tbody>
               <tr><td>0</td><td>0</td><td>0</td><td>0</td></tr>
@@ -696,8 +696,8 @@
           到这里我们有了几块关键积木:逻辑门能判断,加法器能算数,触发器能记一位,时钟能让状态按节拍更新。
           但 CPU 不是把这些零件随便堆在一起,而是把它们组织成几个明确模块:
         </p>
-        <div class="calc-table reveal">
-          <table>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
             <thead><tr><th>底层电路</th><th>组合后的模块</th><th>它在 CPU 里负责什么</th></tr></thead>
             <tbody>
               <tr><td>逻辑门 + 加法器 + 比较器</td><td><strong>ALU</strong></td><td>做加减、比较、位运算等真正的计算</td></tr>

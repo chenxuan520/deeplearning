@@ -668,6 +668,9 @@ encoding[pos][i + 1] = std::cos(angle);
           <p>
             BERT 的经典训练方式不是 GPT 那种“预测下一个 token”,而是 <span class="term">MLM</span>(Masked Language Modeling):把句子里一部分词遮成 <code>[MASK]</code>,让模型根据左右上下文把它猜回来。这样练出来的模型很会理解上下文,但它没有按从左到右续写的生成习惯,所以不适合直接拿来做聊天生成;聊天大模型通常走下面的 decoder-only 路线。
           </p>
+          <p>
+            还有一个机制值得点破:MLM 预训练时,被遮位置的隐藏向量最后也会被映射成<strong>“词表上的一个概率分布”</strong>,目标是让它逼近真实被遮的那个词--这一步和 GPT 预测下一个词的机制其实<strong>一样</strong>(都是隐藏向量 -> 词表分布 -> 逼近目标词)。但预训练真正想带走的不是这个词表输出头,而是<strong>中间隐藏层学到的通用表示</strong>。所以等 BERT 去做文本分类、情感这类任务时,会把这个词表输出头摘掉,换一个很小的<strong>任务头</strong>:比如在句首 <code>[CLS]</code> 的向量上接一个线性分类器,用少量标注数据继续训(也就是<a class="xref" href="chapter-20.html#7-大模型是怎么炼成的-预训练--后训练">微调</a>)。同一套预训练底座能干很多种活,奥秘就在这:通用表示是预训练给的,任务头是微调时按需加的。
+          </p>
         </div>
         <div class="callout callout--note reveal">
           <span class="callout__title">为什么如今大模型多是 decoder-only?</span>

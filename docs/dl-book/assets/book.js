@@ -530,6 +530,117 @@
   }
   function escapeRegExp(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 
+  // ---------- ?highlight= 命中高亮 ----------
+  function getHighlightParam(search) {
+    try { var sp = new URLSearchParams(search || ""); return sp.get("highlight") || ""; }
+    catch (e) { return ""; }
+  }
+  function parseHighlightTerms(raw) {
+    var seen = {}, terms = [];
+    String(raw || "").trim().split(/\s+/).filter(Boolean).forEach(function (chunk) {
+      if (!/[\w\u4e00-\u9fff]/.test(chunk)) return;
+      if (chunk.length < 2 && !/[\u4e00-\u9fff]/.test(chunk)) return;
+      var key = chunk.toLowerCase();
+      if (seen[key]) return;
+      seen[key] = true;
+      terms.push(chunk);
+    });
+    terms.sort(function (a, b) { return b.length - a.length; });
+    return terms;
+  }
+  function highlightSkipParent(el) {
+    var p = el;
+    while (p && p.tagName) {
+      var tag = p.tagName.toUpperCase();
+      if (tag === "SCRIPT" || tag === "STYLE" || tag === "TEXTAREA" ||
+          tag === "MARK" || tag === "NOSCRIPT" || tag === "SVG") return true;
+      if (p.classList && (p.classList.contains("hl-query") ||
+          p.classList.contains("glossary-popover") || p.classList.contains("book-search") ||
+          p.classList.contains("book-header") || p.classList.contains("book-rail") ||
+          p.classList.contains("chapter-nav") || p.classList.contains("toc-drawer") ||
+          p.classList.contains("diagram"))) return true;
+      if (p.classList && p.classList.contains("chapter__inner")) return false;
+      p = p.parentElement;
+    }
+    return true;
+  }
+  function highlightQueryTerms(root, terms) {
+    if (!root || !terms.length) return 0;
+    var re = new RegExp("(" + terms.map(escapeRegExp).join("|") + ")", "gi");
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (node) {
+        var val = node.nodeValue;
+        if (!val) return NodeFilter.FILTER_REJECT;
+        var p = node.parentElement;
+        if (!p || highlightSkipParent(p)) return NodeFilter.FILTER_REJECT;
+        var low = val.toLowerCase();
+        for (var i = 0; i < terms.length; i++) {
+          if (low.indexOf(terms[i].toLowerCase()) !== -1) return NodeFilter.FILTER_ACCEPT;
+        }
+        return NodeFilter.FILTER_REJECT;
+      }
+    });
+    var nodes = [], count = 0;
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(function (node) {
+      var text = node.nodeValue, last = 0, m, wrapped = 0;
+      var frag = document.createDocumentFragment();
+      re.lastIndex = 0;
+      while ((m = re.exec(text)) !== null) {
+        var idx = m.index, mt = m[0];
+        if (idx > last) frag.appendChild(document.createTextNode(text.slice(last, idx)));
+        var mark = document.createElement("mark");
+        mark.className = "hl-query";
+        mark.textContent = mt;
+        frag.appendChild(mark);
+        wrapped++; last = idx + mt.length;
+        if (mt.length === 0) re.lastIndex++;
+      }
+      if (wrapped > 0) {
+        if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+        node.parentNode.replaceChild(frag, node);
+        count += wrapped;
+      }
+    });
+    return count;
+  }
+  function clearHighlight(root) {
+    if (!root) return;
+    [].slice.call(root.querySelectorAll("mark.hl-query")).forEach(function (m) {
+      var parent = m.parentNode;
+      if (!parent) return;
+      while (m.firstChild) parent.insertBefore(m.firstChild, m);
+      parent.removeChild(m);
+      if (parent.normalize) parent.normalize();
+    });
+  }
+  function applyHighlightToInner(raw) {
+    var inner = document.querySelector(".chapter__inner");
+    if (!inner) return 0;
+    clearHighlight(inner);
+    var terms = parseHighlightTerms(raw);
+    if (!terms.length) return 0;
+    return highlightQueryTerms(inner, terms);
+  }
+  function stripHighlightParam() {
+    if (!window.history || !window.history.replaceState) return;
+    try {
+      var sp = new URLSearchParams(location.search);
+      sp.delete("highlight");
+      var q = sp.toString();
+      window.history.replaceState(null, "", location.pathname + (q ? "?" + q : "") + location.hash);
+    } catch (e) { /* ignore */ }
+  }
+  function setupHighlightDismiss(root) {
+    if (!root) return;
+    root.addEventListener("click", function (e) {
+      if (!e.target || !e.target.closest) return;
+      if (!e.target.closest("mark.hl-query")) return;
+      clearHighlight(root);
+      stripHighlightParam();
+    });
+  }
+
   function isMacPlatform() {
     return /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
   }
@@ -790,7 +901,8 @@
       setStatus("找到 " + results.length + " 条结果" + (results.length === 40 ? "(仅显示前 40 条)" : ""));
       resultsEl.innerHTML = results.map(function (r, i) {
         var sec = r.sec;
-        var href = sec.file + (sec.headingId ? "#" + sec.headingId : "");
+        var hl = encodeURIComponent(query);
+        var href = sec.file + "?highlight=" + hl + (sec.headingId ? "#" + sec.headingId : "");
         return '<a class="book-search__result" href="' + href + '" data-ri="' + i + '">' +
           '<span class="book-search__result-chapter">第 ' + sec.num + ' 章 · ' + escapeHtml(sec.chTitle) + '</span>' +
           '<span class="book-search__result-heading">' + highlightFuzzy(sec.heading, r.headingPositions) + '</span>' +
@@ -841,8 +953,11 @@
     function followSearchResult(href) {
       if (!href) return;
       var hashIdx = href.indexOf("#");
-      var file = hashIdx >= 0 ? href.slice(0, hashIdx) : href;
       var hash = hashIdx >= 0 ? href.slice(hashIdx + 1) : "";
+      var beforeHash = hashIdx >= 0 ? href.slice(0, hashIdx) : href;
+      var qIdx = beforeHash.indexOf("?");
+      var file = qIdx >= 0 ? beforeHash.slice(0, qIdx) : beforeHash;
+      var search = qIdx >= 0 ? beforeHash.slice(qIdx + 1) : "";
       var here = pageBaseName();
 
       if (file && file !== here) {
@@ -851,10 +966,20 @@
       }
 
       close();
+      var hl = getHighlightParam(search);
+      if (hl) applyHighlightToInner(hl);
+
       if (!hash) {
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        if (hl) {
+          var first = document.querySelector(".chapter__inner mark.hl-query");
+          if (first) scrollHeadingIntoView(first, true);
+          else window.scrollTo({ top: 0, behavior: "smooth" });
+        } else {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
         if (window.history && window.history.replaceState) {
-          window.history.replaceState(null, "", here);
+          var url = here + (hl ? "?highlight=" + encodeURIComponent(hl) : "");
+          window.history.replaceState(null, "", url);
         }
         return;
       }
@@ -865,7 +990,8 @@
       if (target) {
         scrollHeadingIntoView(target, true);
         if (window.history && window.history.replaceState) {
-          window.history.replaceState(null, "", "#" + hash);
+          var url2 = (hl ? "?highlight=" + encodeURIComponent(hl) : "") + "#" + hash;
+          window.history.replaceState(null, "", url2);
         }
       } else {
         window.location.hash = hash;
@@ -1020,7 +1146,8 @@
       if (!p.tagName) { p = p.parentElement; continue; }
       var tag = p.tagName.toUpperCase();
       if (tag === "SCRIPT" || tag === "STYLE" || tag === "SVG" || tag === "TEXTAREA" ||
-          tag === "INPUT" || tag === "CODE" || tag === "KBD" || tag === "SAMP" || tag === "PRE") return true;
+          tag === "INPUT" || tag === "CODE" || tag === "KBD" || tag === "SAMP" ||
+          tag === "PRE" || tag === "MARK") return true;
       if (/^H[1-6]$/.test(tag)) return true;
       if (p.classList) {
         if (p.classList.contains("chapter__eyebrow") || p.classList.contains("glossary-popover") ||
@@ -1332,6 +1459,13 @@
     setupProgress(refs);
     setupReveal();
     handleInitialHash();
+    var hlTerm = getHighlightParam(location.search);
+    if (hlTerm && applyHighlightToInner(hlTerm) > 0 && !window.location.hash) {
+      var firstHl = document.querySelector(".chapter__inner mark.hl-query");
+      if (firstHl) scrollHeadingIntoView(firstHl, false);
+    }
+    var hlInner = document.querySelector(".chapter__inner");
+    if (hlInner) setupHighlightDismiss(hlInner);
     loadGlossary().then(function () {
       var inner = document.querySelector(".chapter__inner");
       if (inner) setupGlossary(inner);

@@ -736,8 +736,18 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
   transition: border-color 140ms ease, color 140ms ease;
 }
 .dial__top { top: calc(var(--bar-height) + 0.8rem); }
-.dial__home { bottom: calc(var(--bar-height) + 0.8rem); }
-.dial__corner:hover { border-color: var(--amber); color: var(--paper); }
+.dial__home {
+  bottom: calc(var(--bar-height) + 0.8rem);
+  opacity: 0;
+  transition: opacity 180ms ease, border-color 140ms ease, color 140ms ease;
+}
+.dial__home::before {
+  content: "";
+  position: absolute;
+  inset: -0.6rem -1.1rem -0.6rem -0.6rem;
+}
+.dial__home:hover,
+.dial__home:focus-visible { opacity: 1; }
 
 /* ============================================================= */
 /* 移动端跳转面板                                                 */
