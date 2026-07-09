@@ -267,6 +267,45 @@
           </p>
         </div>
 
+        <h3>到底怎么种出来:训练与预测的完整流程</h3>
+        <p>
+          有了上面两重随机,随机森林的“训练”其实就是<strong>把 §2.2 那套种树流程,套着两个随机重复 N 遍</strong>——
+          没有新的数学,只是外面多包了一层循环。写成步骤:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">随机森林训练 + 预测(伪代码)</figcaption>
+          <pre class="code-walk__code"><code>训练(数据集 D 有 M 条样本, 想种 N 棵树):
+  for t in 1..N:                                    <b class="cw-tag">1</b>
+      D_t = 从 D 里【有放回】抽 M 条          # 自助采样(bootstrap)
+      tree_t = 种一棵决策树(D_t):            <b class="cw-tag">2</b>
+          每次分裂前, 先随机抽一个特征子集(比如 √特征数 个)
+          只在这个子集里挑 §2.1 最优切分
+          # 通常【不剪枝】, 让每棵树尽量长深
+  return [tree_1, ..., tree_N]
+
+预测(新样本 x):                                    <b class="cw-tag">3</b>
+  分类: N 棵树各投一票 → 取票数最多的类别
+  回归: N 棵树各给一个数 → 取平均</code></pre>
+          <ol class="code-walk__notes">
+            <li><strong>外层循环</strong>:唯一比单棵树多出来的就是这个 <code>for t in 1..N</code>——种 N 棵,彼此不通气、可以完全并行。</li>
+            <li><strong>两重随机就藏在种树里</strong>:样本随机(自助采样)让每棵树看到的数据不同;特征随机(分裂前抽子集)让它们连“看问题的角度”都不同。单棵树反而<strong>故意长深、不剪枝</strong>——单棵过拟合没关系,交给投票去平均。</li>
+            <li><strong>预测就是汇总</strong>:分类投票、回归取平均,没有别的机关。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">“有放回地抽 M 条”到底是什么样?</span>
+          <p>
+            设训练集只有 <strong>5 条样本,编号 ①②③④⑤</strong>。种第 1 棵树时,<strong>有放回</strong>地抽 5 次,
+            可能抽到 <code>[② ② ④ ⑤ ⑤]</code>——②⑤ 各被抽中两次,而 <strong>①③ 一次都没抽到</strong>。
+            种第 2 棵树重新抽,可能是 <code>[① ① ③ ④ ④]</code>。每棵树看到的“训练集”就这样各不相同,自然长成不同的树。
+          </p>
+          <p style="margin-bottom:0">
+            那些<strong>没被抽中的样本</strong>(这里的 ①③)叫<span class="term">袋外样本(OOB, Out-Of-Bag)</span>。
+            数学上每棵树平均约有 <strong>1/e ≈ 37% 的样本落在袋外</strong>。它们没参与这棵树的训练,正好拿来<strong>免费当验证集</strong>:
+            用“每条样本 × 没见过它的那些树”去预测,就能估出泛化误差,连单独切验证集都省了。
+          </p>
+        </div>
+
         <h2>4. 梯度提升树:一棵接一棵地纠错</h2>
         <p>
           随机森林是<strong>并行</strong>种一堆树再平均(Bagging);还有另一条思路正好相反——<strong>串行</strong>地一棵接一棵种,

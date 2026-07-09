@@ -1094,6 +1094,68 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           所以 MoE 既要会“路由”,也要会“摊活”;推理阶段则要分清:<strong>你体验到的能力,看的是激活算力,不是 PPT 上的总参数量。</strong>
         </p>
 
+        <h3>⑦ 稠密模型 vs 稀疏模型:同样叫“大模型”,两种活法</h3>
+        <p>
+          讲完 MoE,正好回答一个常被问到的分类:大模型按“<strong>每个 token 是不是都要过全部参数</strong>”分成两大类——
+          <span class="term">稠密模型(Dense)</span>和<span class="term">稀疏模型(Sparse,通常就是 MoE)</span>。
+          它们的差别<strong>只在前馈那一段</strong>:稠密模型每个 token 都老老实实过<strong>那一个</strong> FFN;
+          稀疏模型把 FFN 换成 N 个并列专家,每个 token 只走 Router 点亮的 <strong>k 个</strong>。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th></th><th>稠密模型 Dense</th><th>稀疏模型 MoE(Sparse)</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>FFN 段</strong></td>
+                <td>每层<strong>一个</strong> FFN,所有 token 共用</td>
+                <td>每层 <strong>N 个并列专家</strong> + 路由器</td>
+              </tr>
+              <tr>
+                <td><strong>每个 token 用到多少参数</strong></td>
+                <td><strong>全部</strong>参数都参与计算</td>
+                <td>只激活 <strong>k 个专家</strong>(总参数的一小撮)</td>
+              </tr>
+              <tr>
+                <td><strong>总参数 vs 激活参数</strong></td>
+                <td>几乎相等(总参 ≈ 激活参)</td>
+                <td><strong>总参数 ≫ 激活参数</strong>(如 671B 总 / 37B 激活)</td>
+              </tr>
+              <tr>
+                <td><strong>算力开销</strong></td>
+                <td>随总参数线性涨,想更强就得全体变大</td>
+                <td>只跟 <strong>激活的 k</strong> 走,堆专家不显著加算力</td>
+              </tr>
+              <tr>
+                <td><strong>显存开销</strong></td>
+                <td>≈ 总参数</td>
+                <td>依然 <strong>≈ 总参数</strong>(全部专家都得常驻待命)</td>
+              </tr>
+              <tr>
+                <td><strong>典型代表</strong></td>
+                <td>GPT-2/3、LLaMA、Qwen Dense、本项目的 Mini Transformer</td>
+                <td>Mixtral、DeepSeek-V3、多数新一代旗舰</td>
+              </tr>
+              <tr>
+                <td><strong>一句话</strong></td>
+                <td>结构简单、训练稳、好部署;想更强只能<strong>整体变大</strong></td>
+                <td>用<strong>显存换算力</strong>:参数堆很大、每步算得少,但要处理路由和负载均衡</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">核心一句:<strong>稠密 = 每个 token 过全部参数;稀疏 = 每个 token 只过被选中的一部分</strong>。稀疏靠“总参数大、激活参数小”兼顾容量与算力,代价是多了路由/均衡这套机关,而且显存并不省。</p>
+        </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">别把两种“稀疏”搞混</span>
+          <p>
+            本章出现了两处“稀疏”,针对的<strong>不是同一段</strong>:<br />
+            <strong>· 稀疏模型 / MoE(本节)</strong>:稀疏的是 <strong>FFN 那一段</strong>——N 个专家里每次只激活 k 个。<br />
+            <strong>· 稀疏注意力(<a class="xref" href="chapter-21.html#9-稀疏注意力-不必人人都聊">下一节</a>)</strong>:稀疏的是 <strong>Attention 那一段</strong>——不再让每个 token 和所有 token 两两打分,只保留一部分连接。<br />
+            两者可以<strong>同时用在一个模型里</strong>:一个模型既是 MoE(FFN 稀疏),又用稀疏注意力(Attention 稀疏),互不冲突。
+          </p>
+        </div>
+
         <h2>9. 稀疏注意力:不必“人人都聊”</h2>
         <p>
           <a class="xref" href="chapter-17.html">第 17 章</a>的注意力是“<strong>稠密</strong>”的:每个 token 都要和其他<strong>所有</strong> token 两两打分。

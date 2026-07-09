@@ -47,7 +47,7 @@
             <li>残差连接为什么能让“很深的网络”也训得动;</li>
             <li>LayerNorm 在归一化什么,为什么能稳住训练;</li>
             <li>前馈网络(FFN)在 attention 之后又补了什么;</li>
-            <li>位置编码怎么把“词的顺序”告诉模型,以及 encoder 和 decoder 的区别;</li>
+            <li>位置编码有哪些常见写法、分别改在计算图哪里,以及 encoder 和 decoder 的区别;</li>
             <li>读懂那张<strong>最经典的 Transformer 全架构图</strong>:编码器、解码器,以及它们之间的 cross-attention;</li>
             <li>self / masked / cross <strong>三种注意力</strong>的区别,以及 GPT / BERT / T5 三种家族的由来;</li>
             <li>用一句诗走完 GPT 前向:<strong>整矩阵形状链(含多头 h=2)</strong> + 逐步手算,以及它和 <a class="xref" href="chapter-23.html">MNIST</a> 在“关联方式”上的同异。</li>
@@ -377,8 +377,8 @@ for (int i = 0; i &lt; feature_dim_; i++)
         <h2>5. 位置编码:告诉模型“谁在前谁在后”</h2>
         <p>
           注意力有个“缺陷”:它对所有位置一视同仁,<strong>本身并不知道词的先后顺序</strong>
-          ——把“狗咬人”和“人咬狗”打乱了它也分不清。解决办法是给每个位置造一个独特的“位置指纹”,
-          加到词向量上。经典做法用不同频率的<strong>正弦和余弦</strong>:
+          ——把“狗咬人”和“人咬狗”打乱了它也分不清。最直观的解决办法,是给每个位置造一个独特的“位置指纹”,
+          加到词向量上。本项目采用的就是原始 Transformer 里的固定 sin/cos 位置编码:
         </p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/transformer/positional_encoding.cpp(精简)</figcaption>
@@ -440,6 +440,136 @@ encoding[pos][i + 1] = std::cos(angle);
           <p>
             <strong>· 为什么是“加”到词向量上,而不是拼接?</strong> 相加<strong>不增加维度、不多花参数</strong>,模型能在同一组数里同时读到“是什么词 + 在第几位”。(也有模型改用<strong>可学习</strong>的位置向量,思路一样,只是编码从公式改成训练得到。)<br />
             <strong>· sin/cos 还有个隐藏好处:</strong> 位置 <code>pos+k</code> 的编码可以由位置 <code>pos</code> 的编码<strong>线性组合</strong>出来。于是模型很容易学会“相对位置”(比如“往前第三个词”),而不只是死记绝对位次。
+          </p>
+        </div>
+
+        <h3>常见位置编码家族:有的加向量,有的改注意力</h3>
+        <p>
+          上面讲的是本项目实现的固定 sin/cos。现代大模型里,“位置编码”已经不一定真的加在输入向量上:
+          有些方案仍然给 embedding 加一个位置向量;有些方案把“距离”写进 attention 分数;
+          还有些方案直接旋转 Q/K。它们解决的是同一个问题:让模型知道 token 之间的顺序和距离。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>方案</th><th>改在计算图哪里</th><th>怎么实现</th><th>直觉与取舍</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>固定 sin/cos 绝对位置</strong></td>
+                <td>embedding 之后</td>
+                <td>预先按公式算 <code>PE[pos][dim]</code>,再做 <code>X = TokenEmbedding + PE</code></td>
+                <td>无训练参数、规律清楚,适合教学和原始 Transformer;公式能算更远位置,但模型没长文本训练也未必会用</td>
+              </tr>
+              <tr>
+                <td><strong>可学习绝对位置</strong></td>
+                <td>embedding 之后</td>
+                <td>训练一张 <code>PositionEmbedding[max_len][d_model]</code> 表,第 <var>pos</var> 行加到第 <var>pos</var> 个 token 上</td>
+                <td>实现最简单,模型自己学每个位置该长什么样;缺点是 <code>max_len</code> 像硬墙,表外位置没有现成向量</td>
+              </tr>
+              <tr>
+                <td><strong>相对位置 bias</strong></td>
+                <td>softmax 之前的 attention 分数</td>
+                <td>先算 <code>score = QK^T / sqrt(d)</code>,再按距离 <code>i-j</code> 加一项 <code>bias[i-j]</code></td>
+                <td>模型更直接地看“相隔多远”,而不是只看绝对编号;常见做法会把很远距离分桶,避免位置表无限变大</td>
+              </tr>
+              <tr>
+                <td><strong>RoPE 旋转位置编码</strong></td>
+                <td>Q/K 进入点积之前</td>
+                <td>把 Q、K 的维度两两成对,按位置 <var>pos</var> 把每一对旋转一个角度,再做 <code>QK^T</code></td>
+                <td>点积天然带相对位置信息,现代 decoder-only 大模型常用;长上下文里的 PI / NTK / YaRN 本质是在调这些旋转角度</td>
+              </tr>
+              <tr>
+                <td><strong>ALiBi</strong></td>
+                <td>softmax 之前的 attention 分数</td>
+                <td>不给 token 加位置向量,而是给远距离连接加线性惩罚:<code>score -= slope × distance</code></td>
+                <td>结构很轻,外推直觉好:越远的历史默认越吃亏;表达力不如 RoPE 灵活,但实现和推理都很省</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">所以“位置编码”不是一种固定写法,而是一类把顺序信息注入模型的方法:可以写在输入向量里,也可以写在 attention 分数或 Q/K 几何关系里。</p>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">三类位置编码改动位置(伪代码)</figcaption>
+          <pre class="code-walk__code"><code>// ① 绝对位置:先给每个 token 加位置向量
+X = TokenEmbedding(ids)
+X = X + PositionEncoding(pos)
+
+// ② 相对位置 bias / ALiBi:改 attention 分数
+score = Q * K^T / sqrt(head_dim)
+score = score + PositionBias(i - j)
+
+// ③ RoPE:先旋转 Q/K,再算注意力分数
+Q = RotateByPosition(Q, pos)
+K = RotateByPosition(K, pos)
+score = Q * K^T / sqrt(head_dim)</code></pre>
+        </figure>
+
+        <h3>RoPE 到底怎么“转”:为什么点积只看相对距离</h3>
+        <p>
+          RoPE(Rotary Position Embedding,旋转位置编码)是现在 decoder-only 大模型(LLaMA、Qwen、GLM 等)几乎默认的写法。
+          它<strong>不给词向量加任何位置向量</strong>,而是在 Q、K 进入点积之前,把它们“<strong>按位置转一个角度</strong>”。
+          理解它只需要一个初中几何事实:<strong>两个向量一起转相同的角度,夹角不变;转不同的角度,夹角只取决于两者的角度差</strong>。
+        </p>
+        <p>
+          具体做法:把每个 head 的向量维度<strong>两两分成一组</strong>(维0-维1 一组、维2-维3 一组……),每组看成平面上的一个二维向量。
+          对位置 <var>m</var> 上的向量,第 <var>g</var> 组统一旋转角度 <code>m·θ_g</code>:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">一组二维分量的旋转(第 g 组,位置 m)</figcaption>
+          <pre class="code-walk__code"><code>[x']   [cos(m·θ)  −sin(m·θ)] [x]
+[y'] = [sin(m·θ)   cos(m·θ)] [y]
+
+// 每组用不同的 θ_g:低维组转得快(高频),高维组转得慢(低频)
+// 和 sin/cos 一样,用不同频率同时覆盖“近距离”和“远距离”</code></pre>
+        </figure>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">直觉:像两个人一起转身,相对朝向不变</span>
+          <p>
+            把 Q、K 想成两个面对面站着的人。位置越靠后,RoPE 就让他“多转几度”。
+            如果两人<strong>转的角度一样</strong>(距离为 0),彼此相对朝向没变;如果一个转得多、一个转得少,
+            <strong>两人之间的夹角只由“多转了几度”决定</strong>,跟他们各自面朝哪个绝对方向无关。
+            注意力点积衡量的正是这个夹角,所以它天生只关心“<strong>隔多远</strong>”。
+          </p>
+        </div>
+        <p>
+          用矩阵说清楚这件事:query 在位置 <var>m</var>、key 在位置 <var>n</var>,分别被旋转 <code>m·θ</code> 和 <code>n·θ</code>。
+          两个旋转后的向量做点积时,旋转矩阵满足 <code>R(mθ)ᵀ · R(nθ) = R((n−m)θ)</code>——
+          <strong>两个绝对旋转一相乘,绝对位置 m、n 抵消了,只剩下位置差 (n−m)</strong>。
+          也就是说注意力分数 <code>q'·k'</code> 只取决于“它们相隔多远”,而不是“它们各自在第几位”。
+        </p>
+        <p>取一组二维分量、每步转 <code>30°</code> 实际算一遍(为看得清楚令 <code>q = k = (1, 0)</code>,此时点积正好等于 <code>cos(30°×距离)</code>):</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead>
+              <tr><th>Q 的位置 m</th><th>K 的位置 n</th><th>相隔 n−m</th><th>旋转后点积</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>0</td><td>0</td><td>0</td><td>cos(0°) = 1.00</td></tr>
+              <tr><td>0</td><td>1</td><td>1</td><td>cos(30°) = 0.87</td></tr>
+              <tr><td>0</td><td>2</td><td>2</td><td>cos(60°) = 0.50</td></tr>
+              <tr><td>5</td><td>6</td><td class="is-hot">1</td><td class="is-hot">cos(30°) = 0.87</td></tr>
+              <tr><td>5</td><td>7</td><td class="is-hot">2</td><td class="is-hot">cos(60°) = 0.50</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">看最后两行:位置从 (0,1) 挪到 (5,6),<strong>绝对位置全变了,但只要距离还是 1,点积就还是 0.87</strong>。这就是 RoPE“绝对地转、相对地看”的效果。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">两个常被问到的点</span>
+          <p>
+            <strong>· 和 sin/cos 加向量差在哪?</strong> sin/cos 是给 embedding <strong>加</strong>一段位置向量(改的是“数值/长度”),每个位置一个绝对指纹;
+            RoPE 是<strong>旋转</strong> Q/K(改的是“方向/角度”),不加参数、不改模长,位置信息直接落在点积的角度差里——所以相对性是<strong>天生</strong>的,不用模型自己去学。<br />
+            <strong>· 为什么只转 Q/K,不转 V?</strong> 位置只应该影响“<strong>谁该注意谁</strong>”,也就是 <code>QKᵀ</code> 算出来的注意力权重;
+            而 V 是被加权汇总的“<strong>内容</strong>”本身,不该被位置旋转扭曲。所以 RoPE 只作用在决定权重的 Q、K 上,V 保持原样。
+          </p>
+        </div>
+
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">和后面长上下文内容怎么分工</span>
+          <p>
+            本节只回答“位置编码有哪些、它们插在模型哪里”。到<a class="xref" href="chapter-21.html#先拨开一个误会-1m-token-不是把普通-attention-硬拉到-1000000">第 21 章</a>,
+            我们再专门讲另一个问题:当模型要从 4K / 32K 拉到 128K / 1M 时,RoPE 的角度怎样通过位置插值、NTK、YaRN 继续拉长。
+            那部分是<strong>长上下文工程</strong>,不是在重新介绍位置编码家族。
           </p>
         </div>
 
@@ -605,13 +735,13 @@ encoding[pos][i + 1] = std::cos(angle);
         <h3>顺着数据流走一遍</h3>
         <p><strong>左边这座塔是编码器(Encoder),负责“读懂输入”:</strong></p>
         <ol>
-          <li><strong>输入嵌入 + 位置编码</strong>:把输入每个词查成向量(<a class="xref" href="chapter-19.html">第 19 章</a>),⊕ 上位置编码(第 5 节),让它既知道“是什么词”又知道“在第几位”。</li>
+          <li><strong>输入嵌入 + 位置编码</strong>:在原始 Transformer 图里,输入每个词先查成向量(<a class="xref" href="chapter-19.html">第 19 章</a>),再 ⊕ 上位置编码(第 5 节),让它既知道“是什么词”又知道“在第几位”。</li>
           <li><strong>N× 编码器块</strong>:每块 = 自注意力 → Add &amp; Norm → 前馈网络 → Add &amp; Norm(第 1–4 节);堆 N 层(原论文 N=6),越堆理解越深。</li>
           <li><strong>编码器输出</strong>:一串“看过全句上下文”的向量,原样送给右边的解码器备用。</li>
         </ol>
         <p><strong>右边这座塔是解码器(Decoder),负责“一个词一个词生成输出”:</strong></p>
         <ol>
-          <li><strong>输出嵌入 + 位置编码</strong>:把“到目前为止已生成的词”嵌入 + 位置编码。注意底部写着 <span class="term">Outputs(shifted right,右移一位)</span>——预测第 <var>t</var> 个词时,喂进去的是第 1…<var>t</var>−1 个词,这正是<a class="xref" href="chapter-19.html">第 19 章</a>的 teacher forcing。</li>
+          <li><strong>输出嵌入 + 位置编码</strong>:在原始图里,把“到目前为止已生成的词”嵌入 + 位置编码。注意底部写着 <span class="term">Outputs(shifted right,右移一位)</span>——预测第 <var>t</var> 个词时,喂进去的是第 1…<var>t</var>−1 个词,这正是<a class="xref" href="chapter-19.html">第 19 章</a>的 teacher forcing。</li>
           <li><strong>掩码自注意力</strong>:带 causal mask 的自注意力,保证生成时<strong>只能看前文、不能偷看未来</strong>(<a class="xref" href="chapter-17.html">第 17 章</a>)。</li>
           <li><strong>交叉注意力(cross-attention)</strong>:关键一环——它一边看解码器自己的状态,一边<strong>回头查阅编码器的输出</strong>(下面细讲)。</li>
           <li><strong>前馈网络</strong>,再 Add &amp; Norm;同样堆 N 层。</li>
@@ -1384,7 +1514,7 @@ Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code>
             <li><strong>LayerNorm</strong>:对每个词向量减均值除标准差再缩放,稳住数值、加速收敛。</li>
             <li><strong>FFN</strong>:对每个词独立做“升维 → ReLU → 降维”,补充非线性加工。</li>
             <li>一块 Block = 注意力+残差+Norm,再 FFN+残差+Norm;输入输出同形,可无限堆叠。</li>
-            <li><strong>位置编码</strong>用 sin/cos 把词序加进向量;encoder 双向看全句,decoder 带 causal mask 只看前文。</li>
+            <li><strong>位置编码</strong>把词序注入模型:本项目和原始 Transformer 用 sin/cos 加到向量上,现代模型也常用 RoPE / ALiBi 等改 attention 的方案;encoder 双向看全句,decoder 带 causal mask 只看前文。</li>
             <li><strong>别混三条轴</strong>:context window 决定“看多长”,model_dim 决定“每个 token 多厚”,head_num 决定“把这份厚度切成几个头”。</li>
             <li><strong>完整架构</strong> = 编码器塔 + 解码器塔;图中三处注意力(自注意力 / 掩码自注意力 / 交叉注意力)是同一套机制,只是 Q/K/V 来源不同。</li>
             <li><strong>交叉注意力</strong>让解码器“查阅”编码器输出(Q 来自解码器,K/V 来自编码器);GPT=decoder-only,BERT=encoder-only,T5/翻译=encoder-decoder。</li>
@@ -1405,7 +1535,7 @@ Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code>
           <details class="quiz__item">
             <summary class="quiz__q">问题 2:为什么注意力机制需要额外的“位置编码”?</summary>
             <div class="quiz__a">
-              <p>因为注意力对所有位置对称,本身分不清词的先后顺序。位置编码给每个位置一个独特指纹并加到词向量上,模型才能区分“狗咬人”和“人咬狗”。</p>
+              <p>因为注意力对所有位置对称,本身分不清词的先后顺序。位置编码负责把“第几个、隔多远”注入模型:本项目的 sin/cos 是加到词向量上,RoPE/ALiBi 这类现代方案则改 Q/K 或 attention 分数。没有这层顺序信息,模型很难区分“狗咬人”和“人咬狗”。</p>
             </div>
           </details>
           <details class="quiz__item">

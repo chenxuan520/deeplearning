@@ -422,8 +422,42 @@
     setActive(startIdx);
     updateProgress();
   }
+  // ---------- 行内注释(* 号) ----------
+  function buildInlineNotes() {
+    function closeAll(except) {
+      var pops = document.querySelectorAll(".mythos-note__pop.is-open");
+      [].forEach.call(pops, function (p) {
+        if (p === except) return;
+        p.classList.remove("is-open");
+        var m = p.parentNode && p.parentNode.querySelector(".mythos-note__mark");
+        if (m) m.setAttribute("aria-expanded", "false");
+      });
+    }
+    document.addEventListener("click", function (e) {
+      var mark = e.target.closest && e.target.closest(".mythos-note__mark");
+      if (mark) {
+        e.preventDefault();
+        e.stopPropagation();
+        var note = mark.closest(".mythos-note");
+        var pop = note && note.querySelector(".mythos-note__pop");
+        if (!pop) return;
+        var open = pop.classList.contains("is-open");
+        closeAll(pop);
+        pop.classList.toggle("is-open", !open);
+        mark.setAttribute("aria-expanded", open ? "false" : "true");
+        return;
+      }
+      if (e.target.closest && e.target.closest(".mythos-note__pop")) return;
+      closeAll(null);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeAll(null);
+    });
+  }
+
   window.addEventListener("resize", function () { readGeom(); layout(currentIdx < 0 ? 0 : currentIdx); });
   buildConstellationPopover();
+  buildInlineNotes();
   buildMobileJump();
   requestAnimationFrame(boot);
 })();

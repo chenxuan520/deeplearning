@@ -521,6 +521,31 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
 .hero__title .accent { color: var(--amber); font-style: italic; }
 .finale__note { font-size: 0.96rem; line-height: 1.85; color: var(--paper-faint); max-width: 40rem; margin: 0 auto; }
 .finale__note strong { color: var(--paper); }
+.mythos-note { position: relative; display: inline-block; }
+.mythos-note__mark {
+  background: none; border: 0; cursor: pointer; padding: 0 0.1em; margin: 0;
+  color: var(--amber); font-family: var(--font-serif); font-size: 0.8em;
+  vertical-align: super; opacity: 0.85; transition: opacity 0.2s ease;
+}
+.mythos-note__mark:hover, .mythos-note__mark[aria-expanded="true"] { opacity: 1; }
+.mythos-note__pop {
+  position: absolute; left: 50%; bottom: calc(100% + 0.5rem); transform: translate(-50%, 6px);
+  z-index: 40; width: max-content; max-width: 17rem; white-space: normal; text-align: left;
+  padding: 0.5rem 0.7rem; border-radius: 0.5rem;
+  background: rgba(20, 18, 28, 0.96); border: 1px solid rgba(230, 169, 92, 0.28);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.04em; line-height: 1.6;
+  color: var(--paper-faint);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity 0.24s ease, transform 0.24s ease, visibility 0.24s;
+}
+.mythos-note__pop::after {
+  content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  border: 6px solid transparent; border-top-color: rgba(230, 169, 92, 0.28);
+}
+.mythos-note__pop.is-open {
+  opacity: 1; visibility: visible; pointer-events: auto; transform: translate(-50%, 0);
+}
 .slide--future {
   background:
     radial-gradient(90% 72% at 50% 40%, rgba(127, 179, 230, 0.12), transparent 60%),
