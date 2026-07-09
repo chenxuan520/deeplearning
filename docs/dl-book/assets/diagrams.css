@@ -1091,6 +1091,59 @@ select {
   margin-top: 0;
 }
 
+.multihead-flow {
+  margin: 0.6rem 0 1.1rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(196, 183, 255, 0.22);
+  border-radius: 18px;
+  background: rgba(8, 18, 32, 0.42);
+}
+
+.multihead-flow svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 170px;
+}
+
+.multihead-flow rect {
+  fill: rgba(139, 123, 255, 0.14);
+  stroke: #8b7bff;
+  stroke-width: 2;
+}
+
+.multihead-flow__heads rect {
+  fill: rgba(139, 123, 255, 0.22);
+}
+
+.multihead-flow text {
+  fill: #eef4ff;
+  font-size: 13px;
+}
+
+.multihead-flow__sub,
+.multihead-flow__heads text:nth-of-type(even) {
+  fill: var(--text-soft);
+  font-size: 10px;
+}
+
+.multihead-flow__main {
+  stroke: #8499bd;
+  stroke-width: 2.2;
+}
+
+.multihead-flow__split {
+  stroke: #c4b7ff;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.multihead-flow__head {
+  stroke: #c4b7ff;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
 .multihead__grid {
   display: grid;
   grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);

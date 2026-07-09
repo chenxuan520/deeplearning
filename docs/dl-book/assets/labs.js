@@ -673,6 +673,39 @@
     '<div class="multihead">' +
     '  <div class="multihead__intro"><h3>为什么要多头(Multi-Head)</h3>' +
     '    <p>单头 attention 只有一种“关注视角”。多头的想法是:同一个 token,在不同子空间里学不同关系——一个头偏向“谁是主语”,一个头偏向“动作和宾语”,还有一个头更关注“位置或局部结构”。</p></div>' +
+    '  <div class="multihead-flow" aria-label="多头注意力把同一输入分到多个 head">' +
+    '    <svg viewBox="0 0 680 230" role="img">' +
+    '      <defs>' +
+    '        <marker id="mh-arrow" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#c4b7ff" /></marker>' +
+    '        <marker id="mh-main-arrow" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8499bd" /></marker>' +
+    '      </defs>' +
+    '      <rect x="36" y="92" width="150" height="44" rx="10" />' +
+    '      <text x="111" y="111" text-anchor="middle">同一输入 X</text>' +
+    '      <text x="111" y="127" text-anchor="middle" class="multihead-flow__sub">完整 token 表示</text>' +
+    '      <line class="multihead-flow__main" x1="186" y1="114" x2="250" y2="114" marker-end="url(#mh-main-arrow)" />' +
+    '      <line class="multihead-flow__split" x1="250" y1="54" x2="250" y2="174" />' +
+    '      <line class="multihead-flow__head" x1="250" y1="54" x2="330" y2="54" marker-end="url(#mh-arrow)" />' +
+    '      <line class="multihead-flow__head" x1="250" y1="114" x2="330" y2="114" marker-end="url(#mh-arrow)" />' +
+    '      <line class="multihead-flow__head" x1="250" y1="174" x2="330" y2="174" marker-end="url(#mh-arrow)" />' +
+    '      <g class="multihead-flow__heads">' +
+    '        <rect x="330" y="32" width="120" height="44" rx="10" />' +
+    '        <text x="390" y="50" text-anchor="middle">Head 1</text>' +
+    '        <text x="390" y="66" text-anchor="middle">Q1/K1/V1</text>' +
+    '        <rect x="330" y="92" width="120" height="44" rx="10" />' +
+    '        <text x="390" y="110" text-anchor="middle">Head 2</text>' +
+    '        <text x="390" y="126" text-anchor="middle">Q2/K2/V2</text>' +
+    '        <rect x="330" y="152" width="120" height="44" rx="10" />' +
+    '        <text x="390" y="170" text-anchor="middle">Head 3</text>' +
+    '        <text x="390" y="186" text-anchor="middle">Q3/K3/V3</text>' +
+    '      </g>' +
+    '      <line class="multihead-flow__main" x1="450" y1="54" x2="530" y2="114" marker-end="url(#mh-main-arrow)" />' +
+    '      <line class="multihead-flow__main" x1="450" y1="114" x2="530" y2="114" marker-end="url(#mh-main-arrow)" />' +
+    '      <line class="multihead-flow__main" x1="450" y1="174" x2="530" y2="114" marker-end="url(#mh-main-arrow)" />' +
+    '      <rect x="530" y="92" width="120" height="44" rx="10" />' +
+    '      <text x="590" y="110" text-anchor="middle">Concat + W<tspan baseline-shift="sub">O</tspan></text>' +
+    '      <text x="590" y="126" text-anchor="middle" class="multihead-flow__sub">拼接再融合</text>' +
+    '    </svg>' +
+    '  </div>' +
     '  <div class="multihead__grid">' +
     '    <div class="multihead__panel"><h3>头选择</h3><div class="token-picker" data-head-picker></div><p class="explain" data-head-summary></p></div>' +
     '    <div class="multihead__panel"><h3>每个头的注意力热度</h3><div class="head-heatmaps" data-head-heatmaps></div></div>' +

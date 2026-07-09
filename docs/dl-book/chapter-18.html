@@ -689,20 +689,33 @@ encoding[pos][i + 1] = std::cos(angle);
         </p>
         <div class="figure reveal">
           <div class="diagram">
-            <svg viewBox="0 0 720 620" role="img" aria-label="GPT decoder-only Transformer 架构图">
+            <svg viewBox="0 0 720 650" role="img" aria-label="GPT decoder-only Transformer 架构图">
               <defs>
                 <marker id="gpt-flow" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8499bd" /></marker>
                 <marker id="gpt-loop" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" /></marker>
+                <marker id="gpt-head" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L5,3 L0,6 Z" fill="#c4b7ff" /></marker>
               </defs>
 
               <g stroke="#8499bd" stroke-width="2" fill="none" marker-end="url(#gpt-flow)">
                 <line x1="220" y1="560" x2="220" y2="528" />
-                <line x1="220" y1="492" x2="220" y2="436" />
-                <line x1="220" y1="392" x2="220" y2="364" />
+                <line x1="220" y1="492" x2="220" y2="454" marker-end="none" />
                 <line x1="220" y1="340" x2="220" y2="324" />
                 <line x1="220" y1="280" x2="220" y2="252" />
                 <line x1="220" y1="228" x2="220" y2="188" />
                 <line x1="220" y1="160" x2="220" y2="130" />
+              </g>
+              <g stroke="#c4b7ff" stroke-width="2.2" fill="none" opacity="0.95" stroke-linecap="round">
+                <line x1="184" y1="454" x2="256" y2="454" />
+              </g>
+              <g stroke="#c4b7ff" stroke-width="1.9" fill="none" marker-end="url(#gpt-head)" opacity="0.95" stroke-linecap="round">
+                <line x1="184" y1="454" x2="184" y2="438" />
+                <line x1="220" y1="454" x2="220" y2="438" />
+                <line x1="256" y1="454" x2="256" y2="438" />
+              </g>
+              <g fill="#c4b7ff" font-size="8" text-anchor="middle" opacity="0.85">
+                <text x="184" y="468">Q</text>
+                <text x="220" y="468">K</text>
+                <text x="256" y="468">V</text>
               </g>
 
               <rect x="90" y="560" width="260" height="40" rx="10" fill="rgba(142,240,209,0.16)" stroke="#8ef0d1" stroke-width="2" />
@@ -750,7 +763,7 @@ encoding[pos][i + 1] = std::cos(angle);
               <path d="M350,116 L430,116" fill="none" stroke="#8499bd" stroke-width="2" marker-end="url(#gpt-flow)" />
               <path d="M350,116 L390,116 L390,248 L430,248" fill="none" stroke="#8499bd" stroke-width="2" marker-end="url(#gpt-flow)" />
 
-              <path d="M530,292 L530,612 L350,612 L350,600" fill="none" stroke="#8ef0d1" stroke-width="2.4" stroke-dasharray="5 4" marker-end="url(#gpt-loop)" />
+              <path d="M530,292 L530,636 L220,636 L220,600" fill="none" stroke="#8ef0d1" stroke-width="2.4" stroke-dasharray="5 4" marker-end="url(#gpt-loop)" />
             </svg>
           </div>
           <p class="figure__cap">GPT / ChatGPT 这类模型常用的 decoder-only 架构:主干只有“Embedding → N× Decoder Block → LM Head”。训练时,所有位置的 logits 都拿去算交叉熵;生成时,只取最后一个位置的 logits 做 softmax 和采样,再把新 token 接回输入继续自回归。</p>

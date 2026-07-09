@@ -111,6 +111,7 @@
           <li id="g-perplexity"><strong>困惑度 perplexity</strong> — 平均交叉熵取指数,衡量“平均在几个选项里纠结”。<a href="chapter-19.html">→ 第 19 章</a></li>
           <li id="g-bpe"><strong>BPE 子词分词</strong> — 把高频组合合并成一个 token,序列更短更高效。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-scaling"><strong>Scaling Law 规模定律</strong> — 参数/数据/算力一起放大,性能可预测提升。<a href="chapter-20.html#5-规模化scaling-law-大力真的出奇迹">→ 第 20 章</a></li>
+          <li id="g-training-data" data-aliases="训练数据,数据清洗,data cleaning,data curation,training data,pretraining data"><strong>训练数据 / 数据清洗</strong> — 原始网页、代码、数学、授权内容等要经过正文抽取、去重、过滤、分类、配比和分词打包,才会变成可训练 token。<a href="chapter-20.html#数据从哪来又怎么洗干净">→ 第 20 章</a></li>
           <li id="g-param-count" data-aliases="参数量,parameter count,num parameters"><strong>参数量</strong> — 可学习权重元素总数;GPT 系约 12<var>L</var><var>d</var>²+<var>V</var><var>d</var>。<a href="chapter-20.html#2-参数地图-1750-亿个旋钮装在哪儿gpt-举例">→ 第 20 章 §2</a></li>
           <li id="g-emergent"><strong>涌现能力 emergent abilities</strong> — 规模越过门槛后突然出现的新能力。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-selfsup"><strong>自监督 self-supervised</strong> — 答案从数据本身自动抠出(如遮词预测),不用人工标注。<a href="chapter-20.html">→ 第 20 章</a></li>
@@ -122,7 +123,9 @@
           <li id="g-lora" data-aliases="LoRA,lora,PEFT,peft,参数高效微调,低秩,adapter"><strong>LoRA / PEFT</strong> — 参数高效微调:冻住底座大矩阵 <var>W</var>,只在旁边训练一对低秩小矩阵 <var>A</var>/<var>B</var>(<var>y</var>=<var>Wx</var>+<var>BAx</var>);可训练参数与显存省几十上百倍,产出的 adapter 才几 MB、可热插拔。<a href="chapter-20.html#②-指令微调sft-把博学调教成听话">→ 第 20 章</a></li>
           <li id="g-reasoning-model" data-aliases="reasoning model,推理模型,reasoning_effort,thinking budget,test-time compute,思考深度"><strong>推理模型 reasoning model</strong> — 回答前用额外 reasoning token / 候选 / 验证轮次做测试时计算;思考深度由 effort 条件训练、外部预算、模型停机策略和 runtime 截断共同决定。<a href="chapter-20.html#推理模型-先想很久再作答">→ 第 20 章</a></li>
           <li id="g-multimodal"><strong>多模态 multimodal</strong> — 图/音 patch→编码→投影,与文字拼序列进 Transformer。<a href="chapter-20.html">→ 第 20 章</a></li>
+          <li id="g-clip-model" data-aliases="CLIP,Contrastive Language-Image Pre-training,图文对齐,对比学习"><strong>CLIP</strong> — Contrastive Language-Image Pre-training;用图片编码器和文本编码器把配对图文向量拉近、不配对推远,把图和文字放进同一个语义空间。<a href="chapter-20.html#多模态-不只吃文字">→ 第 20 章</a></li>
           <li id="g-diffusion" data-aliases="扩散模型,Diffusion Model,diffusion,去噪,文生图,文生视频"><strong>扩散模型 Diffusion Model</strong> — 文生图/视频主流:训练学“去噪”,生成时从纯噪声反复去噪显影出图;文字用交叉注意力掌舵。<a href="chapter-20.html#反过来-文生图与文生视频扩散模型">→ 第 20 章</a></li>
+          <li id="g-synthetic-data" data-aliases="synthetic data,合成语料,模型生成数据,verifier"><strong>合成数据 synthetic data</strong> — 用强模型生成或改写题目、答案、解析和工具轨迹,再靠 verifier、测试、规则或人工抽检筛选后混入训练。<a href="chapter-20.html#数据从哪来又怎么洗干净">→ 第 20 章</a></li>
           <li id="g-distill" data-aliases="distillation,知识蒸馏,多教师蒸馏,MOPD,teacher,student"><strong>知识蒸馏 distillation</strong> — 让学生模型模仿教师模型的输出分布;新做法会用多个领域老师在线批改学生轨迹。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-dumb" data-aliases="serving policy,执行 profile,推理服务策略,便宜路径"><strong>模型降智</strong> — 常不是权重突然坏了,而是调用链路被压缩:同名模型被路由到便宜后端,推理预算更低、上下文更短、工具更少,再叠加量化、小模型和更保守安全壳。<a href="chapter-21.html#⑥-为什么会觉得模型降智了">→ 第 21 章</a></li>
           <li id="g-hallucination" data-aliases="hallucination,幻觉,编造,不确定,IDK"><strong>幻觉 hallucination</strong> — 一本正经地生成通顺却编造的内容;常来自概率续写、知识缺口和“不会也猜”的评测激励。<a href="chapter-20.html">→ 第 20 章</a> · <a href="chapter-22.html#22-可靠回答-幻觉证据与验证">可靠回答 → 第 22 章</a></li>

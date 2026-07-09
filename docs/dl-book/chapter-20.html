@@ -49,6 +49,7 @@
             <li><strong>1750 亿参数</strong>装在哪些层、每层约多少权重(GPT-3 举例);</li>
             <li>“词嵌入”把词变成<strong>语义坐标</strong>,为什么向量夹角能表示“意思相近”;</li>
             <li>规模定律(Scaling Law)和涌现能力,到底在说什么;</li>
+            <li>训练数据从哪里来、怎样清洗成可用语料,以及为什么高质量数据会越来越稀缺;</li>
             <li><strong>预训练</strong>与<strong>后训练</strong>(SFT、RLHF、蒸馏)的分工,以及“底座模型”和“对话模型”的区别;</li>
             <li>为什么大模型不是单点奇迹,而是<strong>数据、算法、算力、工程</strong>四个卡点同时解开后的结果;</li>
             <li>模型是怎么<strong>一代代迭代升级</strong>的——GPT-4 到 GPT-5 是不是“重新训一个”,大版本和小更新差在哪;</li>
@@ -359,6 +360,128 @@
             (硬件账细算见<a class="xref" href="chapter-21.html">第 21 章</a>)。
           </p>
         </div>
+
+        <h3>数据从哪来,又怎么洗干净?</h3>
+        <p>
+          既然 Scaling Law 要求“参数、数据、算力一起涨”,下一个问题就很自然:
+          <strong>这些训练数据到底从哪里来?</strong> 真实训练集不是“把互联网打包下载下来直接喂给模型”。
+          更准确地说,训练数据是一条很长的<strong>数据工程流水线</strong>:先从许多来源收集原始文本和多模态材料,
+          再经过抽取、去重、过滤、分类、配比,最后才变成一批批 token 送进训练。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">先分清:原始数据很多,可训练数据很少</span>
+          <p>
+            互联网上当然还有海量页面。真正稀缺的不是“字符串”,而是
+            <strong>高质量、低重复、低污染、合法可用、能带来新增能力</strong>的训练 token。
+            垃圾页、广告导航、复制粘贴、SEO 灌水、机器翻译、重复镜像、泄漏的测试题、版权风险内容,看起来都是文本,
+            但喂进去未必让模型变强,还可能让它学坏。
+          </p>
+        </div>
+
+        <h4>① 数据来源:不是只有网页</h4>
+        <p>
+          大模型底座的预训练语料通常会混合多个域。公开报告很少披露精确比例,但大方向很清楚:
+          <strong>网页是基本盘,代码和数学是高价值补给,授权/私有数据补可靠性,合成数据和人类反馈数据补稀缺能力。</strong>
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>来源</th><th>典型内容</th><th>价值</th><th>主要风险</th></tr></thead>
+            <tbody>
+              <tr><td><strong>公开网页</strong></td><td>百科、博客、论坛、新闻、教程、问答站、开源文档</td><td>覆盖面极广,是预训练的基本盘</td><td>重复、广告、SEO spam、低质转载、版权与隐私</td></tr>
+              <tr><td><strong>代码数据</strong></td><td>开源仓库、README、issue、PR、测试、编译报错、题解</td><td>结构化、逻辑密度高,还能用测试/编译验证</td><td>许可证、泄漏密钥、脆弱代码模式、重复模板</td></tr>
+              <tr><td><strong>数学 / STEM</strong></td><td>教材、论文、题库、证明、实验报告、解题步骤</td><td>对推理、抽象和严谨表达很有价值</td><td>答案污染、题目重复、错误解析会被放大</td></tr>
+              <tr><td><strong>授权与私有数据</strong></td><td>图书、期刊、新闻档案、企业知识库、专业数据库</td><td>更新、更可靠、法律边界更清楚</td><td>成本高、覆盖窄、通常不公开</td></tr>
+              <tr><td><strong>多语种 / 多模态</strong></td><td>非英语网页、图文页面、OCR 文档、字幕、音频转写、视频描述</td><td>扩展世界知识和跨语言/跨模态能力</td><td>对齐难、噪声大、清洗和标注成本高</td></tr>
+              <tr><td><strong>后训练数据</strong></td><td>指令问答、偏好排序、红队样本、工具调用轨迹、Agent 任务记录</td><td>直接决定模型是否好用、听话、安全、会做任务</td><td>规模小但质量要求极高,标注标准容易漂移</td></tr>
+              <tr><td><strong>合成数据</strong></td><td>强模型生成题目/答案/解析,改写低质文本,模拟多轮对话</td><td>补自然数据里稀缺的推理、代码、工具和边界 case</td><td>不验证会复制幻觉,循环自训可能越训越窄</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">真实训练集不是“某一种数据越多越好”,而是不同来源按任务目标和实验结果混合。</p>
+        </div>
+
+        <h4>② 清洗:把原始网页变成训练 token</h4>
+        <p>
+          原始网页离“可训练文本”很远。你打开一个网页看到的是正文,爬虫拿到的却可能是 HTML、菜单、广告、
+          cookie 弹窗、推荐列表、评论区、脚本和一堆重复模板。清洗流水线要做的事,就是把这些东西一层层剥掉:
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">抓取<small>网页 / 代码 / 文档</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">抽正文<small>去 HTML / 模板 / 广告</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">去重过滤<small>垃圾 / 低质 / 污染</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">分类配比<small>语言 / 领域 / 质量</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">分词打包<small>token shard</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">数据清洗流水线:从“原始材料”到“训练 token”,中间要丢掉大量噪声和重复内容。</p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>步骤</th><th>在做什么</th><th>为什么必要</th></tr></thead>
+            <tbody>
+              <tr><td><strong>正文抽取</strong></td><td>从 HTML / PDF / OCR 里抽正文,去掉导航栏、广告、版权页、相关推荐</td><td>否则模型会学到一堆“首页 / 登录 / 相关阅读”这类网页噪声</td></tr>
+              <tr><td><strong>语言与格式识别</strong></td><td>判断语言、编码、文档类型,修正乱码和异常字符</td><td>方便按语言配比,也避免乱码 token 浪费训练预算</td></tr>
+              <tr><td><strong>精确去重</strong></td><td>删除完全一样的文档、段落、代码文件</td><td>重复内容会让模型背模板,还会浪费 token 预算</td></tr>
+              <tr><td><strong>近似去重</strong></td><td>删除轻微改写、镜像站、转载页、模板化问答</td><td>很多页面只换了标题或广告,本质仍是同一份内容</td></tr>
+              <tr><td><strong>质量过滤</strong></td><td>用规则和分类器过滤低信息密度、SEO spam、机器翻译腔、自动生成垃圾</td><td>模型会模仿训练分布;低质文本多,输出也会变油、空、乱</td></tr>
+              <tr><td><strong>安全与隐私过滤</strong></td><td>处理个人信息、密钥、恶意代码、极端有害内容等</td><td>降低隐私泄漏、安全风险和法律风险</td></tr>
+              <tr><td><strong>污染检测</strong></td><td>移除 benchmark 题目、测试答案、评测集泄漏内容</td><td>否则模型可能只是“背过考题”,评测分数会虚高</td></tr>
+              <tr><td><strong>领域分类与重加权</strong></td><td>给文本打上 web / code / math / book / forum / language 等标签,再决定混合比例</td><td>训练不是平均吃;高价值领域通常要提高权重</td></tr>
+              <tr><td><strong>分词与打包</strong></td><td>用 tokenizer 切成 token,拼成固定长度训练样本,打成 shard</td><td>让 GPU 能高吞吐地一批批读取,减少空洞和随机 IO</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          这就是为什么同样来自 Common Crawl,不同团队清洗出的语料效果会差很多。模型不是只看“吃了多少 token”,
+          还看这些 token 的<strong>信息密度、重复率、领域配比、语言覆盖、污染程度</strong>。训练前常常会先用小模型做 ablation:
+          换一版过滤器、调一版 web:code:math 比例,看验证集和下游任务到底变好还是变差,再决定大模型要不要跟进。
+        </p>
+
+        <h4>③ 为什么说 GPT-4 之后“数据更难了”?</h4>
+        <p>
+          网上常说“GPT-4 把互联网吃完了”,这句话不严谨。GPT-4 技术报告没有公开完整数据组成,
+          也不能证明它真的消耗完了互联网。更准确的说法是:
+          <strong>从 GPT-4 时代开始,继续靠更多公开高质量自然文本来暴力 scaling,边际收益变差了。</strong>
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">不是没有 token,而是好 token 变贵</span>
+          <p>
+            原始网页还很多,但新增的高质量唯一文本越来越难找。第一次看到一篇好教材,收益很大;
+            第二次看到转载版,收益就小;第十次看到换皮 SEO 文章,可能只是在浪费算力。
+            所以行业竞争点正在从“谁爬得多”转向“谁洗得干净、配得合理、验证得住、拿得到授权数据”。
+          </p>
+        </div>
+        <p>
+          这也解释了为什么现在的训练越来越依赖几类“高价值补给”:代码和数学因为可验证、逻辑密度高,价值很大;
+          多语种和多模态扩大了自然数据边界;授权/私有数据补可靠性和法律边界;合成数据负责补自然世界里很少出现的复杂题解、
+          工具调用轨迹和边界 case。它们不是替代网页,而是在公开网页边际收益下降后,继续给模型提供新的学习信号。
+        </p>
+
+        <h4>④ 合成数据:有用,但不是无限续命</h4>
+        <p>
+          <span class="term">合成数据(synthetic data)</span>就是让已有强模型帮忙生产训练材料:
+          生成数学题和解析、把粗糙答案改写成高质量答案、模拟用户多轮追问、生成代码任务、产出工具调用轨迹。
+          这条路很重要,因为自然网页里“高质量多步推理 + 可执行验证 + 标准格式”的样本并不多。
+        </p>
+        <p>
+          但合成数据不能无脑循环。模型自己生成的内容里会有幻觉、重复套路和隐藏偏见;如果不筛就拿来训练,
+          等于把旧模型的错误再刻进新模型。靠谱做法通常是:
+        </p>
+        <pre class="reveal"><code>自然数据打底
+→ 强模型生成 / 改写 / 补洞
+→ verifier、单元测试、规则过滤、人工抽检
+→ 只把通过验证的样本混回训练集
+→ 用小规模实验确认真的提升,再扩大</code></pre>
+        <p>
+          所以“数据怎么来”这件事,已经从简单爬虫变成了完整的数据系统:
+          <strong>收集、清洗、分类、配比、验证、合成、再验证</strong>。Scaling Law 仍然告诉我们“更多高质量数据有用”,
+          但今天真正难的是把“更多”变成“更干净、更有信息量、更能提升能力”。
+        </p>
 
         <h2>6. 涌现能力:量变到质变</h2>
         <p>
@@ -1035,6 +1158,24 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           <li><strong>多模态指令微调</strong>:图+问答三元组(VQA 等),类似 SFT。</li>
           <li><strong>(可选) RLHF</strong>:按人类偏好再对齐(<a class="xref" href="chapter-12.html">第 12 章</a>)。</li>
         </ol>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">CLIP 到底是什么?</span>
+          <p>
+            <span class="term">CLIP</span> 全名是 <em>Contrastive Language-Image Pre-training</em>,
+            可以理解成“<strong>用对比学习做图文预训练</strong>”。它不是扩散模型本身,而是一套先学好的<strong>图文对齐模型</strong>:
+            一个图片编码器把图变成 image vector,一个文本编码器把句子变成 text vector。
+          </p>
+          <pre class="code-walk__code" style="margin:0.8rem 0"><code>图片编码器: image → image vector
+文本编码器: text  → text vector
+
+配对图文:   拉近
+不配对图文: 推远</code></pre>
+          <p>
+            训练时,一张“猫坐在沙发上”的图片应该靠近文字 <code>a cat sitting on a sofa</code>,
+            远离 <code>a red sports car</code>。久而久之,图片和文字就被放进同一个语义坐标系里:
+            <strong>意思相近的图和句子,向量也相近。</strong> 所以“CLIP 式对齐”说的就是这件事。
+          </p>
+        </div>
         <div class="callout callout--tip reveal">
           <span class="callout__title">早融合 vs 双塔</span>
           <p>
@@ -1138,7 +1279,7 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           <ul>
             <li><strong>数据是现成的,不用标。</strong> 互联网上有<strong>几十亿张图天生自带配文</strong>——网页 <code>alt</code> 文本、图片标题、社交媒体配字、商品描述……(公开数据集 LAION 就有约 50 亿对)。爬下来就是“图 + 配文”训练对,和第 7 节预训练一样是<strong>自监督</strong>,无需人工对齐。</li>
             <li><strong>不要求精确对齐每个词,只要求“文字能影响去噪”。</strong> 训练目标<strong>始终</strong>是那个简单的“预测这一步的噪声”,loss 还是均方误差。文字只是作为<strong>额外条件</strong>喂进去——因为“看着‘橘猫’去噪”比“啥都不看瞎猜”预测得更准,梯度下降自然就逼模型去<strong>利用</strong>文字。所以“词↔像素”的对齐,是它为把噪声预测得更准而<strong>顺带涌现</strong>的副产品,没人显式教。</li>
-            <li><strong>CLIP 已经先把图文对齐好了。</strong> 文本编码器常用的 CLIP,本身就是拿几亿“图+配文”对、用<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">对比学习</a>把配对的图文向量拉近、不配对的推远(见上文<a class="xref" href="chapter-20.html#多模态-不只吃文字">多模态</a>)。所以扩散拿到的文字向量,早就活在一个“和图像语义对齐好的空间”里——最难的对齐,CLIP 提前替它做了一大半。</li>
+            <li><strong>CLIP 已经先把图文对齐好了。</strong> 上文讲过,CLIP 是一套“图片编码器 + 文本编码器”的双塔模型,本身就是拿几亿“图+配文”对、用<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">对比学习</a>把配对的图文向量拉近、不配对的推远。文生图系统如果直接复用它的文本编码器,拿到的文字向量就已经活在一个“和图像语义对齐好的空间”里——最难的对齐,CLIP 提前替它做了一大半。</li>
           </ul>
         </div>
 
@@ -1280,6 +1421,7 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
             <li>真实分词用 BPE/子词:高频组合合并成一个 token,存进词表;词表大小是权衡。</li>
             <li>词嵌入把词变成“语义坐标”,<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦相似度衡量语义远近;词向量可迁移复用。</li>
             <li>Scaling Law:参数、数据、算力一起放大,性能可预测提升;超过门槛会“涌现”新能力。</li>
+            <li>训练数据不是原始互联网的简单堆叠,而是经过正文抽取、去重、质量过滤、安全/隐私过滤、污染检测、领域分类、重加权和分词打包后的工程产物。真正稀缺的是高质量、低重复、低污染、合法可用、能带来新增能力的 token。</li>
             <li>预训练(自监督)像长期读书,练出语言、知识和世界模型底座;后训练(SFT → RLHF/DPO → 蒸馏)像进入真实工作,把它调成好用的助手。SFT 数据量远小于预训练,但正好打在“用户指令 → 助手回答”的使用入口上,所以能显著改变体感;它常常仍是交叉熵训练,但通常<strong>只对 assistant/completion 部分计 loss</strong>,prompt 更多是作为条件输入。新的后训练还会用<strong>多教师在线蒸馏</strong>,把数学、代码、Agent 等专项老师的能力压进一个统一模型。</li>
             <li>最近方向:推理模型、多模态(patch→ViT→投影→拼序列)、长上下文、MoE——内核仍是 token + Transformer。推理模型的“思考深度”由 effort 条件训练、外部预算、模型学到的停机策略和 runtime 硬限制共同决定;上下文窗口由<strong>位置编码 × 训练长度 × 算力显存</strong>三关中最紧的一关决定,且标称长度≠有效长度。</li>
             <li>降智/对齐税/遗忘等多半发生在<strong>后训练、蒸馏、量化、MoE 压 k、截断、产品护栏</strong>等环节,先定位链路再判断能力。小模型追上大模型通常靠专精、更长推理或砍掉多模态来换分数,不能只看 benchmark,还要看任务范围、延迟和通用性。</li>
@@ -1308,9 +1450,9 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 4:预训练用的是“自监督”,它和“监督学习”的区别到底在哪?</summary>
+            <summary class="quiz__q">问题 4:训练数据为什么不能“直接抓网页就开训”?它和自监督有什么关系?</summary>
             <div class="quiz__a">
-              <p>两者都要有目标值(答案)。监督学习的目标靠人工标注;自监督的目标从数据本身自动产生,比如遮住一个词让模型预测,被遮的词就是答案。海量数据无法人工标注,所以预训练靠自监督。</p>
+              <p>原始网页里混着导航栏、广告、重复转载、SEO spam、乱码、隐私、泄漏评测题和大量低质文本,直接训练会浪费 token 预算,甚至让模型学坏。真正的训练数据要先做正文抽取、去重、质量过滤、安全/隐私过滤、污染检测、领域分类和配比。预训练仍然是自监督:清洗后的文本不需要人工逐条标答案,模型把前文当输入、把下一个 token 当自动生成的答案来学。</p>
             </div>
           </details>
           <details class="quiz__item">
