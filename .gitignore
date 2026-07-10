@@ -9,3 +9,4 @@ demo.*
 *ubyte
 .opencode/plugins/ttadk-track.js
 .wrangler/
+__pycache__/
