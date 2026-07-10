@@ -130,18 +130,51 @@
 
         <h2>6. AdamW:把 weight decay 解耦</h2>
         <p>
-          最后一小步升级。为了防过拟合,常给权重加 <strong>weight decay(权重衰减,一种 L2 正则,<a class="xref" href="chapter-10.html">第 10 章</a>)</strong>。
-          经典 Adam 的做法是把它<strong>塞进梯度里</strong>(<code>g += wd·w</code>),可这样一来它会被 Adam 那个自适应分母
-          <strong>√v̂ 给削弱</strong>,衰减力度变得不稳。
+          最后一小步升级。为了防过拟合,常给权重加 <strong>weight decay(权重衰减,和 L2 正则密切相关,<a class="xref" href="chapter-10.html">第 10 章</a>)</strong>。
+          先别急着把“L2 正则”和“weight decay”当成两个招:在普通 SGD 里,它们其实是同一件事。设 <var>g</var> 是原损失给出的梯度、<var>w</var> 是当前权重、<var>wd</var> 是衰减系数,
+          把 <var>wd</var>·<var>w</var> 加进梯度后,一步更新正好可以改写成“先按比例缩水,再照梯度走”:
         </p>
+        <div class="mathblock reveal">
+          <var>w</var> ← <var>w</var> − η · (<var>g</var> + <var>wd</var> · <var>w</var>) = (1−η·<var>wd</var>) · <var>w</var> − η · <var>g</var>
+          <span class="label">SGD 里:把 L2 塞进梯度,等价于每步把权重按 1−η·wd 的比例缩一点</span>
+        </div>
+        <p>
+          问题出在 Adam 会先用梯度更新 <var>m</var>/<var>v</var>,再按 <strong>√v̂</strong> 给每个参数各自缩放步长。
+          若仍把 <var>wd</var>·<var>w</var><strong>塞进梯度里</strong>,这份“把权重拉回 0”的力也会进入 <var>m</var>/<var>v</var>,带上历史、再被每个参数不同的自适应比例重标定。
+          于是 <var>wd</var> 不再表示“每步统一缩一点”:不同权重得到的有效收缩比例会不同,有的比预期强、有的比预期弱,正则力度和 Adam 的自适应更新搅在了一起。
+        </p>
+        <div class="mathblock reveal">
+          经典 Adam: <var>g</var>′ = <var>g</var> + <var>wd</var>·<var>w</var> &nbsp;&nbsp;→&nbsp;&nbsp; <var>w</var> ← <var>w</var> − η · <span class="frac"><span>m̂(<var>g</var>′)</span><span>√v̂(<var>g</var>′) + ε</span></span><br />
+          AdamW: <var>w</var> ← <var>w</var> − η · <span class="frac"><span>m̂(<var>g</var>)</span><span>√v̂(<var>g</var>) + ε</span></span> − η·<var>wd</var>·<var>w</var> = (1−η·<var>wd</var>)·<var>w</var> − 自适应更新
+          <span class="label">关键不在“有没有拉回 0”,而在这股力是否进入 Adam 的 m/v 和自适应分母</span>
+        </div>
         <div class="callout callout--tip reveal">
           <span class="callout__title">AdamW 的修正:分开处理</span>
           <p>
             <span class="term">AdamW</span> 把权重衰减从梯度里<strong>拆出来、单独作用在参数上</strong>(decoupled weight decay):
-            自适应步长照常算,衰减单算一份直接减。效果更干净、更可控,已成为<strong>训练大模型的标配</strong>。
-            仓库里 Adam 与 AdamW 的差别,正是 weight decay 这一处的耦合方式不同。
+            <strong><var>m</var>/<var>v</var> 只看任务本身的梯度</strong>,自适应步长照常算;衰减则单算一份,让每个权重在当步按
+            <code>1 − lr·wd</code> 的比例收缩。这样 <code>wd</code> 的含义更直接、更好调,也不会污染 Adam 对梯度方向和陡峭度的判断。
+            它不是“不做 L2”,而是<strong>把同样的“别让权重太大”这件事,放在自适应更新之外完成</strong>。这正是 AdamW 在 Transformer 和大模型训练中成为默认选择的原因。
           </p>
         </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">两份优化器源码真正分叉的地方(精简)</figcaption>
+          <pre class="code-walk__code"><code>// Adam · adam_optimizer.cpp
+double g = delta;
+if (weight_pos != -1 &amp;&amp; weight_decay_ != 0.0)
+  g += weight_decay_ * param_value;       <b class="cw-tag">1</b>  // wd 进入 m/v
+
+// AdamW · adamw_optimizer.cpp
+double g = delta;                          <b class="cw-tag">2</b>  // m/v 只看原梯度
+double adaptive = learning_rate * m_hat / (std::sqrt(v_hat) + epsilon_);
+if (weight_pos != -1 &amp;&amp; weight_decay_ != 0.0)
+  adaptive += learning_rate * weight_decay_ * param_value;  <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>Adam 在算 <var>m</var>/<var>v</var> <strong>之前</strong>把 <code>wd*w</code> 混进 <code>g</code>;所以正则项也会积累历史、经过自适应缩放。</li>
+            <li>AdamW 的 <code>g</code> 保持为反向传播给出的原梯度;先完成与 Adam 相同的自适应更新。</li>
+            <li>最后才把 <code>lr·wd·w</code> 加到“本次该扣多少”上。框架随后执行 <code>param -= adaptive</code>,所以它只对真正的权重生效,bias 不衰减。</li>
+          </ol>
+        </figure>
 
         <h2>7. 代码里怎么统一起来</h2>
         <p>

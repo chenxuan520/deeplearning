@@ -183,14 +183,6 @@ a:hover {
   font-size: 0.95rem;
 }
 
-.book-header__pct {
-  flex: 0 0 auto;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-soft);
-  font-weight: 700;
-  font-size: 0.9rem;
-}
-
 .book-progress {
   position: fixed;
   top: var(--header-height);

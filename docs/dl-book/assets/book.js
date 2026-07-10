@@ -366,19 +366,15 @@
       '<span class="book-header__home-text">从神经元到大模型</span>';
 
     var current = el("span", "book-header__current", currentLabel);
-    var pct = el("span", "book-header__pct");
-    pct.id = "bookPct";
-    pct.textContent = "0%";
 
     header.appendChild(menuBtn);
     header.appendChild(home);
     header.appendChild(current);
     if (search) header.appendChild(makeSearchTrigger(search, "book-header__search", "搜索全书", SEARCH_ICON));
-    header.appendChild(pct);
 
     document.body.appendChild(progress);
     document.body.appendChild(header);
-    return { progress: progress, pct: pct };
+    return { progress: progress };
   }
 
   // ---------- 底部上一章 / 下一章 ----------
@@ -431,7 +427,6 @@
       if (ratio < 0) ratio = 0;
       if (ratio > 1) ratio = 1;
       refs.progress.style.width = (ratio * 100).toFixed(1) + "%";
-      refs.pct.textContent = Math.round(ratio * 100) + "%";
     }
     function onScroll() {
       if (!ticking) {
