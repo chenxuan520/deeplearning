@@ -125,7 +125,7 @@ cd src/build && cmake .. && make && sudo make install
 - **线上地址**：<https://deeplearning.011203.xyz/>（备用：<https://chenxuan520.github.io/deeplearning/>）
 - **技术史诗**：[`从沙子到 Mythos`](https://deeplearning.011203.xyz/sand-to-mythos.html)
 - **结构**：7 大部分、30 章 + 术语表；含神经元 / 传播 / 注意力等交互实验，章节间可点击跳转到对应小节。
-- **作者与版权**：见 [`docs/dl-book/about.html`](./docs/dl-book/about.html)；电子书内容采用 CC BY-NC-SA 4.0 授权，代码按根目录 [`LICENSE`](./LICENSE) 的 MIT License 开源。
+- **关于本书**：见 [`docs/dl-book/about.html`](./docs/dl-book/about.html)；含本书缘起、作者、来源与内容许可。电子书内容采用 CC BY-NC-SA 4.0 授权，代码按根目录 [`LICENSE`](./LICENSE) 的 MIT License 开源。
 
 ### 本地预览
 

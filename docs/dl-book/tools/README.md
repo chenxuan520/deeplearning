@@ -68,3 +68,17 @@ python3 tools/count_chars.py --json       # JSON 输出
 3. `python3 tools/check_anchors.py`
 4. （可选）`python3 tools/count_chars.py -v` 看篇幅变化
 5. 推送到 `github` 远程以更新 GitHub Pages（见仓库根 `README.md`）
+
+---
+
+## 自动维护“最后内容更新”时间（可选）
+
+仓库提供 `.githooks/pre-commit`：提交暂存区里包含电子书 HTML 或 `assets/` 阅读体验资源时，它会把 `about.html` 中的“最后内容更新”自动改为提交时的完整北京时间并暂存；`tools/` 下的维护脚本改动不会触发。
+
+每个本地 clone 需执行一次：
+
+```bash
+git config --local core.hooksPath .githooks
+```
+
+这是本地辅助机制；使用 `git commit --no-verify` 或在网页端直接提交会绕过它。

@@ -1,0 +1,37 @@
+#!/bin/sh
+set -eu
+
+# 只在电子书正文或阅读体验资源进入暂存区时刷新时间;
+# tools/ 下的校验脚本改动不会让读者看到“内容更新”。
+if ! git diff --cached --name-only --diff-filter=ACMR | grep -Eq '^docs/dl-book/([^/]+\.html$|assets/)'; then
+  exit 0
+fi
+
+about_file="docs/dl-book/about.html"
+
+python3 - "$about_file" <<'PY'
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+now = datetime.now(timezone(timedelta(hours=8)))
+datetime_value = now.isoformat(timespec="seconds")
+display_value = now.strftime("%Y-%m-%d %H:%M:%S CST")
+content = path.read_text(encoding="utf-8")
+pattern = re.compile(
+    r'(<time datetime=")[^"]+(" data-book-last-updated>)[^<]+(</time>)'
+)
+updated, count = pattern.subn(
+    rf"\g<1>{datetime_value}\g<2>{display_value}\g<3>", content, count=1
+)
+if count != 1:
+    raise SystemExit(
+        "无法更新最后内容时间：about.html 中应恰好包含一个 data-book-last-updated 时间字段。"
+    )
+if updated != content:
+    path.write_text(updated, encoding="utf-8")
+PY
+
+git add -- "$about_file"

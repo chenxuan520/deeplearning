@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>关于作者与版权 | 从神经元到大模型</title>
+    <title>关于本书 | 从神经元到大模型</title>
     <link rel="icon" href="assets/favicon.svg" />
     <link rel="stylesheet" href="assets/book.css" />
     <link rel="stylesheet" href="assets/diagrams.css" />
@@ -12,12 +12,32 @@
     <main class="chapter">
       <div class="chapter__inner">
         <p class="chapter__eyebrow">About</p>
-        <h1>关于作者与版权</h1>
+        <h1>关于本书</h1>
 
         <p class="lead">
           《从神经元到大模型》是配套 C++ 深度学习项目的交互式中文电子书,由 <strong>chenxuan</strong> 编写与维护。
           如果你在别处看到本书内容,请优先核对是否保留了作者署名和原始链接。
         </p>
+        <p class="muted">最后内容更新：<time datetime="2026-07-11T01:49:52+08:00" data-book-last-updated>2026-07-11 01:49:52 CST</time></p>
+
+        <h2>这本书从哪里来</h2>
+        <p>
+          这本书一开始并不是计划中的教材。我只是想把深度学习真正弄明白:一个看似简单的神经元,怎样经过前向传播、误差、反向传播和一次次参数更新,
+          一路走到今天风靡全球的大模型。
+        </p>
+        <p>
+          为了不把关键步骤藏在框架的一行调用后面,我用 C++ 从零写了一遍最小实现。代码写下去,问题也跟着一个个冒出来:
+          梯度为什么能指路?注意力为什么有效?一个小模型怎样变成能够生成文本的语言模型?我把每次卡住、查证、想通的过程逐渐整理下来,
+          最后它们汇成了你现在看到的这本书。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">写给正在追问“为什么”的你</span>
+          <p>
+            我希望它不只给你一串结论,还让你亲眼看见:从一个神经元开始,每一步究竟在做什么,又怎样一层层搭成更大的模型。
+            正如<a class="xref" href="sand-to-mythos.html">《从沙子到 Mythos》</a>里那条从硅到智能的长路一样,
+            今天的大模型也不是凭空出现的,而是无数人不断追问、动手和累积的结果。愿你也成为未来那片群星里,愿意发出自己光的一颗星。
+          </p>
+        </div>
 
         <section class="objectives reveal">
           <h2>原始地址</h2>

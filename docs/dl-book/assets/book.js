@@ -125,8 +125,8 @@
     var ali = el("li");
     var aa = el("a", "book-rail__link" + (isAbout ? " is-current" : ""));
     aa.href = "about.html";
-    aa.appendChild(el("span", "book-rail__num", "©"));
-    aa.appendChild(el("span", "book-rail__name", "关于作者与版权"));
+    aa.appendChild(el("span", "book-rail__num", "i"));
+    aa.appendChild(el("span", "book-rail__name", "关于本书"));
     ali.appendChild(aa);
     list.appendChild(ali);
     aside.appendChild(list);
@@ -306,7 +306,7 @@
     list.appendChild(appendixLi);
     [
       { num: "★", title: "术语表", file: "glossary.html" },
-      { num: "©", title: "关于作者与版权", file: "about.html" }
+      { num: "i", title: "关于本书", file: "about.html" }
     ].forEach(function (item) {
       var li = el("li");
       var a = el("a", "book-toc__link" + (pageBaseName() === item.file ? " is-current" : ""));
