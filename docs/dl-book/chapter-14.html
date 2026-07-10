@@ -196,6 +196,20 @@
             <strong>按时间摊平</strong>(unroll)成上图那样一长串——本质是<strong>同一套权重重复用了很多次</strong>。
           </p>
         </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">最该记住的一点:每一步都是同一套参数</span>
+          <p>
+            上面那句“同一套权重重复用”值得单独拎出来强调。展开图里画了 <var>T</var> 个方块,但它们<strong>不是 T 组不同的权重</strong>——
+            从 <var>h</var><sub>1</sub> 到 <var>h</var><sub>T</sub>,每一步用的都是<strong>同一个</strong> <var>W</var><sub>x</sub>、<strong>同一个</strong>
+            <var>W</var><sub>h</sub>、<strong>同一个</strong> <var>b</var>。这套参数的大小<strong>只由输入维度和隐藏维度决定,和序列有多长毫无关系</strong>:
+            读 5 个词和读 500 个词,复用的是同一套矩阵。
+          </p>
+          <p>
+            别小看这一点:正因为参数量和序列长度<strong>解绑</strong>了,同一个 RNN 才能吃下任意长度的句子;也正因为同一套权重被反复使用,
+            后面反传(BPTT)时才必须把各步的梯度<strong>累加</strong>到这一套参数上一起更新。这和
+            <a class="xref" href="chapter-13.html#3-权重共享-参数暴减还自带平移不变">第 13 章 CNN 的权重共享</a>是同一种思想:<strong>一套参数,反复复用</strong>。
+          </p>
+        </div>
 
         <h3>一步里到底吃什么、吐什么?</h3>
         <p>
@@ -513,6 +527,21 @@ rnn_.ApplyGradient(lr);                            <b class="cw-tag">5</b></code
             <var>W</var><sub>x</sub>、<var>b</var> 同理。实现上就是:从最后一个时间步往前循环,每步算出局部梯度,<strong>累加</strong>到同一块参数上。
           </li>
         </ul>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">为什么“共享 + 梯度相加”是刚需,而不是巧合</span>
+          <p>
+            换个角度想:<strong>要是每个时间步各配一套独立矩阵会怎样?</strong>马上两个死穴——① 序列长度不固定,训练只见过 20 步、来个 50 步的句子后面就没矩阵可用;
+            ② 第 7 步那套矩阵一辈子只在第 7 步被用,数据被切碎、严重饥饿,学不出通用规律。所以“同一套参数管所有位置”不是偷懒,是能吃任意长度、能把所有位置的数据合起来学的<strong>前提</strong>。
+          </p>
+          <p>
+            那共享的参数怎么训?关键就一句:<strong>同一块参数被用了几次,就把几份梯度加起来,一次更到位</strong>。
+            每一步各自会算出“这一步希望 <var>W</var><sub>h</sub> 往哪挪”的一份梯度,这些方向<strong>可以彼此不同、甚至打架</strong>;
+            但因为改的是同一块矩阵,就先求和成一个<strong>合力</strong>再更新——这和一个 minibatch 里不同样本把参数拉向不同方向、最后靠求和取一步,是同一个道理。
+            所以“各步想要的不一样”不是 bug,正是它学到一条在<strong>所有位置平均最优</strong>规律的方式。这也和
+            <a class="xref" href="chapter-13.html#3-权重共享-参数暴减还自带平移不变">第 13 章 CNN 的权重共享</a>一脉相承:一套参数,反复复用。
+          </p>
+        </div>
+
         <p>
           反传结束后,用<a class="xref" href="chapter-05.html">第 5 章</a>的优化器(常配合<a class="xref" href="chapter-08.html">第 8 章</a>的 Adam)
           按学习率更新 <var>W</var><sub>x</sub>、<var>W</var><sub>h</sub>、<var>W</var><sub>o</sub> 等——和全连接网络没有本质区别。

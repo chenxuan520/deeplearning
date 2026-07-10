@@ -505,7 +505,7 @@ K = RotateByPosition(K, pos)
 score = Q * K^T / sqrt(head_dim)</code></pre>
         </figure>
 
-        <h3>RoPE 到底怎么“转”:为什么点积只看相对距离</h3>
+        <h3>RoPE 到底怎么“转”:为什么位置的影响只看相对距离</h3>
         <p>
           RoPE(Rotary Position Embedding,旋转位置编码)是现在 decoder-only 大模型(LLaMA、Qwen、GLM 等)几乎默认的写法。
           它<strong>不给词向量加任何位置向量</strong>,而是在 Q、K 进入点积之前,把它们“<strong>按位置转一个角度</strong>”。
@@ -529,14 +529,14 @@ score = Q * K^T / sqrt(head_dim)</code></pre>
             把 Q、K 想成两个面对面站着的人。位置越靠后,RoPE 就让他“多转几度”。
             如果两人<strong>转的角度一样</strong>(距离为 0),彼此相对朝向没变;如果一个转得多、一个转得少,
             <strong>两人之间的夹角只由“多转了几度”决定</strong>,跟他们各自面朝哪个绝对方向无关。
-            注意力点积衡量的正是这个夹角,所以它天生只关心“<strong>隔多远</strong>”。
+            所以位置在注意力点积里贡献的那部分,天生只关心“<strong>隔多远</strong>”——当然,分数最终有多高,还得看 Q、K 这两个内容向量本身合不合拍。
           </p>
         </div>
         <p>
           用矩阵说清楚这件事:query 在位置 <var>m</var>、key 在位置 <var>n</var>,分别被旋转 <code>m·θ</code> 和 <code>n·θ</code>。
           两个旋转后的向量做点积时,旋转矩阵满足 <code>R(mθ)ᵀ · R(nθ) = R((n−m)θ)</code>——
           <strong>两个绝对旋转一相乘,绝对位置 m、n 抵消了,只剩下位置差 (n−m)</strong>。
-          也就是说注意力分数 <code>q'·k'</code> 只取决于“它们相隔多远”,而不是“它们各自在第几位”。
+          也就是说注意力分数 <code>q'·k'</code> 里跟位置有关的那部分,只取决于“它们相隔多远”(n−m),而不是“它们各自在第几位”(m、n);分数里跟内容有关的部分,仍由 Q、K 向量本身决定。
         </p>
         <p>取一组二维分量、每步转 <code>30°</code> 实际算一遍(为看得清楚令 <code>q = k = (1, 0)</code>,此时点积正好等于 <code>cos(30°×距离)</code>):</p>
         <div class="table-wrap reveal">
@@ -1253,7 +1253,7 @@ Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code>
           <span class="label">进去 <code>[n×d]=[3×2]</code> · 出来还是 <code>[3×2]</code> · 参数量仍约 <code>4d²</code>(四张 <code>d×d</code> 表)</span>
         </div>
         <p>
-          本仓库默认 demo 常设 <code>head_num=2</code>、<code>model_dim=64</code> → <code>head_dim=32</code>。
+          本仓库默认 demo 用的是极小配置 <code>head_num=1</code>、<code>model_dim=6</code>(方便快速跑通、看懂形状)。
           上面 <code>d=2, h=2</code> 只为手算形状(每头 <code>d_h=1</code>);换成 <code>d=64, h=8</code> 时,每头 <code>d_h=8</code>,流程完全相同,只是数字更大。
         </p>
 

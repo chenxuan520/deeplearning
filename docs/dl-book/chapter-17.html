@@ -320,6 +320,10 @@
             <strong>注意力让“它”这个词吸收了“猫”的内容——代词指代关系,就这样被解开了。</strong>
             这正是<a class="xref" href="chapter-16.html">第 16 章</a>开头那个“它到底指谁”难题的答案,而它只用了一次加权平均。
           </p>
+          <p class="muted">
+            说明:上面的向量和权重都是<strong>为讲解手工挑的</strong>,用来演示“<em>当</em> Q、K、V 学成这样时,注意力<em>会</em>怎么把‘猫’的信息聚到‘它’身上”。
+            它展示的是注意力这套机制<strong>能做到</strong>指代消解,而不是证明某个训练好的模型一定学会了指代——真实模型是不是真学到,得靠下面「训练」小节里降低损失的过程慢慢逼出来。
+          </p>
         </div>
 
         <h2>5. 为什么“点积”能当相关性?</h2>
@@ -726,18 +730,15 @@ for (int col = 0; col &lt; n; col++)
           </p>
         </div>
 
-        <p>这几步落到真实代码里,就是 <code>Backward</code> 结尾的四行——和<a class="xref" href="chapter-02.html">第 2 章</a>“参数 = 参数 − 学习率 × 梯度”一字不差:</p>
+        <p>这几步落到真实代码里,就是 <code>Backward</code> 结尾的四行——把每个矩阵和它刚算出来的梯度,交给各自的优化器去更新:</p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/transformer/self_attention.cpp · Backward(更新参数)</figcaption>
-          <pre class="code-walk__code"><code>for (int out = 0; out &lt; model_dim_; out++)
-  for (int in = 0; in &lt; model_dim_; in++) {
-    query_weight_[out][in]  -= learning_rate * grad_query_weight[out][in];   <b class="cw-tag">1</b>
-    key_weight_[out][in]    -= learning_rate * grad_key_weight[out][in];
-    value_weight_[out][in]  -= learning_rate * grad_value_weight[out][in];
-    output_weight_[out][in] -= learning_rate * grad_output_weight[out][in];  <b class="cw-tag">2</b>
-  }</code></pre>
+          <pre class="code-walk__code"><code>query_optimizer_.Apply(query_weight_,   grad_query_weight,  learning_rate);   <b class="cw-tag">1</b>
+key_optimizer_.Apply(key_weight_,       grad_key_weight,    learning_rate);
+value_optimizer_.Apply(value_weight_,   grad_value_weight,  learning_rate);
+output_optimizer_.Apply(output_weight_, grad_output_weight, learning_rate);  <b class="cw-tag">2</b></code></pre>
           <ol class="code-walk__notes">
-            <li>对三个矩阵的<strong>每个元素</strong>都做“减去 学习率 × 梯度”——这正是<a class="xref" href="chapter-05.html">第 5 章</a>的梯度下降。<code>grad_query_weight</code> 就是前面用链式法则一层层算回来的梯度。</li>
+            <li>每个矩阵配一个 <code>TensorOptimizer</code>,<code>Apply</code> 把“<strong>参数 ← 参数 − 学习率 × 梯度</strong>”这件事做掉——只不过本仓库这里包的是 <a class="xref" href="chapter-08.html">第 8 章</a>的 <strong>Adam</strong>,会按历史梯度自适应调步长,方向仍是<a class="xref" href="chapter-05.html">第 5 章</a>的梯度下降。<code>grad_query_weight</code> 就是前面用链式法则一层层算回来的梯度。</li>
             <li><var>W</var><sub>O</sub>(多头拼接后的输出矩阵)也一并更新。<strong>四个矩阵,全靠同一个损失的“反馈”来调</strong>。</li>
           </ol>
         </figure>

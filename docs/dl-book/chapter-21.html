@@ -1499,13 +1499,13 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           </div>
           <p>
             <strong>GLM-5.2 的 IndexShare</strong> 很像几层模型共用一份“目录”:第一层先找出最相关的 top-k 历史 token,
-            后面几层先复用这份结果,不用每层都重新找。文章给的数字是:在 1M context 下,这能把 per-token FLOPs 降低约 <strong>2.9×</strong>。
+            后面几层先复用这份结果,不用每层都重新找。文章给的数字是:在 1M context 下,这能把 per-token FLOPs 降低约 <strong>2.9×</strong><sup class="cite"><a class="xref" href="https://z.ai/blog/glm-5.2" target="_blank" rel="noopener">来源</a></sup>。
           </p>
           <p>
             <strong>DeepSeek-V4 的 CSA/HCA</strong> 更像给超长历史做“摘要”:
             CSA 把每 <var>m</var> 个 token 的 KV cache 压成一个条目,再在压缩后的历史上挑重点;
             HCA 把更远的历史压得更狠,保留全局远景;滑动窗口注意力则负责近处细节。
-            论文给出的 1M context 设置下,DeepSeek-V4-Pro 相比 DeepSeek-V3.2 只需要约 <strong>27%</strong> 的单 token 推理 FLOPs 和 <strong>10%</strong> 的 KV cache。
+            论文给出的 1M context 设置下,DeepSeek-V4-Pro 相比 DeepSeek-V3.2 只需要约 <strong>27%</strong> 的单 token 推理 FLOPs 和 <strong>10%</strong> 的 KV cache<sup class="cite"><a class="xref" href="https://arxiv.org/pdf/2606.19348" target="_blank" rel="noopener">来源</a></sup>。
           </p>
           <p>
             所以 V4 不是“从 1M 个原始 token 里直接挑几千个”这么粗暴。更准确地说,它先把历史变成不同粒度的资料:

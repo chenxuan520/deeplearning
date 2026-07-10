@@ -681,21 +681,21 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
         </div>
         <p>
           整个几十层的大模型,反向传播就是把这套“<strong>收到上游 <code>G</code> → 本地算 <code>Xᵀ·G</code> 和 <code>G·Wᵀ</code> → 把 <code>G·Wᵀ</code> 往前传</strong>”在每一层<strong>接力</strong>一遍。
-          从 loss 出发<strong>倒着扫一遍</strong>,所有层、所有参数的梯度就都齐了——代价大约只等于 <strong>2 次前向传播,和参数量几乎无关</strong>。
+          从 loss 出发<strong>倒着扫一遍</strong>,所有层、所有参数的梯度就都齐了——代价大约只等于 <strong>2 次前向传播</strong>(注意这是<strong>相对前向的倍数</strong>:模型越大、序列越长,前向和反向的绝对计算量都会跟着涨,但反向始终只是前向的常数倍,不会额外多出一层指数级膨胀)。
           真实框架里这套“记住前向每一步、反向自动套用局部公式”的机制叫 <span class="term">自动微分(autograd)</span>,所以工程师<strong>只写前向,从不手推</strong>几十亿参数的梯度。
           (<a class="xref" href="chapter-20.html">第 20 章</a>那个 <code>FLOPs ≈ 6 × 参数 × token</code> 的“6”,拆开就是前向 2 + 反向 4——反向按算力算比前向再贵一点,但仍是<strong>常数倍</strong>,不随参数量膨胀。)
         </p>
         <div class="callout callout--warn reveal">
           <span class="callout__title">那大模型训练到底“爆”在哪?</span>
           <p>
-            既然算梯度只要约 2 倍前向,大模型训练难在别处:
+            算梯度只要约 2 倍前向,所以“为几十亿参数求导”本身并不会额外炸掉——大模型训练真正砸钱砸算力之外,还另有几处工程难点:
           </p>
           <ul>
             <li><strong>① 显存</strong>——反向要用到前向存下的<strong>中间激活值</strong>,层多序列长时能吃光显存。解法是 <em>gradient checkpointing</em>:反向时<strong>重算</strong>一部分激活,拿算力换显存。</li>
             <li><strong>② 数值稳定</strong>——梯度穿过很多层连乘,可能<strong>爆炸或消失</strong>,这正是<a class="xref" href="chapter-18.html#1-残差连接-给信息和梯度修一条高速公路">残差连接</a>、<a class="xref" href="chapter-18.html#2-layernorm-把每个词的特征拉回正常范围">LayerNorm</a> 和<a class="xref" href="chapter-09.html">第 9 章</a>梯度裁剪要解决的。</li>
             <li><strong>③ 多卡同步</strong>——梯度要在上千张卡间 AllReduce 求平均(<a class="xref" href="chapter-21.html">第 21 章</a>)。</li>
           </ul>
-          <p>计算量从不是瓶颈,这三样才是。</p>
+          <p>换句话说:原始算力本身当然是大头开销,但反向传播<strong>并没有在前向之外再叠一层新的算力爆炸</strong>;显存、数值稳定、多卡同步这三样,才是“反向”额外带来的头疼事。</p>
         </div>
 
         <section class="summary reveal">
@@ -708,7 +708,7 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
             <li>反向时要用前向存下的 <var>z</var>(<code>neuron_preact_</code>)来算激活导数。</li>
             <li><strong>一层前向 = 一次矩阵乘</strong>:<var>w</var> 是每层一块矩阵(代码里的 <code>neuron_weight_[l]</code>),<var>net</var> = <var>W</var>·<var>out</var> + <var>b</var>;整张网络就是一串矩阵乘叠起来,一整批样本更是 <var>X</var>·<var>W</var><sup>T</sup> 的矩阵×矩阵。</li>
             <li><strong>矩阵求导 = 标量求导批发</strong>:<code>∂L/∂W</code> 和 <code>W</code> 同形状,每格是个标量偏导;线性层 <code>Y=X·W</code> 的梯度是 <code>∂L/∂W=Xᵀ·G</code>、<code>∂L/∂X=G·Wᵀ</code>,靠形状对齐就能记住。</li>
-            <li>大模型算全部梯度只需约 <strong>2 倍前向</strong>(autograd 自动完成),真正的瓶颈是<strong>显存(激活)、数值稳定、多卡同步</strong>,不是计算量。</li>
+            <li>大模型算全部梯度只需约 <strong>2 倍前向</strong>(autograd 自动完成)——反向相对前向只是常数倍,不会额外爆炸;算力之外,<strong>显存(激活)、数值稳定、多卡同步</strong>才是反向额外带来的工程瓶颈。</li>
             <li>前向 → 损失 → 反向 → 更新,四步一循环,反复多次即为训练。</li>
           </ul>
         </section>

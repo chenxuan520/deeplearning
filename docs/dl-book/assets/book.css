@@ -397,6 +397,26 @@ a.xref:hover {
   border-bottom-color: rgba(157, 216, 255, 0.85);
 }
 
+/* 行内来源角标:小、淡、方括号包裹 */
+sup.cite {
+  font-size: 0.68em;
+  margin-left: 0.15em;
+  white-space: nowrap;
+}
+sup.cite a.xref {
+  border-bottom: none;
+  opacity: 0.85;
+}
+sup.cite a.xref::before {
+  content: "[";
+}
+sup.cite a.xref::after {
+  content: "]";
+}
+sup.cite a.xref:hover {
+  opacity: 1;
+}
+
 /* 行内代码与术语 */
 .chapter code {
   padding: 0.1rem 0.4rem;

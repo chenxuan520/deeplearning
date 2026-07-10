@@ -287,6 +287,14 @@
           <li><strong>保留空间结构</strong>:核只看<strong>连在一起</strong>的一小块,天然尊重“相邻像素有关系”。</li>
           <li><strong>平移不变</strong>:同一个核扫全图,所以<strong>猫在哪个角落都能被同一个“猫特征核”检测到</strong>——不用各学一遍。</li>
         </ul>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">严格说:卷积是“平移等变”,真正的“平移不变”还要靠池化</span>
+          <p>
+            精确一点讲,卷积本身给的是<strong>平移等变(equivariance)</strong>:物体往右移几个像素,它在特征图上的响应也<strong>跟着往右移</strong>,而不是原地不动。
+            真正让最终判断“猫在哪个角落都算猫”的<strong>平移不变(invariance)</strong>,是靠后面的<a class="xref" href="chapter-13.html#4-池化-把特征图缩一缩">池化</a>和全局聚合把位置信息“抹平”出来的。
+            本书为了直觉常把两者统称“平移不变”,但记住这层区别,你读论文时不会被绕晕。
+          </p>
+        </div>
         <div class="callout callout--analogy reveal">
           <span class="callout__title">像拿一个“找边缘的印章”盖满全图</span>
           <p>

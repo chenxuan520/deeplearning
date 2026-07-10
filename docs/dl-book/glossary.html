@@ -83,7 +83,7 @@
           <li id="g-layernorm" data-aliases="LayerNorm,layernorm,layer norm"><strong>LayerNorm</strong> — 对每个词向量减均值除标准差,稳住训练。<a href="chapter-18.html">→ 第 18 章</a></li>
           <li id="g-ffn" data-aliases="FFN,Feed Forward,feed-forward,前馈网络"><strong>FFN 前馈网络</strong> — 对每个 token 向量独立做“升维→激活→降维”,不跨词通信。<a href="chapter-18.html">→ 第 18 章</a></li>
           <li id="g-posenc" data-aliases="positional encoding,position embedding,位置编码,位置嵌入"><strong>位置编码</strong> — 把顺序和距离信息注入模型的一类方法,可以加到 embedding 上,也可以改 Q/K 或 attention 分数。<a href="chapter-18.html#5-位置编码-告诉模型谁在前谁在后">→ 第 18 章</a></li>
-          <li id="g-rope" data-aliases="RoPE,rotary position embedding,旋转位置编码"><strong>RoPE 旋转位置编码</strong> — 按位置旋转 Q/K 向量,让注意力点积天然带相对位置信息。<a href="chapter-18.html#rope-到底怎么转-为什么点积只看相对距离">→ 第 18 章</a></li>
+          <li id="g-rope" data-aliases="RoPE,rotary position embedding,旋转位置编码"><strong>RoPE 旋转位置编码</strong> — 按位置旋转 Q/K 向量,让注意力点积天然带相对位置信息。<a href="chapter-18.html#rope-到底怎么转-为什么位置的影响只看相对距离">→ 第 18 章</a></li>
           <li id="g-alibi" data-aliases="ALiBi,attention linear bias,linear bias"><strong>ALiBi</strong> — 在 attention 分数里按距离加线性惩罚,让远处 token 默认更吃亏。<a href="chapter-18.html#常见位置编码家族-有的加向量有的改注意力">→ 第 18 章</a></li>
           <li id="g-transformer" data-aliases="Transformer Block,transformer block"><strong>Transformer</strong> — 注意力+残差+LayerNorm+FFN 拼成的可堆叠积木,大模型的地基。<a href="chapter-18.html">→ 第 18 章</a></li>
           <li id="g-cross" data-aliases="cross-attention,cross attention"><strong>cross-attention 交叉注意力</strong> — Q 来自解码器、K/V 来自编码器,解码时“查阅原文”。<a href="chapter-18.html">→ 第 18 章</a></li>
