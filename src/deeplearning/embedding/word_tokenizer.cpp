@@ -1,6 +1,9 @@
 #include "word_tokenizer.h"
 
+#include <algorithm>
 #include <cctype>
+#include <unordered_map>
+#include <utility>
 
 namespace deeplearning {
 
@@ -36,7 +39,7 @@ WordTokenizer::RC WordTokenizer::AddWord(const std::string &word, int &token_id)
 }
 
 WordTokenizer::RC WordTokenizer::InitFromText(const std::string &text,
-                                             bool add_unknown_token) {
+                                             const Config &config) {
   if (is_init_) {
     err_msg_ = "[WordTokenizer::InitFromText] WordTokenizer already init";
     return ALREADY_INIT;
@@ -45,10 +48,14 @@ WordTokenizer::RC WordTokenizer::InitFromText(const std::string &text,
     err_msg_ = "[WordTokenizer::InitFromText] Empty text";
     return INVALID_DATA;
   }
+  if (config.max_vocab_size < 0) {
+    err_msg_ = "[WordTokenizer::InitFromText] Invalid max vocab size";
+    return INVALID_DATA;
+  }
 
   vocabulary_.clear();
   word_to_id_.clear();
-  if (add_unknown_token) {
+  if (config.add_unknown_token) {
     int token_id = 0;
     auto rc = AddWord("<unk>", token_id);
     if (rc != SUCCESS) {
@@ -58,10 +65,81 @@ WordTokenizer::RC WordTokenizer::InitFromText(const std::string &text,
 
   std::string current;
   bool has_word = false;
-  for (unsigned char ch : text) {
-    if (IsWordChar(ch)) {
-      current.push_back(static_cast<char>(ch));
-      continue;
+  if (config.max_vocab_size > 0) {
+    struct WordStats {
+      int count = 0;
+      int first_pos = 0;
+    };
+    std::unordered_map<std::string, WordStats> word_stats;
+    int next_pos = 0;
+
+    auto count_word = [&]() {
+      if (current.empty()) {
+        return;
+      }
+      const std::string word = NormalizeToken(current);
+      auto found = word_stats.find(word);
+      if (found == word_stats.end()) {
+        word_stats[word] = WordStats{1, next_pos};
+        next_pos++;
+      } else {
+        found->second.count++;
+      }
+      has_word = true;
+      current.clear();
+    };
+
+    for (unsigned char ch : text) {
+      if (IsWordChar(ch)) {
+        current.push_back(static_cast<char>(ch));
+        continue;
+      }
+      count_word();
+    }
+    count_word();
+
+    if (!has_word) {
+      err_msg_ = "[WordTokenizer::InitFromText] No words found";
+      return INVALID_DATA;
+    }
+
+    std::vector<std::pair<std::string, WordStats>> ranked_words;
+    ranked_words.reserve(word_stats.size());
+    for (const auto &entry : word_stats) {
+      ranked_words.push_back(entry);
+    }
+    std::sort(ranked_words.begin(), ranked_words.end(),
+              [](const auto &lhs, const auto &rhs) {
+                if (lhs.second.count != rhs.second.count) {
+                  return lhs.second.count > rhs.second.count;
+                }
+                return lhs.second.first_pos < rhs.second.first_pos;
+              });
+
+    const int keep_num = std::min(config.max_vocab_size,
+                                  static_cast<int>(ranked_words.size()));
+    for (int i = 0; i < keep_num; i++) {
+      int token_id = 0;
+      auto rc = AddWord(ranked_words[i].first, token_id);
+      if (rc != SUCCESS) {
+        return rc;
+      }
+    }
+  } else {
+    for (unsigned char ch : text) {
+      if (IsWordChar(ch)) {
+        current.push_back(static_cast<char>(ch));
+        continue;
+      }
+      if (!current.empty()) {
+        int token_id = 0;
+        auto rc = AddWord(NormalizeToken(current), token_id);
+        if (rc != SUCCESS) {
+          return rc;
+        }
+        has_word = true;
+        current.clear();
+      }
     }
     if (!current.empty()) {
       int token_id = 0;
@@ -70,16 +148,7 @@ WordTokenizer::RC WordTokenizer::InitFromText(const std::string &text,
         return rc;
       }
       has_word = true;
-      current.clear();
     }
-  }
-  if (!current.empty()) {
-    int token_id = 0;
-    auto rc = AddWord(NormalizeToken(current), token_id);
-    if (rc != SUCCESS) {
-      return rc;
-    }
-    has_word = true;
   }
 
   if (!has_word) {
@@ -89,6 +158,13 @@ WordTokenizer::RC WordTokenizer::InitFromText(const std::string &text,
 
   is_init_ = true;
   return SUCCESS;
+}
+
+WordTokenizer::RC WordTokenizer::InitFromText(const std::string &text,
+                                             bool add_unknown_token) {
+  Config config;
+  config.add_unknown_token = add_unknown_token;
+  return InitFromText(text, config);
 }
 
 WordTokenizer::RC

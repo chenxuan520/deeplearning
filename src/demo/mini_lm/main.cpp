@@ -52,6 +52,7 @@ struct Option {
   int feed_forward_dim = 12;
   int block_num = 2;
   int context_size = 2;
+  int max_vocab_size = 0;
   double learning_rate = 0.01;
   double temperature = 1.0;
   int top_k = 0;
@@ -59,7 +60,13 @@ struct Option {
   string backbone = "decoder";
   string tokenizer = "char";
   bool tokenizer_specified = false;
+  bool max_vocab_size_specified = false;
   bool sampling_specified = false;
+};
+
+struct TokenizerBuildOption {
+  TokenizerKind kind = TOKENIZER_CHAR;
+  WordTokenizer::Config word_config;
 };
 
 void PrintTopUsage(const char *prog) {
@@ -80,6 +87,8 @@ void PrintCommandUsage(const char *prog, const string &verb) {
     cout << "  --model <path>              output model path (default "
             "mini_lm.param)\n"
          << "  --tokenizer <char|word>     tokenizer granularity (default char)\n"
+         << "  --max-vocab-size <int>      for word tokenizer, keep top-N words "
+            "plus <unk> (0 = all)\n"
          << "  --corpus <text>             inline corpus used to build the "
             "vocab\n"
          << "  --corpus-file <path>        read the vocab corpus from a file\n"
@@ -158,6 +167,9 @@ bool ParseArgs(int argc, char **argv, int start, Option &option) {
       option.block_num = std::stoi(need_value("--block-num"));
     } else if (arg == "--context-size") {
       option.context_size = std::stoi(need_value("--context-size"));
+    } else if (arg == "--max-vocab-size") {
+      option.max_vocab_size = std::stoi(need_value("--max-vocab-size"));
+      option.max_vocab_size_specified = true;
     } else if (arg == "--temperature") {
       option.temperature = std::stod(need_value("--temperature"));
       option.sampling_specified = true;
@@ -366,10 +378,19 @@ bool WriteVocabSidecar(const string &path, const TokenizerBundle &tokenizer,
   return true;
 }
 
-bool InitTokenizerFromCorpus(TokenizerKind tokenizer_kind, const string &corpus,
-                             TokenizerBundle &tokenizer, string &err) {
-  tokenizer.kind = tokenizer_kind;
+bool InitTokenizerFromCorpus(const TokenizerBuildOption &build_option,
+                             const string &corpus, TokenizerBundle &tokenizer,
+                             string &err) {
+  if (build_option.word_config.max_vocab_size < 0) {
+    err = "max-vocab-size must be >= 0";
+    return false;
+  }
+  tokenizer.kind = build_option.kind;
   if (tokenizer.kind == TOKENIZER_CHAR) {
+    if (build_option.word_config.max_vocab_size != 0) {
+      err = "--max-vocab-size is only supported with --tokenizer word";
+      return false;
+    }
     const string vocabulary = CharacterTokenizer::BuildVocabularyFromText(corpus);
     if (tokenizer.char_tokenizer.Init(vocabulary) !=
         CharacterTokenizer::SUCCESS) {
@@ -379,7 +400,8 @@ bool InitTokenizerFromCorpus(TokenizerKind tokenizer_kind, const string &corpus,
     return true;
   }
 
-  if (tokenizer.word_tokenizer.InitFromText(corpus, true) !=
+  if (tokenizer.word_tokenizer.InitFromText(corpus,
+                                            build_option.word_config) !=
       WordTokenizer::SUCCESS) {
     err = "Tokenizer init failed: " + tokenizer.word_tokenizer.err_msg();
     return false;
@@ -605,15 +627,17 @@ int RunInit(const Option &option) {
     return -1;
   }
 
-  TokenizerKind tokenizer_kind;
+  TokenizerBuildOption tokenizer_build_option;
   try {
-    tokenizer_kind = ParseTokenizerKind(option.tokenizer);
+    tokenizer_build_option.kind = ParseTokenizerKind(option.tokenizer);
   } catch (const std::exception &ex) {
     cout << ex.what() << endl;
     return -1;
   }
+  tokenizer_build_option.word_config.add_unknown_token = true;
+  tokenizer_build_option.word_config.max_vocab_size = option.max_vocab_size;
   TokenizerBundle tokenizer;
-  if (!InitTokenizerFromCorpus(tokenizer_kind, corpus, tokenizer, err)) {
+  if (!InitTokenizerFromCorpus(tokenizer_build_option, corpus, tokenizer, err)) {
     cout << err << endl;
     return -1;
   }
@@ -655,6 +679,10 @@ int RunInit(const Option &option) {
   cout << "Tokenizer: " << TokenizerName(tokenizer.kind) << endl;
   cout << "Vocab source: " << source
        << " vocab_size: " << TokenizerVocabSize(tokenizer) << endl;
+  if (tokenizer.kind == TOKENIZER_WORD && option.max_vocab_size > 0) {
+    cout << "Max vocab words: " << option.max_vocab_size
+         << " (+ <unk>)" << endl;
+  }
   cout << "Backbone: " << BackboneName(config.backbone_type_)
        << " model_dim: " << config.model_dim_
        << " head_num: " << config.head_num_
@@ -887,6 +915,12 @@ int main(int argc, char **argv) {
   if (option.tokenizer_specified && verb != "init") {
     cout << "--tokenizer is only used by init; existing models load tokenizer "
             "type from .vocab"
+         << endl;
+    return -1;
+  }
+  if (option.max_vocab_size_specified && verb != "init") {
+    cout << "--max-vocab-size is only used by init; existing models load vocab "
+            "from .vocab"
          << endl;
     return -1;
   }

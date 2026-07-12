@@ -7,7 +7,7 @@
 ## 能力边界（先说清楚，别误解）
 
 - 默认是**字符级续写模型**：逐个字符地学「看到这些字符，下一个字符最可能是什么」。训练充分后它能续写出**像英文的字符流**（真实单词、空格、标点），而不是背 `abcabc`。
-- 也支持**词级续写模型**：`--tokenizer word` 会按英文单词切分，小写化后预测下一个词，生成结果用空格拼回文本，例如 `alice was beginning to get very tired`。
+- 也支持**词级续写模型**：`--tokenizer word` 会按英文单词切分，小写化后预测下一个词，生成结果用空格拼回文本，例如 `alice was beginning to get very tired`。可用 `--max-vocab-size` 只保留高频词，把长尾词映射到 `<unk>`，控制输出层大小。
 - 它**不是对话模型**。你对它说 `hello` 它不会"理解并回答 hello"——它只会沿着 `hello` 这个前缀，按训练语料的统计继续往下写字符。想要"问答/指令遵循"需要指令微调 + 大得多的模型，超出本库范围。
 - 底层是**朴素实现**（纯 `std::vector`、逐样本、无 batch、无 BLAS/SIMD、Debug 构建），算力有限。请把它当**教学/实验**用途，模型规模和语料都要按「你的机器能训得动」来选（见 [训练成本与选参](#10-训练成本与选参)）。
 
@@ -53,7 +53,7 @@ cd src
 
 **为什么要单独存词表？** 库的模型文件只存了权重和结构，没存"token↔编号"的对应关系。而语言模型必须靠这张表才能把文本编码成 token、把输出解码回文本。所以本 demo 在 `init` 时把词表落到 `.vocab` sidecar，`train`/`generate`/`info` 都会连它一起加载。**两个文件要一起拷贝、一起备份**，丢了 `.vocab` 就没法用了。
 
-> 词表在 `init` 时就**固定死**了（它的大小 = embedding 行数 = 输出层维度，属于模型结构）。之后 `train`/`generate` 遇到字符级词表外字符会**自动跳过并告警**；词级模型遇到词表外单词会映射到 `<unk>`。所以 `init` 用的语料要尽量覆盖你后续会用到的字符集或常用词。
+> 词表在 `init` 时就**固定死**了（它的大小 = embedding 行数 = 输出层维度，属于模型结构）。之后 `train`/`generate` 遇到字符级词表外字符会**自动跳过并告警**；词级模型遇到词表外单词会映射到 `<unk>`。所以 `init` 用的语料要尽量覆盖你后续会用到的字符集或常用词；如果使用 `--max-vocab-size`，低频词会被有意留在词表外。
 
 ### `.vocab` sidecar 格式
 
@@ -94,11 +94,12 @@ said
 
 一个副作用：编号跟“语料开头长什么样”绑定，**相同字符集、不同语料开头 → 不同的 id 分配**。所以两个模型的 `.vocab` 不能互换，`LoadModel` 里 `vocab_size` 那道校验就是为此。
 
-词级模式走 `WordTokenizer::InitFromText(text, true)`：
+词级模式走 `WordTokenizer::InitFromText(text, config)`，其中 `config` 统一描述 `<unk>`、词表上限等词级 tokenizer 构建策略：
 
 - **按英文单词切分**：连续的字母、数字、下划线算一个词，逗号、句号、引号、换行等都只是分隔符。
 - **统一小写**：`Alice` 和 `alice` 是同一个 token，生成时也会输出小写词。
-- **按首次出现顺序编号**：`<unk>` 固定为 id 0，后面按语料里第一次出现的词依次编号。
+- **可限制高频词表**：`--max-vocab-size N` 只保留出现次数最高的 N 个普通词，另加 `<unk>`，并用首次出现顺序打破同频词排序；默认 `0` 表示保留全部词。
+- **编号规则**：`<unk>` 固定为 id 0；不限制词表时，普通词按语料里第一次出现的顺序编号；限制词表时，普通词按频率降序编号。
 - **词表外单词进 `<unk>`**：`train`/`generate` 遇到没见过的词不会删掉整段输入，而是映射到 `<unk>` 并打印告警。
 - **解码用空格拼词**：词级生成不会恢复原始标点和大小写，输出形如 `alice was beginning to get very tired`。
 
@@ -123,6 +124,7 @@ said
 |------|------|------|
 | `--model <path>` | 输出模型路径 | `mini_lm.param` |
 | `--tokenizer <char\|word>` | tokenizer 粒度：字符级或词级 | `char` |
+| `--max-vocab-size <int>` | 词级模式保留 top-N 高频普通词，另加 `<unk>`；`0` 表示全量词表 | `0` |
 | `--corpus <text>` | 内联文本，用来建词表 | 一段占位串 |
 | `--corpus-file <path>` | 从文件读建词表的语料 | — |
 | `--corpus-dir <dir>` | 从目录下所有文件读语料 | — |
@@ -168,7 +170,7 @@ said
 
 ## 6. 准备训练数据（清洗 → 喂给模型）
 
-字符级模型对"字符集大小"很敏感：语料里每多一个稀有字符（花引号、emoji、非拉丁字母……）词表就大一圈，小模型更难学。词级模型对"词表大小"敏感：低频词越多，embedding 和输出层越大，小模型越难训。所以**喂给模型前先清洗成干净的 ASCII 文本**，必要时缩小语料范围。
+字符级模型对"字符集大小"很敏感：语料里每多一个稀有字符（花引号、emoji、非拉丁字母……）词表就大一圈，小模型更难学。词级模型对"词表大小"敏感：低频词越多，embedding 和输出层越大，小模型越难训。所以**喂给模型前先清洗成干净的 ASCII 文本**，必要时用 `--max-vocab-size` 只保留高频词。
 
 `src/demo/mini_lm/tools/` 下提供两个只依赖标准库的脚本（都已纳入 git，可直接改）：
 
@@ -346,7 +348,7 @@ Vocabulary: [<unk>] [alice] [was] [beginning] [to] [get] [very] [tired]
 - **`Vocab sidecar not found`**：`.vocab` 文件丢了或没跟 `.param` 放一起。两个文件必须成对；模型要重新 `init`。
 - **`model-dim must be divisible by head-num`**：`--model-dim` 必须能被 `--head-num` 整除（多头要均分维度）。
 - **训练时 `skipped N characters outside the model vocabulary`**：字符级训练语料含 `init` 词表外的字符，已自动跳过。要支持这些字符得用覆盖它们的语料重新 `init`。
-- **训练/生成时 `mapped N words outside the model vocabulary to <unk>`**：词级模型遇到没见过的词，已映射到 `<unk>`。想让模型真正学会这些词，需要用覆盖它们的语料重新 `init`。
+- **训练/生成时 `mapped N words outside the model vocabulary to <unk>`**：词级模型遇到没见过的词，已映射到 `<unk>`。如果用了 `--max-vocab-size`，这通常是低频词被主动裁掉；想让模型真正学会这些词，需要增大词表或用覆盖它们的语料重新 `init`。
 - **生成一直重复**：贪心的通病，改用采样（`--temperature 0.7 --top-k 5`），或训得更久/更大。
 - **`Model vocab size does not match the vocab sidecar`**：`.param` 和 `.vocab` 来自不同模型，别混用。
 

@@ -16,6 +16,13 @@ public:
   };
 
 public:
+  struct Config {
+    bool add_unknown_token = false;
+    int max_vocab_size = 0;
+  };
+
+public:
+  RC InitFromText(const std::string &text, const Config &config);
   RC InitFromText(const std::string &text, bool add_unknown_token = false);
   RC InitFromVocabulary(const std::vector<std::string> &vocabulary);
   RC TokenizeSentences(const std::string &text,
