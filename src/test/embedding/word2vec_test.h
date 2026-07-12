@@ -55,19 +55,20 @@ TEST(WordTokenizer, MaxVocabKeepsMostFrequentWords) {
   MUST_EQUAL(tokenizer.vocab_size(), 4);
   MUST_TRUE(tokenizer.Lookup("the") > 0, "the should be kept");
   MUST_TRUE(tokenizer.Lookup("cat") > 0, "cat should be kept");
-  MUST_TRUE(tokenizer.Lookup("dog") > 0, "dog should be kept");
+  MUST_TRUE(tokenizer.Lookup("ran") > 0, "ran should be kept");
+  MUST_EQUAL(tokenizer.Lookup("dog"), -1);
   MUST_EQUAL(tokenizer.Lookup("owl"), -1);
 
   std::vector<int> token_ids;
   int unknown_count = 0;
-  MUST_EQUAL(tokenizer.TokenizeFlatWithUnknown("the owl dog", token_ids,
+  MUST_EQUAL(tokenizer.TokenizeFlatWithUnknown("the owl ran", token_ids,
                                                unknown_count),
              WordTokenizer::SUCCESS);
   MUST_EQUAL(unknown_count, 1);
 
   std::string decoded;
   MUST_EQUAL(tokenizer.Decode(token_ids, decoded), WordTokenizer::SUCCESS);
-  MUST_EQUAL(decoded, "the <unk> dog");
+  MUST_EQUAL(decoded, "the <unk> ran");
 }
 
 TEST(WordTokenizer, DropUnknownPolicySkipsOutOfVocabWords) {
@@ -82,18 +83,19 @@ TEST(WordTokenizer, DropUnknownPolicySkipsOutOfVocabWords) {
   MUST_EQUAL(tokenizer.vocab_size(), 3);
   MUST_TRUE(tokenizer.Lookup("the") >= 0, "the should be kept");
   MUST_TRUE(tokenizer.Lookup("cat") >= 0, "cat should be kept");
-  MUST_TRUE(tokenizer.Lookup("dog") >= 0, "dog should be kept");
+  MUST_TRUE(tokenizer.Lookup("ran") >= 0, "ran should be kept");
+  MUST_EQUAL(tokenizer.Lookup("dog"), -1);
 
   std::vector<int> token_ids;
   int unknown_count = 0;
-  MUST_EQUAL(tokenizer.TokenizeFlatWithPolicy("the owl dog", token_ids,
+  MUST_EQUAL(tokenizer.TokenizeFlatWithPolicy("the owl ran", token_ids,
                                               unknown_count),
              WordTokenizer::SUCCESS);
   MUST_EQUAL(unknown_count, 1);
 
   std::string decoded;
   MUST_EQUAL(tokenizer.Decode(token_ids, decoded), WordTokenizer::SUCCESS);
-  MUST_EQUAL(decoded, "the dog");
+  MUST_EQUAL(decoded, "the ran");
 }
 
 TEST(WordTokenizer, InitFromVocabularyRejectsDuplicates) {
