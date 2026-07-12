@@ -223,6 +223,39 @@ WriteAttentionJson(attention_file, model, tokenizer, ...);           <b class="c
           </p>
         </div>
 
+        <h2>9. 同一套骨架的另一种封装:基座式 CLI</h2>
+        <p>
+          本章从头到尾读的 <code>transformer_char</code> 是“一条命令训练 + 生成”。仓库里还有个 <code>mini_lm</code>,
+          用的是<strong>同一套 <code>transformer/</code> 模块</strong>,只是把流程拆成<strong>三段式子命令</strong>,更像在用一个小小的<strong>基座模型</strong>:
+        </p>
+        <ul>
+          <li><code>init</code>:先定好结构(<code>model-dim / block-num / head-num …</code>)、从语料扫出字符表,随机初始化并存盘;</li>
+          <li><code>train</code>:加载这个模型,喂文本文件或整个目录训练,把权重写回;</li>
+          <li><code>generate</code>:加载参数,从你的提示往下续写。</li>
+        </ul>
+        <p>
+          这恰好把上一节的<strong>预训练 → 后训练</strong>落成了能在本机跑的命令:先用大语料 <code>init</code> + <code>train</code> 得到一个基座,再对它换一份小语料、用更小的学习率 <code>train</code> 一次,就是最朴素的<strong>微调</strong>:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">在 <code>src/</code> 下:预训练 → 后训练 → 推理</figcaption>
+          <pre class="code-walk__code"><code># 预训练:定结构 + 扫词表,再喂语料训练
+./bin/mini_lm init  --model base.param --corpus-file corpus.txt --model-dim 32 --block-num 2
+./bin/mini_lm train --model base.param --corpus-file corpus.txt --epochs 60
+
+# 后训练:对同一个基座,换语料、用更小的学习率再训一次
+./bin/mini_lm train --model base.param --corpus-file my_style.txt --epochs 15 --learning-rate 0.0005
+
+# 推理:加载参数续写
+./bin/mini_lm generate --model base.param --prompt "Alice " --generate-num 80 --temperature 0.6</code></pre>
+          <p class="figure__cap">和 <code>transformer_char</code> 同一个模型内核,区别只在“分阶段、以模型文件为中心”的用法。</p>
+        </figure>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">别把它想成 ChatGPT</span>
+          <p>
+            这仍是<strong>字符级续写</strong>模型:你对它说 <code>hello</code>,它只会沿着这个前缀按训练语料的统计往下写字符,<strong>不会“理解并回答”</strong>。想要“听懂指令、对话”,要的正是本节反复提到的规模 + 指令微调 + RLHF(<a class="xref" href="chapter-20.html#7-大模型是怎么炼成的-预训练--后训练">第 20 章</a>)。完整的数据清洗、训练与预训练/后训练流程,见仓库文档 <code>docs/mini-lm-demo.md</code>。
+          </p>
+        </div>
+
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>

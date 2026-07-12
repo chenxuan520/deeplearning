@@ -83,6 +83,7 @@ deeplearning/
 | `optimizer_bench` | 同一 MLP 上对比 SGD / Momentum / Adam / AdamW / RMSProp |
 | `rl_tictactoe` | 井字棋 Q-learning：ε-greedy 训练、对战随机/最优对手，见 [`docs/rl-tictactoe-demo.md`](./docs/rl-tictactoe-demo.md) |
 | `word2vec` | skip-gram/CBOW + 负采样词向量训练，见 [`docs/word2vec-demo.md`](./docs/word2vec-demo.md) |
+| `mini_lm` | 字符级基座模型 CLI：init/train/generate/info 四段式，喂文本训练+加载推理，见 [`docs/mini-lm-demo.md`](./docs/mini-lm-demo.md) |
 
 ---
 
@@ -109,6 +110,7 @@ cd src
 ./bin/optimizer_bench       # 优化器对比
 ./bin/rl_tictactoe          # 井字棋 Q-learning
 ./bin/word2vec              # word2vec 词向量训练
+./bin/mini_lm               # 字符级基座模型 CLI（init/train/generate/info）
 ```
 
 安装头文件与静态库（可选）：
@@ -229,6 +231,17 @@ net.Train(data, target, nullptr, epochs, batch_size);
 ./bin/optimizer_bench --steps 3000 --batch 64
 ```
 
+**字符级基座模型 `mini_lm`**（init → train → generate 三段式）：
+
+```bash
+# 先拿公版语料：cd src/demo/mini_lm && ./tools/fetch_data.sh
+./bin/mini_lm init  --model /tmp/m.param --corpus-file demo/mini_lm/tools/data/alice.txt \
+  --model-dim 32 --head-num 2 --feed-forward-dim 128 --block-num 1 --context-size 16
+./bin/mini_lm train --model /tmp/m.param --corpus-file demo/mini_lm/tools/data/alice.txt --epochs 20
+./bin/mini_lm generate --model /tmp/m.param --prompt "Alice " --generate-num 80 --temperature 0.6 --top-k 5
+```
+
+
 ---
 
 ## 其他文档
@@ -238,6 +251,7 @@ net.Train(data, target, nullptr, epochs, batch_size);
 | [`AGENTS.md`](./AGENTS.md) | 给协作者 / AI 的仓库说明（构建、测试、电子书部署） |
 | [`docs/mnist-demo.md`](./docs/mnist-demo.md) | MNIST 准确率升级与配置说明 |
 | [`docs/word2vec-demo.md`](./docs/word2vec-demo.md) | word2vec skip-gram / CBOW 训练演示 |
+| [`docs/mini-lm-demo.md`](./docs/mini-lm-demo.md) | 字符级基座模型 CLI：数据清洗 / 训练 / 推理 / 预训练与后训练 |
 | [`docs/CHANGELOG.md`](./docs/CHANGELOG.md) | 变更记录 |
 
 ---

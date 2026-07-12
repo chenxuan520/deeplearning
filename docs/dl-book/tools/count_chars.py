@@ -10,7 +10,7 @@ count_chars.py — 统计电子书正文规模 (docs/dl-book)
 用法:
     cd docs/dl-book
     python3 tools/count_chars.py              # 汇总
-    python3 tools/count_chars.py -v           # 按文件明细
+    python3 tools/count_chars.py -v           # 按章节明细 (每章标题 + 字数)
     python3 tools/count_chars.py --pages 400  # 自定义「每页汉字数」估页数
 
 默认扫描 BASE_DIR 下所有 *.html (含 index / glossary / 各章)。
@@ -22,6 +22,7 @@ import argparse
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -32,6 +33,8 @@ RE_COMMENT = re.compile(r"<!--[\s\S]*?-->")
 RE_TAG = re.compile(r"<[^>]+>")
 RE_HAN = re.compile(r"[\u4e00-\u9fff]")
 RE_WS = re.compile(r"\s+")
+RE_TITLE = re.compile(r"<title[^>]*>([\s\S]*?)</title>", re.IGNORECASE)
+RE_H1 = re.compile(r"<h1[^>]*>([\s\S]*?)</h1>", re.IGNORECASE)
 
 
 def strip_html(raw: str) -> str:
@@ -42,11 +45,51 @@ def strip_html(raw: str) -> str:
     return RE_WS.sub(" ", text).strip()
 
 
+def extract_title(raw: str, fallback: str) -> str:
+    """取章节名: 优先 <title> 竖线前那段, 退回 <h1>, 再退回文件名。"""
+    m = RE_TITLE.search(raw)
+    if m:
+        title = RE_TAG.sub("", m.group(1)).split("|")[0].strip()
+        if title:
+            return title
+    m = RE_H1.search(raw)
+    if m:
+        title = RE_WS.sub(" ", RE_TAG.sub(" ", m.group(1))).strip()
+        if title:
+            return title
+    return fallback
+
+
 def count_text(text: str) -> dict[str, int]:
     han = len(RE_HAN.findall(text))
     with_space = len(text)
     no_space = len(RE_WS.sub("", text))
     return {"han": han, "no_space": no_space, "with_space": with_space}
+
+
+def disp_width(text: str) -> int:
+    """终端显示宽度: 全角 / 宽字符按 2 计, 其余按 1。"""
+    return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
+
+
+def ljust_disp(text: str, width: int) -> str:
+    """按显示宽度左对齐到 width; 超长则截断加省略号。"""
+    if disp_width(text) <= width:
+        return text + " " * (width - disp_width(text))
+    out, used = "", 0
+    for ch in text:
+        cw = 2 if unicodedata.east_asian_width(ch) in "WF" else 1
+        if used + cw > width - 1:
+            break
+        out += ch
+        used += cw
+    out += "…"
+    return out + " " * max(0, width - disp_width(out))
+
+
+def rjust_disp(text: str, width: int) -> str:
+    """按显示宽度右对齐, 使中文表头能和数字列对齐。"""
+    return " " * max(0, width - disp_width(text)) + text
 
 
 def iter_html_files(base: Path) -> list[Path]:
@@ -58,7 +101,7 @@ def main() -> int:
     parser.add_argument(
         "-v", "--verbose",
         action="store_true",
-        help="按文件输出明细",
+        help="按章节输出明细 (每章标题 + 字数)",
     )
     parser.add_argument(
         "--pages",
@@ -89,8 +132,9 @@ def main() -> int:
 
     for path in files:
         raw = path.read_text(encoding="utf-8")
+        title = extract_title(raw, path.stem)
         stats = count_text(strip_html(raw))
-        row = {"file": path.name, **stats}
+        row = {"file": path.name, "title": title, **stats}
         rows.append(row)
         for k in total:
             total[k] += stats[k]
@@ -112,14 +156,19 @@ def main() -> int:
     if args.verbose:
         print(f"目录: {args.dir}")
         print(f"文件: {len(rows)} 个 HTML\n")
-        print(f"{'文件':22s}  {'汉字':>8s}  {'去空白':>10s}  {'含空白':>10s}")
-        print("-" * 56)
+        header = (
+            f"{ljust_disp('章节', 34)}{ljust_disp('文件', 20)}"
+            f"{rjust_disp('汉字', 9)}{rjust_disp('去空白', 11)}"
+            f"{rjust_disp('含空白', 11)}"
+        )
+        print(header)
+        print("-" * disp_width(header))
         for row in rows:
             print(
-                f"{row['file']:22s}  {row['han']:8,d}  "
-                f"{row['no_space']:10,d}  {row['with_space']:10,d}"
+                f"{ljust_disp(row['title'], 34)}{ljust_disp(row['file'], 20)}"
+                f"{row['han']:>9,d}{row['no_space']:>11,d}{row['with_space']:>11,d}"
             )
-        print("-" * 56)
+        print("-" * disp_width(header))
 
     print(f"汉字总数:       {total['han']:,}")
     print(f"去空白字符:     {total['no_space']:,}")

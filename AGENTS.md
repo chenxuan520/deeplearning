@@ -24,6 +24,7 @@
   - `rl_tictactoe`：井字棋 Q-learning 示例（表格式 TD 学习 / ε-greedy / 对战随机或最优对手）
   - `word2vec`：skip-gram / CBOW + 负采样词向量训练，见 `docs/word2vec-demo.md`
   - `transformer_char`：最小字符级语言模型示例
+  - `mini_lm`：字符级基座模型 CLI（`init`/`train`/`generate`/`info` 四段式，喂文本训练 + 加载推理），见 `docs/mini-lm-demo.md`
   - `optimizer_bench`：不同 optimizer 在 MNIST 上的对比 benchmark
     （SGD / Momentum / Adam / AdamW / RMSProp / Adam+CosineLR）
 - 测试位于 `src/test/` 下。
@@ -164,6 +165,7 @@
   - 优化器对比 benchmark: `src/bin/optimizer_bench`（来自 `src/demo/optimizer_bench/CMakeLists.txt`）
   - 井字棋 Q-learning：`src/bin/rl_tictactoe`（来自 `src/demo/rl_tictactoe/CMakeLists.txt`）
   - word2vec 词向量训练：`src/bin/word2vec`（来自 `src/demo/word2vec/CMakeLists.txt`）
+  - 字符级基座模型 CLI：`src/bin/mini_lm`（来自 `src/demo/mini_lm/CMakeLists.txt`）
 
 ### 运行
 

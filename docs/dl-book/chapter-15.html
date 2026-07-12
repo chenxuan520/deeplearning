@@ -207,22 +207,97 @@ output_embeddings_.assign(vocab_size_, vector&lt;double&gt;(embed_dim, 0));
         </p>
         <div class="figure reveal">
           <div class="diagram">
-            <p style="text-align:center;color:var(--text-dim);font-size:0.85rem;margin:0 0 0.6rem">skip-gram 一次前向 · 样本 (中心 sat → 预测上下文 cat)</p>
-            <div class="pipe">
-              <div class="pipe__box">① 输入<small>中心词 sat<br/>one-hot(V 维)</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">W<sub>in</sub> 查表<small>取出第 sat 行</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">② 隐藏层 h<small>dim 维词向量<br/><strong>无 ReLU</strong></small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">③ 与 W<sub>out</sub> 点积<small>每个词 w: score = v<sub>w</sub>·h</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">④ softmax<small>V 个概率<br/>希望 <strong>cat</strong> 最高</small></div>
-            </div>
+            <svg viewBox="0 0 760 384" role="img" aria-label="skip-gram 三层网络结构:one-hot 输入层、词向量隐藏层、softmax 输出层,以及层间的 W_in 查表和 W_out 点积连线">
+              <text x="30" y="32" fill="#8ef0d1" font-size="16" font-weight="700">skip-gram 一次前向:中心词 sat → 预测上下文 cat</text>
+              <text x="30" y="54" fill="#b6c5e1" font-size="12">词表 V=4(cat/sat/on/mat),词向量维度 dim=2 —— 数值与第 8 节手算一致</text>
+
+              <!-- 层标题 -->
+              <text x="100" y="92" text-anchor="middle" fill="#6ac3ff" font-size="12.5" font-weight="700">输入层</text>
+              <text x="340" y="92" text-anchor="middle" fill="#8b7bff" font-size="12.5" font-weight="700">隐藏层 h</text>
+              <text x="600" y="92" text-anchor="middle" fill="#ffcf72" font-size="12.5" font-weight="700">输出层</text>
+
+              <!-- W_in 连线:6 条灰(其余词)+ 2 条高亮(sat 这一行 = 查表) -->
+              <g stroke="#3a4a68" stroke-width="1.1">
+                <line x1="126" y1="118" x2="314" y2="180" />
+                <line x1="126" y1="118" x2="314" y2="260" />
+                <line x1="126" y1="254" x2="314" y2="180" />
+                <line x1="126" y1="254" x2="314" y2="260" />
+                <line x1="126" y1="322" x2="314" y2="180" />
+                <line x1="126" y1="322" x2="314" y2="260" />
+              </g>
+              <g stroke="#8ef0d1" stroke-width="2.4">
+                <line x1="126" y1="186" x2="314" y2="180" />
+                <line x1="126" y1="186" x2="314" y2="260" />
+              </g>
+
+              <!-- W_out 连线:6 条灰 + 2 条高亮(通向目标 cat) -->
+              <g stroke="#46587a" stroke-width="1.1">
+                <line x1="366" y1="180" x2="576" y2="186" />
+                <line x1="366" y1="180" x2="576" y2="254" />
+                <line x1="366" y1="180" x2="576" y2="322" />
+                <line x1="366" y1="260" x2="576" y2="186" />
+                <line x1="366" y1="260" x2="576" y2="254" />
+                <line x1="366" y1="260" x2="576" y2="322" />
+              </g>
+              <g stroke="#ffcf72" stroke-width="1.9">
+                <line x1="366" y1="180" x2="576" y2="118" />
+                <line x1="366" y1="260" x2="576" y2="118" />
+              </g>
+
+              <!-- one-hot 位值(左侧) -->
+              <text x="58" y="123" text-anchor="end" fill="#8499bd" font-size="13">0</text>
+              <text x="58" y="191" text-anchor="end" fill="#8ef0d1" font-size="14" font-weight="700">1</text>
+              <text x="58" y="259" text-anchor="end" fill="#8499bd" font-size="13">0</text>
+              <text x="58" y="327" text-anchor="end" fill="#8499bd" font-size="13">0</text>
+
+              <!-- 输入层节点:sat 点亮(one-hot=1),其余空心 -->
+              <circle cx="100" cy="118" r="24" fill="rgba(106,195,255,0.06)" stroke="#6ac3ff" stroke-width="1.6" />
+              <text x="100" y="123" text-anchor="middle" fill="#c9d6ee" font-size="13">cat</text>
+              <circle cx="100" cy="186" r="24" fill="rgba(142,240,209,0.22)" stroke="#8ef0d1" stroke-width="2.6" />
+              <text x="100" y="191" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">sat</text>
+              <circle cx="100" cy="254" r="24" fill="rgba(106,195,255,0.06)" stroke="#6ac3ff" stroke-width="1.6" />
+              <text x="100" y="259" text-anchor="middle" fill="#c9d6ee" font-size="13">on</text>
+              <circle cx="100" cy="322" r="24" fill="rgba(106,195,255,0.06)" stroke="#6ac3ff" stroke-width="1.6" />
+              <text x="100" y="327" text-anchor="middle" fill="#c9d6ee" font-size="13">mat</text>
+
+              <!-- 隐藏层节点:h = u_sat = [0.1, 0.3],无激活 -->
+              <circle cx="340" cy="180" r="26" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2.2" />
+              <text x="340" y="177" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">h₁</text>
+              <text x="340" y="193" text-anchor="middle" fill="#c9b8ff" font-size="11">0.1</text>
+              <circle cx="340" cy="260" r="26" fill="rgba(139,123,255,0.18)" stroke="#8b7bff" stroke-width="2.2" />
+              <text x="340" y="257" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">h₂</text>
+              <text x="340" y="273" text-anchor="middle" fill="#c9b8ff" font-size="11">0.3</text>
+
+              <!-- 输出层节点:softmax,cat 是目标(点亮) -->
+              <circle cx="600" cy="118" r="24" fill="rgba(255,207,114,0.22)" stroke="#ffcf72" stroke-width="2.6" />
+              <text x="600" y="123" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">cat</text>
+              <circle cx="600" cy="186" r="24" fill="rgba(255,207,114,0.06)" stroke="#ffcf72" stroke-width="1.5" />
+              <text x="600" y="191" text-anchor="middle" fill="#e9ddc0" font-size="13">sat</text>
+              <circle cx="600" cy="254" r="24" fill="rgba(255,207,114,0.06)" stroke="#ffcf72" stroke-width="1.5" />
+              <text x="600" y="259" text-anchor="middle" fill="#e9ddc0" font-size="13">on</text>
+              <circle cx="600" cy="322" r="24" fill="rgba(255,207,114,0.06)" stroke="#ffcf72" stroke-width="1.5" />
+              <text x="600" y="327" text-anchor="middle" fill="#e9ddc0" font-size="13">mat</text>
+
+              <!-- 输出打分(右侧,来自第 8 节) -->
+              <text x="636" y="114" fill="#8ef0d1" font-size="12" font-weight="700">score 0.26 ✓</text>
+              <text x="636" y="128" fill="#8499bd" font-size="10">softmax→P≈0.30</text>
+              <text x="636" y="191" text-anchor="start" fill="#8499bd" font-size="12">0.07</text>
+              <text x="636" y="259" text-anchor="start" fill="#8499bd" font-size="12">0.16</text>
+              <text x="636" y="327" text-anchor="start" fill="#8499bd" font-size="12">0.09</text>
+
+              <!-- 阶段说明(底部) -->
+              <text x="100" y="368" text-anchor="middle" fill="#8499bd" font-size="11">① one-hot(V 维)</text>
+              <text x="220" y="368" text-anchor="middle" fill="#8ef0d1" font-size="11">W_in 取 sat 行 = 查表</text>
+              <text x="340" y="368" text-anchor="middle" fill="#8499bd" font-size="11">② 词向量 h · 无激活</text>
+              <text x="470" y="368" text-anchor="middle" fill="#e9ddc0" font-size="11">③ W_out 点积 score=v·h</text>
+              <text x="600" y="368" text-anchor="middle" fill="#8499bd" font-size="11">④ softmax</text>
+            </svg>
           </div>
           <p class="figure__cap">
-            三层结构:<strong>输入 one-hot → 隐藏层词向量 h → 输出 logits → softmax</strong>。
-            和<a class="xref" href="chapter-03.html">第 3 章</a>小 MLP 同构,只是隐藏层没有激活函数,且 h 正是我们要保存的嵌入。
+            一个 <strong>4 → 2 → 4</strong> 的三层网络,和<a class="xref" href="chapter-03.html">第 3 章</a>小 MLP 同构:
+            <strong>绿色高亮</strong>是本次样本走过的路——输入层只有 <strong>sat=1</strong> 点亮,W<sub>in</sub> 于是只取出 sat 那一行(=查表)得到隐藏层
+            <var>h</var>=[0.1, 0.3];h 再与 W<sub>out</sub> 每一行点积得到 4 个 score,softmax 后希望目标 <strong>cat</strong>(黄色)概率最高。
+            关键区别:隐藏层<strong>没有激活函数</strong>,且这层 <var>h</var> 正是我们最终要保存的词向量。
           </p>
         </div>
         <p>

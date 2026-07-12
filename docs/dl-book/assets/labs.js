@@ -998,6 +998,83 @@
     render();
   }
 
+  /* ===================== 语料清洗(第 20 章) ===================== */
+  var CLEAN_TPL =
+    '<div class="lab">' +
+    '  <div class="lab__controls">' +
+    '    <p class="explain">下面是 8 条「刚爬下来」的原始文本。逐个打开过滤器,看脏数据<strong>按什么方法、什么判据</strong>被剥掉:</p>' +
+    '    <label class="checkbox"><input type="checkbox" data-clean="nav" />抽正文 · 去网页模板/导航</label>' +
+    '    <label class="checkbox"><input type="checkbox" data-clean="lowq" />质量过滤 · 规则+分类器</label>' +
+    '    <label class="checkbox"><input type="checkbox" data-clean="dedup" />精确去重 · 哈希</label>' +
+    '    <label class="checkbox"><input type="checkbox" data-clean="neardup" />近似去重 · MinHash/Jaccard</label>' +
+    '    <label class="checkbox"><input type="checkbox" data-clean="pii" />隐私过滤 · 正则+NER</label>' +
+    '  </div>' +
+    '  <div class="lab__viz">' +
+    '    <div class="formula-card">' +
+    '      <h3>清洗结果</h3>' +
+    '      <p class="explain" data-clean-stat></p>' +
+    '      <div class="clean-list" data-clean-out></div>' +
+    '    </div>' +
+    '  </div>' +
+    '</div>';
+
+  function initCorpusClean(root) {
+    root.innerHTML = CLEAN_TPL;
+    // method: 触发它的过滤器; how: 这条“凭什么被判掉”的白箱说明
+    var RAW = [
+      { kind: "keep", text: "反向传播通过链式法则,把输出层的误差一层层传回每一个参数。" },
+      { kind: "nav", method: "nav", text: "首页 > 教程 > 深度学习    登录 | 注册 | 关于我们 | 联系我们",
+        how: "正文抽取:文本块太短、链接/符号占比过高,判为模板碎块" },
+      { kind: "lowq", method: "lowq", text: "【劲爆】三天学会 AI!点击领取内部绝密资料,加微信限时免费领!!!",
+        how: "质量过滤:命中脏词表(领取/限时/免费)+ 感叹号密度过高,分类器判低质" },
+      { kind: "keep", text: "梯度下降沿损失下降最快的方向更新权重,学习率决定每一步走多远。" },
+      { kind: "dedup", method: "dedup", text: "反向传播通过链式法则,把输出层的误差一层层传回每一个参数。",
+        how: "精确去重:哈希值与第 1 条完全相同(逐字一致)" },
+      { kind: "lowq", method: "lowq", text: "这个文章是非常好的关于神经网络,你应该去阅读它因为对学习很有帮助的。",
+        how: "质量过滤:机器翻译腔,语言模型困惑度偏高,信息密度低" },
+      { kind: "neardup", method: "neardup", text: "反向传播利用链式法则,将输出层误差逐层回传到每个参数。(某站转载)",
+        how: "近似去重:与第 1 条 n-gram Jaccard ≈ 0.82 > 0.8 阈值,判为改写转载" },
+      { kind: "pii", method: "pii", text: "作者微信 lei_1990,手机 138-0013-8000,家住北京市海淀区中关村。",
+        how: "隐私过滤:正则命中手机号,NER 识别到人名/地址" }
+    ];
+    var LABELS = {
+      keep: "正文", nav: "网页模板", lowq: "广告/低质",
+      dedup: "完全重复", neardup: "近似重复", pii: "隐私信息"
+    };
+    var state = { nav: false, lowq: false, dedup: false, neardup: false, pii: false };
+    var out = root.querySelector("[data-clean-out]");
+    var stat = root.querySelector("[data-clean-stat]");
+
+    function render() {
+      var kept = 0, html = "";
+      RAW.forEach(function (row) {
+        var dropped = !!row.method && state[row.method];
+        if (!dropped) kept++;
+        html +=
+          '<div class="clean-row ' + (dropped ? "clean-row--drop" : "clean-row--keep") + '">' +
+          '<span class="clean-row__tag">' + LABELS[row.kind] + "</span>" +
+          '<span class="clean-row__text">' + row.text + "</span>" +
+          (dropped ? '<span class="clean-row__how">✕ ' + row.how + "</span>" : "") +
+          "</div>";
+      });
+      out.innerHTML = html;
+      var pct = Math.round((kept / RAW.length) * 100);
+      stat.innerHTML =
+        "原始 " + RAW.length + " 条 → 保留 <strong>" + kept + "</strong> 条(保留率 " + pct + "%)。" +
+        (kept === 2
+          ? "五道过滤器全开后只剩两条真正的正文——每条被丢的下面都写清了「按什么方法、什么判据」丢的。"
+          : "勾选左侧过滤器,被丢的行会显示它<strong>凭什么被判掉</strong>(哈希 / Jaccard / 规则 / 正则)。");
+    }
+
+    root.querySelectorAll("[data-clean]").forEach(function (control) {
+      control.addEventListener("change", function () {
+        state[control.dataset.clean] = control.checked;
+        render();
+      });
+    });
+    render();
+  }
+
   /* ===================== 自动挂载 ===================== */
   var INITS = {
     neuron: initNeuron,
@@ -1006,7 +1083,8 @@
     multihead: initMultihead,
     "real-attention": initRealAttention,
     "activation-curve": initActivationCurve,
-    "gradient-descent": initGradientDescent
+    "gradient-descent": initGradientDescent,
+    "corpus-clean": initCorpusClean
   };
 
   function mountAll() {

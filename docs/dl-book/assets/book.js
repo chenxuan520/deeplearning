@@ -44,6 +44,7 @@
 
   var STORAGE_LAST = "dlbook:last";
   var STORAGE_SEARCH = "dlbook:search";
+  var sectionNavigate = null;
   var REPO_URL = "https://github.com/chenxuan520/deeplearning";
 
   var store = {
@@ -194,11 +195,45 @@
 
   // 把某个元素滚到视口偏上位置 (smooth 可选)
   function scrollHeadingIntoView(target, smooth) {
+    if (!target) return;
     var rect = target.getBoundingClientRect();
     var y = rect.top + window.pageYOffset - (window.innerHeight * HEADING_ANCHOR_RATIO);
     y = Math.max(0, y);
     if (smooth) window.scrollTo({ top: y, behavior: "smooth" });
     else window.scrollTo(0, y);
+  }
+
+  // 找到正文节点所属的小节标题 (h2/h3), 供搜索高亮与侧栏目录对齐。
+  function findSectionHeading(node) {
+    var inner = document.querySelector(".chapter__inner");
+    if (!inner || !node || !inner.contains(node)) return null;
+    var headings = [].slice.call(inner.querySelectorAll("h2, h3")).filter(function (h) {
+      return !h.closest(".quiz");
+    });
+    if (!headings.length) return null;
+    for (var i = headings.length - 1; i >= 0; i--) {
+      if (headings[i].compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING) {
+        return headings[i];
+      }
+    }
+    return headings[0];
+  }
+
+  function isSectionHeading(el) {
+    if (!el || !el.tagName) return false;
+    var tag = el.tagName.toUpperCase();
+    return tag === "H2" || tag === "H3";
+  }
+
+  // 搜索 / 初始 hash / 正文锚点与右侧本章目录共用: 优先滚到小节标题并同步侧栏高亮。
+  function scrollToSectionTarget(target, smooth) {
+    if (!target) return;
+    var heading = isSectionHeading(target) ? target : findSectionHeading(target);
+    if (heading && sectionNavigate) {
+      sectionNavigate(heading, smooth);
+      return;
+    }
+    scrollHeadingIntoView(target, smooth);
   }
 
   function setupOutlineSpy(links) {
@@ -214,14 +249,23 @@
         scrollRailToCurrent(current.closest(".book-rail"), current);
       }
     }
+    function navigateToSection(heading, smooth) {
+      if (!heading) return;
+      var item = null;
+      for (var i = 0; i < links.length; i++) {
+        if (links[i].heading === heading) { item = links[i]; break; }
+      }
+      if (smooth) lockUntil = Date.now() + 900;
+      if (item) setCurrent(item.link);
+      scrollHeadingIntoView(heading, smooth);
+    }
+    sectionNavigate = navigateToSection;
     // 点击右侧目录: 把该小标题滚到视口偏上位置, 并立即高亮它。
     // 这样即使小节内容很少, 也不会误定位/误高亮到它下面的标题。
     links.forEach(function (item) {
       item.link.addEventListener("click", function (e) {
         e.preventDefault();
-        lockUntil = Date.now() + 900; // 平滑滚动期间, 先别让 spy 抢高亮
-        setCurrent(item.link);
-        scrollHeadingIntoView(item.heading, true);
+        navigateToSection(item.heading, true);
         if (window.history && window.history.replaceState) {
           window.history.replaceState(null, "", "#" + item.heading.id);
         }
@@ -967,7 +1011,7 @@
       if (!hash) {
         if (hl) {
           var first = document.querySelector(".chapter__inner mark.hl-query");
-          if (first) scrollHeadingIntoView(first, true);
+          if (first) scrollToSectionTarget(first, true);
           else window.scrollTo({ top: 0, behavior: "smooth" });
         } else {
           window.scrollTo({ top: 0, behavior: "smooth" });
@@ -983,7 +1027,7 @@
       try { id = decodeURIComponent(hash); } catch (e) { /* keep raw */ }
       var target = document.getElementById(id);
       if (target) {
-        scrollHeadingIntoView(target, true);
+        scrollToSectionTarget(target, true);
         if (window.history && window.history.replaceState) {
           var url2 = (hl ? "?highlight=" + encodeURIComponent(hl) : "") + "#" + hash;
           window.history.replaceState(null, "", url2);
@@ -1157,6 +1201,10 @@
     return true;
   }
 
+  function isCJK(ch) {
+    return !!ch && ch >= "\u4e00" && ch <= "\u9fff";
+  }
+
   function findGlossaryMatches(text) {
     var all = [];
     GLOSSARY.matchers.forEach(function (matcher) {
@@ -1164,7 +1212,13 @@
       re.lastIndex = 0;
       var m;
       while ((m = re.exec(text)) !== null) {
-        all.push({ start: m.index, end: m.index + m[0].length, id: matcher.id, text: m[0] });
+        var start = m.index, end = m.index + m[0].length;
+        // 中文没有词边界: 若匹配串的汉字端紧邻另一个汉字, 说明它其实嵌在更长的词里
+        // (如别名「训练数据」出现在「后训练数据」中间), 不该单独高亮, 跳过
+        if (!(isCJK(m[0].charAt(0)) && isCJK(text.charAt(start - 1))) &&
+            !(isCJK(m[0].charAt(m[0].length - 1)) && isCJK(text.charAt(end)))) {
+          all.push({ start: start, end: end, id: matcher.id, text: m[0] });
+        }
       }
     });
     all.sort(function (a, b) {
@@ -1402,7 +1456,32 @@
     var target = document.getElementById(id);
     if (!target) return;
     requestAnimationFrame(function () {
-      requestAnimationFrame(function () { scrollHeadingIntoView(target, false); });
+      requestAnimationFrame(function () { scrollToSectionTarget(target, false); });
+    });
+  }
+
+  // 章内 #锚点 / 同页 xref: 与右侧本章目录、搜索跳转共用停靠位置
+  function setupInPageHashLinks(root) {
+    if (!root) return;
+    root.addEventListener("click", function (e) {
+      var a = e.target.closest && e.target.closest("a[href*='#']");
+      if (!a || a.target === "_blank" || a.hasAttribute("download")) return;
+      var href = a.getAttribute("href") || "";
+      if (!href || href.indexOf("#") < 0) return;
+      var hashIdx = href.indexOf("#");
+      var file = hashIdx > 0 ? href.slice(0, hashIdx) : "";
+      var hash = href.slice(hashIdx + 1);
+      if (!hash) return;
+      if (file && file !== pageBaseName()) return;
+      var id = hash;
+      try { id = decodeURIComponent(hash); } catch (err) { /* keep raw */ }
+      var target = document.getElementById(id);
+      if (!target) return;
+      e.preventDefault();
+      scrollToSectionTarget(target, true);
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, "", location.pathname + location.search + "#" + hash);
+      }
     });
   }
 
@@ -1453,14 +1532,18 @@
     }
     setupProgress(refs);
     setupReveal();
-    handleInitialHash();
     var hlTerm = getHighlightParam(location.search);
-    if (hlTerm && applyHighlightToInner(hlTerm) > 0 && !window.location.hash) {
+    if (hlTerm) applyHighlightToInner(hlTerm);
+    handleInitialHash();
+    if (hlTerm && !window.location.hash) {
       var firstHl = document.querySelector(".chapter__inner mark.hl-query");
-      if (firstHl) scrollHeadingIntoView(firstHl, false);
+      if (firstHl) scrollToSectionTarget(firstHl, false);
     }
     var hlInner = document.querySelector(".chapter__inner");
-    if (hlInner) setupHighlightDismiss(hlInner);
+    if (hlInner) {
+      setupHighlightDismiss(hlInner);
+      setupInPageHashLinks(hlInner);
+    }
     loadGlossary().then(function () {
       var inner = document.querySelector(".chapter__inner");
       if (inner) setupGlossary(inner);

@@ -1,0 +1,151 @@
+name: Release Binaries
+
+# Build all demo binaries for Linux / macOS / Windows and publish them to a
+# GitHub Release. Triggered by pushing a version tag (e.g. v0.1.0) or manually.
+#
+#   git tag v0.1.0
+#   git push github v0.1.0
+#
+# The CMake project root is src/. Each demo sets EXECUTABLE_OUTPUT_PATH to
+# ../../../bin relative to the build dir, so building inside src/build makes the
+# binaries land in a fixed src/bin. Windows uses the MSVC multi-config generator
+# (binaries land under a Release/ subfolder) and has never been compiled here, so
+# that leg is best-effort (continue-on-error) and must not block the others.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64
+            os: ubuntu-22.04
+            experimental: false
+          - name: macos-arm64
+            os: macos-14
+            experimental: false
+          - name: windows-x64
+            os: windows-2022
+            experimental: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake
+
+      # Build with a plain CMake invocation. On Linux/macOS this is a
+      # single-config (Debug default in this project) build; we force Release.
+      - name: Configure and build (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cd src
+          mkdir -p build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Release ..
+          cmake --build . -j
+
+      - name: Configure and build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd src
+          mkdir build
+          cd build
+          cmake ..
+          cmake --build . --config Release
+
+      # Collect the produced binaries into a flat staging dir, excluding the
+      # test runner (test_bin) which is not a user-facing artifact. src/bin is
+      # the single-config output; src/bin/Release is where MSVC multi-config
+      # lands.
+      - name: Stage binaries (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p staging
+          for f in src/bin/*; do
+            base=$(basename "$f")
+            if [ "$base" = "test_bin" ]; then continue; fi
+            [ -f "$f" ] && cp "$f" staging/
+          done
+          ls -la staging
+
+      - name: Stage binaries (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p staging
+          # MSVC multi-config puts exes under bin/Release; single-config under bin.
+          for f in src/bin/Release/*.exe src/bin/*.exe; do
+            [ -f "$f" ] || continue
+            base=$(basename "$f")
+            if [ "$base" = "test_bin.exe" ]; then continue; fi
+            cp "$f" staging/
+          done
+          ls -la staging
+
+      # Package as a single archive per platform.
+      - name: Package (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cd staging
+          tar -czf ../mini_lm-${{ matrix.name }}.tar.gz *
+          cd ..
+          ls -la mini_lm-${{ matrix.name }}.tar.gz
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cd staging
+          7z a ../mini_lm-${{ matrix.name }}.zip * >/dev/null
+          cd ..
+          ls -la mini_lm-${{ matrix.name }}.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mini_lm-${{ matrix.name }}
+          path: |
+            mini_lm-${{ matrix.name }}.tar.gz
+            mini_lm-${{ matrix.name }}.zip
+          if-no-files-found: ignore
+
+  release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    # Run even if a best-effort leg (Windows) failed, as long as the workflow
+    # wasn't cancelled.
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Show downloaded files
+        run: find artifacts -type f
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          fail_on_unmatched_files: false
+          generate_release_notes: true

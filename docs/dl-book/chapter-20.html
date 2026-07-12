@@ -86,6 +86,69 @@
           </p>
         </div>
 
+        <h3>那么,“大”到底大在哪几个方面?</h3>
+        <p>
+          既然内核没变,“大模型”的<strong>大</strong>就不是某一处,而是同一套机制在<strong>好几个维度上同时被放大</strong>。
+          把它们拆开看,后面每一节其实都在讲“其中一个维度怎么被放大、放大后带来什么新问题”:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>放大的维度</th><th>具体指什么</th><th>本书 mini LM</th><th>GPT-3 量级</th><th>细讲小节</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>① 参数量</strong></td>
+                <td>可学习权重的总个数(旋钮数)</td>
+                <td>几千 ~ 几万</td>
+                <td>1750 亿</td>
+                <td><a class="xref" href="chapter-20.html#2-参数地图-1750-亿个旋钮装在哪儿gpt-举例">§2 参数地图</a></td>
+              </tr>
+              <tr>
+                <td><strong>② 深度与宽度</strong></td>
+                <td>堆多少层 Block(<var>L</var>)、每个 token 向量多宽(<var>d</var>)</td>
+                <td><var>L</var>≈1~2 · <var>d</var>≈64</td>
+                <td><var>L</var>=96 · <var>d</var>=12 288</td>
+                <td><a class="xref" href="chapter-20.html#2-参数地图-1750-亿个旋钮装在哪儿gpt-举例">§2 参数地图</a></td>
+              </tr>
+              <tr>
+                <td><strong>③ 训练数据</strong></td>
+                <td>喂进去的 token 总量</td>
+                <td>几句话</td>
+                <td>数千亿 token</td>
+                <td><a class="xref" href="chapter-20.html#5-规模化scaling-law-大力真的出奇迹">§5 规模化</a></td>
+              </tr>
+              <tr>
+                <td><strong>④ 词表</strong></td>
+                <td>能区分多少个 token(<var>V</var>)</td>
+                <td>几十个字符</td>
+                <td>约 5 万 BPE 子词</td>
+                <td><a class="xref" href="chapter-20.html#3-第一步-把文字切成-token分词与-bpe">§3 分词与 BPE</a></td>
+              </tr>
+              <tr>
+                <td><strong>⑤ 上下文长度</strong></td>
+                <td>一次能看多长的前文</td>
+                <td>几十个 token</td>
+                <td>数千 ~ 上百万 token</td>
+                <td><a class="xref" href="chapter-20.html#更长的上下文">§9 更长的上下文</a></td>
+              </tr>
+              <tr>
+                <td><strong>⑥ 算力与训练时长</strong></td>
+                <td>用多少 GPU、训多久</td>
+                <td>CPU 几秒</td>
+                <td>上千 GPU 训数周</td>
+                <td><a class="xref" href="chapter-21.html">第 21 章 工程与基础设施</a></td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">六个维度不是各自独立地随便加——<a class="xref" href="chapter-20.html#5-规模化scaling-law-大力真的出奇迹">规模定律(§5)</a>告诉我们参数、数据、算力要<strong>按比例一起放大</strong>才划算;放大到一定程度还会冒出小模型没有的<a class="xref" href="chapter-20.html#6-涌现能力-量变到质变">涌现能力(§6)</a>。</p>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">一句话记住</span>
+          <p>
+            “大”= <strong>更多参数 · 更深更宽 · 更多数据 · 更大词表 · 更长上下文 · 更多算力</strong>,六者协同放大。
+            但<strong>“大”只是量,不是新原理</strong>——下面先把最直观的“参数量”拆开,看这 1750 亿个旋钮到底装在哪。
+          </p>
+        </div>
+
         <h2>2. 参数地图:1750 亿个“旋钮”装在哪儿(GPT 举例)</h2>
         <p>
           上一节说 GPT-3 有 <strong>1750 亿参数</strong>。参数就是训练后要<strong>存进模型文件</strong>、推理时要<strong>加载进内存/显存</strong>的那些可学习权重
@@ -422,17 +485,17 @@
         </div>
         <div class="table-wrap reveal">
           <table class="calc-table calc-table--wrap">
-            <thead><tr><th>步骤</th><th>在做什么</th><th>为什么必要</th></tr></thead>
+            <thead><tr><th>步骤</th><th>在做什么</th><th>怎么判(方法)</th><th>为什么必要</th></tr></thead>
             <tbody>
-              <tr><td><strong>正文抽取</strong></td><td>从 HTML / PDF / OCR 里抽正文,去掉导航栏、广告、版权页、相关推荐</td><td>否则模型会学到一堆“首页 / 登录 / 相关阅读”这类网页噪声</td></tr>
-              <tr><td><strong>语言与格式识别</strong></td><td>判断语言、编码、文档类型,修正乱码和异常字符</td><td>方便按语言配比,也避免乱码 token 浪费训练预算</td></tr>
-              <tr><td><strong>精确去重</strong></td><td>删除完全一样的文档、段落、代码文件</td><td>重复内容会让模型背模板,还会浪费 token 预算</td></tr>
-              <tr><td><strong>近似去重</strong></td><td>删除轻微改写、镜像站、转载页、模板化问答</td><td>很多页面只换了标题或广告,本质仍是同一份内容</td></tr>
-              <tr><td><strong>质量过滤</strong></td><td>用规则和分类器过滤低信息密度、SEO spam、机器翻译腔、自动生成垃圾</td><td>模型会模仿训练分布;低质文本多,输出也会变油、空、乱</td></tr>
-              <tr><td><strong>安全与隐私过滤</strong></td><td>处理个人信息、密钥、恶意代码、极端有害内容等</td><td>降低隐私泄漏、安全风险和法律风险</td></tr>
-              <tr><td><strong>污染检测</strong></td><td>移除 benchmark 题目、测试答案、评测集泄漏内容</td><td>否则模型可能只是“背过考题”,评测分数会虚高</td></tr>
-              <tr><td><strong>领域分类与重加权</strong></td><td>给文本打上 web / code / math / book / forum / language 等标签,再决定混合比例</td><td>训练不是平均吃;高价值领域通常要提高权重</td></tr>
-              <tr><td><strong>分词与打包</strong></td><td>用 tokenizer 切成 token,拼成固定长度训练样本,打成 shard</td><td>让 GPU 能高吞吐地一批批读取,减少空洞和随机 IO</td></tr>
+              <tr><td><strong>正文抽取</strong></td><td>从 HTML / PDF / OCR 里抽正文,去掉导航栏、广告、版权页、相关推荐</td><td>用 readability / trafilatura 等工具,按<strong>标签密度、文本块长度</strong>找出正文主体,丢掉短小的模板碎块</td><td>否则模型会学到一堆“首页 / 登录 / 相关阅读”这类网页噪声</td></tr>
+              <tr><td><strong>语言与格式识别</strong></td><td>判断语言、编码、文档类型,修正乱码和异常字符</td><td>用 <strong>fastText / CLD3 语言分类器</strong>给每段打语种和置信度,低置信度或乱码率高的丢弃</td><td>方便按语言配比,也避免乱码 token 浪费训练预算</td></tr>
+              <tr><td><strong>精确去重</strong></td><td>删除完全一样的文档、段落、代码文件</td><td>对正文算<strong>哈希(MD5 / SHA)</strong>,哈希撞了就是逐字相同,直接判重</td><td>重复内容会让模型背模板,还会浪费 token 预算</td></tr>
+              <tr><td><strong>近似去重</strong></td><td>删除轻微改写、镜像站、转载页、模板化问答</td><td><strong>MinHash / SimHash + LSH</strong>,按 n-gram 集合的 <strong>Jaccard 相似度</strong>超阈值(如 &gt;0.8)判为近重</td><td>很多页面只换了标题或广告,本质仍是同一份内容</td></tr>
+              <tr><td><strong>质量过滤</strong></td><td>过滤低信息密度、SEO spam、机器翻译腔、自动生成垃圾</td><td>①<strong>启发式规则</strong>(长度、符号/数字占比、重复行比例、脏词表);②<strong>质量分类器</strong>或语言模型<strong>困惑度</strong>打分,低分丢弃</td><td>模型会模仿训练分布;低质文本多,输出也会变油、空、乱</td></tr>
+              <tr><td><strong>安全与隐私过滤</strong></td><td>处理个人信息、密钥、恶意代码、极端有害内容等</td><td><strong>正则</strong>匹配邮箱/手机号/身份证/密钥 + <strong>NER</strong> 识别人名地址,命中就删或替换成占位符</td><td>降低隐私泄漏、安全风险和法律风险</td></tr>
+              <tr><td><strong>污染检测</strong></td><td>移除 benchmark 题目、测试答案、评测集泄漏内容</td><td>把评测集的 <strong>n-gram</strong> 与训练文本比对,重叠过高的样本剔除</td><td>否则模型可能只是“背过考题”,评测分数会虚高</td></tr>
+              <tr><td><strong>领域分类与重加权</strong></td><td>给文本打上 web / code / math / book / forum / language 等标签,再决定混合比例</td><td>训练一个<strong>领域分类器</strong>给文档打标签,再按实验结果调各域权重</td><td>训练不是平均吃;高价值领域通常要提高权重</td></tr>
+              <tr><td><strong>分词与打包</strong></td><td>用 tokenizer 切成 token,拼成固定长度训练样本,打成 shard</td><td>用 <strong>BPE / BBPE tokenizer</strong>(<a class="xref" href="chapter-20.html#3-第一步-把文字切成-token分词与-bpe">§3</a>)切分,再拼成定长序列</td><td>让 GPU 能高吞吐地一批批读取,减少空洞和随机 IO</td></tr>
             </tbody>
           </table>
         </div>
@@ -441,6 +504,10 @@
           还看这些 token 的<strong>信息密度、重复率、领域配比、语言覆盖、污染程度</strong>。训练前常常会先用小模型做 ablation:
           换一版过滤器、调一版 web:code:math 比例,看验证集和下游任务到底变好还是变差,再决定大模型要不要跟进。
         </p>
+        <div class="figure reveal">
+          <div data-lab="corpus-clean"></div>
+          <p class="figure__cap">动手洗一段脏语料:8 条「刚爬下来」的原始文本,逐个打开过滤器,看噪声、重复、隐私被一层层剥掉,最后只剩下真正能训练的正文。</p>
+        </div>
 
         <h4>③ 为什么说 GPT-4 之后“数据更难了”?</h4>
         <p>
@@ -1495,5 +1562,6 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
     </main>
 
     <script src="assets/book.js"></script>
+    <script src="assets/labs.js"></script>
   </body>
 </html>

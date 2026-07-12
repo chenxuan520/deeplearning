@@ -644,6 +644,62 @@ select {
   transition: width 180ms ease;
 }
 
+/* 语料清洗实验(第 20 章) */
+.clean-list {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.clean-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.6rem;
+  align-items: baseline;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  transition: opacity 160ms ease, background 160ms ease;
+}
+
+.clean-row--keep {
+  background: rgba(142, 240, 209, 0.1);
+  border-color: rgba(142, 240, 209, 0.4);
+}
+
+.clean-row--drop {
+  opacity: 0.6;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.clean-row--drop .clean-row__text {
+  text-decoration: line-through;
+}
+
+.clean-row__tag {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.clean-row--keep .clean-row__tag {
+  color: var(--accent);
+}
+
+.clean-row__text {
+  color: var(--text);
+}
+
+.clean-row__how {
+  flex-basis: 100%;
+  font-size: 0.76rem;
+  color: var(--warn);
+  padding-left: 0.2rem;
+}
+
 /* 传播动画 */
 .propagation {
   width: 100%;

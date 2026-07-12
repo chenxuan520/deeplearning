@@ -30,6 +30,7 @@
             <li><strong>精确率 / 召回 / F1 / 混淆矩阵</strong>怎么读、怎么算,以及指标如何随<strong>判定门槛</strong>变化(ROC/PR、AUC);</li>
             <li>多分类(如 MNIST 10 类)的 <strong>macro / micro 平均</strong>是怎么回事;</li>
             <li>数据为什么要<strong>归一化</strong>,以及<strong>统计量只能从训练集算</strong>(否则泄漏);</li>
+            <li>原始数据的四类<strong>脏</strong>(缺失 / 异常 / 重复 / 标签错)怎么识别与处理,以及为什么<strong>去重要在切分前</strong>做;</li>
             <li>训练“不降 / 发散 / 过拟合”时的一份<strong>调试清单</strong>。</li>
           </ul>
         </section>
@@ -298,6 +299,50 @@ pixel_value = raw_pixel / 255.0;                <b class="cw-tag">1</b></code></
           <li><strong>别漏了非数值特征</strong>:类别型(如“星期几”“城市”)一般转成 <strong>one-hot</strong> 编码;有<strong>缺失值</strong>要先填补(常用训练集的均值/众数)——同样只用训练集的统计量。</li>
         </ul>
 
+        <h3>不止缩放:先处理缺失、异常、重复与标签错</h3>
+        <p>
+          归一化只是把干净数据“摆正”。可现实里的原始数据往往先是<strong>脏</strong>的:有空洞、有离谱的值、有重复、还有贴错的标签。
+          这些不先处理,再好的模型也是<strong>“垃圾进,垃圾出”</strong>。下面四类是最常见的脏,也是喂数据前该先扫一遍的清单:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>脏在哪</th><th>长什么样</th><th>危害</th><th>常用处理</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>缺失值</strong></td><td>某些特征是空的(没填年龄、传感器掉数)</td><td>很多算法算不动;直接填 0 会被当成“真有个 0”而误导</td><td>用<strong>训练集</strong>的均值/中位数/众数填补,或额外加一列“是否缺失”标记</td></tr>
+              <tr><td><strong>异常值 / 离群点</strong></td><td>年龄 999、金额是负数、单位填错大了 1000 倍</td><td>把归一化的尺度<strong>整个带偏</strong>(一个超大值压扁其余),梯度也跟着乱</td><td>先查是<strong>录错</strong>还是<strong>真极端</strong>:录错就改/删,真极端可截断(clip)或改用更耐受的标准化</td></tr>
+              <tr><td><strong>重复样本</strong></td><td>同一条数据抄了好几遍、爬虫抓到镜像页</td><td>让模型<strong>反复背同一条</strong>,还会在划分时“串台”造成泄漏</td><td>按关键字段去重;近似重复(轻微改写)也要一并清掉</td></tr>
+              <tr><td><strong>标签噪声</strong></td><td>猫的图被标成狗、评论情感标反</td><td>等于拿<strong>错答案</strong>教模型,天花板被直接压低</td><td>抽检标注质量、多人交叉标注取一致,或用模型找出“最可疑”的标签复核</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">四类脏数据:先扫一遍再谈建模。清洗做得好,常比换个更大的模型更划算。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">怎么判「异常」和「近似重复」?给两个能上手的判据</span>
+          <p>
+            <strong>异常值</strong>:最常用的是「离均值多少个标准差」——把偏离均值超过 <strong>3 个标准差</strong>的点先拎出来看(所谓 3σ 法则);
+            或用<strong>四分位距(IQR)</strong>,落在 <code>[Q1−1.5·IQR, Q3+1.5·IQR]</code> 之外的算离群。判出来后别急着删,先分清是<strong>录错</strong>还是<strong>真极端</strong>。<br />
+            <strong>近似重复</strong>:完全一样的用<strong>哈希</strong>比对就行;只是「改了标题的转载」这种,要看两段文字的<strong>词/片段重合度</strong>(集合的交集比并集,即 Jaccard 相似度),
+            超过某个阈值(如 0.8)就当同一份——这套在大模型语料里就是 <a class="xref" href="chapter-20.html#5-规模化scaling-law-大力真的出奇迹">MinHash 近似去重</a>,原理完全一样,只是规模大得多。
+          </p>
+        </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">重复样本会顺手制造“数据泄漏”</span>
+          <p>
+            如果同一条(或近似重复的)数据<strong>一份落进训练集、一份落进测试集</strong>,模型在测试时其实是在“考做过的原题”,
+            分数虚高、上线打回原形。所以<strong>去重要在切分之前做</strong>,别让重复的数据跨越
+            <a class="xref" href="chapter-11.html#1-三个数据集-学调考">train/test 的墙</a>。
+          </p>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">顺序很重要:先修脏、再切分、最后才算统计量</span>
+          <p>
+            正确的流水线是:<strong>①去重、修异常、补缺失、核标签</strong>(把数据修干净)→ <strong>②划分 train/val/test</strong> →
+            <strong>③只用训练集</strong>算均值/标准差等统计量,再套到三份上做归一化。顺序反了——比如先用全量数据算统计量或先归一化再切分——就会把测试集信息<strong>漏</strong>进训练,前功尽弃。
+          </p>
+        </div>
+
         <h2>6. 训练不动?一份排查清单</h2>
         <p>真上手训练,十有八九会遇到“不对劲”。按这个顺序排查,能解决大部分问题:</p>
         <ul>
@@ -323,6 +368,7 @@ pixel_value = raw_pixel / 255.0;                <b class="cw-tag">1</b></code></
             <li>数据少用 <strong>K 折 / 分层 K 折</strong>,每条数据都当一次考题。</li>
             <li><strong>先立笨基线</strong>;准确率在不平衡时会骗人,用<strong>混淆矩阵</strong>推出精确率、召回、F1,并记得它们随<strong>门槛</strong>变(ROC/PR、AUC)。</li>
             <li>指标要配任务:分类看 P/R/F1(多类看 macro/micro),回归看 MSE,语言模型看困惑度。</li>
+            <li>喂数据前先<strong>修脏</strong>:处理缺失、异常、重复、标签错,<strong>去重要在切分前做</strong>免得泄漏。</li>
             <li>喂数据前先<strong>归一化</strong>(MNIST 除以 255),统计量<strong>只从训练集算</strong>;训练不动就按清单排查,先“过拟合一小撮”验证管道。</li>
           </ul>
         </section>

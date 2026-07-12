@@ -1,0 +1,10 @@
+# Training data and model artifacts for the mini_lm demo are NOT tracked in git.
+# Only the source (main.cpp), build config, and the tools/ scripts are committed;
+# anyone can regenerate the data with tools/fetch_data.sh and retrain locally.
+
+# Downloaded + cleaned corpora produced by tools/fetch_data.sh
+tools/data/
+
+# Model artifacts produced by 'mini_lm init' / 'mini_lm train'
+*.param
+*.vocab

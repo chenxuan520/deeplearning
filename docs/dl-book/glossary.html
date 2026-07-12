@@ -59,6 +59,8 @@
           <li id="g-generalize"><strong>泛化 generalization</strong> — 在没见过的数据上也表现好,这才是真本事。<a href="chapter-10.html">→ 第 10 章</a></li>
           <li id="g-split"><strong>训练/验证/测试集</strong> — 学 / 调 / 考三份互不重叠的数据。<a href="chapter-11.html">→ 第 11 章</a></li>
           <li id="g-prf"><strong>精确率 / 召回 / F1</strong> — 查得准 / 查得全 / 两者的调和平均。<a href="chapter-11.html">→ 第 11 章</a></li>
+          <li id="g-leakage" data-aliases="数据泄漏,data leakage,信息泄漏,泄漏"><strong>数据泄漏 data leakage</strong> — 测试集信息偷偷进了训练(用全量数据算统计量、重复样本跨越 train/test),导致分数虚高、上线翻车。<a href="chapter-11.html#1-三个数据集-学调考">→ 第 11 章 §1</a></li>
+          <li id="g-clean" data-aliases="数据清洗,脏数据,缺失值,异常值,离群点,标签噪声,data cleaning,近似去重,MinHash,Jaccard,质量过滤,困惑度过滤,正文抽取"><strong>数据清洗 / 脏数据</strong> — 喂模型前先处理缺失值、异常值、重复样本、标签错;去重要在切分前做,统计量只从训练集算。方法上:精确重复用<strong>哈希</strong>、近似重复用 <strong>MinHash/Jaccard 相似度</strong>、低质用<strong>规则+分类器/困惑度</strong>过滤。<a href="chapter-11.html#不止缩放-先处理缺失异常重复与标签错">→ 第 11 章</a></li>
         </ul>
 
         <h2>网络结构</h2>
