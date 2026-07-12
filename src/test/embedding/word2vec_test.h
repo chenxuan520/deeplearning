@@ -21,6 +21,57 @@ TEST(WordTokenizer, BuildsVocabularyAndTokenizes) {
   MUST_TRUE(tokenizer.Lookup("dog") >= 0, "dog should be lowercased");
 }
 
+TEST(WordTokenizer, UnknownAndDecodeRoundTrip) {
+  WordTokenizer tokenizer;
+  const std::string text = "Alice was beginning to get very tired";
+  MUST_EQUAL(tokenizer.InitFromText(text, true), WordTokenizer::SUCCESS);
+  MUST_EQUAL(tokenizer.Lookup("<unk>"), 0);
+  MUST_TRUE(tokenizer.Lookup("alice") > 0, "alice should be in vocabulary");
+
+  std::vector<int> token_ids;
+  int unknown_count = 0;
+  MUST_EQUAL(tokenizer.TokenizeFlatWithUnknown("Alice met Dinah", token_ids,
+                                               unknown_count),
+             WordTokenizer::SUCCESS);
+  MUST_EQUAL(unknown_count, 2);
+  MUST_EQUAL(token_ids[0], tokenizer.Lookup("alice"));
+  MUST_EQUAL(token_ids[1], tokenizer.Lookup("<unk>"));
+  MUST_EQUAL(token_ids[2], tokenizer.Lookup("<unk>"));
+
+  std::string decoded;
+  MUST_EQUAL(tokenizer.Decode(token_ids, decoded), WordTokenizer::SUCCESS);
+  MUST_EQUAL(decoded, "alice <unk> <unk>");
+}
+
+TEST(WordTokenizer, InitFromVocabularyRejectsDuplicates) {
+  WordTokenizer tokenizer;
+  const std::vector<std::string> vocabulary = {"<unk>", "the", "alice", "The"};
+  MUST_EQUAL(tokenizer.InitFromVocabulary(vocabulary),
+             WordTokenizer::INVALID_DATA);
+}
+
+TEST(WordTokenizer, InitFromVocabularyPreservesIds) {
+  WordTokenizer tokenizer;
+  const std::vector<std::string> vocabulary = {"<unk>", "the", "alice",
+                                               "said"};
+  MUST_EQUAL(tokenizer.InitFromVocabulary(vocabulary), WordTokenizer::SUCCESS);
+  MUST_EQUAL(tokenizer.Lookup("<unk>"), 0);
+  MUST_EQUAL(tokenizer.Lookup("the"), 1);
+  MUST_EQUAL(tokenizer.Lookup("alice"), 2);
+  MUST_EQUAL(tokenizer.Lookup("said"), 3);
+
+  std::vector<int> token_ids;
+  int unknown_count = 0;
+  MUST_EQUAL(tokenizer.TokenizeFlatWithUnknown("The Alice smiled", token_ids,
+                                               unknown_count),
+             WordTokenizer::SUCCESS);
+  MUST_EQUAL(unknown_count, 1);
+
+  std::string decoded;
+  MUST_EQUAL(tokenizer.Decode(token_ids, decoded), WordTokenizer::SUCCESS);
+  MUST_EQUAL(decoded, "the alice <unk>");
+}
+
 TEST(Word2Vec, SkipGramPullsRelatedWordsTogether) {
   const std::string corpus = R"(the cat sat on the mat
 the dog sat on the log

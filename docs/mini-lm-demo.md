@@ -1,12 +1,13 @@
 # mini_lm 基座模型 Demo
 
-`src/bin/mini_lm` 是一个围绕 `deeplearning::MiniTransformerLM` 的**字符级语言模型命令行工具**，把「定义结构 → 喂语料训练 → 加载推理」拆成独立子命令，方便当作一个小小的**基座模型**来用：先初始化一个空模型，再用任意文本把它喂大，最后加载参数做文本续写。
+`src/bin/mini_lm` 是一个围绕 `deeplearning::MiniTransformerLM` 的**小型语言模型命令行工具**，把「定义结构 → 喂语料训练 → 加载推理」拆成独立子命令，方便当作一个小小的**基座模型**来用：先初始化一个空模型，再用任意文本把它喂大，最后加载参数做文本续写。它默认使用字符级 tokenizer，也可以通过 `--tokenizer word` 切到词级 tokenizer。
 
-它复用的是仓库已有的 Transformer 模块（`src/deeplearning/transformer/`），本 demo 只做「命令调度 + 数据 IO」这一薄层，不改动任何库代码，因此对现有测试和电子书零影响。
+它复用的是仓库已有的 Transformer 模块（`src/deeplearning/transformer/`）；demo 层负责命令调度、数据 IO、tokenizer sidecar 读写，词级模式复用并扩展了 `src/deeplearning/embedding/word_tokenizer.*`。
 
 ## 能力边界（先说清楚，别误解）
 
-- 这是**字符级续写模型**：逐个字符地学「看到这些字符，下一个字符最可能是什么」。训练充分后它能续写出**像英文的字符流**（真实单词、空格、标点），而不是背 `abcabc`。
+- 默认是**字符级续写模型**：逐个字符地学「看到这些字符，下一个字符最可能是什么」。训练充分后它能续写出**像英文的字符流**（真实单词、空格、标点），而不是背 `abcabc`。
+- 也支持**词级续写模型**：`--tokenizer word` 会按英文单词切分，小写化后预测下一个词，生成结果用空格拼回文本，例如 `alice was beginning to get very tired`。
 - 它**不是对话模型**。你对它说 `hello` 它不会"理解并回答 hello"——它只会沿着 `hello` 这个前缀，按训练语料的统计继续往下写字符。想要"问答/指令遵循"需要指令微调 + 大得多的模型，超出本库范围。
 - 底层是**朴素实现**（纯 `std::vector`、逐样本、无 batch、无 BLAS/SIMD、Debug 构建），算力有限。请把它当**教学/实验**用途，模型规模和语料都要按「你的机器能训得动」来选（见 [训练成本与选参](#10-训练成本与选参)）。
 
@@ -24,7 +25,7 @@ cd src
 ```bash
 cd src
 
-# ① init：定义模型结构，并从语料扫出字符表，随机初始化后保存
+# ① init：定义模型结构，并从语料扫出词表，随机初始化后保存
 ./bin/mini_lm init --model /tmp/toy.param --corpus "hello mini language model" \
     --model-dim 16 --head-num 2 --feed-forward-dim 32 --block-num 1 --context-size 8
 
@@ -48,11 +49,26 @@ cd src
 | 文件 | 内容 | 谁写的 |
 |------|------|--------|
 | `<model>`（如 `toy.param`） | 二进制权重 + 结构超参 | `MiniTransformerLMLoader`（库自带格式） |
-| `<model>.vocab`（如 `toy.param.vocab`） | 字符表（原始字节） | 本 demo |
+| `<model>.vocab`（如 `toy.param.vocab`） | tokenizer 类型 + 词表 | 本 demo |
 
-**为什么要单独存词表？** 库的模型文件只存了权重和结构，没存"字符↔编号"的对应关系。而字符级模型必须靠这张表才能把文本编码成 token、把输出解码回文本。所以本 demo 在 `init` 时把词表落到 `.vocab` sidecar，`train`/`generate`/`info` 都会连它一起加载。**两个文件要一起拷贝、一起备份**，丢了 `.vocab` 就没法用了。
+**为什么要单独存词表？** 库的模型文件只存了权重和结构，没存"token↔编号"的对应关系。而语言模型必须靠这张表才能把文本编码成 token、把输出解码回文本。所以本 demo 在 `init` 时把词表落到 `.vocab` sidecar，`train`/`generate`/`info` 都会连它一起加载。**两个文件要一起拷贝、一起备份**，丢了 `.vocab` 就没法用了。
 
-> 词表在 `init` 时就**固定死**了（它的大小 = embedding 行数 = 输出层维度，属于模型结构）。之后 `train`/`generate` 遇到词表里没有的字符会**自动跳过并告警**，不会崩溃，但那些字符学不到也生成不出来。所以 `init` 用的语料要尽量覆盖你后续会用到的字符集。
+> 词表在 `init` 时就**固定死**了（它的大小 = embedding 行数 = 输出层维度，属于模型结构）。之后 `train`/`generate` 遇到字符级词表外字符会**自动跳过并告警**；词级模型遇到词表外单词会映射到 `<unk>`。所以 `init` 用的语料要尽量覆盖你后续会用到的字符集或常用词。
+
+### `.vocab` sidecar 格式
+
+字符级模型为了兼容旧文件，仍然把字符表按原始字节直接写进 `.vocab`。词级模型会写成可区分的行格式：
+
+```text
+tokenizer=word
+<unk>
+the
+alice
+said
+...
+```
+
+第一行说明 tokenizer 类型；后面每行一个词，行号就是 token id。`<unk>` 固定在 id 0，用来承接推理或续训时没见过的词。
 
 ## 4. 词表是怎么来的、怎么训练的
 
@@ -60,14 +76,16 @@ cd src
 
 | | 词表（vocabulary） | 词向量（embedding table） |
 |---|---|---|
-| 是什么 | 一张 `字符 ↔ 编号` 的静态查找表 | 每个编号对应一行 `model-dim` 维的可学向量 |
+| 是什么 | 一张 `token ↔ 编号` 的静态查找表 | 每个编号对应一行 `model-dim` 维的可学向量 |
 | 怎么来的 | `init` 时扫语料生成，之后**冻结** | `init` 时随机初始化，`train` 时不断被更新 |
 | 存在哪 | `<model>.vocab`（本 demo 写的纯文本） | `<model>`（`.param` 二进制权重的一部分） |
 | 训练时 | 一动不动，只用来编码/解码 | 参与前向、反向传播、Adam 更新 |
 
 ### 词表怎么生成（`init` 阶段，只做一次）
 
-`init` 调 `CharacterTokenizer::BuildVocabularyFromText`（`character_tokenizer.cpp:5`）扫一遍语料，逻辑非常朴素——见过的字符跳过，没见过的就分配下一个编号：
+`init` 会根据 `--tokenizer` 选择不同词表生成方式。
+
+字符级默认走 `CharacterTokenizer::BuildVocabularyFromText`（`character_tokenizer.cpp:5`）扫一遍语料，逻辑非常朴素——见过的字符跳过，没见过的就分配下一个编号：
 
 - **字节级**：粒度就是单个 `char`，不做 BPE、不切词。`hello` = `h/e/l/o` 四个 token（`l` 去重）。
 - **按首次出现顺序编号**：语料里第一个出现的字符拿 id 0，第二个新字符拿 id 1…… 所以 `info` 打出来的词表顺序，就是语料开头的字符顺序。
@@ -75,6 +93,14 @@ cd src
 - **大小 = distinct 字符数**：它同时等于 embedding 的行数和输出 softmax 的维度，属于模型结构，所以 `init` 后**冻结**（词表外的字符在 `train`/`generate` 时被 `FilterToVocab` 丢弃并告警）。
 
 一个副作用：编号跟“语料开头长什么样”绑定，**相同字符集、不同语料开头 → 不同的 id 分配**。所以两个模型的 `.vocab` 不能互换，`LoadModel` 里 `vocab_size` 那道校验就是为此。
+
+词级模式走 `WordTokenizer::InitFromText(text, true)`：
+
+- **按英文单词切分**：连续的字母、数字、下划线算一个词，逗号、句号、引号、换行等都只是分隔符。
+- **统一小写**：`Alice` 和 `alice` 是同一个 token，生成时也会输出小写词。
+- **按首次出现顺序编号**：`<unk>` 固定为 id 0，后面按语料里第一次出现的词依次编号。
+- **词表外单词进 `<unk>`**：`train`/`generate` 遇到没见过的词不会删掉整段输入，而是映射到 `<unk>` 并打印告警。
+- **解码用空格拼词**：词级生成不会恢复原始标点和大小写，输出形如 `alice was beginning to get very tired`。
 
 ### 词向量怎么训练（`train` 阶段，每步都在变）
 
@@ -85,17 +111,18 @@ cd src
 3. **反向更新**：`TrainNextToken`（`mini_transformer_lm.cpp:539`）把该位置回传的梯度 `grad_hidden` 按 token id **散射累加**回对应的 embedding 行（同一字符在窗口里出现多次就累加多次），再对整张表走一步 Adam（`embedding_optimizer_.Apply`）。
 4. 训练久了，**经常出现在相似上下文里的字符，向量会越来越接近**——这就是“学到”的字符表示。
 
-所以整条链是：**词表把字符变成编号（不训练）→ 词向量把编号变成向量（这才是训练对象）→ Transformer 在向量上做预测。** 词表存在 `.vocab` 里、词向量存在 `.param` 里，也正对应这个分工。
+所以整条链是：**词表把字符/单词变成编号（不训练）→ 词向量把编号变成向量（这才是训练对象）→ Transformer 在向量上做预测。** 词表存在 `.vocab` 里、词向量存在 `.param` 里，也正对应这个分工。
 
 ## 5. 命令与参数
 
 ### `init` — 创建基座模型
 
-从语料扫字符表 + 按结构超参随机初始化 + 保存。
+从语料扫词表 + 按结构超参随机初始化 + 保存。
 
 | 参数 | 含义 | 默认 |
 |------|------|------|
 | `--model <path>` | 输出模型路径 | `mini_lm.param` |
+| `--tokenizer <char\|word>` | tokenizer 粒度：字符级或词级 | `char` |
 | `--corpus <text>` | 内联文本，用来建词表 | 一段占位串 |
 | `--corpus-file <path>` | 从文件读建词表的语料 | — |
 | `--corpus-dir <dir>` | 从目录下所有文件读语料 | — |
@@ -128,7 +155,7 @@ cd src
 |------|------|------|
 | `--model <path>` | 要加载的模型 | `mini_lm.param` |
 | `--prompt <text>` | 起始文本 | `ab` |
-| `--generate-num <int>` | 续写多少个字符 | 20 |
+| `--generate-num <int>` | 续写多少个 token（字符级=字符数，词级=词数） | 20 |
 | `--temperature <double>` | 采样温度（**给了就切采样模式**） | — |
 | `--top-k <int>` | top-k 采样 | — |
 | `--top-p <double>` | top-p (nucleus) 采样 | — |
@@ -141,7 +168,7 @@ cd src
 
 ## 6. 准备训练数据（清洗 → 喂给模型）
 
-字符级模型对"字符集大小"很敏感：语料里每多一个稀有字符（花引号、emoji、非拉丁字母……）词表就大一圈，小模型更难学。所以**喂给模型前先清洗成干净的 ASCII 文本**。
+字符级模型对"字符集大小"很敏感：语料里每多一个稀有字符（花引号、emoji、非拉丁字母……）词表就大一圈，小模型更难学。词级模型对"词表大小"敏感：低频词越多，embedding 和输出层越大，小模型越难训。所以**喂给模型前先清洗成干净的 ASCII 文本**，必要时缩小语料范围。
 
 `src/demo/mini_lm/tools/` 下提供两个只依赖标准库的脚本（都已纳入 git，可直接改）：
 
@@ -223,9 +250,9 @@ cp /tmp/base.param.vocab /tmp/tuned.param.vocab
 ```
 
 要点：
-- 微调语料的字符必须落在基座 `init` 时定的词表内，否则会被跳过（有告警）。想支持新字符只能重新 `init` + 重新预训练。
+- 字符级微调语料的字符必须落在基座 `init` 时定的词表内，否则会被跳过（有告警）；词级微调语料里的新词会映射到 `<unk>`。想真正支持新字符/新词，只能重新 `init` + 重新预训练。
 - 微调学习率通常**比预训练小一个量级**（例：预训练 `0.002` → 微调 `0.0005`），避免把基座学到的东西冲掉。
-- 这是**风格/领域适配**，不是"教它对话"。字符级 + 无指令数据，做不到"你问它答"。
+- 这是**风格/领域适配**，不是"教它对话"。无论字符级还是词级，只靠普通续写语料都做不到"你问它答"。
 
 ## 8. 真实训练示例（诚实的结果）
 
@@ -266,8 +293,17 @@ The wat tout ald s, tiledofoudeve ththerasang s s t tude o thed oud t t se tuthe
 $ ./bin/mini_lm info --model /tmp/alice.param
 Model: /tmp/alice.param
 Backbone: decoder model_dim: 32 head_num: 2 feed_forward_dim: 128 block_num: 1 context_size: 16 rand_seed: 42
+Tokenizer: char
 Vocab size: 65
 Vocabulary: [I][l][u][s][t][r][a][i][o][n][ ][A][c][e]['][d][v][W]...
+```
+
+词级模型的 `info` 会显示：
+
+```text
+Tokenizer: word
+Vocab size: 8
+Vocabulary: [<unk>] [alice] [was] [beginning] [to] [get] [very] [tired]
 ```
 
 ## 10. 训练成本与选参
@@ -302,14 +338,15 @@ Vocabulary: [I][l][u][s][t][r][a][i][o][n][ ][A][c][e]['][d][v][W]...
 | 数据获取 / 清洗脚本 | `src/demo/mini_lm/tools/fetch_data.sh` · `clean_text.py` |
 | 模型主体（Transformer LM） | `src/deeplearning/transformer/mini_transformer_lm.*` |
 | 权重存取 | `src/deeplearning/transformer/mini_transformer_lm_loader.*` |
-| 字符分词 / 数据集 | `character_tokenizer.*` · `character_dataset.*` |
+| 字符/词级分词 / 数据集 | `character_tokenizer.*` · `embedding/word_tokenizer.*` · `character_dataset.*` |
 | 学习率调度 | `src/deeplearning/lr_scheduler/warmup_cosine_lr.h` |
 
 ## 13. 常见问题
 
 - **`Vocab sidecar not found`**：`.vocab` 文件丢了或没跟 `.param` 放一起。两个文件必须成对；模型要重新 `init`。
 - **`model-dim must be divisible by head-num`**：`--model-dim` 必须能被 `--head-num` 整除（多头要均分维度）。
-- **训练时 `skipped N characters outside the model vocabulary`**：训练语料含 `init` 词表外的字符，已自动跳过。要支持这些字符得用覆盖它们的语料重新 `init`。
+- **训练时 `skipped N characters outside the model vocabulary`**：字符级训练语料含 `init` 词表外的字符，已自动跳过。要支持这些字符得用覆盖它们的语料重新 `init`。
+- **训练/生成时 `mapped N words outside the model vocabulary to <unk>`**：词级模型遇到没见过的词，已映射到 `<unk>`。想让模型真正学会这些词，需要用覆盖它们的语料重新 `init`。
 - **生成一直重复**：贪心的通病，改用采样（`--temperature 0.7 --top-k 5`），或训得更久/更大。
 - **`Model vocab size does not match the vocab sidecar`**：`.param` 和 `.vocab` 来自不同模型，别混用。
 

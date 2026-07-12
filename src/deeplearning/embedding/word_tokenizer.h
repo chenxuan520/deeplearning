@@ -16,10 +16,15 @@ public:
   };
 
 public:
-  RC InitFromText(const std::string &text);
+  RC InitFromText(const std::string &text, bool add_unknown_token = false);
+  RC InitFromVocabulary(const std::vector<std::string> &vocabulary);
   RC TokenizeSentences(const std::string &text,
                        std::vector<std::vector<int>> &sentences);
   RC TokenizeFlat(const std::string &text, std::vector<int> &token_ids);
+  RC TokenizeFlatWithUnknown(const std::string &text,
+                             std::vector<int> &token_ids,
+                             int &unknown_count);
+  RC Decode(const std::vector<int> &token_ids, std::string &text);
 
   int Lookup(const std::string &word) const;
   const std::string &Word(int token_id) const;

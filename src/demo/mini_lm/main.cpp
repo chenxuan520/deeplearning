@@ -1,3 +1,4 @@
+#include "embedding/word_tokenizer.h"
 #include "lr_scheduler/warmup_cosine_lr.h"
 #include "transformer/character_dataset.h"
 #include "transformer/character_tokenizer.h"
@@ -8,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -27,9 +29,14 @@ namespace {
 //
 // A model is stored as two sidecar files sharing the same base path:
 //   <model>        binary weights + structure (MiniTransformerLMLoader format)
-//   <model>.vocab  the character vocabulary, raw bytes (this demo's own file)
+//   <model>.vocab  tokenizer metadata + vocabulary (this demo's own file)
 // The vocabulary is required to map characters to token ids, so it is persisted
 // alongside the weights instead of being rebuilt from the training corpus.
+
+enum TokenizerKind {
+  TOKENIZER_CHAR,
+  TOKENIZER_WORD,
+};
 
 struct Option {
   string model = "mini_lm.param";
@@ -50,6 +57,8 @@ struct Option {
   int top_k = 0;
   double top_p = 1.0;
   string backbone = "decoder";
+  string tokenizer = "char";
+  bool tokenizer_specified = false;
   bool sampling_specified = false;
 };
 
@@ -70,6 +79,7 @@ void PrintCommandUsage(const char *prog, const string &verb) {
   if (verb == "init") {
     cout << "  --model <path>              output model path (default "
             "mini_lm.param)\n"
+         << "  --tokenizer <char|word>     tokenizer granularity (default char)\n"
          << "  --corpus <text>             inline corpus used to build the "
             "vocab\n"
          << "  --corpus-file <path>        read the vocab corpus from a file\n"
@@ -159,6 +169,9 @@ bool ParseArgs(int argc, char **argv, int start, Option &option) {
       option.sampling_specified = true;
     } else if (arg == "--backbone") {
       option.backbone = need_value("--backbone");
+    } else if (arg == "--tokenizer") {
+      option.tokenizer = need_value("--tokenizer");
+      option.tokenizer_specified = true;
     } else if (arg == "--help") {
       return false;
     } else {
@@ -184,6 +197,13 @@ void StripTrailingNewlines(string &text) {
   while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
     text.pop_back();
   }
+}
+
+string TrimLineEnd(string line) {
+  while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) {
+    line.pop_back();
+  }
+  return line;
 }
 
 // Reads every regular file under dir (recursively) sorted by path, so the
@@ -273,7 +293,27 @@ string FilterToVocab(const string &vocabulary, const string &text,
   return filtered;
 }
 
-string DisplayVocab(const string &vocabulary) {
+TokenizerKind ParseTokenizerKind(const string &tokenizer) {
+  if (tokenizer == "char") {
+    return TOKENIZER_CHAR;
+  }
+  if (tokenizer == "word") {
+    return TOKENIZER_WORD;
+  }
+  throw std::runtime_error("Invalid tokenizer, expected char or word");
+}
+
+const char *TokenizerName(TokenizerKind tokenizer_kind) {
+  return tokenizer_kind == TOKENIZER_WORD ? "word" : "char";
+}
+
+struct TokenizerBundle {
+  TokenizerKind kind = TOKENIZER_CHAR;
+  CharacterTokenizer char_tokenizer;
+  WordTokenizer word_tokenizer;
+};
+
+string DisplayCharVocab(const string &vocabulary) {
   string out;
   for (char ch : vocabulary) {
     out.push_back('[');
@@ -289,6 +329,209 @@ string DisplayVocab(const string &vocabulary) {
     out.push_back(']');
   }
   return out;
+}
+
+string DisplayWordVocab(const vector<string> &vocabulary) {
+  string out;
+  for (const auto &word : vocabulary) {
+    if (!out.empty()) {
+      out += " ";
+    }
+    out.push_back('[');
+    out += word;
+    out.push_back(']');
+  }
+  return out;
+}
+
+bool WriteVocabSidecar(const string &path, const TokenizerBundle &tokenizer,
+                       string &err) {
+  std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
+  if (!ofs.is_open()) {
+    err = "Write vocab sidecar failed: " + path;
+    return false;
+  }
+  if (tokenizer.kind == TOKENIZER_CHAR) {
+    ofs << tokenizer.char_tokenizer.vocabulary();
+  } else {
+    ofs << "tokenizer=word\n";
+    for (const auto &word : tokenizer.word_tokenizer.vocabulary()) {
+      ofs << word << '\n';
+    }
+  }
+  if (!ofs.good()) {
+    err = "Write vocab sidecar failed: " + path;
+    return false;
+  }
+  return true;
+}
+
+bool InitTokenizerFromCorpus(TokenizerKind tokenizer_kind, const string &corpus,
+                             TokenizerBundle &tokenizer, string &err) {
+  tokenizer.kind = tokenizer_kind;
+  if (tokenizer.kind == TOKENIZER_CHAR) {
+    const string vocabulary = CharacterTokenizer::BuildVocabularyFromText(corpus);
+    if (tokenizer.char_tokenizer.Init(vocabulary) !=
+        CharacterTokenizer::SUCCESS) {
+      err = "Tokenizer init failed: " + tokenizer.char_tokenizer.err_msg();
+      return false;
+    }
+    return true;
+  }
+
+  if (tokenizer.word_tokenizer.InitFromText(corpus, true) !=
+      WordTokenizer::SUCCESS) {
+    err = "Tokenizer init failed: " + tokenizer.word_tokenizer.err_msg();
+    return false;
+  }
+  return true;
+}
+
+bool InitTokenizerFromSidecar(const string &content, TokenizerBundle &tokenizer,
+                              string &err) {
+  if (content.rfind("tokenizer=", 0) != 0) {
+    tokenizer.kind = TOKENIZER_CHAR;
+    if (tokenizer.char_tokenizer.Init(content) != CharacterTokenizer::SUCCESS) {
+      err = "Tokenizer init failed: " + tokenizer.char_tokenizer.err_msg();
+      return false;
+    }
+    return true;
+  }
+
+  std::istringstream iss(content);
+  string header;
+  std::getline(iss, header);
+  header = TrimLineEnd(header);
+  const string tokenizer_name = header.substr(string("tokenizer=").size());
+  try {
+    tokenizer.kind = ParseTokenizerKind(tokenizer_name);
+  } catch (const std::exception &ex) {
+    err = ex.what();
+    return false;
+  }
+
+  string rest((std::istreambuf_iterator<char>(iss)),
+              std::istreambuf_iterator<char>());
+  if (tokenizer.kind == TOKENIZER_CHAR) {
+    StripTrailingNewlines(rest);
+    if (tokenizer.char_tokenizer.Init(rest) != CharacterTokenizer::SUCCESS) {
+      err = "Tokenizer init failed: " + tokenizer.char_tokenizer.err_msg();
+      return false;
+    }
+    return true;
+  }
+
+  vector<string> vocabulary;
+  string line;
+  std::istringstream vocab_stream(rest);
+  while (std::getline(vocab_stream, line)) {
+    line = TrimLineEnd(line);
+    if (!line.empty()) {
+      vocabulary.push_back(line);
+    }
+  }
+  if (tokenizer.word_tokenizer.InitFromVocabulary(vocabulary) !=
+      WordTokenizer::SUCCESS) {
+    err = "Tokenizer init failed: " + tokenizer.word_tokenizer.err_msg();
+    return false;
+  }
+  if (tokenizer.word_tokenizer.Lookup("<unk>") < 0) {
+    err = "Word vocab sidecar must contain <unk>";
+    return false;
+  }
+  return true;
+}
+
+int TokenizerVocabSize(const TokenizerBundle &tokenizer) {
+  return tokenizer.kind == TOKENIZER_WORD ? tokenizer.word_tokenizer.vocab_size()
+                                          : tokenizer.char_tokenizer.vocab_size();
+}
+
+bool EncodeForTraining(TokenizerBundle &tokenizer, const string &text,
+                       vector<int> &token_ids, int &unknown_count,
+                       string &err) {
+  unknown_count = 0;
+  if (tokenizer.kind == TOKENIZER_WORD) {
+    if (tokenizer.word_tokenizer.TokenizeFlatWithUnknown(
+            text, token_ids, unknown_count) != WordTokenizer::SUCCESS) {
+      err = "Encode corpus failed: " + tokenizer.word_tokenizer.err_msg();
+      return false;
+    }
+    return true;
+  }
+
+  long long dropped = 0;
+  const string filtered =
+      FilterToVocab(tokenizer.char_tokenizer.vocabulary(), text, dropped);
+  unknown_count = static_cast<int>(dropped);
+  if (filtered.empty()) {
+    err = "No trainable text left after filtering to the model vocabulary";
+    return false;
+  }
+  if (tokenizer.char_tokenizer.Encode(filtered, token_ids) !=
+      CharacterTokenizer::SUCCESS) {
+    err = "Encode corpus failed: " + tokenizer.char_tokenizer.err_msg();
+    return false;
+  }
+  return true;
+}
+
+bool EncodePrompt(TokenizerBundle &tokenizer, const string &text,
+                  vector<int> &token_ids, int &unknown_count, string &prompt,
+                  string &err) {
+  unknown_count = 0;
+  if (tokenizer.kind == TOKENIZER_WORD) {
+    if (tokenizer.word_tokenizer.TokenizeFlatWithUnknown(
+            text, token_ids, unknown_count) != WordTokenizer::SUCCESS) {
+      err = "Encode prompt failed: " + tokenizer.word_tokenizer.err_msg();
+      return false;
+    }
+    if (tokenizer.word_tokenizer.Decode(token_ids, prompt) !=
+        WordTokenizer::SUCCESS) {
+      err = "Decode prompt failed: " + tokenizer.word_tokenizer.err_msg();
+      return false;
+    }
+    return true;
+  }
+
+  long long dropped = 0;
+  prompt = FilterToVocab(tokenizer.char_tokenizer.vocabulary(), text, dropped);
+  unknown_count = static_cast<int>(dropped);
+  if (prompt.empty()) {
+    err = "Prompt is empty after filtering to the model vocabulary";
+    return false;
+  }
+  if (tokenizer.char_tokenizer.Encode(prompt, token_ids) !=
+      CharacterTokenizer::SUCCESS) {
+    err = "Encode prompt failed: " + tokenizer.char_tokenizer.err_msg();
+    return false;
+  }
+  return true;
+}
+
+bool DecodeGenerated(TokenizerBundle &tokenizer, const vector<int> &token_ids,
+                     string &text, string &err) {
+  if (tokenizer.kind == TOKENIZER_WORD) {
+    if (tokenizer.word_tokenizer.Decode(token_ids, text) !=
+        WordTokenizer::SUCCESS) {
+      err = "Decode generated text failed: " + tokenizer.word_tokenizer.err_msg();
+      return false;
+    }
+    return true;
+  }
+  if (tokenizer.char_tokenizer.Decode(token_ids, text) !=
+      CharacterTokenizer::SUCCESS) {
+    err = "Decode generated text failed: " + tokenizer.char_tokenizer.err_msg();
+    return false;
+  }
+  return true;
+}
+
+string DisplayTokenizerVocab(const TokenizerBundle &tokenizer) {
+  if (tokenizer.kind == TOKENIZER_WORD) {
+    return DisplayWordVocab(tokenizer.word_tokenizer.vocabulary());
+  }
+  return DisplayCharVocab(tokenizer.char_tokenizer.vocabulary());
 }
 
 MiniTransformerLM::BackboneType ParseBackboneType(const string &backbone) {
@@ -307,7 +550,7 @@ const char *BackboneName(MiniTransformerLM::BackboneType type) {
 
 // Loads the weights and the vocab sidecar produced by 'init'.
 bool LoadModel(const string &model_path, MiniTransformerLM &model,
-               CharacterTokenizer &tokenizer, string &err) {
+               TokenizerBundle &tokenizer, string &err) {
   std::ifstream probe(model_path, std::ios::binary);
   if (!probe.good()) {
     err = "Model file not found: " + model_path;
@@ -315,14 +558,14 @@ bool LoadModel(const string &model_path, MiniTransformerLM &model,
   }
   probe.close();
 
-  string vocabulary;
-  if (!ReadFileRaw(VocabPath(model_path), vocabulary) || vocabulary.empty()) {
+  string vocab_content;
+  if (!ReadFileRaw(VocabPath(model_path), vocab_content) ||
+      vocab_content.empty()) {
     err = "Vocab sidecar not found or empty: " + VocabPath(model_path) +
           " (was this model created by 'mini_lm init'?)";
     return false;
   }
-  if (tokenizer.Init(vocabulary) != CharacterTokenizer::SUCCESS) {
-    err = "Tokenizer init failed: " + tokenizer.err_msg();
+  if (!InitTokenizerFromSidecar(vocab_content, tokenizer, err)) {
     return false;
   }
   if (MiniTransformerLMLoader::ImportModelFromFile(model, model_path) !=
@@ -330,7 +573,7 @@ bool LoadModel(const string &model_path, MiniTransformerLM &model,
     err = "Import model failed: " + model_path;
     return false;
   }
-  if (model.vocab_size() != tokenizer.vocab_size()) {
+  if (model.vocab_size() != TokenizerVocabSize(tokenizer)) {
     err = "Model vocab size does not match the vocab sidecar";
     return false;
   }
@@ -362,15 +605,21 @@ int RunInit(const Option &option) {
     return -1;
   }
 
-  string vocabulary = CharacterTokenizer::BuildVocabularyFromText(corpus);
-  CharacterTokenizer tokenizer;
-  if (tokenizer.Init(vocabulary) != CharacterTokenizer::SUCCESS) {
-    cout << "Tokenizer init failed: " << tokenizer.err_msg() << endl;
+  TokenizerKind tokenizer_kind;
+  try {
+    tokenizer_kind = ParseTokenizerKind(option.tokenizer);
+  } catch (const std::exception &ex) {
+    cout << ex.what() << endl;
+    return -1;
+  }
+  TokenizerBundle tokenizer;
+  if (!InitTokenizerFromCorpus(tokenizer_kind, corpus, tokenizer, err)) {
+    cout << err << endl;
     return -1;
   }
 
   MiniTransformerLM::Config config;
-  config.vocab_size_ = tokenizer.vocab_size();
+  config.vocab_size_ = TokenizerVocabSize(tokenizer);
   config.model_dim_ = option.model_dim;
   config.head_num_ = option.head_num;
   config.feed_forward_dim_ = option.feed_forward_dim;
@@ -397,17 +646,15 @@ int RunInit(const Option &option) {
     cout << "Export model failed: " << option.model << endl;
     return -1;
   }
-  {
-    std::ofstream ofs(VocabPath(option.model), std::ios::binary | std::ios::trunc);
-    if (!ofs.is_open() || !(ofs << vocabulary).good()) {
-      cout << "Write vocab sidecar failed: " << VocabPath(option.model) << endl;
-      return -1;
-    }
+  if (!WriteVocabSidecar(VocabPath(option.model), tokenizer, err)) {
+    cout << err << endl;
+    return -1;
   }
 
   cout << "Initialized model: " << option.model << endl;
-  cout << "Vocab source: " << source << " vocab_size: " << tokenizer.vocab_size()
-       << endl;
+  cout << "Tokenizer: " << TokenizerName(tokenizer.kind) << endl;
+  cout << "Vocab source: " << source
+       << " vocab_size: " << TokenizerVocabSize(tokenizer) << endl;
   cout << "Backbone: " << BackboneName(config.backbone_type_)
        << " model_dim: " << config.model_dim_
        << " head_num: " << config.head_num_
@@ -420,7 +667,7 @@ int RunInit(const Option &option) {
 
 int RunTrain(const Option &option) {
   MiniTransformerLM model;
-  CharacterTokenizer tokenizer;
+  TokenizerBundle tokenizer;
   string err;
   if (!LoadModel(option.model, model, tokenizer, err)) {
     cout << err << endl;
@@ -443,30 +690,29 @@ int RunTrain(const Option &option) {
     cout << err << endl;
     return -1;
   }
-  long long dropped = 0;
-  string filtered = FilterToVocab(tokenizer.vocabulary(), corpus, dropped);
-  if (dropped > 0) {
-    cout << "Warning: skipped " << dropped
-         << " characters outside the model vocabulary" << endl;
-  }
-  if (filtered.empty()) {
-    cout << "No trainable text left after filtering to the model vocabulary"
-         << endl;
-    return -1;
-  }
 
   vector<int> corpus_token_ids;
-  if (tokenizer.Encode(filtered, corpus_token_ids) !=
-      CharacterTokenizer::SUCCESS) {
-    cout << "Encode corpus failed: " << tokenizer.err_msg() << endl;
+  int unknown_or_dropped = 0;
+  if (!EncodeForTraining(tokenizer, corpus, corpus_token_ids,
+                         unknown_or_dropped, err)) {
+    cout << err << endl;
     return -1;
+  }
+  if (unknown_or_dropped > 0) {
+    if (tokenizer.kind == TOKENIZER_WORD) {
+      cout << "Warning: mapped " << unknown_or_dropped
+           << " words outside the model vocabulary to <unk>" << endl;
+    } else {
+      cout << "Warning: skipped " << unknown_or_dropped
+           << " characters outside the model vocabulary" << endl;
+    }
   }
 
   CharacterDataset dataset;
   if (dataset.Init(corpus_token_ids, context_size) !=
       CharacterDataset::SUCCESS) {
     cout << "Dataset init failed: " << dataset.err_msg()
-         << " (need more than " << context_size << " in-vocab characters)"
+         << " (need more than " << context_size << " in-vocab tokens)"
          << endl;
     return -1;
   }
@@ -523,7 +769,7 @@ int RunTrain(const Option &option) {
 
 int RunGenerate(const Option &option) {
   MiniTransformerLM model;
-  CharacterTokenizer tokenizer;
+  TokenizerBundle tokenizer;
   string err;
   if (!LoadModel(option.model, model, tokenizer, err)) {
     cout << err << endl;
@@ -534,22 +780,22 @@ int RunGenerate(const Option &option) {
     return -1;
   }
 
-  long long dropped = 0;
-  string prompt = FilterToVocab(tokenizer.vocabulary(), option.prompt, dropped);
-  if (dropped > 0) {
-    cout << "Warning: dropped " << dropped
-         << " prompt characters outside the model vocabulary" << endl;
-  }
-  if (prompt.empty()) {
-    cout << "Prompt is empty after filtering to the model vocabulary" << endl;
-    return -1;
-  }
-
   vector<int> prompt_token_ids;
-  if (tokenizer.Encode(prompt, prompt_token_ids) !=
-      CharacterTokenizer::SUCCESS) {
-    cout << "Encode prompt failed: " << tokenizer.err_msg() << endl;
+  int unknown_or_dropped = 0;
+  string prompt;
+  if (!EncodePrompt(tokenizer, option.prompt, prompt_token_ids,
+                    unknown_or_dropped, prompt, err)) {
+    cout << err << endl;
     return -1;
+  }
+  if (unknown_or_dropped > 0) {
+    if (tokenizer.kind == TOKENIZER_WORD) {
+      cout << "Warning: mapped " << unknown_or_dropped
+           << " prompt words outside the model vocabulary to <unk>" << endl;
+    } else {
+      cout << "Warning: dropped " << unknown_or_dropped
+           << " prompt characters outside the model vocabulary" << endl;
+    }
   }
 
   vector<int> generated_token_ids;
@@ -573,9 +819,8 @@ int RunGenerate(const Option &option) {
   }
 
   string generated_text;
-  if (tokenizer.Decode(generated_token_ids, generated_text) !=
-      CharacterTokenizer::SUCCESS) {
-    cout << "Decode generated text failed: " << tokenizer.err_msg() << endl;
+  if (!DecodeGenerated(tokenizer, generated_token_ids, generated_text, err)) {
+    cout << err << endl;
     return -1;
   }
 
@@ -588,7 +833,7 @@ int RunGenerate(const Option &option) {
 
 int RunInfo(const Option &option) {
   MiniTransformerLM model;
-  CharacterTokenizer tokenizer;
+  TokenizerBundle tokenizer;
   string err;
   if (!LoadModel(option.model, model, tokenizer, err)) {
     cout << err << endl;
@@ -603,8 +848,9 @@ int RunInfo(const Option &option) {
        << " block_num: " << model.block_num()
        << " context_size: " << model.max_context_size()
        << " rand_seed: " << model.rand_seed() << endl;
+  cout << "Tokenizer: " << TokenizerName(tokenizer.kind) << endl;
   cout << "Vocab size: " << model.vocab_size() << endl;
-  cout << "Vocabulary: " << DisplayVocab(tokenizer.vocabulary()) << endl;
+  cout << "Vocabulary: " << DisplayTokenizerVocab(tokenizer) << endl;
   return 0;
 }
 
@@ -636,6 +882,12 @@ int main(int argc, char **argv) {
   } catch (const std::exception &ex) {
     cout << ex.what() << endl;
     PrintCommandUsage(argv[0], verb);
+    return -1;
+  }
+  if (option.tokenizer_specified && verb != "init") {
+    cout << "--tokenizer is only used by init; existing models load tokenizer "
+            "type from .vocab"
+         << endl;
     return -1;
   }
 
