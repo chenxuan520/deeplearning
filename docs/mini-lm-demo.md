@@ -7,7 +7,7 @@
 ## 能力边界（先说清楚，别误解）
 
 - 默认是**字符级续写模型**：逐个字符地学「看到这些字符，下一个字符最可能是什么」。训练充分后它能续写出**像英文的字符流**（真实单词、空格、标点），而不是背 `abcabc`。
-- 也支持**词级续写模型**：`--tokenizer word` 会按英文单词切分，小写化后预测下一个词，生成结果用空格拼回文本，例如 `alice was beginning to get very tired`。可用 `--max-vocab-size` 只保留高频词，把长尾词映射到 `<unk>`，控制输出层大小。
+- 也支持**词级续写模型**：`--tokenizer word` 会按英文单词切分，小写化后预测下一个词，生成结果用空格拼回文本，例如 `alice was beginning to get very tired`。可用 `--max-vocab-size` 只保留高频词，词表外单词默认映射到 `<unk>`，也可用 `--unknown-policy drop` 直接丢弃，控制输出层大小和生成可读性。
 - 它**不是对话模型**。你对它说 `hello` 它不会"理解并回答 hello"——它只会沿着 `hello` 这个前缀，按训练语料的统计继续往下写字符。想要"问答/指令遵循"需要指令微调 + 大得多的模型，超出本库范围。
 - 底层是**朴素实现**（纯 `std::vector`、逐样本、无 batch、无 BLAS/SIMD、Debug 构建），算力有限。请把它当**教学/实验**用途，模型规模和语料都要按「你的机器能训得动」来选（见 [训练成本与选参](#10-训练成本与选参)）。
 
@@ -53,7 +53,7 @@ cd src
 
 **为什么要单独存词表？** 库的模型文件只存了权重和结构，没存"token↔编号"的对应关系。而语言模型必须靠这张表才能把文本编码成 token、把输出解码回文本。所以本 demo 在 `init` 时把词表落到 `.vocab` sidecar，`train`/`generate`/`info` 都会连它一起加载。**两个文件要一起拷贝、一起备份**，丢了 `.vocab` 就没法用了。
 
-> 词表在 `init` 时就**固定死**了（它的大小 = embedding 行数 = 输出层维度，属于模型结构）。之后 `train`/`generate` 遇到字符级词表外字符会**自动跳过并告警**；词级模型遇到词表外单词会映射到 `<unk>`。所以 `init` 用的语料要尽量覆盖你后续会用到的字符集或常用词；如果使用 `--max-vocab-size`，低频词会被有意留在词表外。
+> 词表在 `init` 时就**固定死**了（它的大小 = embedding 行数 = 输出层维度，属于模型结构）。之后 `train`/`generate` 遇到字符级词表外字符会**自动跳过并告警**；词级模型遇到词表外单词时，默认映射到 `<unk>`，也可以在 `init` 时选择 `--unknown-policy drop` 直接丢弃。`init` 用的语料要尽量覆盖你后续会用到的字符集或常用词；如果使用 `--max-vocab-size`，低频词会被有意留在词表外。
 
 ### `.vocab` sidecar 格式
 
@@ -68,7 +68,7 @@ said
 ...
 ```
 
-第一行说明 tokenizer 类型；后面每行一个词，行号就是 token id。`<unk>` 固定在 id 0，用来承接推理或续训时没见过的词。
+第一行说明 tokenizer 类型；后面每行一个词，行号就是 token id。默认 `map` 策略下，`<unk>` 固定在 id 0，用来承接推理或续训时没见过的词；`drop` 策略下不会写 `<unk>`，词表外词会在编码时被跳过。
 
 ## 4. 词表是怎么来的、怎么训练的
 
@@ -98,9 +98,9 @@ said
 
 - **按英文单词切分**：连续的字母、数字、下划线算一个词，逗号、句号、引号、换行等都只是分隔符。
 - **统一小写**：`Alice` 和 `alice` 是同一个 token，生成时也会输出小写词。
-- **可限制高频词表**：`--max-vocab-size N` 只保留出现次数最高的 N 个普通词，另加 `<unk>`，并用首次出现顺序打破同频词排序；默认 `0` 表示保留全部词。
-- **编号规则**：`<unk>` 固定为 id 0；不限制词表时，普通词按语料里第一次出现的顺序编号；限制词表时，普通词按频率降序编号。
-- **词表外单词进 `<unk>`**：`train`/`generate` 遇到没见过的词不会删掉整段输入，而是映射到 `<unk>` 并打印告警。
+- **可限制高频词表**：`--max-vocab-size N` 只保留出现次数最高的 N 个普通词，并用首次出现顺序打破同频词排序；默认 `0` 表示保留全部词。
+- **编号规则**：默认 `map` 策略下 `<unk>` 固定为 id 0；不限制词表时，普通词按语料里第一次出现的顺序编号；限制词表时，普通词按频率降序编号。
+- **词表外单词处理**：`--unknown-policy map`（默认）把没见过的词映射到 `<unk>` 并告警，兼容旧词级模型；`--unknown-policy drop` 直接跳过词表外词，生成时不会吐 `<unk>`，但会让少量长尾词从上下文中消失。
 - **解码用空格拼词**：词级生成不会恢复原始标点和大小写，输出形如 `alice was beginning to get very tired`。
 
 ### 词向量怎么训练（`train` 阶段，每步都在变）
@@ -124,7 +124,8 @@ said
 |------|------|------|
 | `--model <path>` | 输出模型路径 | `mini_lm.param` |
 | `--tokenizer <char\|word>` | tokenizer 粒度：字符级或词级 | `char` |
-| `--max-vocab-size <int>` | 词级模式保留 top-N 高频普通词，另加 `<unk>`；`0` 表示全量词表 | `0` |
+| `--max-vocab-size <int>` | 词级模式保留 top-N 高频普通词；`0` 表示全量词表 | `0` |
+| `--unknown-policy <map\|drop>` | 词级 OOV 策略：映射到 `<unk>` 或直接丢弃 | `map` |
 | `--corpus <text>` | 内联文本，用来建词表 | 一段占位串 |
 | `--corpus-file <path>` | 从文件读建词表的语料 | — |
 | `--corpus-dir <dir>` | 从目录下所有文件读语料 | — |
@@ -252,7 +253,7 @@ cp /tmp/base.param.vocab /tmp/tuned.param.vocab
 ```
 
 要点：
-- 字符级微调语料的字符必须落在基座 `init` 时定的词表内，否则会被跳过（有告警）；词级微调语料里的新词会映射到 `<unk>`。想真正支持新字符/新词，只能重新 `init` + 重新预训练。
+- 字符级微调语料的字符必须落在基座 `init` 时定的词表内，否则会被跳过（有告警）；词级微调语料里的新词会按模型初始化时保存的 unknown policy 映射到 `<unk>` 或被丢弃。想真正支持新字符/新词，只能重新 `init` + 重新预训练。
 - 微调学习率通常**比预训练小一个量级**（例：预训练 `0.002` → 微调 `0.0005`），避免把基座学到的东西冲掉。
 - 这是**风格/领域适配**，不是"教它对话"。无论字符级还是词级，只靠普通续写语料都做不到"你问它答"。
 
@@ -348,7 +349,8 @@ Vocabulary: [<unk>] [alice] [was] [beginning] [to] [get] [very] [tired]
 - **`Vocab sidecar not found`**：`.vocab` 文件丢了或没跟 `.param` 放一起。两个文件必须成对；模型要重新 `init`。
 - **`model-dim must be divisible by head-num`**：`--model-dim` 必须能被 `--head-num` 整除（多头要均分维度）。
 - **训练时 `skipped N characters outside the model vocabulary`**：字符级训练语料含 `init` 词表外的字符，已自动跳过。要支持这些字符得用覆盖它们的语料重新 `init`。
-- **训练/生成时 `mapped N words outside the model vocabulary to <unk>`**：词级模型遇到没见过的词，已映射到 `<unk>`。如果用了 `--max-vocab-size`，这通常是低频词被主动裁掉；想让模型真正学会这些词，需要增大词表或用覆盖它们的语料重新 `init`。
+- **训练/生成时 `mapped N words outside the model vocabulary to <unk>`**：词级模型使用默认 `map` 策略，遇到没见过的词会映射到 `<unk>`。如果用了 `--max-vocab-size`，这通常是低频词被主动裁掉；想让模型真正学会这些词，需要增大词表或用覆盖它们的语料重新 `init`。
+- **训练/生成时 `dropped N words outside the model vocabulary`**：词级模型使用 `drop` 策略，遇到没见过的词会直接跳过。这通常让生成更可读，但会损失少量长尾词上下文。
 - **生成一直重复**：贪心的通病，改用采样（`--temperature 0.7 --top-k 5`），或训得更久/更大。
 - **`Model vocab size does not match the vocab sidecar`**：`.param` 和 `.vocab` 来自不同模型，别混用。
 

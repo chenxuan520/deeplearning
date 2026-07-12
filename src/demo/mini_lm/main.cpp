@@ -59,8 +59,10 @@ struct Option {
   double top_p = 1.0;
   string backbone = "decoder";
   string tokenizer = "char";
+  string unknown_policy = "map";
   bool tokenizer_specified = false;
   bool max_vocab_size_specified = false;
+  bool unknown_policy_specified = false;
   bool sampling_specified = false;
 };
 
@@ -89,6 +91,8 @@ void PrintCommandUsage(const char *prog, const string &verb) {
          << "  --tokenizer <char|word>     tokenizer granularity (default char)\n"
          << "  --max-vocab-size <int>      for word tokenizer, keep top-N words "
             "plus <unk> (0 = all)\n"
+         << "  --unknown-policy <map|drop> for word tokenizer, map OOV to "
+            "<unk> or drop OOV (default map)\n"
          << "  --corpus <text>             inline corpus used to build the "
             "vocab\n"
          << "  --corpus-file <path>        read the vocab corpus from a file\n"
@@ -170,6 +174,9 @@ bool ParseArgs(int argc, char **argv, int start, Option &option) {
     } else if (arg == "--max-vocab-size") {
       option.max_vocab_size = std::stoi(need_value("--max-vocab-size"));
       option.max_vocab_size_specified = true;
+    } else if (arg == "--unknown-policy") {
+      option.unknown_policy = need_value("--unknown-policy");
+      option.unknown_policy_specified = true;
     } else if (arg == "--temperature") {
       option.temperature = std::stod(need_value("--temperature"));
       option.sampling_specified = true;
@@ -319,6 +326,20 @@ const char *TokenizerName(TokenizerKind tokenizer_kind) {
   return tokenizer_kind == TOKENIZER_WORD ? "word" : "char";
 }
 
+WordTokenizer::UnknownPolicy ParseUnknownPolicy(const string &policy) {
+  if (policy == "map") {
+    return WordTokenizer::UNKNOWN_MAP_TO_UNK;
+  }
+  if (policy == "drop") {
+    return WordTokenizer::UNKNOWN_DROP;
+  }
+  throw std::runtime_error("Invalid unknown-policy, expected map or drop");
+}
+
+const char *UnknownPolicyName(WordTokenizer::UnknownPolicy policy) {
+  return policy == WordTokenizer::UNKNOWN_DROP ? "drop" : "map";
+}
+
 struct TokenizerBundle {
   TokenizerKind kind = TOKENIZER_CHAR;
   CharacterTokenizer char_tokenizer;
@@ -367,6 +388,10 @@ bool WriteVocabSidecar(const string &path, const TokenizerBundle &tokenizer,
     ofs << tokenizer.char_tokenizer.vocabulary();
   } else {
     ofs << "tokenizer=word\n";
+    if (tokenizer.word_tokenizer.unknown_policy() ==
+        WordTokenizer::UNKNOWN_DROP) {
+      ofs << "unknown-policy=drop\n";
+    }
     for (const auto &word : tokenizer.word_tokenizer.vocabulary()) {
       ofs << word << '\n';
     }
@@ -389,6 +414,11 @@ bool InitTokenizerFromCorpus(const TokenizerBuildOption &build_option,
   if (tokenizer.kind == TOKENIZER_CHAR) {
     if (build_option.word_config.max_vocab_size != 0) {
       err = "--max-vocab-size is only supported with --tokenizer word";
+      return false;
+    }
+    if (build_option.word_config.unknown_policy !=
+        WordTokenizer::UNKNOWN_MAP_TO_UNK) {
+      err = "--unknown-policy is only supported with --tokenizer word";
       return false;
     }
     const string vocabulary = CharacterTokenizer::BuildVocabularyFromText(corpus);
@@ -446,18 +476,45 @@ bool InitTokenizerFromSidecar(const string &content, TokenizerBundle &tokenizer,
   vector<string> vocabulary;
   string line;
   std::istringstream vocab_stream(rest);
+  WordTokenizer::Config word_config;
+  word_config.unknown_policy = WordTokenizer::UNKNOWN_MAP_TO_UNK;
+  bool unknown_policy_set = false;
   while (std::getline(vocab_stream, line)) {
     line = TrimLineEnd(line);
+    if (line.rfind("unknown-policy=", 0) == 0) {
+      const string policy_name = line.substr(string("unknown-policy=").size());
+      try {
+        word_config.unknown_policy = ParseUnknownPolicy(policy_name);
+      } catch (const std::exception &ex) {
+        err = ex.what();
+        return false;
+      }
+      unknown_policy_set = true;
+      continue;
+    }
     if (!line.empty()) {
       vocabulary.push_back(line);
     }
   }
-  if (tokenizer.word_tokenizer.InitFromVocabulary(vocabulary) !=
+  if (!unknown_policy_set) {
+    bool has_unknown = false;
+    for (const auto &word : vocabulary) {
+      if (word == "<unk>") {
+        has_unknown = true;
+        break;
+      }
+    }
+    word_config.unknown_policy =
+        has_unknown ? WordTokenizer::UNKNOWN_MAP_TO_UNK : WordTokenizer::UNKNOWN_DROP;
+  }
+  if (tokenizer.word_tokenizer.InitFromVocabulary(vocabulary, word_config) !=
       WordTokenizer::SUCCESS) {
     err = "Tokenizer init failed: " + tokenizer.word_tokenizer.err_msg();
     return false;
   }
-  if (tokenizer.word_tokenizer.Lookup("<unk>") < 0) {
+  if (tokenizer.word_tokenizer.unknown_policy() ==
+          WordTokenizer::UNKNOWN_MAP_TO_UNK &&
+      tokenizer.word_tokenizer.Lookup("<unk>") < 0) {
     err = "Word vocab sidecar must contain <unk>";
     return false;
   }
@@ -474,7 +531,7 @@ bool EncodeForTraining(TokenizerBundle &tokenizer, const string &text,
                        string &err) {
   unknown_count = 0;
   if (tokenizer.kind == TOKENIZER_WORD) {
-    if (tokenizer.word_tokenizer.TokenizeFlatWithUnknown(
+    if (tokenizer.word_tokenizer.TokenizeFlatWithPolicy(
             text, token_ids, unknown_count) != WordTokenizer::SUCCESS) {
       err = "Encode corpus failed: " + tokenizer.word_tokenizer.err_msg();
       return false;
@@ -503,7 +560,7 @@ bool EncodePrompt(TokenizerBundle &tokenizer, const string &text,
                   string &err) {
   unknown_count = 0;
   if (tokenizer.kind == TOKENIZER_WORD) {
-    if (tokenizer.word_tokenizer.TokenizeFlatWithUnknown(
+    if (tokenizer.word_tokenizer.TokenizeFlatWithPolicy(
             text, token_ids, unknown_count) != WordTokenizer::SUCCESS) {
       err = "Encode prompt failed: " + tokenizer.word_tokenizer.err_msg();
       return false;
@@ -634,8 +691,17 @@ int RunInit(const Option &option) {
     cout << ex.what() << endl;
     return -1;
   }
-  tokenizer_build_option.word_config.add_unknown_token = true;
   tokenizer_build_option.word_config.max_vocab_size = option.max_vocab_size;
+  try {
+    tokenizer_build_option.word_config.unknown_policy =
+        ParseUnknownPolicy(option.unknown_policy);
+  } catch (const std::exception &ex) {
+    cout << ex.what() << endl;
+    return -1;
+  }
+  tokenizer_build_option.word_config.add_unknown_token =
+      tokenizer_build_option.word_config.unknown_policy ==
+      WordTokenizer::UNKNOWN_MAP_TO_UNK;
   TokenizerBundle tokenizer;
   if (!InitTokenizerFromCorpus(tokenizer_build_option, corpus, tokenizer, err)) {
     cout << err << endl;
@@ -681,7 +747,16 @@ int RunInit(const Option &option) {
        << " vocab_size: " << TokenizerVocabSize(tokenizer) << endl;
   if (tokenizer.kind == TOKENIZER_WORD && option.max_vocab_size > 0) {
     cout << "Max vocab words: " << option.max_vocab_size
-         << " (+ <unk>)" << endl;
+         << (tokenizer.word_tokenizer.unknown_policy() ==
+                     WordTokenizer::UNKNOWN_MAP_TO_UNK
+                 ? " (+ <unk>)"
+                 : "")
+         << endl;
+  }
+  if (tokenizer.kind == TOKENIZER_WORD) {
+    cout << "Unknown policy: "
+         << UnknownPolicyName(tokenizer.word_tokenizer.unknown_policy())
+         << endl;
   }
   cout << "Backbone: " << BackboneName(config.backbone_type_)
        << " model_dim: " << config.model_dim_
@@ -728,8 +803,14 @@ int RunTrain(const Option &option) {
   }
   if (unknown_or_dropped > 0) {
     if (tokenizer.kind == TOKENIZER_WORD) {
-      cout << "Warning: mapped " << unknown_or_dropped
-           << " words outside the model vocabulary to <unk>" << endl;
+      if (tokenizer.word_tokenizer.unknown_policy() ==
+          WordTokenizer::UNKNOWN_DROP) {
+        cout << "Warning: dropped " << unknown_or_dropped
+             << " words outside the model vocabulary" << endl;
+      } else {
+        cout << "Warning: mapped " << unknown_or_dropped
+             << " words outside the model vocabulary to <unk>" << endl;
+      }
     } else {
       cout << "Warning: skipped " << unknown_or_dropped
            << " characters outside the model vocabulary" << endl;
@@ -818,8 +899,14 @@ int RunGenerate(const Option &option) {
   }
   if (unknown_or_dropped > 0) {
     if (tokenizer.kind == TOKENIZER_WORD) {
-      cout << "Warning: mapped " << unknown_or_dropped
-           << " prompt words outside the model vocabulary to <unk>" << endl;
+      if (tokenizer.word_tokenizer.unknown_policy() ==
+          WordTokenizer::UNKNOWN_DROP) {
+        cout << "Warning: dropped " << unknown_or_dropped
+             << " prompt words outside the model vocabulary" << endl;
+      } else {
+        cout << "Warning: mapped " << unknown_or_dropped
+             << " prompt words outside the model vocabulary to <unk>" << endl;
+      }
     } else {
       cout << "Warning: dropped " << unknown_or_dropped
            << " prompt characters outside the model vocabulary" << endl;
@@ -877,6 +964,11 @@ int RunInfo(const Option &option) {
        << " context_size: " << model.max_context_size()
        << " rand_seed: " << model.rand_seed() << endl;
   cout << "Tokenizer: " << TokenizerName(tokenizer.kind) << endl;
+  if (tokenizer.kind == TOKENIZER_WORD) {
+    cout << "Unknown policy: "
+         << UnknownPolicyName(tokenizer.word_tokenizer.unknown_policy())
+         << endl;
+  }
   cout << "Vocab size: " << model.vocab_size() << endl;
   cout << "Vocabulary: " << DisplayTokenizerVocab(tokenizer) << endl;
   return 0;
@@ -921,6 +1013,12 @@ int main(int argc, char **argv) {
   if (option.max_vocab_size_specified && verb != "init") {
     cout << "--max-vocab-size is only used by init; existing models load vocab "
             "from .vocab"
+         << endl;
+    return -1;
+  }
+  if (option.unknown_policy_specified && verb != "init") {
+    cout << "--unknown-policy is only used by init; existing models load "
+            "unknown policy from .vocab"
          << endl;
     return -1;
   }

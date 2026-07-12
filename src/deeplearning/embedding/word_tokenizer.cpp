@@ -52,9 +52,16 @@ WordTokenizer::RC WordTokenizer::InitFromText(const std::string &text,
     err_msg_ = "[WordTokenizer::InitFromText] Invalid max vocab size";
     return INVALID_DATA;
   }
+  if (config.unknown_policy == UNKNOWN_MAP_TO_UNK &&
+      !config.add_unknown_token) {
+    err_msg_ =
+        "[WordTokenizer::InitFromText] UNKNOWN_MAP_TO_UNK requires <unk>";
+    return INVALID_DATA;
+  }
 
   vocabulary_.clear();
   word_to_id_.clear();
+  unknown_policy_ = config.unknown_policy;
   if (config.add_unknown_token) {
     int token_id = 0;
     auto rc = AddWord("<unk>", token_id);
@@ -164,11 +171,14 @@ WordTokenizer::RC WordTokenizer::InitFromText(const std::string &text,
                                              bool add_unknown_token) {
   Config config;
   config.add_unknown_token = add_unknown_token;
+  config.unknown_policy =
+      add_unknown_token ? UNKNOWN_MAP_TO_UNK : UNKNOWN_DROP;
   return InitFromText(text, config);
 }
 
 WordTokenizer::RC
-WordTokenizer::InitFromVocabulary(const std::vector<std::string> &vocabulary) {
+WordTokenizer::InitFromVocabulary(const std::vector<std::string> &vocabulary,
+                                  const Config &config) {
   if (is_init_) {
     err_msg_ = "[WordTokenizer::InitFromVocabulary] WordTokenizer already init";
     return ALREADY_INIT;
@@ -177,9 +187,24 @@ WordTokenizer::InitFromVocabulary(const std::vector<std::string> &vocabulary) {
     err_msg_ = "[WordTokenizer::InitFromVocabulary] Empty vocabulary";
     return INVALID_DATA;
   }
+  if (config.unknown_policy == UNKNOWN_MAP_TO_UNK) {
+    bool has_unknown = false;
+    for (const auto &word : vocabulary) {
+      if (NormalizeToken(word) == "<unk>") {
+        has_unknown = true;
+        break;
+      }
+    }
+    if (!has_unknown) {
+      err_msg_ =
+          "[WordTokenizer::InitFromVocabulary] UNKNOWN_MAP_TO_UNK requires <unk>";
+      return INVALID_DATA;
+    }
+  }
 
   vocabulary_.clear();
   word_to_id_.clear();
+  unknown_policy_ = config.unknown_policy;
   for (const auto &word : vocabulary) {
     const std::string normalized_word = NormalizeToken(word);
     if (word_to_id_.count(normalized_word) != 0) {
@@ -196,6 +221,13 @@ WordTokenizer::InitFromVocabulary(const std::vector<std::string> &vocabulary) {
 
   is_init_ = true;
   return SUCCESS;
+}
+
+WordTokenizer::RC
+WordTokenizer::InitFromVocabulary(const std::vector<std::string> &vocabulary) {
+  Config config;
+  config.unknown_policy = UNKNOWN_MAP_TO_UNK;
+  return InitFromVocabulary(vocabulary, config);
 }
 
 WordTokenizer::RC
@@ -323,6 +355,52 @@ WordTokenizer::TokenizeFlatWithUnknown(const std::string &text,
   return SUCCESS;
 }
 
+WordTokenizer::RC
+WordTokenizer::TokenizeFlatWithPolicy(const std::string &text,
+                                      std::vector<int> &token_ids,
+                                      int &unknown_count) {
+  if (!is_init_) {
+    err_msg_ =
+        "[WordTokenizer::TokenizeFlatWithPolicy] WordTokenizer not init";
+    return NOT_INIT;
+  }
+  if (unknown_policy_ == UNKNOWN_MAP_TO_UNK) {
+    return TokenizeFlatWithUnknown(text, token_ids, unknown_count);
+  }
+
+  token_ids.clear();
+  unknown_count = 0;
+  std::string current;
+  auto flush_word = [&]() {
+    if (current.empty()) {
+      return;
+    }
+    const std::string word = NormalizeToken(current);
+    auto found = word_to_id_.find(word);
+    if (found == word_to_id_.end()) {
+      unknown_count++;
+    } else {
+      token_ids.push_back(found->second);
+    }
+    current.clear();
+  };
+
+  for (unsigned char ch : text) {
+    if (IsWordChar(ch)) {
+      current.push_back(static_cast<char>(ch));
+    } else {
+      flush_word();
+    }
+  }
+  flush_word();
+
+  if (token_ids.empty()) {
+    err_msg_ = "[WordTokenizer::TokenizeFlatWithPolicy] No words found";
+    return INVALID_DATA;
+  }
+  return SUCCESS;
+}
+
 WordTokenizer::RC WordTokenizer::Decode(const std::vector<int> &token_ids,
                                         std::string &text) {
   if (!is_init_) {
@@ -374,6 +452,10 @@ std::string WordTokenizer::err_msg() const { return err_msg_; }
 
 int WordTokenizer::vocab_size() const {
   return static_cast<int>(vocabulary_.size());
+}
+
+WordTokenizer::UnknownPolicy WordTokenizer::unknown_policy() const {
+  return unknown_policy_;
 }
 
 const std::vector<std::string> &WordTokenizer::vocabulary() const {

@@ -70,6 +70,32 @@ TEST(WordTokenizer, MaxVocabKeepsMostFrequentWords) {
   MUST_EQUAL(decoded, "the <unk> dog");
 }
 
+TEST(WordTokenizer, DropUnknownPolicySkipsOutOfVocabWords) {
+  WordTokenizer tokenizer;
+  const std::string text =
+      "the cat sat the cat ran the dog barked the dog ran owl";
+  WordTokenizer::Config config;
+  config.unknown_policy = WordTokenizer::UNKNOWN_DROP;
+  config.max_vocab_size = 3;
+  MUST_EQUAL(tokenizer.InitFromText(text, config), WordTokenizer::SUCCESS);
+  MUST_EQUAL(tokenizer.Lookup("<unk>"), -1);
+  MUST_EQUAL(tokenizer.vocab_size(), 3);
+  MUST_TRUE(tokenizer.Lookup("the") >= 0, "the should be kept");
+  MUST_TRUE(tokenizer.Lookup("cat") >= 0, "cat should be kept");
+  MUST_TRUE(tokenizer.Lookup("dog") >= 0, "dog should be kept");
+
+  std::vector<int> token_ids;
+  int unknown_count = 0;
+  MUST_EQUAL(tokenizer.TokenizeFlatWithPolicy("the owl dog", token_ids,
+                                              unknown_count),
+             WordTokenizer::SUCCESS);
+  MUST_EQUAL(unknown_count, 1);
+
+  std::string decoded;
+  MUST_EQUAL(tokenizer.Decode(token_ids, decoded), WordTokenizer::SUCCESS);
+  MUST_EQUAL(decoded, "the dog");
+}
+
 TEST(WordTokenizer, InitFromVocabularyRejectsDuplicates) {
   WordTokenizer tokenizer;
   const std::vector<std::string> vocabulary = {"<unk>", "the", "alice", "The"};
