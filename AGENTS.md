@@ -416,7 +416,7 @@ python3 tools/count_chars.py -v    # (可选) 统计篇幅变化
 
 ### 改书注意事项（几处容易踩的坑）
 - **先看全书/本章现有写法再改**:改 `docs/dl-book/` 任何章节、标题、层级、表格、互动组件或样式前,必须先阅读本章上下文、相邻章节和已有同类组件写法。不要凭局部片段自创结构;新增内容必须放到合适的 h2/h3 层级,并沿用本书现有语气和组件模式。
-- **同步“最后内容更新”时间**:改电子书 HTML 或 `assets/` 阅读体验资源时,同步刷新 `about.html` 中带 `data-book-last-updated` 的完整北京时间。仓库提供 `.githooks/pre-commit` 自动处理;新 clone 先执行 `git config --local core.hooksPath .githooks`,但仍要检查提交前字段是否更新。`tools/` 下维护脚本改动不触发。
+- **“最后内容更新”时间由 hook 维护**:改电子书 HTML 或 `assets/` 阅读体验资源时,编辑阶段不要手动修改 `about.html` 中带 `data-book-last-updated` 的时间。仓库提供 `.githooks/pre-commit` 自动处理:提交时如果暂存区包含这些可见内容改动,hook 会刷新完整北京时间并自动暂存 `about.html`。新 clone 先执行 `git config --local core.hooksPath .githooks`;提交前只检查 hook 是否已配置、字段是否被 hook 正确更新。只有 hook 未配置/不可用,或用户明确要求手动刷新时,才直接改这行时间。`tools/` 下维护脚本改动不触发。
 - **表格必须沿用现有容器**:正文里的表格优先使用 `<div class="table-wrap reveal"><table class="calc-table calc-table--wrap">...`。宽表/长文字表不能裸用 `<div class="calc-table"><table>...`,否则容易撑出正文栏、压到右侧目录或在移动端溢出。改完必须用浏览器实际看桌面和窄屏效果。
 - **动手与思考要取舍,每章不超过 9 题**:删减问题不能机械删末尾,要按本章主线覆盖面取舍,保留最能检查核心概念的题,合并重复细节题。
 - **h2 编号会顺延**:在某章中间插入带编号的新 h2 小节后,后面所有 h2 编号要跟着 +1,否则 `check_structure.py` 报“h2 编号不连续”。「读完这一章」「小结」「动手与思考」等无编号 h2 不计入。
