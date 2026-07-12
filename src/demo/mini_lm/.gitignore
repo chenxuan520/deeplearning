@@ -8,3 +8,5 @@ tools/data/
 # Model artifacts produced by 'mini_lm init' / 'mini_lm train'
 *.param
 *.vocab
+*.ckpt
+*.train

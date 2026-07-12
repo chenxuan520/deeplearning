@@ -111,7 +111,7 @@
         <h2>大模型</h2>
         <ul class="glossary">
           <li id="g-autoregressive" data-aliases="autoregressive,自回归"><strong>自回归 autoregressive</strong> — 把刚生成的词接回输入,循环往下写。<a href="chapter-19.html">→ 第 19 章</a></li>
-          <li id="g-sampling"><strong>temperature / top-k / top-p</strong> — 控制生成随机性的三个采样旋钮。<a href="chapter-19.html">→ 第 19 章</a></li>
+          <li id="g-sampling"><strong>temperature / top-k / top-p</strong> — 控制生成随机性与确定性的解码旋钮。<a href="chapter-19.html#7-怎么挑下一个字-从-greedy-到采样">→ 第 19 章 §7</a></li>
           <li id="g-perplexity"><strong>困惑度 perplexity</strong> — 平均交叉熵取指数,衡量“平均在几个选项里纠结”。<a href="chapter-19.html">→ 第 19 章</a></li>
           <li id="g-bpe"><strong>BPE 子词分词</strong> — 把高频组合合并成一个 token,序列更短更高效。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-scaling"><strong>Scaling Law 规模定律</strong> — 参数/数据/算力一起放大,性能可预测提升。<a href="chapter-20.html#5-规模化scaling-law-大力真的出奇迹">→ 第 20 章</a></li>
@@ -120,6 +120,7 @@
           <li id="g-emergent"><strong>涌现能力 emergent abilities</strong> — 规模越过门槛后突然出现的新能力。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-selfsup"><strong>自监督 self-supervised</strong> — 答案从数据本身自动抠出(如遮词预测),不用人工标注。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-pretrain"><strong>预训练 / 后训练</strong> — 海量文本上练底座 / SFT+RLHF+蒸馏调成好用的助手。<a href="chapter-20.html">→ 第 20 章</a></li>
+          <li id="g-llm-eval" data-aliases="大模型测评,模型评测,evaluation,benchmark,评测集,红队,上线门禁"><strong>大模型测评 / benchmark</strong> — 用固定题集、真实任务、人工规则和线上反馈做质量控制:预训练选 checkpoint、后训练看对齐效果、上线前做门禁、上线后抓回归。<a href="chapter-20.html#测评-贯穿训练和上线的质检系统">→ 第 20 章</a></li>
           <li id="g-rlhf"><strong>RLHF / SFT</strong> — 按人类偏好对齐 / 用指令范文微调。<a href="chapter-20.html">→ 第 20 章</a> · <a href="chapter-12.html">RL → 第 12 章</a></li>
           <li id="g-rl"><strong>强化学习 RL</strong> — 靠奖励试错学策略;MDP / Q-learning / PPO。<a href="chapter-12.html">→ 第 12 章</a> · <a href="chapter-25.html">代码 → 第 25 章</a></li>
           <li id="g-align-tax"><strong>对齐税 alignment tax</strong> — RLHF 后更安全听话,但部分能力/创造性可能下降。<a href="chapter-20.html">→ 第 20 章</a></li>

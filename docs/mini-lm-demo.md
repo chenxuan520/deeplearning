@@ -149,8 +149,37 @@ said
 | `--corpus <text>` / `--corpus-file <path>` / `--corpus-dir <dir>` | 训练语料来源 | 内联占位串 |
 | `--epochs <int>` | 训练轮数 | 800 |
 | `--learning-rate <double>` | 基础学习率（内部套 `WarmupCosineLR`） | 0.01 |
+| `--log-every <int>` | 每 N 个 epoch 打印一次汇总日志 | 1 |
+| `--progress-every-sec <int>` | 单个 epoch 内每 N 秒打印进度（0=关闭） | 5 |
+| `--early-stop-loss <double>` | epoch loss 低于该值后提前停止（<=0=关闭） | 0.02 |
+| `--checkpoint <path>` | checkpoint 文件路径 | `<model>.ckpt` |
+| `--checkpoint-every <int>` | 每 N 个完整 epoch 保存 checkpoint | 1 |
+| `--resume-checkpoint` | 从 checkpoint 恢复并继续训到 `--epochs` 指定的总轮数 | 关闭 |
+| `--no-checkpoint` | 关闭周期性 checkpoint | 关闭 |
 
-训练用逐位置 next-token 交叉熵 + Adam，学习率走线性 warmup + cosine 退火（与仓库其他 demo 同款配方）。loss 每 1/10 轮打印一次；跌破 0.02 会提前停止。
+训练用逐位置 next-token 交叉熵 + Adam，学习率走线性 warmup + cosine 退火（与仓库其他 demo 同款配方）。默认每个 epoch 都会打印 loss / perplexity / lr / elapsed / eta，并保存一份 checkpoint，避免长时间训练完全黑盒。
+
+checkpoint 由三份 sidecar 组成：
+
+```text
+<model>.ckpt        # 权重
+<model>.ckpt.vocab  # 词表 / tokenizer 元数据
+<model>.ckpt.train  # 训练进度元数据(completed_epoch、last_loss 等)
+```
+
+中断后继续训练：
+
+```bash
+./bin/mini_lm train --model /tmp/alice.param \
+  --checkpoint /tmp/alice.param.ckpt \
+  --resume-checkpoint \
+  --corpus-file /tmp/alice.txt \
+  --epochs 200 --learning-rate 0.002
+```
+
+`--epochs` 在恢复时表示“目标总 epoch 数”，不是“再额外训多少轮”。例如 `.train` 里 `completed_epoch=73`，命令传 `--epochs 200`，就会从 checkpoint 权重继续训到第 200 轮。Ctrl+C / SIGTERM 会在当前样本更新后尽量保存 checkpoint 并退出；如果刚好中断在 epoch 中途，元数据仍只记录已完整完成的 epoch，恢复时会从这个 epoch 重新开始，但权重已经包含中途学到的参数。
+
+注意：当前 checkpoint 保存的是模型权重、词表和训练进度，**不保存 Adam 的动量 / 二阶矩状态**。恢复后不会从零开始学，已训练出的权重都在；但优化器状态会冷启动，这对教学 demo 可接受，追求严格训练复现时需要扩展模型序列化格式。
 
 ### `generate` — 推理生成
 
@@ -323,6 +352,7 @@ Vocabulary: [<unk>] [alice] [was] [beginning] [to] [get] [very] [tired]
 - **先小后大**：先用小配置（`d=32`）验证语料和流程跑通，再逐步加大。
 - **样本数 ≈ 语料字符数**，`--corpus-dir` 喂大目录时留意总量。
 - 想估算总时长：先 `--epochs 1` 跑一轮看 wall-clock，再乘目标轮数。
+- 训练很久时保留默认 checkpoint；如果只是跑极小 smoke test，才考虑 `--no-checkpoint`。
 
 ## 11. 训练数据与模型产物不入库
 
@@ -330,6 +360,7 @@ Vocabulary: [<unk>] [alice] [was] [beginning] [to] [get] [very] [tired]
 
 - `tools/data/`（`fetch_data.sh` 下载 + 清洗出来的语料）
 - `*.param` / `*.vocab`（`init`/`train` 产出的模型）
+- `*.ckpt` / `*.train`（训练 checkpoint 和进度元数据）
 
 这样仓库保持干净，别人拉下来用 `tools/fetch_data.sh` 就能自己重新拿数据、重新训。
 
@@ -351,6 +382,8 @@ Vocabulary: [<unk>] [alice] [was] [beginning] [to] [get] [very] [tired]
 - **训练时 `skipped N characters outside the model vocabulary`**：字符级训练语料含 `init` 词表外的字符，已自动跳过。要支持这些字符得用覆盖它们的语料重新 `init`。
 - **训练/生成时 `mapped N words outside the model vocabulary to <unk>`**：词级模型使用默认 `map` 策略，遇到没见过的词会映射到 `<unk>`。如果用了 `--max-vocab-size`，这通常是低频词被主动裁掉；想让模型真正学会这些词，需要增大词表或用覆盖它们的语料重新 `init`。
 - **训练/生成时 `dropped N words outside the model vocabulary`**：词级模型使用 `drop` 策略，遇到没见过的词会直接跳过。这通常让生成更可读，但会损失少量长尾词上下文。
+- **训练中断后怎么继续**：默认会写 `<model>.ckpt`，重新运行 `train` 时加 `--resume-checkpoint`，并把 `--epochs` 设为目标总轮数。
+- **为什么恢复后 loss 有一点波动**：checkpoint 不保存 Adam 状态，恢复后优化器动量会冷启动；权重不会丢，但短期 loss 可能有小波动。
 - **生成一直重复**：贪心的通病，改用采样（`--temperature 0.7 --top-k 5`），或训得更久/更大。
 - **`Model vocab size does not match the vocab sidecar`**：`.param` 和 `.vocab` 来自不同模型，别混用。
 

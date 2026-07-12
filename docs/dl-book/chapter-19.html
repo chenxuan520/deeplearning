@@ -48,7 +48,7 @@
             <li><strong>每一步矩阵有多大</strong>:逐步写出谁×谁、乘完多大(含 n=2 完整手算,见 §4.4);</li>
             <li><strong>模型到底怎么“学”</strong>:训练数据怎么造、损失怎么算、反向传播怎么一路更新到<a class="xref" href="chapter-17.html">第 17 章</a>那三个矩阵;</li>
             <li>“预测下一个字”怎么变成“写出一整段”(自回归生成),以及 <strong>KV cache</strong> 为什么能让每一步不必重算前文;</li>
-            <li>greedy、temperature、top-k、top-p 这些采样策略各自的脾气;</li>
+            <li>greedy、temperature、top-k、top-p 这些解码策略各自的脾气,以及为什么参数不变时回答仍可能变化;</li>
             <li>怎么用困惑度(perplexity)评估一个语言模型的好坏。</li>
           </ul>
         </section>
@@ -545,6 +545,69 @@ token_id = sample_from(filtered_probs);                     <b class="cw-tag">4<
           </ol>
         </figure>
 
+        <h3>7.1 参数矩阵都没变,为什么回答还会变?</h3>
+        <p>
+          这里最容易误会的一点是:<strong>参数固定,固定的是“同一段完整上下文 → 下一 token 概率分布”这台函数</strong>,
+          不是固定“最后一定输出同一句话”。语言模型生成时不是一次性写完整段,而是每一步都先算分布,再选一个 token:
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">问题 + 已生成前缀<small>完整上下文</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">模型前向<small>参数固定</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">下一 token 概率<small>分布固定</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">解码策略<small>greedy 或采样</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">接回上下文<small>进入下一步</small></div>
+            </div>
+          </div>
+          <p class="figure__cap">参数决定概率分布;解码策略决定怎么从分布里挑 token。只要挑出的第一个 token 不同,后面的上下文就变了,整段回答会越走越不同。</p>
+        </div>
+        <p>比如你问“你是谁”,某一步模型可能给出这样的分布:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>候选 token</th><th>概率</th><th>如果被选中,后面会怎样</th></tr></thead>
+            <tbody>
+              <tr><td>我是</td><td>0.34</td><td>后续大概率接“一个 AI 助手……”</td></tr>
+              <tr><td>你好</td><td>0.22</td><td>后续大概率先寒暄,再介绍身份</td></tr>
+              <tr><td>作为</td><td>0.13</td><td>后续大概率接“一个语言模型……”</td></tr>
+              <tr><td>我可以</td><td>0.08</td><td>后续可能转向能力说明</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          greedy 会永远选 0.34 的“我是”;采样则可能抽到“你好”或“作为”。这不是参数变了,
+          而是<strong>同一个概率分布里本来就有多个合理候选</strong>。第一个 token 一旦不同,下一步的“完整上下文”就已经不同,
+          所以后续概率分布也跟着不同。
+        </p>
+
+        <h3>7.2 temperature = 0 就一定完全一样吗?</h3>
+        <p>
+          在本地、同一份模型权重、同一个完整 prompt、同一套代码、走 greedy 解码时,输出<strong>应该稳定</strong>:
+          每一步都取最高分 token,没有随机抽样。很多 API 里 <code>temperature = 0</code> 大致就是这个意思——尽量关闭随机性,
+          让输出接近“同问同答”。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">但商业大模型服务不一定承诺逐 token 绝对复现</span>
+          <p>
+            真实平台里,“同一个模型名 + <code>temperature = 0</code>”背后仍有几类变量:
+          </p>
+          <ol>
+            <li><strong>服务端不一定是同一个模型版本</strong>:模型名看起来一样,实际可能灰度了小版本、量化版本或推理引擎版本。</li>
+            <li><strong>完整上下文可能变了</strong>:你只看到自己问了“你是谁”,但真实输入里还可能有系统提示词、历史对话、记忆、安全策略、当前时间和产品侧注入信息。</li>
+            <li><strong>GPU 推理可能有极小数值差异</strong>:当两个候选 token 分数非常接近,比如 12.000001 和 12.000000,一点浮点并行误差就可能让第一名换人;第一步一换,后面整段都会变。</li>
+            <li><strong>有些平台的 <code>temperature = 0</code> 不是严格数学意义的 0</strong>:实现上可能只是“接近 greedy”,或者仍然经过 <code>top_p</code>、重复惩罚、重排、安全改写等额外逻辑。</li>
+            <li><strong>用了工具、联网、RAG 或函数调用时更不稳定</strong>:外部检索结果、工具返回、排序结果或函数调用轨迹一变,模型看到的输入也就变了。</li>
+          </ol>
+        </div>
+        <p>
+          所以更严谨的说法是:<strong><code>temperature = 0</code> 会显著提高确定性,但真实平台上通常只能说“高度稳定”,不能保证永远逐字一致</strong>。
+          想尽量复现同一答案,要固定完整 messages、模型版本、<code>top_p</code>、惩罚项、工具/检索输入,平台支持的话还要固定 seed。
+        </p>
+
         <h2>8. 自回归:把刚写的字接回去,再写下一个</h2>
         <p>
           生成一整段的诀窍叫<span class="term">自回归(autoregressive)</span>:预测出一个字后,
@@ -724,7 +787,7 @@ perplexity = std::exp(average_loss);                     <b class="cw-tag">2</b>
             <li><strong>LM Head</strong> = 线性层 <code>output_weight_[vocab×dim] + bias</code>,hidden 与每行模板点积得 logits;<code>[n×d]→[n×V]</code>;推理取 <code>all_logits.back()</code>(<a class="xref" href="chapter-19.html#44-每一步矩阵有多大-n2-走一遍">§4.4</a>)。</li>
             <li>Tokenizer 把字符 ↔ id;Embedding 把 id 查表成可学习向量。</li>
             <li>训练:滑动窗口造“输入 → 下一字”样本(自监督);交叉熵损失反向传播,一路更新到<a class="xref" href="chapter-17.html">第 17 章</a>的 Q/K/V 矩阵和词嵌入。</li>
-            <li>挑字:greedy(取最高)死板;采样(temperature / top-k / top-p)更自然有创意。</li>
+            <li>挑字:greedy(取最高)稳定但死板;采样(temperature / top-k / top-p)更自然有变化。参数固定只固定概率分布,不固定采样结果。</li>
             <li>自回归:把生成的字接回输入,循环往下写——这就是大模型逐字输出的原理。</li>
             <li><strong>KV cache</strong>:每个词的 K/V 只由它自己决定、算出就不变,于是缓存历史 K/V、每步只算新词,把 n² 的重复计算降到 n;代价是显存驻留(长上下文/高并发的开销来源)。</li>
             <li>“停下来”通常也是预测出来的:模型学会输出一个结束 token;推理程序看到它就停止生成。</li>
@@ -762,6 +825,12 @@ perplexity = std::exp(average_loss);                     <b class="cw-tag">2</b>
             <summary class="quiz__q">问题 5:KV cache 缓存的到底是什么?为什么缓存的是 K、V,而不是 Q?</summary>
             <div class="quiz__a">
               <p>缓存的是<strong>每一层、每个头、每个已处理位置</strong>各自的 Key 向量和 Value 向量。因为第 i 个词的 k/v 只由它自己算出、算完就不再变(causal mask 决定后面的词影响不到它),所以历史 K/V 可以存起来复用,每步只为新词算一份。而 Q 是“当前词拿去查历史”的,历史词的 Q 用完即弃、新词不会用到,所以不缓存。效果:把每步“重算整段前文”的 n² 计算降到只算新词的 n,代价是 K/V 要一直驻留显存。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 6:参数矩阵没变,为什么大模型同一个问题可能回答不一样?temperature = 0 又意味着什么?</summary>
+            <div class="quiz__a">
+              <p>参数固定只保证“同一完整上下文”会算出同一组下一 token 概率;如果解码时按概率采样,每一步都可能抽到不同 token,第一个 token 不同又会改变后面的上下文。<code>temperature = 0</code> 通常表示关闭随机采样、接近 greedy,因此更稳定;但商业服务还受完整上下文、模型版本、工具/检索结果、浮点细节等影响,一般只能说高度稳定,不保证永远逐字一致。</p>
             </div>
           </details>
         </div>

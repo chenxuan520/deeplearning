@@ -422,7 +422,10 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextToken(
     const std::vector<int> &target_tokens,
     std::function<void(int epoch_num, double average_loss, bool &early_stop)>
         each_epoch_call,
-    int epoch_num, double learning_rate, LRScheduler *lr_scheduler) {
+    int epoch_num, double learning_rate, LRScheduler *lr_scheduler,
+    std::function<void(int epoch_num, int finished_sample_num, int sample_num,
+                       double average_loss, bool &early_stop)>
+        each_sample_call) {
   if (!is_init_) {
     err_msg_ = "[MiniTransformerLM::TrainNextToken] MiniTransformerLM not init";
     return NOT_INIT;
@@ -443,6 +446,7 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextToken(
                         : epoch_learning_rate * block_learning_rate_scale_;
     double loss_sum = 0;
     long long loss_count = 0;
+    bool stop_epoch = false;
     for (int sample_idx = 0; sample_idx < input_samples.size(); sample_idx++) {
       const auto &sample = input_samples[sample_idx];
       if (sample.empty()) {
@@ -545,9 +549,18 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextToken(
       }
       embedding_optimizer_.Apply(embedding_table, grad_embedding,
                                  epoch_learning_rate);
+      if (each_sample_call != nullptr) {
+        each_sample_call(epoch, sample_idx + 1,
+                         static_cast<int>(input_samples.size()),
+                         loss_count == 0 ? 0.0 : loss_sum / loss_count,
+                         stop_epoch);
+      }
+      if (stop_epoch) {
+        break;
+      }
     }
 
-    bool early_stop = false;
+    bool early_stop = stop_epoch;
     if (each_epoch_call != nullptr) {
       each_epoch_call(epoch, loss_count == 0 ? 0.0 : loss_sum / loss_count,
                       early_stop);

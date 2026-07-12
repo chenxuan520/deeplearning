@@ -51,6 +51,7 @@
             <li>规模定律(Scaling Law)和涌现能力,到底在说什么;</li>
             <li>训练数据从哪里来、怎样清洗成可用语料,以及为什么高质量数据会越来越稀缺;</li>
             <li><strong>预训练</strong>与<strong>后训练</strong>(SFT、RLHF、蒸馏)的分工,以及“底座模型”和“对话模型”的区别;</li>
+            <li><strong>大模型测评</strong>在预训练、后训练、上线门禁和线上监控里分别测什么;</li>
             <li>为什么大模型不是单点奇迹,而是<strong>数据、算法、算力、工程</strong>四个卡点同时解开后的结果;</li>
             <li>模型是怎么<strong>一代代迭代升级</strong>的——GPT-4 到 GPT-5 是不是“重新训一个”,大版本和小更新差在哪;</li>
             <li>推理模型、多模态(图像/语音怎么进 Transformer)、长上下文(窗口大小由什么决定、为何标称≠有效)等最近的新方向,大致是怎么回事;</li>
@@ -639,6 +640,51 @@
             今天各家大模型拉开体验差距的,很大一部分就在后训练这一段的数据质量与工艺。
           </p>
         </div>
+
+        <h3>测评:贯穿训练和上线的质检系统</h3>
+        <p>
+          大模型测评不是“随手问几个问题看看聪不聪明”,而是一套<strong>质量控制工作</strong>:
+          用固定题集、真实任务、自动脚本、人工规则和线上反馈,判断模型到底会什么、不会什么、有没有退步、能不能上线。
+          它本身通常不直接训练模型,但会反过来告诉训练团队<strong>该补什么数据、调哪段后训练、哪些版本不能发布</strong>。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>测评维度</th><th>具体看什么</th><th>常见问题</th></tr></thead>
+            <tbody>
+              <tr><td><strong>基础能力</strong></td><td>语言理解、数学、代码、知识问答、推理、长文本</td><td>数学变强了,代码是否退步?</td></tr>
+              <tr><td><strong>指令遵循</strong></td><td>格式约束、多轮对话、角色边界、只输出 JSON 等</td><td>用户说“不要解释”,它还在啰嗦吗?</td></tr>
+              <tr><td><strong>安全与对齐</strong></td><td>危险内容、隐私泄漏、越狱、歧视、过度拒绝</td><td>安全了,但是否把正常问题也拒掉了?</td></tr>
+              <tr><td><strong>可靠性</strong></td><td>幻觉、引用来源、证据不足时能否承认不知道</td><td>它是在回答,还是在编一个像真的答案?</td></tr>
+              <tr><td><strong>产品体验</strong></td><td>清晰度、啰嗦程度、延迟、成本、工具调用成功率</td><td>benchmark 高,但用户是不是觉得难用?</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>放到训练和发布链路里看,测评几乎每一站都在场:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>环节</th><th>测评重点</th><th>测评结论用来干什么</th></tr></thead>
+            <tbody>
+              <tr><td><strong>预训练中</strong></td><td>loss / perplexity、基础 benchmark、不同 checkpoint 的能力走势</td><td>判断训练是否有效、哪个 checkpoint 值得继续训或拿去后训练</td></tr>
+              <tr><td><strong>后训练中</strong></td><td>SFT / RLHF / DPO 前后,指令遵循、安全、偏好、幻觉是否改善</td><td>选择后训练配方,发现对齐税、灾难性遗忘和安全退步</td></tr>
+              <tr><td><strong>上线前</strong></td><td>新旧模型对比、红线安全、核心业务 case、延迟与成本</td><td>做发布门禁:能不能上线、灰度多少、哪些能力要回滚</td></tr>
+              <tr><td><strong>上线后</strong></td><td>A/B 实验、用户反馈、人工抽检、投诉、安全事件、失败日志</td><td>发现离线榜单看不到的真实问题,进入下一轮数据和后训练</td></tr>
+              <tr><td><strong>应用层</strong></td><td>模型 + prompt + RAG + 工具 + 产品流程的端到端效果</td><td>判断问题到底出在模型、检索、工具、提示词还是业务链路</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">模型测评和系统测评要分开看</span>
+          <p>
+            <strong>模型测评</strong>尽量只看模型本身:同一题、同一 prompt、同一解码参数,比较模型 A/B 的能力。
+            <strong>系统测评</strong>则看完整产品链路:检索有没有召回正确文档、rerank 有没有排对、工具有没有执行成功、最终答案有没有解决用户问题。
+            RAG 问答答错时,不一定是模型笨;也可能是切片、召回、排序或 prompt 出了问题。
+          </p>
+        </div>
+        <p>
+          所以测评岗位的产出,通常不是一个孤零零的分数,而是一整套证据:
+          测评集、自动评测脚本、人工标注规范、模型对比报告、安全红队报告、badcase 分析、上线准入结论和回归看板。
+          最有价值的测评报告会说清楚:<strong>哪里变好了、哪里变差了、为什么变差、下一轮训练该补什么</strong>。
+        </p>
 
         <h3>① 预训练(Pre-training):自监督地读遍互联网</h3>
         <p>
@@ -1490,6 +1536,7 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
             <li>Scaling Law:参数、数据、算力一起放大,性能可预测提升;超过门槛会“涌现”新能力。</li>
             <li>训练数据不是原始互联网的简单堆叠,而是经过正文抽取、去重、质量过滤、安全/隐私过滤、污染检测、领域分类、重加权和分词打包后的工程产物。真正稀缺的是高质量、低重复、低污染、合法可用、能带来新增能力的 token。</li>
             <li>预训练(自监督)像长期读书,练出语言、知识和世界模型底座;后训练(SFT → RLHF/DPO → 蒸馏)像进入真实工作,把它调成好用的助手。SFT 数据量远小于预训练,但正好打在“用户指令 → 助手回答”的使用入口上,所以能显著改变体感;它常常仍是交叉熵训练,但通常<strong>只对 assistant/completion 部分计 loss</strong>,prompt 更多是作为条件输入。新的后训练还会用<strong>多教师在线蒸馏</strong>,把数学、代码、Agent 等专项老师的能力压进一个统一模型。</li>
+            <li>大模型测评是训练和上线的质检系统:预训练中选 checkpoint,后训练中看指令/安全/幻觉是否改善,上线前做发布门禁,上线后用 A/B、人工抽检和日志发现真实问题;应用层还要把模型、prompt、RAG、工具和产品流程一起测。</li>
             <li>最近方向:推理模型、多模态(patch→ViT→投影→拼序列)、长上下文、MoE——内核仍是 token + Transformer。推理模型的“思考深度”由 effort 条件训练、外部预算、模型学到的停机策略和 runtime 硬限制共同决定;上下文窗口由<strong>位置编码 × 训练长度 × 算力显存</strong>三关中最紧的一关决定,且标称长度≠有效长度。</li>
             <li>降智/对齐税/遗忘等多半发生在<strong>后训练、蒸馏、量化、MoE 压 k、截断、产品护栏</strong>等环节,先定位链路再判断能力。小模型追上大模型通常靠专精、更长推理或砍掉多模态来换分数,不能只看 benchmark,还要看任务范围、延迟和通用性。</li>
             <li>它本质是概率预测器,所以会幻觉、有知识截止和偏见——要理性使用,并靠 RAG/工具补救。</li>

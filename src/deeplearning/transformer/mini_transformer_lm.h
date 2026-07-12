@@ -87,7 +87,11 @@ public:
       std::function<void(int epoch_num, double average_loss, bool &early_stop)>
           each_epoch_call = nullptr,
       int epoch_num = 1, double learning_rate = 0.1,
-      LRScheduler *lr_scheduler = nullptr);
+      LRScheduler *lr_scheduler = nullptr,
+      std::function<void(int epoch_num, int finished_sample_num,
+                         int sample_num, double average_loss,
+                         bool &early_stop)>
+          each_sample_call = nullptr);
 
   void set_random_seed(int seed);
   void set_backbone_type(BackboneType backbone_type);

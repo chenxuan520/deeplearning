@@ -6,6 +6,9 @@
 #include "transformer/mini_transformer_lm_loader.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <csignal>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -20,6 +23,12 @@ using namespace deeplearning;
 namespace fs = std::filesystem;
 
 namespace {
+
+volatile std::sig_atomic_t g_stop_requested = 0;
+
+void HandleStopSignal(int) { g_stop_requested = 1; }
+
+bool StopRequested() { return g_stop_requested != 0; }
 
 // A base-model style CLI around MiniTransformerLM with four sub-commands:
 //   init      define structure + build vocab from a corpus + save a fresh model
@@ -53,16 +62,24 @@ struct Option {
   int block_num = 2;
   int context_size = 2;
   int max_vocab_size = 0;
+  int log_every = 1;
+  int checkpoint_every = 1;
+  int progress_every_sec = 5;
   double learning_rate = 0.01;
+  double early_stop_loss = 0.02;
   double temperature = 1.0;
   int top_k = 0;
   double top_p = 1.0;
   string backbone = "decoder";
   string tokenizer = "char";
   string unknown_policy = "map";
+  string checkpoint;
   bool tokenizer_specified = false;
   bool max_vocab_size_specified = false;
   bool unknown_policy_specified = false;
+  bool train_control_specified = false;
+  bool resume_checkpoint = false;
+  bool no_checkpoint = false;
   bool sampling_specified = false;
 };
 
@@ -115,6 +132,19 @@ void PrintCommandUsage(const char *prog, const string &verb) {
             "in a directory\n"
          << "  --epochs <int>\n"
          << "  --learning-rate <double>\n";
+    cout << "  --log-every <int>           print epoch summary every N epochs "
+            "(default 1)\n"
+         << "  --progress-every-sec <int>  print in-epoch progress every N "
+            "seconds (0 = off, default 5)\n"
+         << "  --early-stop-loss <double>  stop after an epoch below this loss "
+            "(<=0 = off, default 0.02)\n"
+         << "  --checkpoint <path>         checkpoint path (default "
+            "<model>.ckpt)\n"
+         << "  --checkpoint-every <int>    save checkpoint every N completed "
+            "epochs (default 1)\n"
+         << "  --resume-checkpoint         load the checkpoint and continue "
+            "toward --epochs\n"
+         << "  --no-checkpoint             disable periodic checkpoint writes\n";
   } else if (verb == "generate") {
     cout << "  --model <path>              model to load (default "
             "mini_lm.param)\n"
@@ -159,6 +189,28 @@ bool ParseArgs(int argc, char **argv, int start, Option &option) {
       option.epoch_num = std::stoi(need_value("--epochs"));
     } else if (arg == "--learning-rate") {
       option.learning_rate = std::stod(need_value("--learning-rate"));
+    } else if (arg == "--log-every") {
+      option.log_every = std::stoi(need_value("--log-every"));
+      option.train_control_specified = true;
+    } else if (arg == "--progress-every-sec") {
+      option.progress_every_sec =
+          std::stoi(need_value("--progress-every-sec"));
+      option.train_control_specified = true;
+    } else if (arg == "--early-stop-loss") {
+      option.early_stop_loss = std::stod(need_value("--early-stop-loss"));
+      option.train_control_specified = true;
+    } else if (arg == "--checkpoint") {
+      option.checkpoint = need_value("--checkpoint");
+      option.train_control_specified = true;
+    } else if (arg == "--checkpoint-every") {
+      option.checkpoint_every = std::stoi(need_value("--checkpoint-every"));
+      option.train_control_specified = true;
+    } else if (arg == "--resume-checkpoint") {
+      option.resume_checkpoint = true;
+      option.train_control_specified = true;
+    } else if (arg == "--no-checkpoint") {
+      option.no_checkpoint = true;
+      option.train_control_specified = true;
     } else if (arg == "--rand-seed") {
       option.rand_seed = std::stoi(need_value("--rand-seed"));
     } else if (arg == "--model-dim") {
@@ -201,6 +253,14 @@ bool ParseArgs(int argc, char **argv, int start, Option &option) {
 }
 
 string VocabPath(const string &model_path) { return model_path + ".vocab"; }
+
+string DefaultCheckpointPath(const string &model_path) {
+  return model_path + ".ckpt";
+}
+
+string CheckpointMetaPath(const string &checkpoint_path) {
+  return checkpoint_path + ".train";
+}
 
 bool ReadFileRaw(const string &filename, string &content) {
   std::ifstream ifs(filename, std::ios::binary);
@@ -345,6 +405,109 @@ struct TokenizerBundle {
   CharacterTokenizer char_tokenizer;
   WordTokenizer word_tokenizer;
 };
+
+struct CheckpointMeta {
+  int completed_epoch = 0;
+  int target_epoch = 0;
+  double learning_rate = 0.0;
+  double last_loss = 0.0;
+  double last_perplexity = 0.0;
+  string source;
+};
+
+double SecondsSince(std::chrono::steady_clock::time_point start,
+                    std::chrono::steady_clock::time_point now) {
+  return std::chrono::duration_cast<std::chrono::duration<double>>(now - start)
+      .count();
+}
+
+string FormatSeconds(double seconds) {
+  if (seconds < 0) {
+    seconds = 0;
+  }
+  long long total_seconds = static_cast<long long>(seconds + 0.5);
+  long long hours = total_seconds / 3600;
+  long long minutes = (total_seconds % 3600) / 60;
+  long long secs = total_seconds % 60;
+  std::ostringstream oss;
+  if (hours > 0) {
+    oss << hours << "h";
+  }
+  if (hours > 0 || minutes > 0) {
+    oss << minutes << "m";
+  }
+  oss << secs << "s";
+  return oss.str();
+}
+
+bool WriteCheckpointMeta(const string &checkpoint_path,
+                         const CheckpointMeta &meta, string &err) {
+  const string path = CheckpointMetaPath(checkpoint_path);
+  std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
+  if (!ofs.is_open()) {
+    err = "Write checkpoint metadata failed: " + path;
+    return false;
+  }
+  ofs << "completed_epoch=" << meta.completed_epoch << '\n'
+      << "target_epoch=" << meta.target_epoch << '\n'
+      << "learning_rate=" << meta.learning_rate << '\n'
+      << "last_loss=" << meta.last_loss << '\n'
+      << "last_perplexity=" << meta.last_perplexity << '\n'
+      << "source=" << meta.source << '\n';
+  if (!ofs.good()) {
+    err = "Write checkpoint metadata failed: " + path;
+    return false;
+  }
+  return true;
+}
+
+bool ReadCheckpointMeta(const string &checkpoint_path, CheckpointMeta &meta,
+                        string &err) {
+  const string path = CheckpointMetaPath(checkpoint_path);
+  string content;
+  if (!ReadFileRaw(path, content)) {
+    err = "Checkpoint metadata not found: " + path;
+    return false;
+  }
+  std::istringstream iss(content);
+  string line;
+  while (std::getline(iss, line)) {
+    line = TrimLineEnd(line);
+    if (line.empty()) {
+      continue;
+    }
+    const auto pos = line.find('=');
+    if (pos == string::npos) {
+      err = "Invalid checkpoint metadata line: " + line;
+      return false;
+    }
+    const string key = line.substr(0, pos);
+    const string value = line.substr(pos + 1);
+    try {
+      if (key == "completed_epoch") {
+        meta.completed_epoch = std::stoi(value);
+      } else if (key == "target_epoch") {
+        meta.target_epoch = std::stoi(value);
+      } else if (key == "learning_rate") {
+        meta.learning_rate = std::stod(value);
+      } else if (key == "last_loss") {
+        meta.last_loss = std::stod(value);
+      } else if (key == "last_perplexity") {
+        meta.last_perplexity = std::stod(value);
+      } else if (key == "source") {
+        meta.source = value;
+      }
+    } catch (const std::exception &ex) {
+      err = "Invalid checkpoint metadata value for " + key + ": " + value;
+      return false;
+    }
+  }
+  if (meta.completed_epoch < 0 || meta.target_epoch < 0) {
+    err = "Invalid checkpoint epoch metadata";
+    return false;
+  }
+  return true;
+}
 
 string DisplayCharVocab(const string &vocabulary) {
   string out;
@@ -659,6 +822,32 @@ bool LoadModel(const string &model_path, MiniTransformerLM &model,
   return true;
 }
 
+bool SaveModelWithVocab(const string &model_path, const MiniTransformerLM &model,
+                        const TokenizerBundle &tokenizer, string &err) {
+  if (MiniTransformerLMLoader::ExportModelToFile(model, model_path) !=
+      MiniTransformerLMLoader::SUCCESS) {
+    err = "Export model failed: " + model_path;
+    return false;
+  }
+  if (!WriteVocabSidecar(VocabPath(model_path), tokenizer, err)) {
+    return false;
+  }
+  return true;
+}
+
+bool SaveTrainingCheckpoint(const string &checkpoint_path,
+                            const MiniTransformerLM &model,
+                            const TokenizerBundle &tokenizer,
+                            const CheckpointMeta &meta, string &err) {
+  if (!SaveModelWithVocab(checkpoint_path, model, tokenizer, err)) {
+    return false;
+  }
+  if (!WriteCheckpointMeta(checkpoint_path, meta, err)) {
+    return false;
+  }
+  return true;
+}
+
 int RunInit(const Option &option) {
   if (option.model_dim <= 0 || option.head_num <= 0 ||
       option.feed_forward_dim <= 0 || option.block_num < 0 ||
@@ -731,12 +920,7 @@ int RunInit(const Option &option) {
     cout << "Model init failed: " << model.err_msg() << endl;
     return -1;
   }
-  if (MiniTransformerLMLoader::ExportModelToFile(model, option.model) !=
-      MiniTransformerLMLoader::SUCCESS) {
-    cout << "Export model failed: " << option.model << endl;
-    return -1;
-  }
-  if (!WriteVocabSidecar(VocabPath(option.model), tokenizer, err)) {
+  if (!SaveModelWithVocab(option.model, model, tokenizer, err)) {
     cout << err << endl;
     return -1;
   }
@@ -769,12 +953,39 @@ int RunInit(const Option &option) {
 }
 
 int RunTrain(const Option &option) {
+  std::signal(SIGINT, HandleStopSignal);
+  std::signal(SIGTERM, HandleStopSignal);
+
+  string checkpoint_path =
+      option.checkpoint.empty() ? DefaultCheckpointPath(option.model)
+                                : option.checkpoint;
+  if (option.no_checkpoint && option.resume_checkpoint) {
+    cout << "--resume-checkpoint cannot be used with --no-checkpoint" << endl;
+    return -1;
+  }
+  if (option.log_every <= 0 || option.progress_every_sec < 0 ||
+      option.checkpoint_every <= 0) {
+    cout << "Invalid logging/checkpoint option" << endl;
+    return -1;
+  }
+
   MiniTransformerLM model;
   TokenizerBundle tokenizer;
   string err;
-  if (!LoadModel(option.model, model, tokenizer, err)) {
+  const string load_path =
+      option.resume_checkpoint ? checkpoint_path : option.model;
+  if (!LoadModel(load_path, model, tokenizer, err)) {
     cout << err << endl;
     return -1;
+  }
+  CheckpointMeta resume_meta;
+  int start_epoch = 0;
+  if (option.resume_checkpoint) {
+    if (!ReadCheckpointMeta(checkpoint_path, resume_meta, err)) {
+      cout << err << endl;
+      return -1;
+    }
+    start_epoch = resume_meta.completed_epoch;
   }
   const int context_size = model.max_context_size();
   if (context_size <= 0) {
@@ -785,6 +996,16 @@ int RunTrain(const Option &option) {
     cout << "Invalid training option (epochs and learning-rate must be > 0)"
          << endl;
     return -1;
+  }
+  if (start_epoch >= option.epoch_num) {
+    cout << "Checkpoint already reached target epochs: " << start_epoch
+         << "/" << option.epoch_num << endl;
+    if (!SaveModelWithVocab(option.model, model, tokenizer, err)) {
+      cout << err << endl;
+      return -1;
+    }
+    cout << "Saved checkpoint weights to model: " << option.model << endl;
+    return 0;
   }
 
   string corpus;
@@ -836,24 +1057,169 @@ int RunTrain(const Option &option) {
   int warmup_epochs = std::max(1, option.epoch_num / 20);
   WarmupCosineLR lr_scheduler(option.learning_rate, warmup_epochs,
                               option.epoch_num, option.learning_rate * 0.1);
-  int log_every = std::max(1, option.epoch_num / 10);
-  auto callback = [&](int epoch, double average_loss, bool &early_stop) {
-    if ((epoch + 1) % log_every == 0 || epoch + 1 == option.epoch_num) {
-      cout << "epoch " << (epoch + 1) << "/" << option.epoch_num
-           << " loss=" << average_loss << endl;
-    }
-    if (average_loss < 0.02) {
-      early_stop = true;
-    }
-  };
 
   cout << "Training on " << source << " (" << input_samples.size()
        << " samples, context " << context_size << ")" << endl;
-  if (model.TrainNextToken(input_samples, target_tokens, callback,
-                           option.epoch_num, option.learning_rate,
-                           &lr_scheduler) != MiniTransformerLM::SUCCESS) {
-    cout << "TrainNextToken failed: " << model.err_msg() << endl;
-    return -1;
+  cout << "Tokenizer: " << TokenizerName(tokenizer.kind)
+       << " vocab_size: " << TokenizerVocabSize(tokenizer) << endl;
+  cout << "Epochs: " << start_epoch << " -> " << option.epoch_num
+       << " learning_rate: " << option.learning_rate
+       << " warmup_epochs: " << warmup_epochs << endl;
+  if (option.no_checkpoint) {
+    cout << "Checkpoint: disabled" << endl;
+  } else {
+    cout << "Checkpoint: " << checkpoint_path << " every "
+         << option.checkpoint_every << " epoch(s)" << endl;
+  }
+  cout << "Early stop loss: "
+       << (option.early_stop_loss > 0 ? std::to_string(option.early_stop_loss)
+                                      : string("off"))
+       << endl;
+  if (option.resume_checkpoint) {
+    cout << "Resumed checkpoint: completed_epoch=" << start_epoch
+         << " last_loss=" << resume_meta.last_loss
+         << " last_perplexity=" << resume_meta.last_perplexity << endl;
+  }
+
+  const auto train_start = std::chrono::steady_clock::now();
+  auto last_progress_time = train_start;
+  double last_loss = 0.0;
+  bool interrupted = false;
+  bool stopped_by_loss = false;
+  int completed_epoch = start_epoch;
+
+  for (int global_epoch = start_epoch; global_epoch < option.epoch_num;
+       global_epoch++) {
+    const double current_lr = lr_scheduler.GetLR(global_epoch);
+    auto epoch_start = std::chrono::steady_clock::now();
+    bool stop_after_epoch = false;
+    bool stop_during_epoch = false;
+
+    auto sample_callback = [&](int, int finished_sample_num, int sample_num,
+                               double average_loss, bool &early_stop) {
+      last_loss = average_loss;
+      if (StopRequested()) {
+        early_stop = true;
+        stop_during_epoch = true;
+      }
+      if (option.progress_every_sec == 0 || finished_sample_num == sample_num) {
+        return;
+      }
+      const auto now = std::chrono::steady_clock::now();
+      if (SecondsSince(last_progress_time, now) <
+          option.progress_every_sec) {
+        return;
+      }
+      last_progress_time = now;
+      const double epoch_elapsed = SecondsSince(epoch_start, now);
+      const double samples_per_sec =
+          epoch_elapsed > 0 ? finished_sample_num / epoch_elapsed : 0.0;
+      const int total_samples = static_cast<int>(input_samples.size());
+      const double epoch_eta =
+          samples_per_sec > 0
+              ? (total_samples - finished_sample_num) / samples_per_sec
+              : 0.0;
+      const long long done_steps =
+          static_cast<long long>(global_epoch - start_epoch) * total_samples +
+          finished_sample_num;
+      const long long total_steps =
+          static_cast<long long>(option.epoch_num - start_epoch) *
+          total_samples;
+      const double total_eta =
+          done_steps > 0
+              ? SecondsSince(train_start, now) *
+                    (static_cast<double>(total_steps - done_steps) / done_steps)
+              : 0.0;
+      cout << "epoch " << (global_epoch + 1) << "/" << option.epoch_num
+           << " sample " << finished_sample_num << "/" << sample_num
+           << " loss=" << average_loss
+           << " samples/s=" << samples_per_sec
+           << " epoch_eta=" << FormatSeconds(epoch_eta)
+           << " total_eta=" << FormatSeconds(total_eta) << endl;
+    };
+
+    auto epoch_callback = [&](int, double average_loss, bool &early_stop) {
+      last_loss = average_loss;
+      if (StopRequested() || stop_during_epoch) {
+        early_stop = true;
+        stop_after_epoch = true;
+        return;
+      }
+      if (option.early_stop_loss > 0 &&
+          average_loss < option.early_stop_loss) {
+        early_stop = true;
+        stop_after_epoch = true;
+        stopped_by_loss = true;
+      }
+    };
+
+    if (model.TrainNextToken(input_samples, target_tokens, epoch_callback, 1,
+                             current_lr, nullptr,
+                             sample_callback) != MiniTransformerLM::SUCCESS) {
+      cout << "TrainNextToken failed: " << model.err_msg() << endl;
+      return -1;
+    }
+
+    const bool finished_full_epoch = !stop_during_epoch;
+    if (finished_full_epoch) {
+      completed_epoch = global_epoch + 1;
+    }
+    const double perplexity = std::exp(last_loss);
+    const auto now = std::chrono::steady_clock::now();
+    const double elapsed = SecondsSince(train_start, now);
+    const int finished_epochs = std::max(1, completed_epoch - start_epoch);
+    const double epoch_per_sec = finished_epochs / std::max(elapsed, 1e-9);
+    const double eta =
+        epoch_per_sec > 0 ? (option.epoch_num - completed_epoch) / epoch_per_sec
+                          : 0.0;
+    if ((completed_epoch % option.log_every == 0) ||
+        completed_epoch == option.epoch_num || stop_after_epoch ||
+        stop_during_epoch) {
+      cout << "epoch " << completed_epoch << "/" << option.epoch_num
+           << " loss=" << last_loss << " perplexity=" << perplexity
+           << " lr=" << current_lr
+           << " elapsed=" << FormatSeconds(elapsed)
+           << " eta=" << FormatSeconds(eta) << endl;
+    }
+
+    if (!option.no_checkpoint &&
+        (completed_epoch % option.checkpoint_every == 0 ||
+         completed_epoch == option.epoch_num || stop_after_epoch ||
+         stop_during_epoch)) {
+      CheckpointMeta meta;
+      meta.completed_epoch = completed_epoch;
+      meta.target_epoch = option.epoch_num;
+      meta.learning_rate = option.learning_rate;
+      meta.last_loss = last_loss;
+      meta.last_perplexity = perplexity;
+      meta.source = source;
+      if (!SaveTrainingCheckpoint(checkpoint_path, model, tokenizer, meta, err)) {
+        cout << err << endl;
+        return -1;
+      }
+      cout << "Saved checkpoint: " << checkpoint_path
+           << " completed_epoch=" << completed_epoch << endl;
+    }
+
+    if (stop_during_epoch) {
+      interrupted = true;
+      break;
+    }
+    if (stop_after_epoch) {
+      break;
+    }
+  }
+
+  if (interrupted) {
+    if (option.no_checkpoint) {
+      cout << "Training interrupted; checkpoint disabled, weights were not "
+              "saved"
+           << endl;
+    } else {
+      cout << "Training interrupted; checkpoint saved at " << checkpoint_path
+           << endl;
+    }
+    return 130;
   }
 
   double average_loss = 0.0;
@@ -866,13 +1232,16 @@ int RunTrain(const Option &option) {
     return -1;
   }
 
-  if (MiniTransformerLMLoader::ExportModelToFile(model, option.model) !=
-      MiniTransformerLMLoader::SUCCESS) {
-    cout << "Export model failed: " << option.model << endl;
+  if (!SaveModelWithVocab(option.model, model, tokenizer, err)) {
+    cout << err << endl;
     return -1;
   }
   cout << "Loss: " << average_loss << " Perplexity: " << perplexity << endl;
   cout << "Saved updated weights: " << option.model << endl;
+  if (stopped_by_loss) {
+    cout << "Stopped early because loss dropped below "
+         << option.early_stop_loss << endl;
+  }
   return 0;
 }
 
@@ -1020,6 +1389,10 @@ int main(int argc, char **argv) {
     cout << "--unknown-policy is only used by init; existing models load "
             "unknown policy from .vocab"
          << endl;
+    return -1;
+  }
+  if (option.train_control_specified && verb != "train") {
+    cout << "training log/checkpoint options are only used by train" << endl;
     return -1;
   }
 
