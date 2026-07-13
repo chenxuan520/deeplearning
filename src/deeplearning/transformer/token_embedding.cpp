@@ -63,13 +63,13 @@ TokenEmbedding::set_embedding_table(const Matrix &embedding_table) {
     err_msg_ = "[TokenEmbedding::set_embedding_table] TokenEmbedding not init";
     return NOT_INIT;
   }
-  if (embedding_table.size() != vocab_size_) {
+  if (embedding_table.size() != static_cast<size_t>(vocab_size_)) {
     err_msg_ =
         "[TokenEmbedding::set_embedding_table] Invalid embedding table size";
     return INVALID_DATA;
   }
   for (const auto &token_embedding : embedding_table) {
-    if (token_embedding.size() != model_dim_) {
+    if (token_embedding.size() != static_cast<size_t>(model_dim_)) {
       err_msg_ =
           "[TokenEmbedding::set_embedding_table] Invalid embedding table size";
       return INVALID_DATA;

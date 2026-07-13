@@ -9,7 +9,7 @@ void XavierParamInitFunction::InitParam(
     return;
   }
 
-  for (int i = 1; i < weight.size(); i++) {
+  for (int i = 1; i < static_cast<int>(weight.size()); i++) {
     // Same bug as he_param_init: `weight[i - 1].size()` is 0 for i==1 (the
     // input layer has no weights), so the divisor becomes weight[i].size()
     // alone -- meaning the "fan-in" half of Xavier is missing. Fix by

@@ -37,14 +37,14 @@ std::vector<double> Softmax(const std::vector<double> &logits) {
   }
 
   double max_logit = logits[0];
-  for (int i = 1; i < logits.size(); i++) {
+  for (int i = 1; i < static_cast<int>(logits.size()); i++) {
     if (logits[i] > max_logit) {
       max_logit = logits[i];
     }
   }
 
   double sum = 0;
-  for (int i = 0; i < logits.size(); i++) {
+  for (int i = 0; i < static_cast<int>(logits.size()); i++) {
     probs[i] = std::exp(logits[i] - max_logit);
     sum += probs[i];
   }
@@ -64,6 +64,16 @@ std::vector<double> SoftmaxWithTemperature(const std::vector<double> &logits,
     value /= temperature;
   }
   return Softmax(scaled_logits);
+}
+
+std::vector<int> BuildPositionTargets(const std::vector<int> &sample,
+                                      int target_token) {
+  std::vector<int> position_targets(sample.size());
+  for (int i = 0; i + 1 < static_cast<int>(sample.size()); i++) {
+    position_targets[i] = sample[i + 1];
+  }
+  position_targets.back() = target_token;
+  return position_targets;
 }
 
 } // namespace
@@ -91,6 +101,7 @@ MiniTransformerLM::RC MiniTransformerLM::Init(const Config &config) {
   use_positional_encoding_ = config.use_positional_encoding_;
   scale_embedding_ = config.scale_embedding_;
   block_learning_rate_scale_ = config.block_learning_rate_scale_;
+  train_rng_.seed(static_cast<std::mt19937::result_type>(rand_seed_));
   sample_rng_.seed(static_cast<std::mt19937::result_type>(rand_seed_));
 
   token_embedding_.set_random_seed(rand_seed_);
@@ -113,6 +124,9 @@ MiniTransformerLM::RC MiniTransformerLM::Init(const Config &config) {
 
   output_weight_.assign(vocab_size_, std::vector<double>(model_dim_, 0));
   output_bias_.assign(vocab_size_, 0);
+  grad_output_weight_.assign(vocab_size_, std::vector<double>(model_dim_, 0));
+  grad_output_bias_.assign(vocab_size_, 0);
+  grad_embedding_.assign(vocab_size_, std::vector<double>(model_dim_, 0));
   const double limit = std::sqrt(6.0 / (vocab_size_ + model_dim_));
   std::mt19937 gen(rand_seed_ + kOutputHeadSeedOffset);
   std::uniform_real_distribution<double> dist(-limit, limit);
@@ -155,7 +169,7 @@ MiniTransformerLM::Forward(const std::vector<int> &token_ids, Matrix &logits,
   }
 
   logits.assign(encoded.size(), std::vector<double>(vocab_size_, 0));
-  for (int pos = 0; pos < encoded.size(); pos++) {
+  for (int pos = 0; pos < static_cast<int>(encoded.size()); pos++) {
     for (int token_id = 0; token_id < vocab_size_; token_id++) {
       logits[pos][token_id] = output_bias_[token_id];
       for (int dim = 0; dim < model_dim_; dim++) {
@@ -229,7 +243,7 @@ MiniTransformerLM::RC MiniTransformerLM::PredictNextToken(
 
   token_id = 0;
   double best_logit = logits[0];
-  for (int i = 1; i < logits.size(); i++) {
+  for (int i = 1; i < static_cast<int>(logits.size()); i++) {
     if (logits[i] > best_logit) {
       best_logit = logits[i];
       token_id = i;
@@ -255,7 +269,7 @@ MiniTransformerLM::RC MiniTransformerLM::SampleNextToken(
 
   auto probs = SoftmaxWithTemperature(logits, option.temperature_);
   std::vector<int> order(probs.size(), 0);
-  for (int i = 0; i < order.size(); i++) {
+  for (int i = 0; i < static_cast<int>(order.size()); i++) {
     order[i] = i;
   }
   std::sort(order.begin(), order.end(), [&](int lhs, int rhs) {
@@ -291,7 +305,7 @@ MiniTransformerLM::RC MiniTransformerLM::SampleNextToken(
   double rand_value = dist(sample_rng_);
   double prob_sum = 0;
   token_id = order[0];
-  for (int i = 0; i < filtered_probs.size(); i++) {
+  for (int i = 0; i < static_cast<int>(filtered_probs.size()); i++) {
     prob_sum += filtered_probs[i];
     if (rand_value <= prob_sum) {
       token_id = i;
@@ -363,23 +377,40 @@ MiniTransformerLM::RC MiniTransformerLM::CalcNextTokenLoss(
     return INVALID_DATA;
   }
 
-  double loss_sum = 0;
-  for (int sample_idx = 0; sample_idx < input_samples.size(); sample_idx++) {
+  double loss_sum = 0.0;
+  long long loss_count = 0;
+  for (int sample_idx = 0; sample_idx < static_cast<int>(input_samples.size());
+       sample_idx++) {
+    const auto &sample = input_samples[sample_idx];
+    if (sample.empty()) {
+      err_msg_ = "[MiniTransformerLM::CalcNextTokenLoss] Empty sample";
+      return INVALID_DATA;
+    }
     if (target_tokens[sample_idx] < 0 || target_tokens[sample_idx] >= vocab_size_) {
       err_msg_ = "[MiniTransformerLM::CalcNextTokenLoss] Invalid target token";
       return INVALID_DATA;
     }
 
-    std::vector<double> logits;
-    auto rc = CalcNextTokenLogits(input_samples[sample_idx], logits, true);
+    Matrix logits;
+    auto rc = Forward(sample, logits, true);
     if (rc != SUCCESS) {
       return rc;
     }
-    auto probs = Softmax(logits);
-    loss_sum += -std::log(std::max(probs[target_tokens[sample_idx]], 1e-12));
+    if (logits.size() != sample.size()) {
+      err_msg_ = "[MiniTransformerLM::CalcNextTokenLoss] Invalid logits size";
+      return INVALID_DATA;
+    }
+
+    const auto position_targets =
+        BuildPositionTargets(sample, target_tokens[sample_idx]);
+    for (int pos = 0; pos < static_cast<int>(logits.size()); pos++) {
+      auto probs = Softmax(logits[pos]);
+      loss_sum += -std::log(std::max(probs[position_targets[pos]], 1e-12));
+      loss_count++;
+    }
   }
 
-  average_loss = loss_sum / input_samples.size();
+  average_loss = loss_count == 0 ? 0.0 : loss_sum / loss_count;
   return SUCCESS;
 }
 
@@ -436,9 +467,14 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextToken(
     return INVALID_DATA;
   }
 
-  const double embedding_scale =
-      scale_embedding_ ? std::sqrt(static_cast<double>(model_dim_)) : 1.0;
+  ClearAccumulatedGradients();
+  std::vector<int> order(input_samples.size(), 0);
+  for (int i = 0; i < static_cast<int>(input_samples.size()); i++) {
+    order[i] = i;
+  }
+
   for (int epoch = 0; epoch < epoch_num; epoch++) {
+    std::shuffle(order.begin(), order.end(), train_rng_);
     const double epoch_learning_rate =
         lr_scheduler != nullptr ? lr_scheduler->GetLR(epoch) : learning_rate;
     const double block_learning_rate =
@@ -447,110 +483,18 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextToken(
     double loss_sum = 0;
     long long loss_count = 0;
     bool stop_epoch = false;
-    for (int sample_idx = 0; sample_idx < input_samples.size(); sample_idx++) {
+    for (int order_pos = 0; order_pos < static_cast<int>(order.size());
+         order_pos++) {
+      const int sample_idx = order[order_pos];
       const auto &sample = input_samples[sample_idx];
-      if (sample.empty()) {
-        err_msg_ = "[MiniTransformerLM::TrainNextToken] Empty sample";
-        return INVALID_DATA;
-      }
-      if (target_tokens[sample_idx] < 0 ||
-          target_tokens[sample_idx] >= vocab_size_) {
-        err_msg_ = "[MiniTransformerLM::TrainNextToken] Invalid target token";
-        return INVALID_DATA;
-      }
-
-      // Standard autoregressive targets: every position predicts the following
-      // token in the sequence, and the last position predicts target_tokens.
-      std::vector<int> position_targets(sample.size());
-      for (int i = 0; i + 1 < static_cast<int>(sample.size()); i++) {
-        position_targets[i] = sample[i + 1];
-      }
-      position_targets.back() = target_tokens[sample_idx];
-
-      Matrix encoded;
-      auto rc = EncodeSequence(sample, encoded, true);
+      auto rc = BackwardSample(sample, target_tokens[sample_idx],
+                               epoch_learning_rate, block_learning_rate, false,
+                               loss_sum, loss_count);
       if (rc != SUCCESS) {
         return rc;
       }
-
-      const int seq_len = static_cast<int>(encoded.size());
-      const double inv_seq_len = 1.0 / seq_len;
-      Matrix grad_encoded(seq_len, std::vector<double>(model_dim_, 0));
-      Matrix grad_output_weight(vocab_size_,
-                                std::vector<double>(model_dim_, 0));
-      std::vector<double> grad_output_bias(vocab_size_, 0);
-
-      for (int pos = 0; pos < seq_len; pos++) {
-        std::vector<double> logits(vocab_size_, 0);
-        for (int token_id = 0; token_id < vocab_size_; token_id++) {
-          logits[token_id] = output_bias_[token_id];
-          for (int dim = 0; dim < model_dim_; dim++) {
-            logits[token_id] += output_weight_[token_id][dim] * encoded[pos][dim];
-          }
-        }
-
-        auto probs = Softmax(logits);
-        const int target_token = position_targets[pos];
-        loss_sum += -std::log(std::max(probs[target_token], 1e-12));
-        loss_count++;
-
-        // Average the per-position gradient so the update matches a mean
-        // cross-entropy loss over the sequence regardless of its length.
-        std::vector<double> grad_logits = probs;
-        grad_logits[target_token] -= 1.0;
-        for (double &value : grad_logits) {
-          value *= inv_seq_len;
-        }
-
-        for (int token_id = 0; token_id < vocab_size_; token_id++) {
-          const double grad = grad_logits[token_id];
-          grad_output_bias[token_id] += grad;
-          for (int dim = 0; dim < model_dim_; dim++) {
-            grad_output_weight[token_id][dim] += grad * encoded[pos][dim];
-            grad_encoded[pos][dim] += output_weight_[token_id][dim] * grad;
-          }
-        }
-      }
-
-      output_weight_optimizer_.Apply(output_weight_, grad_output_weight,
-                                     epoch_learning_rate);
-      output_bias_optimizer_.Apply(output_bias_, grad_output_bias,
-                                   epoch_learning_rate);
-
-      Matrix grad_hidden;
-      if (backbone_type_ == BACKBONE_DECODER) {
-        if (decoder_.Backward(grad_encoded, grad_hidden, block_learning_rate) !=
-            TransformerDecoder::SUCCESS) {
-          err_msg_ = decoder_.err_msg();
-          return INVALID_DATA;
-        }
-      } else {
-        if (encoder_.Backward(grad_encoded, grad_hidden, block_learning_rate) !=
-            TransformerEncoder::SUCCESS) {
-          err_msg_ = encoder_.err_msg();
-          return INVALID_DATA;
-        }
-      }
-
-      auto &embedding_table = token_embedding_.mutable_embedding_table();
-      if (grad_hidden.size() != sample.size()) {
-        err_msg_ = "[MiniTransformerLM::TrainNextToken] Invalid backward result";
-        return INVALID_DATA;
-      }
-      // Scatter the per-position hidden gradients back onto the embedding rows
-      // (a token may appear several times, so accumulate), then take one Adam
-      // step over the whole table.
-      Matrix grad_embedding(vocab_size_, std::vector<double>(model_dim_, 0));
-      for (int i = 0; i < static_cast<int>(sample.size()); i++) {
-        int token_id = sample[i];
-        for (int dim = 0; dim < model_dim_; dim++) {
-          grad_embedding[token_id][dim] += grad_hidden[i][dim] * embedding_scale;
-        }
-      }
-      embedding_optimizer_.Apply(embedding_table, grad_embedding,
-                                 epoch_learning_rate);
       if (each_sample_call != nullptr) {
-        each_sample_call(epoch, sample_idx + 1,
+        each_sample_call(epoch, order_pos + 1,
                          static_cast<int>(input_samples.size()),
                          loss_count == 0 ? 0.0 : loss_sum / loss_count,
                          stop_epoch);
@@ -572,8 +516,251 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextToken(
   return SUCCESS;
 }
 
+MiniTransformerLM::RC MiniTransformerLM::TrainNextTokenBatch(
+    const std::vector<std::vector<int>> &input_samples,
+    const std::vector<int> &target_tokens, int batch_size,
+    std::function<void(int epoch_num, double average_loss, bool &early_stop)>
+        each_epoch_call,
+    int epoch_num, double learning_rate, LRScheduler *lr_scheduler,
+    std::function<void(int epoch_num, int finished_sample_num, int sample_num,
+                       double average_loss, bool &early_stop)>
+        each_sample_call) {
+  if (!is_init_) {
+    err_msg_ =
+        "[MiniTransformerLM::TrainNextTokenBatch] MiniTransformerLM not init";
+    return NOT_INIT;
+  }
+  if (input_samples.empty() || input_samples.size() != target_tokens.size() ||
+      epoch_num <= 0 || learning_rate <= 0 || batch_size <= 0) {
+    err_msg_ = "[MiniTransformerLM::TrainNextTokenBatch] Invalid training input";
+    return INVALID_DATA;
+  }
+  if (batch_size == 1) {
+    return TrainNextToken(input_samples, target_tokens, each_epoch_call,
+                          epoch_num, learning_rate, lr_scheduler,
+                          each_sample_call);
+  }
+
+  std::vector<int> order(input_samples.size(), 0);
+  for (int i = 0; i < static_cast<int>(input_samples.size()); i++) {
+    order[i] = i;
+  }
+
+  for (int epoch = 0; epoch < epoch_num; epoch++) {
+    std::shuffle(order.begin(), order.end(), train_rng_);
+    const double epoch_learning_rate =
+        lr_scheduler != nullptr ? lr_scheduler->GetLR(epoch) : learning_rate;
+    const double block_learning_rate =
+        block_num_ == 0 ? epoch_learning_rate
+                        : epoch_learning_rate * block_learning_rate_scale_;
+    double loss_sum = 0.0;
+    long long loss_count = 0;
+    bool stop_epoch = false;
+    int pending_sample_num = 0;
+    ClearAccumulatedGradients();
+
+    for (int order_pos = 0; order_pos < static_cast<int>(order.size());
+         order_pos++) {
+      const int sample_idx = order[order_pos];
+      auto rc = BackwardSample(input_samples[sample_idx],
+                               target_tokens[sample_idx], epoch_learning_rate,
+                               block_learning_rate, true, loss_sum, loss_count);
+      if (rc != SUCCESS) {
+        ClearAccumulatedGradients();
+        return rc;
+      }
+      pending_sample_num++;
+
+      const bool should_apply = pending_sample_num == batch_size ||
+                                order_pos + 1 == static_cast<int>(order.size());
+      if (should_apply) {
+        ApplyAccumulatedGradients(epoch_learning_rate, block_learning_rate,
+                                  1.0 / pending_sample_num);
+        pending_sample_num = 0;
+      }
+
+      if (each_sample_call != nullptr) {
+        each_sample_call(epoch, order_pos + 1,
+                         static_cast<int>(input_samples.size()),
+                         loss_count == 0 ? 0.0 : loss_sum / loss_count,
+                         stop_epoch);
+      }
+      if (stop_epoch) {
+        break;
+      }
+    }
+
+    if (pending_sample_num > 0) {
+      ApplyAccumulatedGradients(epoch_learning_rate, block_learning_rate,
+                                1.0 / pending_sample_num);
+    }
+
+    bool early_stop = stop_epoch;
+    if (each_epoch_call != nullptr) {
+      each_epoch_call(epoch, loss_count == 0 ? 0.0 : loss_sum / loss_count,
+                      early_stop);
+    }
+    if (early_stop) {
+      break;
+    }
+  }
+  return SUCCESS;
+}
+
+MiniTransformerLM::RC
+MiniTransformerLM::BackwardSample(const std::vector<int> &sample,
+                                  int target_token, double learning_rate,
+                                  double block_learning_rate,
+                                  bool accumulate_gradient, double &loss_sum,
+                                  long long &loss_count) {
+  if (sample.empty()) {
+    err_msg_ = "[MiniTransformerLM::BackwardSample] Empty sample";
+    return INVALID_DATA;
+  }
+  if (target_token < 0 || target_token >= vocab_size_) {
+    err_msg_ = "[MiniTransformerLM::BackwardSample] Invalid target token";
+    return INVALID_DATA;
+  }
+
+  const auto position_targets = BuildPositionTargets(sample, target_token);
+  Matrix encoded;
+  auto rc = EncodeSequence(sample, encoded, true);
+  if (rc != SUCCESS) {
+    return rc;
+  }
+
+  const int seq_len = static_cast<int>(encoded.size());
+  const double inv_seq_len = 1.0 / seq_len;
+  const double embedding_scale =
+      scale_embedding_ ? std::sqrt(static_cast<double>(model_dim_)) : 1.0;
+  Matrix grad_encoded(seq_len, std::vector<double>(model_dim_, 0));
+  Matrix grad_output_weight(vocab_size_, std::vector<double>(model_dim_, 0));
+  std::vector<double> grad_output_bias(vocab_size_, 0);
+
+  for (int pos = 0; pos < seq_len; pos++) {
+    std::vector<double> logits(vocab_size_, 0);
+    for (int token_id = 0; token_id < vocab_size_; token_id++) {
+      logits[token_id] = output_bias_[token_id];
+      for (int dim = 0; dim < model_dim_; dim++) {
+        logits[token_id] += output_weight_[token_id][dim] * encoded[pos][dim];
+      }
+    }
+
+    auto probs = Softmax(logits);
+    const int position_target = position_targets[pos];
+    loss_sum += -std::log(std::max(probs[position_target], 1e-12));
+    loss_count++;
+
+    // Average the per-position gradient so the update matches a mean
+    // cross-entropy loss over the sequence regardless of its length.
+    std::vector<double> grad_logits = probs;
+    grad_logits[position_target] -= 1.0;
+    for (double &value : grad_logits) {
+      value *= inv_seq_len;
+    }
+
+    for (int token_id = 0; token_id < vocab_size_; token_id++) {
+      const double grad = grad_logits[token_id];
+      grad_output_bias[token_id] += grad;
+      for (int dim = 0; dim < model_dim_; dim++) {
+        grad_output_weight[token_id][dim] += grad * encoded[pos][dim];
+        grad_encoded[pos][dim] += output_weight_[token_id][dim] * grad;
+      }
+    }
+  }
+
+  Matrix grad_hidden;
+  if (accumulate_gradient) {
+    if (backbone_type_ == BACKBONE_DECODER) {
+      if (decoder_.BackwardAccumulate(grad_encoded, grad_hidden) !=
+          TransformerDecoder::SUCCESS) {
+        err_msg_ = decoder_.err_msg();
+        return INVALID_DATA;
+      }
+    } else {
+      if (encoder_.BackwardAccumulate(grad_encoded, grad_hidden) !=
+          TransformerEncoder::SUCCESS) {
+        err_msg_ = encoder_.err_msg();
+        return INVALID_DATA;
+      }
+    }
+  } else if (backbone_type_ == BACKBONE_DECODER) {
+    if (decoder_.Backward(grad_encoded, grad_hidden, block_learning_rate) !=
+        TransformerDecoder::SUCCESS) {
+      err_msg_ = decoder_.err_msg();
+      return INVALID_DATA;
+    }
+  } else {
+    if (encoder_.Backward(grad_encoded, grad_hidden, block_learning_rate) !=
+        TransformerEncoder::SUCCESS) {
+      err_msg_ = encoder_.err_msg();
+      return INVALID_DATA;
+    }
+  }
+
+  if (grad_hidden.size() != sample.size()) {
+    err_msg_ = "[MiniTransformerLM::BackwardSample] Invalid backward result";
+    return INVALID_DATA;
+  }
+
+  Matrix grad_embedding(vocab_size_, std::vector<double>(model_dim_, 0));
+  for (int i = 0; i < static_cast<int>(sample.size()); i++) {
+    int token_id = sample[i];
+    for (int dim = 0; dim < model_dim_; dim++) {
+      grad_embedding[token_id][dim] += grad_hidden[i][dim] * embedding_scale;
+    }
+  }
+
+  if (accumulate_gradient) {
+    for (int token_id = 0; token_id < vocab_size_; token_id++) {
+      grad_output_bias_[token_id] += grad_output_bias[token_id];
+      for (int dim = 0; dim < model_dim_; dim++) {
+        grad_output_weight_[token_id][dim] +=
+            grad_output_weight[token_id][dim];
+        grad_embedding_[token_id][dim] += grad_embedding[token_id][dim];
+      }
+    }
+  } else {
+    output_weight_optimizer_.Apply(output_weight_, grad_output_weight,
+                                   learning_rate);
+    output_bias_optimizer_.Apply(output_bias_, grad_output_bias,
+                                 learning_rate);
+    auto &embedding_table = token_embedding_.mutable_embedding_table();
+    embedding_optimizer_.Apply(embedding_table, grad_embedding,
+                               learning_rate);
+  }
+  return SUCCESS;
+}
+
+void MiniTransformerLM::ApplyAccumulatedGradients(double learning_rate,
+                                                  double block_learning_rate,
+                                                  double gradient_scale) {
+  output_weight_optimizer_.Apply(output_weight_, grad_output_weight_,
+                                 learning_rate, gradient_scale);
+  output_bias_optimizer_.Apply(output_bias_, grad_output_bias_, learning_rate,
+                               gradient_scale);
+  auto &embedding_table = token_embedding_.mutable_embedding_table();
+  embedding_optimizer_.Apply(embedding_table, grad_embedding_, learning_rate,
+                             gradient_scale);
+  if (backbone_type_ == BACKBONE_DECODER) {
+    decoder_.ApplyGradient(block_learning_rate, gradient_scale);
+  } else {
+    encoder_.ApplyGradient(block_learning_rate, gradient_scale);
+  }
+  ClearAccumulatedGradients();
+}
+
+void MiniTransformerLM::ClearAccumulatedGradients() {
+  grad_output_weight_.assign(vocab_size_, std::vector<double>(model_dim_, 0));
+  grad_output_bias_.assign(vocab_size_, 0);
+  grad_embedding_.assign(vocab_size_, std::vector<double>(model_dim_, 0));
+  encoder_.ClearGradients();
+  decoder_.ClearGradients();
+}
+
 void MiniTransformerLM::set_random_seed(int seed) {
   rand_seed_ = seed;
+  train_rng_.seed(static_cast<std::mt19937::result_type>(seed));
   sample_rng_.seed(static_cast<std::mt19937::result_type>(seed));
 }
 
@@ -612,7 +799,7 @@ MiniTransformerLM::set_output_bias(const std::vector<double> &bias) {
     err_msg_ = "[MiniTransformerLM::set_output_bias] MiniTransformerLM not init";
     return NOT_INIT;
   }
-  if (bias.size() != vocab_size_) {
+  if (bias.size() != static_cast<size_t>(vocab_size_)) {
     err_msg_ = "[MiniTransformerLM::set_output_bias] Invalid bias size";
     return INVALID_DATA;
   }
@@ -696,13 +883,13 @@ MiniTransformerLM::ValidateOutputWeight(const Matrix &weight,
                "] MiniTransformerLM not init";
     return NOT_INIT;
   }
-  if (weight.size() != vocab_size_) {
+  if (weight.size() != static_cast<size_t>(vocab_size_)) {
     err_msg_ = std::string("[MiniTransformerLM::") + func_name +
                "] Invalid weight size";
     return INVALID_DATA;
   }
   for (const auto &row : weight) {
-    if (row.size() != model_dim_) {
+    if (row.size() != static_cast<size_t>(model_dim_)) {
       err_msg_ = std::string("[MiniTransformerLM::") + func_name +
                  "] Invalid weight size";
       return INVALID_DATA;

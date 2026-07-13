@@ -30,15 +30,15 @@ bool PositionalEncoding::Apply(std::vector<std::vector<double>> &sequence) {
     return false;
   }
 
-  const int model_dim = sequence[0].size();
+  const int model_dim = static_cast<int>(sequence[0].size());
   for (const auto &token : sequence) {
-    if (token.size() != model_dim) {
+    if (token.size() != static_cast<size_t>(model_dim)) {
       return false;
     }
   }
 
   auto encoding = Create(sequence.size(), model_dim);
-  for (int i = 0; i < sequence.size(); i++) {
+  for (int i = 0; i < static_cast<int>(sequence.size()); i++) {
     for (int j = 0; j < model_dim; j++) {
       sequence[i][j] += encoding[i][j];
     }

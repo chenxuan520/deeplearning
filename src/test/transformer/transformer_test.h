@@ -310,7 +310,8 @@ TEST(MiniTransformerLM, SampleTopKOneMatchesGreedy) {
              MiniTransformerLM::SUCCESS);
 
   MUST_EQUAL(sampled_generated_token_ids.size(), greedy_generated_token_ids.size());
-  for (int i = 0; i < greedy_generated_token_ids.size(); i++) {
+  for (int i = 0; i < static_cast<int>(greedy_generated_token_ids.size());
+       i++) {
     MUST_EQUAL(sampled_generated_token_ids[i], greedy_generated_token_ids[i]);
   }
 }
@@ -330,6 +331,31 @@ TEST(MiniTransformerLM, RejectInvalidSamplingOption) {
   int token_id = -1;
   MUST_EQUAL(model.SampleNextToken({0, 1}, token_id, option),
              MiniTransformerLM::INVALID_DATA);
+}
+
+TEST(MiniTransformerLM, CalcNextTokenLossUsesEveryPosition) {
+  MiniTransformerLM model;
+  model.set_random_seed(0);
+  model.set_use_positional_encoding(false);
+  model.set_scale_embedding(false);
+  MUST_EQUAL(model.Init(3, 3, 1, 6, 0), MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(model.token_embedding().set_embedding_table(IdentityMatrix(3)),
+             TokenEmbedding::SUCCESS);
+  MUST_EQUAL(model.set_output_weight(IdentityMatrix(3)),
+             MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(model.set_output_bias({0.0, 1.0, 2.0}),
+             MiniTransformerLM::SUCCESS);
+
+  double average_loss = 0.0;
+  MUST_EQUAL(model.CalcNextTokenLoss({{0, 1}}, {2}, average_loss),
+             MiniTransformerLM::SUCCESS);
+
+  const double pos0_loss =
+      std::log(std::exp(1.0) + std::exp(1.0) + std::exp(2.0)) - 1.0;
+  const double pos1_loss =
+      std::log(std::exp(0.0) + std::exp(2.0) + std::exp(2.0)) - 2.0;
+  MUST_TRUE(NearlyEqual(average_loss, (pos0_loss + pos1_loss) / 2.0, 1e-9),
+            "loss should average every next-token position");
 }
 
 TEST(MiniTransformerLM, TrainAndReloadCharacterModel) {
@@ -388,6 +414,112 @@ TEST(MiniTransformerLM, TrainAndReloadCharacterModel) {
              CharacterTokenizer::SUCCESS);
   MUST_TRUE(loaded_generated_text == generated_text,
             "reload generation mismatch");
+}
+
+TEST(MiniTransformerLM, TrainBatchCharacterModel) {
+  const string corpus = "abcabcabcabcabcabc";
+  CharacterTokenizer tokenizer;
+  MUST_EQUAL(tokenizer.Init(CharacterTokenizer::BuildVocabularyFromText(corpus)),
+             CharacterTokenizer::SUCCESS);
+
+  vector<int> corpus_token_ids;
+  MUST_EQUAL(tokenizer.Encode(corpus, corpus_token_ids),
+             CharacterTokenizer::SUCCESS);
+
+  CharacterDataset dataset;
+  MUST_EQUAL(dataset.Init(corpus_token_ids, 2), CharacterDataset::SUCCESS);
+
+  vector<vector<int>> input_samples;
+  vector<int> target_tokens;
+  MUST_EQUAL(dataset.BuildNextTokenSamples(input_samples, target_tokens),
+             CharacterDataset::SUCCESS);
+
+  MiniTransformerLM model;
+  model.set_random_seed(0);
+  model.set_use_positional_encoding(false);
+  model.set_scale_embedding(true);
+  MUST_EQUAL(model.Init(tokenizer.vocab_size(), 6, 1, 12, 0),
+             MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(model.TrainNextTokenBatch(input_samples, target_tokens, 4, nullptr,
+                                       250, 0.1),
+             MiniTransformerLM::SUCCESS);
+
+  double average_loss = 0.0;
+  MUST_EQUAL(model.CalcNextTokenLoss(input_samples, target_tokens, average_loss),
+             MiniTransformerLM::SUCCESS);
+  MUST_TRUE(average_loss < 0.1, "batch trained loss too high");
+
+  vector<int> prompt_token_ids;
+  MUST_EQUAL(tokenizer.Encode("ab", prompt_token_ids),
+             CharacterTokenizer::SUCCESS);
+
+  vector<int> generated_token_ids;
+  MUST_EQUAL(model.Generate(prompt_token_ids, 6, generated_token_ids),
+             MiniTransformerLM::SUCCESS);
+  string generated_text;
+  MUST_EQUAL(tokenizer.Decode(generated_token_ids, generated_text),
+             CharacterTokenizer::SUCCESS);
+  MUST_TRUE(generated_text == "abcabcab", "batch generation mismatch");
+}
+
+TEST(MiniTransformerLM, TrainBatchSingleBlockDecoderCharacterModel) {
+  const string corpus = "abcabcabcabcabcabc";
+  CharacterTokenizer tokenizer;
+  MUST_EQUAL(tokenizer.Init(CharacterTokenizer::BuildVocabularyFromText(corpus)),
+             CharacterTokenizer::SUCCESS);
+
+  vector<int> corpus_token_ids;
+  MUST_EQUAL(tokenizer.Encode(corpus, corpus_token_ids),
+             CharacterTokenizer::SUCCESS);
+
+  CharacterDataset dataset;
+  MUST_EQUAL(dataset.Init(corpus_token_ids, 2), CharacterDataset::SUCCESS);
+
+  vector<vector<int>> input_samples;
+  vector<int> target_tokens;
+  MUST_EQUAL(dataset.BuildNextTokenSamples(input_samples, target_tokens),
+             CharacterDataset::SUCCESS);
+
+  MiniTransformerLM model;
+  model.set_random_seed(0);
+  model.set_backbone_type(MiniTransformerLM::BACKBONE_DECODER);
+  model.set_use_positional_encoding(true);
+  model.set_scale_embedding(true);
+  model.set_max_context_size(2);
+  MUST_EQUAL(model.Init(tokenizer.vocab_size(), 6, 1, 12, 1),
+             MiniTransformerLM::SUCCESS);
+  auto query_weight_before =
+      model.decoder().blocks()[0].self_attention().query_weight();
+  MUST_EQUAL(model.TrainNextTokenBatch(input_samples, target_tokens, 4, nullptr,
+                                       1200, 0.01),
+             MiniTransformerLM::SUCCESS);
+
+  auto query_weight_after =
+      model.decoder().blocks()[0].self_attention().query_weight();
+  bool has_query_weight_change = false;
+  for (int i = 0; i < static_cast<int>(query_weight_before.size()); i++) {
+    for (int j = 0; j < static_cast<int>(query_weight_before[i].size()); j++) {
+      if (!NearlyEqual(query_weight_before[i][j], query_weight_after[i][j],
+                       1e-9)) {
+        has_query_weight_change = true;
+      }
+    }
+  }
+  MUST_TRUE(has_query_weight_change,
+            "batch single block attention weight did not update");
+
+  vector<int> prompt_token_ids;
+  MUST_EQUAL(tokenizer.Encode("ab", prompt_token_ids),
+             CharacterTokenizer::SUCCESS);
+
+  vector<int> generated_token_ids;
+  MUST_EQUAL(model.Generate(prompt_token_ids, 6, generated_token_ids),
+             MiniTransformerLM::SUCCESS);
+  string generated_text;
+  MUST_EQUAL(tokenizer.Decode(generated_token_ids, generated_text),
+             CharacterTokenizer::SUCCESS);
+  MUST_TRUE(generated_text == "abcabcab",
+            "batch single block generation mismatch");
 }
 
 TEST(MiniTransformerLM, CalcPerplexityAfterTraining) {
@@ -460,8 +592,8 @@ TEST(MiniTransformerLM, TrainSingleBlockCharacterModel) {
              MiniTransformerLM::SUCCESS);
   auto query_weight_after = model.decoder().blocks()[0].self_attention().query_weight();
   bool has_query_weight_change = false;
-  for (int i = 0; i < query_weight_before.size(); i++) {
-    for (int j = 0; j < query_weight_before[i].size(); j++) {
+  for (int i = 0; i < static_cast<int>(query_weight_before.size()); i++) {
+    for (int j = 0; j < static_cast<int>(query_weight_before[i].size()); j++) {
       if (!NearlyEqual(query_weight_before[i][j], query_weight_after[i][j], 1e-9)) {
         has_query_weight_change = true;
       }

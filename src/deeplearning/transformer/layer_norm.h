@@ -23,6 +23,10 @@ public:
   RC Backward(const std::vector<std::vector<double>> &grad_output,
               std::vector<std::vector<double>> &grad_input,
               double learning_rate);
+  RC BackwardAccumulate(const std::vector<std::vector<double>> &grad_output,
+                        std::vector<std::vector<double>> &grad_input);
+  void ApplyGradient(double learning_rate, double gradient_scale = 1.0);
+  void ClearGradients();
 
   RC set_scale(const std::vector<double> &scale);
   RC set_bias(const std::vector<double> &bias);
@@ -37,6 +41,8 @@ private:
   std::vector<double> scale_;
   std::vector<double> bias_;
   std::vector<std::vector<double>> last_input_;
+  std::vector<double> grad_scale_;
+  std::vector<double> grad_bias_;
   TensorOptimizer scale_optimizer_;
   TensorOptimizer bias_optimizer_;
   std::string err_msg_;

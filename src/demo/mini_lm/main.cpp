@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cmath>
 #include <csignal>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -29,6 +30,8 @@ volatile std::sig_atomic_t g_stop_requested = 0;
 void HandleStopSignal(int) { g_stop_requested = 1; }
 
 bool StopRequested() { return g_stop_requested != 0; }
+
+constexpr int kRecentLossWindowSize = 100;
 
 // A base-model style CLI around MiniTransformerLM with four sub-commands:
 //   init      define structure + build vocab from a corpus + save a fresh model
@@ -65,6 +68,7 @@ struct Option {
   int log_every = 1;
   int checkpoint_every = 1;
   int progress_every_sec = 5;
+  int batch_size = 1;
   double learning_rate = 0.01;
   double early_stop_loss = 0.02;
   double temperature = 1.0;
@@ -131,6 +135,8 @@ void PrintCommandUsage(const char *prog, const string &verb) {
          << "  --corpus-dir <dir>          read training corpus from all files "
             "in a directory\n"
          << "  --epochs <int>\n"
+         << "  --batch-size <int>          train with a minibatch size "
+            "(default 1)\n"
          << "  --learning-rate <double>\n";
     cout << "  --log-every <int>           print epoch summary every N epochs "
             "(default 1)\n"
@@ -187,6 +193,8 @@ bool ParseArgs(int argc, char **argv, int start, Option &option) {
       option.generate_num = std::stoi(need_value("--generate-num"));
     } else if (arg == "--epochs") {
       option.epoch_num = std::stoi(need_value("--epochs"));
+    } else if (arg == "--batch-size") {
+      option.batch_size = std::stoi(need_value("--batch-size"));
     } else if (arg == "--learning-rate") {
       option.learning_rate = std::stod(need_value("--learning-rate"));
     } else if (arg == "--log-every") {
@@ -413,6 +421,68 @@ struct CheckpointMeta {
   double last_loss = 0.0;
   double last_perplexity = 0.0;
   string source;
+};
+
+class RecentLossTracker {
+public:
+  explicit RecentLossTracker(int window_size) : window_size_(window_size) {}
+
+  void Reset() {
+    losses_.clear();
+    loss_sum_ = 0.0;
+    last_finished_sample_num_ = 0;
+    last_cumulative_loss_sum_ = 0.0;
+  }
+
+  double AddCumulativeAverage(int finished_sample_num, double average_loss) {
+    if (window_size_ <= 0) {
+      return average_loss;
+    }
+    if (finished_sample_num <= last_finished_sample_num_) {
+      Reset();
+    }
+
+    const int sample_delta = finished_sample_num - last_finished_sample_num_;
+    const double cumulative_loss_sum =
+        average_loss * static_cast<double>(finished_sample_num);
+    if (sample_delta <= 0) {
+      return Average();
+    }
+
+    const double sample_loss =
+        (cumulative_loss_sum - last_cumulative_loss_sum_) / sample_delta;
+    for (int i = 0; i < sample_delta; i++) {
+      Push(sample_loss);
+    }
+
+    last_finished_sample_num_ = finished_sample_num;
+    last_cumulative_loss_sum_ = cumulative_loss_sum;
+    return Average();
+  }
+
+  double Average() const {
+    if (losses_.empty()) {
+      return 0.0;
+    }
+    return loss_sum_ / losses_.size();
+  }
+
+private:
+  void Push(double loss) {
+    losses_.push_back(loss);
+    loss_sum_ += loss;
+    while (static_cast<int>(losses_.size()) > window_size_) {
+      loss_sum_ -= losses_.front();
+      losses_.pop_front();
+    }
+  }
+
+private:
+  int window_size_ = 0;
+  std::deque<double> losses_;
+  double loss_sum_ = 0.0;
+  int last_finished_sample_num_ = 0;
+  double last_cumulative_loss_sum_ = 0.0;
 };
 
 double SecondsSince(std::chrono::steady_clock::time_point start,
@@ -992,8 +1062,10 @@ int RunTrain(const Option &option) {
     cout << "Loaded model has no context size; re-create it with 'init'" << endl;
     return -1;
   }
-  if (option.epoch_num <= 0 || option.learning_rate <= 0.0) {
-    cout << "Invalid training option (epochs and learning-rate must be > 0)"
+  if (option.epoch_num <= 0 || option.batch_size <= 0 ||
+      option.learning_rate <= 0.0) {
+    cout << "Invalid training option (epochs, batch-size and learning-rate "
+            "must be > 0)"
          << endl;
     return -1;
   }
@@ -1063,6 +1135,7 @@ int RunTrain(const Option &option) {
   cout << "Tokenizer: " << TokenizerName(tokenizer.kind)
        << " vocab_size: " << TokenizerVocabSize(tokenizer) << endl;
   cout << "Epochs: " << start_epoch << " -> " << option.epoch_num
+       << " batch_size: " << option.batch_size
        << " learning_rate: " << option.learning_rate
        << " warmup_epochs: " << warmup_epochs << endl;
   if (option.no_checkpoint) {
@@ -1084,20 +1157,26 @@ int RunTrain(const Option &option) {
   const auto train_start = std::chrono::steady_clock::now();
   auto last_progress_time = train_start;
   double last_loss = 0.0;
+  double recent_loss = 0.0;
   bool interrupted = false;
   bool stopped_by_loss = false;
   int completed_epoch = start_epoch;
+  RecentLossTracker recent_loss_tracker(kRecentLossWindowSize);
 
   for (int global_epoch = start_epoch; global_epoch < option.epoch_num;
        global_epoch++) {
     const double current_lr = lr_scheduler.GetLR(global_epoch);
     auto epoch_start = std::chrono::steady_clock::now();
+    recent_loss_tracker.Reset();
     bool stop_after_epoch = false;
     bool stop_during_epoch = false;
 
     auto sample_callback = [&](int, int finished_sample_num, int sample_num,
                                double average_loss, bool &early_stop) {
       last_loss = average_loss;
+      recent_loss =
+          recent_loss_tracker.AddCumulativeAverage(finished_sample_num,
+                                                   average_loss);
       if (StopRequested()) {
         early_stop = true;
         stop_during_epoch = true;
@@ -1133,6 +1212,7 @@ int RunTrain(const Option &option) {
       cout << "epoch " << (global_epoch + 1) << "/" << option.epoch_num
            << " sample " << finished_sample_num << "/" << sample_num
            << " loss=" << average_loss
+           << " recent_loss=" << recent_loss
            << " samples/s=" << samples_per_sec
            << " epoch_eta=" << FormatSeconds(epoch_eta)
            << " total_eta=" << FormatSeconds(total_eta) << endl;
@@ -1153,10 +1233,15 @@ int RunTrain(const Option &option) {
       }
     };
 
-    if (model.TrainNextToken(input_samples, target_tokens, epoch_callback, 1,
-                             current_lr, nullptr,
-                             sample_callback) != MiniTransformerLM::SUCCESS) {
-      cout << "TrainNextToken failed: " << model.err_msg() << endl;
+    MiniTransformerLM::RC train_rc =
+        option.batch_size > 1
+            ? model.TrainNextTokenBatch(input_samples, target_tokens,
+                                        option.batch_size, epoch_callback, 1,
+                                        current_lr, nullptr, sample_callback)
+            : model.TrainNextToken(input_samples, target_tokens, epoch_callback,
+                                   1, current_lr, nullptr, sample_callback);
+    if (train_rc != MiniTransformerLM::SUCCESS) {
+      cout << "Train failed: " << model.err_msg() << endl;
       return -1;
     }
 
@@ -1177,6 +1262,7 @@ int RunTrain(const Option &option) {
         stop_during_epoch) {
       cout << "epoch " << completed_epoch << "/" << option.epoch_num
            << " loss=" << last_loss << " perplexity=" << perplexity
+           << " recent_loss=" << recent_loss
            << " lr=" << current_lr
            << " elapsed=" << FormatSeconds(elapsed)
            << " eta=" << FormatSeconds(eta) << endl;
@@ -1225,12 +1311,11 @@ int RunTrain(const Option &option) {
   double average_loss = 0.0;
   double perplexity = 0.0;
   if (model.CalcNextTokenLoss(input_samples, target_tokens, average_loss) !=
-          MiniTransformerLM::SUCCESS ||
-      model.CalcPerplexity(input_samples, target_tokens, perplexity) !=
-          MiniTransformerLM::SUCCESS) {
+      MiniTransformerLM::SUCCESS) {
     cout << "Evaluate failed: " << model.err_msg() << endl;
     return -1;
   }
+  perplexity = std::exp(average_loss);
 
   if (!SaveModelWithVocab(option.model, model, tokenizer, err)) {
     cout << err << endl;

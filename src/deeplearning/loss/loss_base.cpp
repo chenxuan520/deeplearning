@@ -8,7 +8,7 @@ double LossFunction::AverageLoss(const std::vector<double> &target,
   if (target.size() != output.size() || target.size() == 0) {
     return -1;
   }
-  for (int i = 0; i < target.size(); i++) {
+  for (int i = 0; i < static_cast<int>(target.size()); i++) {
     result += Loss(target[i], output[i]);
   }
   result /= target.size();

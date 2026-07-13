@@ -26,6 +26,9 @@ public:
              const Matrix *mask = nullptr);
   RC Backward(const Matrix &grad_output, Matrix &grad_input,
               double learning_rate);
+  RC BackwardAccumulate(const Matrix &grad_output, Matrix &grad_input);
+  void ApplyGradient(double learning_rate, double gradient_scale = 1.0);
+  void ClearGradients();
 
   void set_random_seed(int seed);
   RC set_query_weight(const Matrix &weight);
@@ -61,6 +64,10 @@ private:
   Matrix last_mask_;
   bool has_last_mask_ = false;
   Tensor3D last_attention_weight_;
+  Matrix grad_query_weight_;
+  Matrix grad_key_weight_;
+  Matrix grad_value_weight_;
+  Matrix grad_output_weight_;
   TensorOptimizer query_optimizer_;
   TensorOptimizer key_optimizer_;
   TensorOptimizer value_optimizer_;

@@ -60,7 +60,7 @@ TransformerDecoder::RC TransformerDecoder::Forward(const Matrix &input,
     return INVALID_DATA;
   }
   for (const auto &token : input) {
-    if (token.size() != model_dim_) {
+    if (token.size() != static_cast<size_t>(model_dim_)) {
       err_msg_ = "[TransformerDecoder::Forward] Invalid data input";
       return INVALID_DATA;
     }
@@ -82,19 +82,32 @@ TransformerDecoder::RC TransformerDecoder::Forward(const Matrix &input,
 TransformerDecoder::RC
 TransformerDecoder::Backward(const Matrix &grad_output, Matrix &grad_input,
                              double learning_rate) {
+  ClearGradients();
+  auto rc = BackwardAccumulate(grad_output, grad_input);
+  if (rc != SUCCESS) {
+    return rc;
+  }
+  ApplyGradient(learning_rate);
+  return SUCCESS;
+}
+
+TransformerDecoder::RC
+TransformerDecoder::BackwardAccumulate(const Matrix &grad_output,
+                                       Matrix &grad_input) {
   if (!is_init_) {
-    err_msg_ = "[TransformerDecoder::Backward] TransformerDecoder not init";
+    err_msg_ =
+        "[TransformerDecoder::BackwardAccumulate] TransformerDecoder not init";
     return NOT_INIT;
   }
   if (grad_output.empty()) {
-    err_msg_ = "[TransformerDecoder::Backward] Invalid data input";
+    err_msg_ = "[TransformerDecoder::BackwardAccumulate] Invalid data input";
     return INVALID_DATA;
   }
 
   grad_input = grad_output;
   for (int i = block_num_ - 1; i >= 0; i--) {
     Matrix block_grad_input;
-    if (blocks_[i].Backward(grad_input, block_grad_input, learning_rate) !=
+    if (blocks_[i].BackwardAccumulate(grad_input, block_grad_input) !=
         TransformerBlock::SUCCESS) {
       err_msg_ = blocks_[i].err_msg();
       return INVALID_DATA;
@@ -104,10 +117,24 @@ TransformerDecoder::Backward(const Matrix &grad_output, Matrix &grad_input,
   return SUCCESS;
 }
 
+void TransformerDecoder::ApplyGradient(double learning_rate,
+                                       double gradient_scale) {
+  for (auto &block : blocks_) {
+    block.ApplyGradient(learning_rate, gradient_scale);
+  }
+}
+
+void TransformerDecoder::ClearGradients() {
+  for (auto &block : blocks_) {
+    block.ClearGradients();
+  }
+}
+
 void TransformerDecoder::set_random_seed(int seed) { rand_seed_ = seed; }
 
 TransformerBlock *TransformerDecoder::mutable_block(int index) {
-  if (!is_init_ || index < 0 || index >= blocks_.size()) {
+  if (!is_init_ || index < 0 ||
+      index >= static_cast<int>(blocks_.size())) {
     return nullptr;
   }
   return &blocks_[index];

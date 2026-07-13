@@ -233,7 +233,7 @@ string JsonEscape(const string &text) {
 void WriteJsonTokenArray(std::ofstream &ofs, const CharacterTokenizer &tokenizer,
                          const vector<int> &token_ids) {
   ofs << "[";
-  for (int i = 0; i < token_ids.size(); i++) {
+  for (int i = 0; i < static_cast<int>(token_ids.size()); i++) {
     if (i != 0) {
       ofs << ", ";
     }
@@ -248,7 +248,7 @@ void WriteJsonLayers(std::ofstream &ofs, const MiniTransformerLM &model) {
                            ? model.decoder().blocks()
                            : model.encoder().blocks();
   ofs << "[\n";
-  for (int layer = 0; layer < blocks.size(); layer++) {
+  for (int layer = 0; layer < static_cast<int>(blocks.size()); layer++) {
     if (layer != 0) {
       ofs << ",\n";
     }
@@ -256,17 +256,18 @@ void WriteJsonLayers(std::ofstream &ofs, const MiniTransformerLM &model) {
     ofs << "      \"layer_index\": " << layer << ",\n";
     ofs << "      \"heads\": [\n";
     const auto &heads = blocks[layer].self_attention().last_attention_weight();
-    for (int head = 0; head < heads.size(); head++) {
+    for (int head = 0; head < static_cast<int>(heads.size()); head++) {
       if (head != 0) {
         ofs << ",\n";
       }
       ofs << "        [\n";
-      for (int row = 0; row < heads[head].size(); row++) {
+      for (int row = 0; row < static_cast<int>(heads[head].size()); row++) {
         if (row != 0) {
           ofs << ",\n";
         }
         ofs << "          [";
-        for (int col = 0; col < heads[head][row].size(); col++) {
+        for (int col = 0; col < static_cast<int>(heads[head][row].size());
+             col++) {
           if (col != 0) {
             ofs << ", ";
           }

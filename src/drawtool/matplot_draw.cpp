@@ -50,7 +50,7 @@ void MatplotDraw::PrintBiasBar(const std::string &title,
                                const std::vector<std::vector<double>> &biases) {
   std::vector<double> bias_arr;
   for (auto bias : biases) {
-    for (int i = 0; i < bias.size(); i++) {
+    for (int i = 0; i < static_cast<int>(bias.size()); i++) {
       bias_arr.push_back(bias[i]);
     }
   }

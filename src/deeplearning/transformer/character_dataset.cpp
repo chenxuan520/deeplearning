@@ -26,14 +26,14 @@ CharacterDataset::RC CharacterDataset::BuildNextTokenSamples(
     err_msg_ = "[CharacterDataset::BuildNextTokenSamples] CharacterDataset not init";
     return NOT_INIT;
   }
-  if (token_ids_.size() <= context_size_) {
+  if (token_ids_.size() <= static_cast<size_t>(context_size_)) {
     err_msg_ = "[CharacterDataset::BuildNextTokenSamples] Invalid token input";
     return INVALID_DATA;
   }
 
   input_samples.clear();
   target_tokens.clear();
-  for (int i = 0; i + context_size_ < token_ids_.size(); i++) {
+  for (int i = 0; i + context_size_ < static_cast<int>(token_ids_.size()); i++) {
     input_samples.push_back(std::vector<int>(token_ids_.begin() + i,
                                              token_ids_.begin() + i + context_size_));
     target_tokens.push_back(token_ids_[i + context_size_]);
@@ -46,7 +46,7 @@ std::string CharacterDataset::err_msg() { return err_msg_; }
 int CharacterDataset::context_size() { return context_size_; }
 
 int CharacterDataset::sample_size() {
-  if (!is_init_ || token_ids_.size() <= context_size_) {
+  if (!is_init_ || token_ids_.size() <= static_cast<size_t>(context_size_)) {
     return 0;
   }
   return token_ids_.size() - context_size_;

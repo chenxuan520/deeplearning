@@ -104,7 +104,6 @@ private:
       int number_of_images = 0;
       int n_rows = 0;
       int n_cols = 0;
-      unsigned char label;
       file.read((char *)&magic_number, sizeof(magic_number));
       file.read((char *)&number_of_images, sizeof(number_of_images));
       file.read((char *)&n_rows, sizeof(n_rows));

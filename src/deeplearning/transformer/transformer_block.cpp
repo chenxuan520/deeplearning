@@ -12,9 +12,9 @@ std::vector<double> ApplyLinear(const std::vector<double> &input,
                                 const Matrix &weight,
                                 const std::vector<double> &bias) {
   std::vector<double> result(weight.size(), 0);
-  for (int row = 0; row < weight.size(); row++) {
+  for (int row = 0; row < static_cast<int>(weight.size()); row++) {
     result[row] = bias[row];
-    for (int col = 0; col < input.size(); col++) {
+    for (int col = 0; col < static_cast<int>(input.size()); col++) {
       result[row] += weight[row][col] * input[col];
     }
   }
@@ -61,6 +61,12 @@ TransformerBlock::RC TransformerBlock::Init(int model_dim, int head_num,
                                 std::vector<double>(feed_forward_dim_, 0));
   feed_forward_bias_1_.assign(feed_forward_dim_, 0);
   feed_forward_bias_2_.assign(model_dim_, 0);
+  grad_feed_forward_weight_1_.assign(feed_forward_dim_,
+                                     std::vector<double>(model_dim_, 0));
+  grad_feed_forward_weight_2_.assign(model_dim_,
+                                     std::vector<double>(feed_forward_dim_, 0));
+  grad_feed_forward_bias_1_.assign(feed_forward_dim_, 0);
+  grad_feed_forward_bias_2_.assign(model_dim_, 0);
   InitWeight(feed_forward_weight_1_, gen);
   InitWeight(feed_forward_weight_2_, gen);
   is_init_ = true;
@@ -88,7 +94,7 @@ TransformerBlock::Forward(const Matrix &input, Matrix &output,
   }
 
   last_residual_1_ = input;
-  for (int i = 0; i < last_residual_1_.size(); i++) {
+  for (int i = 0; i < static_cast<int>(last_residual_1_.size()); i++) {
     for (int j = 0; j < model_dim_; j++) {
       last_residual_1_[i][j] += last_attention_output_[i][j];
     }
@@ -105,7 +111,7 @@ TransformerBlock::Forward(const Matrix &input, Matrix &output,
                                    std::vector<double>(feed_forward_dim_, 0));
   last_feed_forward_output_.assign(last_norm_1_.size(),
                                    std::vector<double>(model_dim_, 0));
-  for (int i = 0; i < last_norm_1_.size(); i++) {
+  for (int i = 0; i < static_cast<int>(last_norm_1_.size()); i++) {
     last_feed_forward_hidden_linear_[i] =
         ApplyLinear(last_norm_1_[i], feed_forward_weight_1_, feed_forward_bias_1_);
     last_feed_forward_hidden_[i] = last_feed_forward_hidden_linear_[i];
@@ -118,7 +124,7 @@ TransformerBlock::Forward(const Matrix &input, Matrix &output,
   }
 
   last_residual_2_ = last_norm_1_;
-  for (int i = 0; i < last_residual_2_.size(); i++) {
+  for (int i = 0; i < static_cast<int>(last_residual_2_.size()); i++) {
     for (int j = 0; j < model_dim_; j++) {
       last_residual_2_[i][j] += last_feed_forward_output_[i][j];
     }
@@ -134,17 +140,31 @@ TransformerBlock::Forward(const Matrix &input, Matrix &output,
 TransformerBlock::RC TransformerBlock::Backward(const Matrix &grad_output,
                                                 Matrix &grad_input,
                                                 double learning_rate) {
+  ClearGradients();
+  auto rc = BackwardAccumulate(grad_output, grad_input);
+  if (rc != SUCCESS) {
+    return rc;
+  }
+  ApplyGradient(learning_rate);
+  return SUCCESS;
+}
+
+TransformerBlock::RC
+TransformerBlock::BackwardAccumulate(const Matrix &grad_output,
+                                     Matrix &grad_input) {
   if (!is_init_) {
-    err_msg_ = "[TransformerBlock::Backward] TransformerBlock not init";
+    err_msg_ =
+        "[TransformerBlock::BackwardAccumulate] TransformerBlock not init";
     return NOT_INIT;
   }
   if (grad_output.size() != last_input_.size() || grad_output.empty()) {
-    err_msg_ = "[TransformerBlock::Backward] Invalid data input";
+    err_msg_ =
+        "[TransformerBlock::BackwardAccumulate] Invalid data input";
     return INVALID_DATA;
   }
 
   Matrix grad_residual_2;
-  if (feed_forward_norm_.Backward(grad_output, grad_residual_2, learning_rate) !=
+  if (feed_forward_norm_.BackwardAccumulate(grad_output, grad_residual_2) !=
       LayerNorm::SUCCESS) {
     err_msg_ = feed_forward_norm_.err_msg();
     return INVALID_DATA;
@@ -156,18 +176,15 @@ TransformerBlock::RC TransformerBlock::Backward(const Matrix &grad_output,
                      std::vector<double>(feed_forward_dim_, 0));
   Matrix grad_hidden_linear(last_feed_forward_hidden_.size(),
                             std::vector<double>(feed_forward_dim_, 0));
-  Matrix grad_feed_forward_weight_2(model_dim_,
-                                    std::vector<double>(feed_forward_dim_, 0));
-  std::vector<double> grad_feed_forward_bias_2(model_dim_, 0);
-  Matrix grad_feed_forward_weight_1(feed_forward_dim_,
-                                    std::vector<double>(model_dim_, 0));
-  std::vector<double> grad_feed_forward_bias_1(feed_forward_dim_, 0);
 
-  for (int token_idx = 0; token_idx < grad_feed_forward_output.size(); token_idx++) {
+  for (int token_idx = 0;
+       token_idx < static_cast<int>(grad_feed_forward_output.size());
+       token_idx++) {
     for (int out = 0; out < model_dim_; out++) {
-      grad_feed_forward_bias_2[out] += grad_feed_forward_output[token_idx][out];
+      grad_feed_forward_bias_2_[out] +=
+          grad_feed_forward_output[token_idx][out];
       for (int in = 0; in < feed_forward_dim_; in++) {
-        grad_feed_forward_weight_2[out][in] +=
+        grad_feed_forward_weight_2_[out][in] +=
             grad_feed_forward_output[token_idx][out] * last_feed_forward_hidden_[token_idx][in];
         grad_hidden[token_idx][in] +=
             feed_forward_weight_2_[out][in] * grad_feed_forward_output[token_idx][out];
@@ -177,9 +194,9 @@ TransformerBlock::RC TransformerBlock::Backward(const Matrix &grad_output,
     for (int i = 0; i < feed_forward_dim_; i++) {
       grad_hidden_linear[token_idx][i] =
           last_feed_forward_hidden_linear_[token_idx][i] > 0 ? grad_hidden[token_idx][i] : 0;
-      grad_feed_forward_bias_1[i] += grad_hidden_linear[token_idx][i];
+      grad_feed_forward_bias_1_[i] += grad_hidden_linear[token_idx][i];
       for (int j = 0; j < model_dim_; j++) {
-        grad_feed_forward_weight_1[i][j] +=
+        grad_feed_forward_weight_1_[i][j] +=
             grad_hidden_linear[token_idx][i] * last_norm_1_[token_idx][j];
         grad_norm_1[token_idx][j] +=
             feed_forward_weight_1_[i][j] * grad_hidden_linear[token_idx][i];
@@ -187,19 +204,8 @@ TransformerBlock::RC TransformerBlock::Backward(const Matrix &grad_output,
     }
   }
 
-  feed_forward_weight_2_optimizer_.Apply(feed_forward_weight_2_,
-                                         grad_feed_forward_weight_2,
-                                         learning_rate);
-  feed_forward_bias_2_optimizer_.Apply(feed_forward_bias_2_,
-                                       grad_feed_forward_bias_2, learning_rate);
-  feed_forward_weight_1_optimizer_.Apply(feed_forward_weight_1_,
-                                         grad_feed_forward_weight_1,
-                                         learning_rate);
-  feed_forward_bias_1_optimizer_.Apply(feed_forward_bias_1_,
-                                       grad_feed_forward_bias_1, learning_rate);
-
   Matrix grad_residual_1;
-  if (attention_norm_.Backward(grad_norm_1, grad_residual_1, learning_rate) !=
+  if (attention_norm_.BackwardAccumulate(grad_norm_1, grad_residual_1) !=
       LayerNorm::SUCCESS) {
     err_msg_ = attention_norm_.err_msg();
     return INVALID_DATA;
@@ -207,19 +213,52 @@ TransformerBlock::RC TransformerBlock::Backward(const Matrix &grad_output,
 
   Matrix grad_attention_output = grad_residual_1;
   Matrix grad_attention_input;
-  if (self_attention_.Backward(grad_attention_output, grad_attention_input,
-                               learning_rate) != SelfAttention::SUCCESS) {
+  if (self_attention_.BackwardAccumulate(grad_attention_output,
+                                         grad_attention_input) !=
+      SelfAttention::SUCCESS) {
     err_msg_ = self_attention_.err_msg();
     return INVALID_DATA;
   }
 
   grad_input = grad_residual_1;
-  for (int i = 0; i < grad_input.size(); i++) {
+  for (int i = 0; i < static_cast<int>(grad_input.size()); i++) {
     for (int j = 0; j < model_dim_; j++) {
       grad_input[i][j] += grad_attention_input[i][j];
     }
   }
   return SUCCESS;
+}
+
+void TransformerBlock::ApplyGradient(double learning_rate,
+                                     double gradient_scale) {
+  feed_forward_weight_2_optimizer_.Apply(feed_forward_weight_2_,
+                                         grad_feed_forward_weight_2_,
+                                         learning_rate, gradient_scale);
+  feed_forward_bias_2_optimizer_.Apply(feed_forward_bias_2_,
+                                       grad_feed_forward_bias_2_,
+                                       learning_rate, gradient_scale);
+  feed_forward_weight_1_optimizer_.Apply(feed_forward_weight_1_,
+                                         grad_feed_forward_weight_1_,
+                                         learning_rate, gradient_scale);
+  feed_forward_bias_1_optimizer_.Apply(feed_forward_bias_1_,
+                                       grad_feed_forward_bias_1_,
+                                       learning_rate, gradient_scale);
+  attention_norm_.ApplyGradient(learning_rate, gradient_scale);
+  feed_forward_norm_.ApplyGradient(learning_rate, gradient_scale);
+  self_attention_.ApplyGradient(learning_rate, gradient_scale);
+  ClearGradients();
+}
+
+void TransformerBlock::ClearGradients() {
+  grad_feed_forward_weight_1_.assign(
+      feed_forward_dim_, std::vector<double>(model_dim_, 0));
+  grad_feed_forward_weight_2_.assign(
+      model_dim_, std::vector<double>(feed_forward_dim_, 0));
+  grad_feed_forward_bias_1_.assign(feed_forward_dim_, 0);
+  grad_feed_forward_bias_2_.assign(model_dim_, 0);
+  attention_norm_.ClearGradients();
+  feed_forward_norm_.ClearGradients();
+  self_attention_.ClearGradients();
 }
 
 void TransformerBlock::set_random_seed(int seed) { rand_seed_ = seed; }
@@ -242,7 +281,7 @@ TransformerBlock::set_feed_forward_bias_1(const std::vector<double> &bias) {
         "[TransformerBlock::set_feed_forward_bias_1] TransformerBlock not init";
     return NOT_INIT;
   }
-  if (bias.size() != feed_forward_dim_) {
+  if (bias.size() != static_cast<size_t>(feed_forward_dim_)) {
     err_msg_ =
         "[TransformerBlock::set_feed_forward_bias_1] Invalid bias size";
     return INVALID_DATA;
@@ -269,7 +308,7 @@ TransformerBlock::set_feed_forward_bias_2(const std::vector<double> &bias) {
         "[TransformerBlock::set_feed_forward_bias_2] TransformerBlock not init";
     return NOT_INIT;
   }
-  if (bias.size() != model_dim_) {
+  if (bias.size() != static_cast<size_t>(model_dim_)) {
     err_msg_ =
         "[TransformerBlock::set_feed_forward_bias_2] Invalid bias size";
     return INVALID_DATA;
@@ -320,7 +359,7 @@ TransformerBlock::RC TransformerBlock::ValidateInput(const Matrix &input) {
     return INVALID_DATA;
   }
   for (const auto &token : input) {
-    if (token.size() != model_dim_) {
+    if (token.size() != static_cast<size_t>(model_dim_)) {
       err_msg_ = "[TransformerBlock::ValidateInput] Invalid data input";
       return INVALID_DATA;
     }
@@ -336,13 +375,13 @@ TransformerBlock::ValidateWeightShape(const Matrix &weight, int row, int col,
                "] TransformerBlock not init";
     return NOT_INIT;
   }
-  if (weight.size() != row) {
+  if (weight.size() != static_cast<size_t>(row)) {
     err_msg_ = std::string("[TransformerBlock::") + func_name +
                "] Invalid weight size";
     return INVALID_DATA;
   }
   for (const auto &weight_row : weight) {
-    if (weight_row.size() != col) {
+    if (weight_row.size() != static_cast<size_t>(col)) {
       err_msg_ = std::string("[TransformerBlock::") + func_name +
                  "] Invalid weight size";
       return INVALID_DATA;
@@ -352,8 +391,8 @@ TransformerBlock::ValidateWeightShape(const Matrix &weight, int row, int col,
 }
 
 void TransformerBlock::InitWeight(Matrix &weight, std::mt19937 &gen) {
-  const int row = weight.size();
-  const int col = row == 0 ? 0 : weight[0].size();
+  const int row = static_cast<int>(weight.size());
+  const int col = row == 0 ? 0 : static_cast<int>(weight[0].size());
   const double limit = std::sqrt(6.0 / (row + col));
   std::uniform_real_distribution<double> dist(-limit, limit);
   for (auto &weight_row : weight) {

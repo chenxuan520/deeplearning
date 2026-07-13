@@ -27,6 +27,9 @@ public:
              const Matrix *mask = nullptr);
   RC Backward(const Matrix &grad_output, Matrix &grad_input,
               double learning_rate);
+  RC BackwardAccumulate(const Matrix &grad_output, Matrix &grad_input);
+  void ApplyGradient(double learning_rate, double gradient_scale = 1.0);
+  void ClearGradients();
 
   void set_random_seed(int seed);
   RC set_feed_forward_weight_1(const Matrix &weight);
@@ -69,6 +72,10 @@ private:
   Matrix last_feed_forward_hidden_;
   Matrix last_feed_forward_output_;
   Matrix last_residual_2_;
+  Matrix grad_feed_forward_weight_1_;
+  std::vector<double> grad_feed_forward_bias_1_;
+  Matrix grad_feed_forward_weight_2_;
+  std::vector<double> grad_feed_forward_bias_2_;
   SelfAttention self_attention_;
   LayerNorm attention_norm_;
   LayerNorm feed_forward_norm_;

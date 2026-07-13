@@ -148,6 +148,7 @@ said
 | `--model <path>` | 要加载并更新的模型 | `mini_lm.param` |
 | `--corpus <text>` / `--corpus-file <path>` / `--corpus-dir <dir>` | 训练语料来源 | 内联占位串 |
 | `--epochs <int>` | 训练轮数 | 800 |
+| `--batch-size <int>` | mini-batch 大小；`1` 表示沿用单样本更新 | 1 |
 | `--learning-rate <double>` | 基础学习率（内部套 `WarmupCosineLR`） | 0.01 |
 | `--log-every <int>` | 每 N 个 epoch 打印一次汇总日志 | 1 |
 | `--progress-every-sec <int>` | 单个 epoch 内每 N 秒打印进度（0=关闭） | 5 |
@@ -157,7 +158,7 @@ said
 | `--resume-checkpoint` | 从 checkpoint 恢复并继续训到 `--epochs` 指定的总轮数 | 关闭 |
 | `--no-checkpoint` | 关闭周期性 checkpoint | 关闭 |
 
-训练用逐位置 next-token 交叉熵 + Adam，学习率走线性 warmup + cosine 退火（与仓库其他 demo 同款配方）。默认每个 epoch 都会打印 loss / perplexity / lr / elapsed / eta，并保存一份 checkpoint，避免长时间训练完全黑盒。
+训练用逐位置 next-token 交叉熵 + Adam，学习率走线性 warmup + cosine 退火（与仓库其他 demo 同款配方）。默认 `--batch-size 1` 沿用原来的单样本更新；传入更大的 batch size 时，会先累积一批样本的梯度，再统一做一次 Adam 更新。默认每个 epoch 都会打印 loss / recent_loss / perplexity / lr / elapsed / eta，其中 loss 是当前 epoch 累计平均，recent_loss 是最近一小段样本的滑动平均；默认保存一份 checkpoint，避免长时间训练完全黑盒。
 
 checkpoint 由三份 sidecar 组成：
 

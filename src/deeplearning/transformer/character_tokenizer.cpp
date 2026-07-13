@@ -26,7 +26,7 @@ CharacterTokenizer::RC CharacterTokenizer::Init(const std::string &vocabulary) {
   }
 
   vocabulary_ = vocabulary;
-  for (int i = 0; i < vocabulary_.size(); i++) {
+  for (int i = 0; i < static_cast<int>(vocabulary_.size()); i++) {
     if (char_to_id_.count(vocabulary_[i]) != 0) {
       err_msg_ = "[CharacterTokenizer::Init] Duplicate char in vocabulary";
       return INVALID_DATA;
@@ -75,7 +75,7 @@ CharacterTokenizer::Decode(const std::vector<int> &token_ids, std::string &text)
   text.clear();
   text.reserve(token_ids.size());
   for (int token_id : token_ids) {
-    if (token_id < 0 || token_id >= vocabulary_.size()) {
+    if (token_id < 0 || token_id >= static_cast<int>(vocabulary_.size())) {
       err_msg_ = "[CharacterTokenizer::Decode] Invalid token input";
       return INVALID_DATA;
     }

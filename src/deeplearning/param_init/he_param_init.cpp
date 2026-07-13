@@ -8,7 +8,7 @@ void HeParamInitFunction::InitParam(
   if (weight.size() != bias.size()) {
     return;
   }
-  for (int i = 1; i < weight.size(); i++) {
+  for (int i = 1; i < static_cast<int>(weight.size()); i++) {
     // BUGFIX (was): `sqrt(6.0 / weight[i - 1].size())` which uses the
     // neuron count of layer i-1. For i==1, weight[0] is empty (the input
     // layer has no weights), so size()==0 and the formula yields sqrt(6/0)

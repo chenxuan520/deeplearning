@@ -41,26 +41,27 @@ TEST(Loader, ExportAndInport) {
   MUST_EQUAL(option.loss_type_, demo_option.loss_type_);
 
   MUST_EQUAL(param.layer_.size(), demo_param.layer_.size());
-  for (int i = 0; i < param.layer_.size(); i++) {
+  for (int i = 0; i < static_cast<int>(param.layer_.size()); i++) {
     MUST_EQUAL(param.layer_[i], demo_param.layer_[i]);
   }
 
   MUST_EQUAL(param.neuron_bias_.size(), demo_param.neuron_bias_.size());
-  for (int i = 0; i < param.neuron_bias_.size(); i++) {
+  for (int i = 0; i < static_cast<int>(param.neuron_bias_.size()); i++) {
     MUST_EQUAL(param.neuron_bias_[i].size(), demo_param.neuron_bias_[i].size());
-    for (int j = 0; j < param.neuron_bias_[i].size(); j++) {
+    for (int j = 0; j < static_cast<int>(param.neuron_bias_[i].size()); j++) {
       MUST_EQUAL(param.neuron_bias_[i][j], demo_param.neuron_bias_[i][j]);
     }
   }
 
   MUST_EQUAL(param.neuron_weight_.size(), demo_param.neuron_weight_.size());
-  for (int i = 0; i < param.neuron_weight_.size(); i++) {
+  for (int i = 0; i < static_cast<int>(param.neuron_weight_.size()); i++) {
     MUST_EQUAL(param.neuron_weight_[i].size(),
                demo_param.neuron_weight_[i].size());
-    for (int j = 0; j < param.neuron_weight_[i].size(); j++) {
+    for (int j = 0; j < static_cast<int>(param.neuron_weight_[i].size()); j++) {
       MUST_EQUAL(param.neuron_weight_[i][j].size(),
                  demo_param.neuron_weight_[i][j].size());
-      for (int k = 0; k < param.neuron_weight_[i][j].size(); k++) {
+      for (int k = 0; k < static_cast<int>(param.neuron_weight_[i][j].size());
+           k++) {
         MUST_EQUAL(param.neuron_weight_[i][j][k],
                    demo_param.neuron_weight_[i][j][k]);
       }

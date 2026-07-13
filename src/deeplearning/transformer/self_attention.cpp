@@ -16,7 +16,7 @@ bool IsValidSequence(const Matrix &input, int model_dim) {
     return false;
   }
   for (const auto &token : input) {
-    if (token.size() != model_dim) {
+    if (token.size() != static_cast<size_t>(model_dim)) {
       return false;
     }
   }
@@ -26,8 +26,8 @@ bool IsValidSequence(const Matrix &input, int model_dim) {
 std::vector<double> ProjectToken(const std::vector<double> &token,
                                  const Matrix &weight) {
   std::vector<double> result(weight.size(), 0);
-  for (int out = 0; out < weight.size(); out++) {
-    for (int in = 0; in < token.size(); in++) {
+  for (int out = 0; out < static_cast<int>(weight.size()); out++) {
+    for (int in = 0; in < static_cast<int>(token.size()); in++) {
       result[out] += weight[out][in] * token[in];
     }
   }
@@ -47,7 +47,7 @@ std::vector<double> Softmax(const std::vector<double> &score) {
   std::vector<double> weight(score.size(), 0);
   double max_score = *std::max_element(score.begin(), score.end());
   double sum = 0;
-  for (int i = 0; i < score.size(); i++) {
+  for (int i = 0; i < static_cast<int>(score.size()); i++) {
     if (score[i] <= std::numeric_limits<double>::lowest() / 2) {
       continue;
     }
@@ -84,6 +84,10 @@ SelfAttention::RC SelfAttention::Init(int model_dim, int head_num) {
   key_weight_.assign(model_dim_, std::vector<double>(model_dim_, 0));
   value_weight_.assign(model_dim_, std::vector<double>(model_dim_, 0));
   output_weight_.assign(model_dim_, std::vector<double>(model_dim_, 0));
+  grad_query_weight_.assign(model_dim_, std::vector<double>(model_dim_, 0));
+  grad_key_weight_.assign(model_dim_, std::vector<double>(model_dim_, 0));
+  grad_value_weight_.assign(model_dim_, std::vector<double>(model_dim_, 0));
+  grad_output_weight_.assign(model_dim_, std::vector<double>(model_dim_, 0));
   InitProjectionWeight(query_weight_, gen);
   InitProjectionWeight(key_weight_, gen);
   InitProjectionWeight(value_weight_, gen);
@@ -128,9 +132,9 @@ SelfAttention::RC SelfAttention::Forward(const Matrix &input, Matrix &output,
   for (int head = 0; head < head_num_; head++) {
     Matrix head_weight(input.size(), std::vector<double>(input.size(), 0));
     const int head_start = head * head_dim_;
-    for (int row = 0; row < input.size(); row++) {
+    for (int row = 0; row < static_cast<int>(input.size()); row++) {
       std::vector<double> score(input.size(), 0);
-      for (int col = 0; col < input.size(); col++) {
+      for (int col = 0; col < static_cast<int>(input.size()); col++) {
         if (mask != nullptr && (*mask)[row][col] <= 0) {
           score[col] = std::numeric_limits<double>::lowest();
           continue;
@@ -150,7 +154,7 @@ SelfAttention::RC SelfAttention::Forward(const Matrix &input, Matrix &output,
         return INVALID_DATA;
       }
         head_weight[row] = weight;
-        for (int col = 0; col < input.size(); col++) {
+        for (int col = 0; col < static_cast<int>(input.size()); col++) {
           for (int i = 0; i < head_dim_; i++) {
             merged_output[row][head_start + i] +=
                 weight[col] * last_value_[col][head_start + i];
@@ -168,25 +172,36 @@ SelfAttention::RC SelfAttention::Forward(const Matrix &input, Matrix &output,
 SelfAttention::RC SelfAttention::Backward(const Matrix &grad_output,
                                           Matrix &grad_input,
                                           double learning_rate) {
+  ClearGradients();
+  auto rc = BackwardAccumulate(grad_output, grad_input);
+  if (rc != SUCCESS) {
+    return rc;
+  }
+  ApplyGradient(learning_rate);
+  return SUCCESS;
+}
+
+SelfAttention::RC SelfAttention::BackwardAccumulate(const Matrix &grad_output,
+                                                    Matrix &grad_input) {
   if (!is_init_) {
-    err_msg_ = "[SelfAttention::Backward] SelfAttention not init";
+    err_msg_ = "[SelfAttention::BackwardAccumulate] SelfAttention not init";
     return NOT_INIT;
   }
   if (grad_output.size() != last_input_.size() || grad_output.empty()) {
-    err_msg_ = "[SelfAttention::Backward] Invalid data input";
+    err_msg_ = "[SelfAttention::BackwardAccumulate] Invalid data input";
     return INVALID_DATA;
   }
 
   Matrix grad_merged(last_merged_output_.size(), std::vector<double>(model_dim_, 0));
-  Matrix grad_output_weight(model_dim_, std::vector<double>(model_dim_, 0));
-  for (int token_idx = 0; token_idx < grad_output.size(); token_idx++) {
-    if (grad_output[token_idx].size() != model_dim_) {
-      err_msg_ = "[SelfAttention::Backward] Invalid data input";
+  for (int token_idx = 0; token_idx < static_cast<int>(grad_output.size());
+       token_idx++) {
+    if (grad_output[token_idx].size() != static_cast<size_t>(model_dim_)) {
+      err_msg_ = "[SelfAttention::BackwardAccumulate] Invalid data input";
       return INVALID_DATA;
     }
     for (int out = 0; out < model_dim_; out++) {
       for (int in = 0; in < model_dim_; in++) {
-        grad_output_weight[out][in] +=
+        grad_output_weight_[out][in] +=
             grad_output[token_idx][out] * last_merged_output_[token_idx][in];
         grad_merged[token_idx][in] += output_weight_[out][in] * grad_output[token_idx][out];
       }
@@ -199,9 +214,9 @@ SelfAttention::RC SelfAttention::Backward(const Matrix &grad_output,
   const double scale = std::sqrt(static_cast<double>(head_dim_));
   for (int head = 0; head < head_num_; head++) {
     int head_start = head * head_dim_;
-    for (int row = 0; row < last_input_.size(); row++) {
+    for (int row = 0; row < static_cast<int>(last_input_.size()); row++) {
       std::vector<double> grad_weight(last_input_.size(), 0);
-      for (int col = 0; col < last_input_.size(); col++) {
+      for (int col = 0; col < static_cast<int>(last_input_.size()); col++) {
         for (int i = 0; i < head_dim_; i++) {
           grad_weight[col] += grad_merged[row][head_start + i] *
                               last_value_[col][head_start + i];
@@ -211,11 +226,11 @@ SelfAttention::RC SelfAttention::Backward(const Matrix &grad_output,
       }
 
       double weighted_sum = 0;
-      for (int col = 0; col < last_input_.size(); col++) {
+      for (int col = 0; col < static_cast<int>(last_input_.size()); col++) {
         weighted_sum += grad_weight[col] * last_attention_weight_[head][row][col];
       }
 
-      for (int col = 0; col < last_input_.size(); col++) {
+      for (int col = 0; col < static_cast<int>(last_input_.size()); col++) {
         if (has_last_mask_ && last_mask_[row][col] <= 0) {
           continue;
         }
@@ -232,15 +247,13 @@ SelfAttention::RC SelfAttention::Backward(const Matrix &grad_output,
   }
 
   grad_input.assign(last_input_.size(), std::vector<double>(model_dim_, 0));
-  Matrix grad_query_weight(model_dim_, std::vector<double>(model_dim_, 0));
-  Matrix grad_key_weight(model_dim_, std::vector<double>(model_dim_, 0));
-  Matrix grad_value_weight(model_dim_, std::vector<double>(model_dim_, 0));
-  for (int token_idx = 0; token_idx < last_input_.size(); token_idx++) {
+  for (int token_idx = 0; token_idx < static_cast<int>(last_input_.size());
+       token_idx++) {
     for (int out = 0; out < model_dim_; out++) {
       for (int in = 0; in < model_dim_; in++) {
-        grad_query_weight[out][in] += grad_query[token_idx][out] * last_input_[token_idx][in];
-        grad_key_weight[out][in] += grad_key[token_idx][out] * last_input_[token_idx][in];
-        grad_value_weight[out][in] += grad_value[token_idx][out] * last_input_[token_idx][in];
+        grad_query_weight_[out][in] += grad_query[token_idx][out] * last_input_[token_idx][in];
+        grad_key_weight_[out][in] += grad_key[token_idx][out] * last_input_[token_idx][in];
+        grad_value_weight_[out][in] += grad_value[token_idx][out] * last_input_[token_idx][in];
         grad_input[token_idx][in] += query_weight_[out][in] * grad_query[token_idx][out] +
                                      key_weight_[out][in] * grad_key[token_idx][out] +
                                      value_weight_[out][in] * grad_value[token_idx][out];
@@ -248,11 +261,26 @@ SelfAttention::RC SelfAttention::Backward(const Matrix &grad_output,
     }
   }
 
-  query_optimizer_.Apply(query_weight_, grad_query_weight, learning_rate);
-  key_optimizer_.Apply(key_weight_, grad_key_weight, learning_rate);
-  value_optimizer_.Apply(value_weight_, grad_value_weight, learning_rate);
-  output_optimizer_.Apply(output_weight_, grad_output_weight, learning_rate);
   return SUCCESS;
+}
+
+void SelfAttention::ApplyGradient(double learning_rate, double gradient_scale) {
+  query_optimizer_.Apply(query_weight_, grad_query_weight_, learning_rate,
+                         gradient_scale);
+  key_optimizer_.Apply(key_weight_, grad_key_weight_, learning_rate,
+                       gradient_scale);
+  value_optimizer_.Apply(value_weight_, grad_value_weight_, learning_rate,
+                         gradient_scale);
+  output_optimizer_.Apply(output_weight_, grad_output_weight_, learning_rate,
+                          gradient_scale);
+  ClearGradients();
+}
+
+void SelfAttention::ClearGradients() {
+  grad_query_weight_.assign(model_dim_, std::vector<double>(model_dim_, 0));
+  grad_key_weight_.assign(model_dim_, std::vector<double>(model_dim_, 0));
+  grad_value_weight_.assign(model_dim_, std::vector<double>(model_dim_, 0));
+  grad_output_weight_.assign(model_dim_, std::vector<double>(model_dim_, 0));
 }
 
 void SelfAttention::set_random_seed(int seed) { rand_seed_ = seed; }
@@ -322,13 +350,13 @@ SelfAttention::RC SelfAttention::ValidateWeight(const Matrix &weight,
                "] SelfAttention not init";
     return NOT_INIT;
   }
-  if (weight.size() != model_dim_) {
+  if (weight.size() != static_cast<size_t>(model_dim_)) {
     err_msg_ = std::string("[SelfAttention::") + func_name +
                "] Invalid weight size";
     return INVALID_DATA;
   }
   for (const auto &row : weight) {
-    if (row.size() != model_dim_) {
+    if (row.size() != static_cast<size_t>(model_dim_)) {
       err_msg_ = std::string("[SelfAttention::") + func_name +
                  "] Invalid weight size";
       return INVALID_DATA;

@@ -161,7 +161,7 @@ TEST(NeuralNetwork, TrainAndPredict) {
 
   // calc right rate
   int right_count = 0;
-  for (int i = 0; i < demo_test.size(); i++) {
+  for (int i = 0; i < static_cast<int>(demo_test.size()); i++) {
     std::vector<double> result;
     rc = network.Predict(demo_test[i], result);
     if (rc != NeuralNetwork::SUCCESS) {
@@ -214,7 +214,7 @@ TEST(NeuralNetwork, CloneAndExport) {
   // calc right rate
   auto right_rate = [&](NeuralNetwork &demo_network) -> double {
     int right_count = 0;
-    for (int i = 0; i < demo_test.size(); i++) {
+    for (int i = 0; i < static_cast<int>(demo_test.size()); i++) {
       std::vector<double> result(2, 0);
       rc = demo_network.Predict(demo_test[i], result);
       if (rc != NeuralNetwork::SUCCESS) {

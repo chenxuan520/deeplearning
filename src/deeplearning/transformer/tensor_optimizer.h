@@ -26,6 +26,13 @@ public:
   void Apply(std::vector<std::vector<double>> &param,
              const std::vector<std::vector<double>> &grad,
              double learning_rate) {
+    Apply(param, grad, learning_rate, 1.0);
+  }
+
+  // Updates a [rows x cols] weight matrix after scaling the supplied gradient.
+  void Apply(std::vector<std::vector<double>> &param,
+             const std::vector<std::vector<double>> &grad,
+             double learning_rate, double gradient_scale) {
     if (param.empty() || param[0].empty()) {
       return;
     }
@@ -38,7 +45,8 @@ public:
     for (int row = 0; row < rows; row++) {
       for (int col = 0; col < cols; col++) {
         param[row][col] -= matrix_adam_->CalcChangeValue(
-            grad[row][col], learning_rate, {1, row}, col, param[row][col]);
+            grad[row][col] * gradient_scale, learning_rate, {1, row}, col,
+            param[row][col]);
       }
     }
   }
@@ -46,6 +54,12 @@ public:
   // Updates a length-D vector (bias / LayerNorm scale) in place.
   void Apply(std::vector<double> &param, const std::vector<double> &grad,
              double learning_rate) {
+    Apply(param, grad, learning_rate, 1.0);
+  }
+
+  // Updates a length-D vector after scaling the supplied gradient.
+  void Apply(std::vector<double> &param, const std::vector<double> &grad,
+             double learning_rate, double gradient_scale) {
     if (param.empty()) {
       return;
     }
@@ -55,8 +69,9 @@ public:
     }
     vector_adam_->BeforeStep();
     for (int i = 0; i < size; i++) {
-      param[i] -= vector_adam_->CalcChangeValue(grad[i], learning_rate, {0, i},
-                                                -1, param[i]);
+      param[i] -= vector_adam_->CalcChangeValue(grad[i] * gradient_scale,
+                                                learning_rate, {0, i}, -1,
+                                                param[i]);
     }
   }
 

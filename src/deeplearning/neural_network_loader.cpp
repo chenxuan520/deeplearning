@@ -23,7 +23,7 @@ NeuralNetworkLoader::RC NeuralNetworkLoader::ExportParamToFile(
     return EXPORT_ERROR;
   }
 
-  for (int i = 0; i < param.layer_.size(); i++) {
+  for (int i = 0; i < static_cast<int>(param.layer_.size()); i++) {
     is_success = ofs.write((const char *)&param.layer_[i], sizeof(int)).good();
     if (!is_success) {
       ofs.close();
@@ -31,8 +31,8 @@ NeuralNetworkLoader::RC NeuralNetworkLoader::ExportParamToFile(
     }
   }
 
-  for (int i = 0; i < param.neuron_bias_.size(); i++) {
-    for (int j = 0; j < param.neuron_bias_[i].size(); j++) {
+  for (int i = 0; i < static_cast<int>(param.neuron_bias_.size()); i++) {
+    for (int j = 0; j < static_cast<int>(param.neuron_bias_[i].size()); j++) {
       is_success =
           ofs.write((const char *)&param.neuron_bias_[i][j], sizeof(double)).good();
       if (!is_success) {
@@ -42,9 +42,10 @@ NeuralNetworkLoader::RC NeuralNetworkLoader::ExportParamToFile(
     }
   }
 
-  for (int i = 1; i < param.neuron_weight_.size(); i++) {
-    for (int j = 0; j < param.neuron_weight_[i].size(); j++) {
-      for (int k = 0; k < param.neuron_weight_[i][j].size(); k++) {
+  for (int i = 1; i < static_cast<int>(param.neuron_weight_.size()); i++) {
+    for (int j = 0; j < static_cast<int>(param.neuron_weight_[i].size()); j++) {
+      for (int k = 0; k < static_cast<int>(param.neuron_weight_[i][j].size());
+           k++) {
         is_success = ofs.write((const char *)&param.neuron_weight_[i][j][k],
                                sizeof(double))
                          .good();

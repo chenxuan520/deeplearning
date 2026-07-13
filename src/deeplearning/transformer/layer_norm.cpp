@@ -18,6 +18,8 @@ LayerNorm::RC LayerNorm::Init(int feature_dim, double epsilon) {
   epsilon_ = epsilon;
   scale_.assign(feature_dim_, 1.0);
   bias_.assign(feature_dim_, 0.0);
+  grad_scale_.assign(feature_dim_, 0.0);
+  grad_bias_.assign(feature_dim_, 0.0);
   is_init_ = true;
   return SUCCESS;
 }
@@ -37,7 +39,7 @@ LayerNorm::Forward(const std::vector<std::vector<double>> &input,
   last_input_ = input;
   output = input;
   for (auto &token : output) {
-    if (token.size() != feature_dim_) {
+    if (token.size() != static_cast<size_t>(feature_dim_)) {
       err_msg_ = "[LayerNorm::Forward] Invalid data input";
       return INVALID_DATA;
     }
@@ -66,22 +68,33 @@ LayerNorm::Forward(const std::vector<std::vector<double>> &input,
 LayerNorm::RC LayerNorm::Backward(
     const std::vector<std::vector<double>> &grad_output,
     std::vector<std::vector<double>> &grad_input, double learning_rate) {
+  ClearGradients();
+  auto rc = BackwardAccumulate(grad_output, grad_input);
+  if (rc != SUCCESS) {
+    return rc;
+  }
+  ApplyGradient(learning_rate);
+  return SUCCESS;
+}
+
+LayerNorm::RC LayerNorm::BackwardAccumulate(
+    const std::vector<std::vector<double>> &grad_output,
+    std::vector<std::vector<double>> &grad_input) {
   if (!is_init_) {
-    err_msg_ = "[LayerNorm::Backward] LayerNorm not init";
+    err_msg_ = "[LayerNorm::BackwardAccumulate] LayerNorm not init";
     return NOT_INIT;
   }
   if (grad_output.size() != last_input_.size() || grad_output.empty()) {
-    err_msg_ = "[LayerNorm::Backward] Invalid data input";
+    err_msg_ = "[LayerNorm::BackwardAccumulate] Invalid data input";
     return INVALID_DATA;
   }
 
   grad_input.assign(grad_output.size(), std::vector<double>(feature_dim_, 0));
-  std::vector<double> grad_scale(feature_dim_, 0);
-  std::vector<double> grad_bias(feature_dim_, 0);
-  for (int token_idx = 0; token_idx < grad_output.size(); token_idx++) {
-    if (grad_output[token_idx].size() != feature_dim_ ||
-        last_input_[token_idx].size() != feature_dim_) {
-      err_msg_ = "[LayerNorm::Backward] Invalid data input";
+  for (int token_idx = 0; token_idx < static_cast<int>(grad_output.size());
+       token_idx++) {
+    if (grad_output[token_idx].size() != static_cast<size_t>(feature_dim_) ||
+        last_input_[token_idx].size() != static_cast<size_t>(feature_dim_)) {
+      err_msg_ = "[LayerNorm::BackwardAccumulate] Invalid data input";
       return INVALID_DATA;
     }
 
@@ -104,8 +117,8 @@ LayerNorm::RC LayerNorm::Backward(
     double sum_dx_hat_x_hat = 0;
     for (int i = 0; i < feature_dim_; i++) {
       x_hat[i] = (last_input_[token_idx][i] - mean) * std_inv;
-      grad_scale[i] += grad_output[token_idx][i] * x_hat[i];
-      grad_bias[i] += grad_output[token_idx][i];
+      grad_scale_[i] += grad_output[token_idx][i] * x_hat[i];
+      grad_bias_[i] += grad_output[token_idx][i];
 
       double dx_hat = grad_output[token_idx][i] * scale_[i];
       sum_dx_hat += dx_hat;
@@ -121,9 +134,18 @@ LayerNorm::RC LayerNorm::Backward(
     }
   }
 
-  scale_optimizer_.Apply(scale_, grad_scale, learning_rate);
-  bias_optimizer_.Apply(bias_, grad_bias, learning_rate);
   return SUCCESS;
+}
+
+void LayerNorm::ApplyGradient(double learning_rate, double gradient_scale) {
+  scale_optimizer_.Apply(scale_, grad_scale_, learning_rate, gradient_scale);
+  bias_optimizer_.Apply(bias_, grad_bias_, learning_rate, gradient_scale);
+  ClearGradients();
+}
+
+void LayerNorm::ClearGradients() {
+  grad_scale_.assign(feature_dim_, 0.0);
+  grad_bias_.assign(feature_dim_, 0.0);
 }
 
 LayerNorm::RC LayerNorm::set_scale(const std::vector<double> &scale) {
@@ -131,7 +153,7 @@ LayerNorm::RC LayerNorm::set_scale(const std::vector<double> &scale) {
     err_msg_ = "[LayerNorm::set_scale] LayerNorm not init";
     return NOT_INIT;
   }
-  if (scale.size() != feature_dim_) {
+  if (scale.size() != static_cast<size_t>(feature_dim_)) {
     err_msg_ = "[LayerNorm::set_scale] Invalid scale size";
     return INVALID_DATA;
   }
@@ -144,7 +166,7 @@ LayerNorm::RC LayerNorm::set_bias(const std::vector<double> &bias) {
     err_msg_ = "[LayerNorm::set_bias] LayerNorm not init";
     return NOT_INIT;
   }
-  if (bias.size() != feature_dim_) {
+  if (bias.size() != static_cast<size_t>(feature_dim_)) {
     err_msg_ = "[LayerNorm::set_bias] Invalid bias size";
     return INVALID_DATA;
   }

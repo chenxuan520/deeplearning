@@ -23,6 +23,9 @@ public:
   RC Forward(const Matrix &input, Matrix &output);
   RC Backward(const Matrix &grad_output, Matrix &grad_input,
               double learning_rate);
+  RC BackwardAccumulate(const Matrix &grad_output, Matrix &grad_input);
+  void ApplyGradient(double learning_rate, double gradient_scale = 1.0);
+  void ClearGradients();
 
   void set_random_seed(int seed);
   TransformerBlock *mutable_block(int index);
