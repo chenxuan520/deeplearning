@@ -12,6 +12,7 @@
 #include "transformer/transformer_block.h"
 #include "transformer/transformer_decoder.h"
 #include "transformer/transformer_encoder.h"
+#include "transformer/utf8_char_tokenizer.h"
 
 #include <cmath>
 #include <cstdio>
@@ -207,6 +208,46 @@ TEST(CharacterTokenizer, EncodeDecodeRoundTrip) {
   string decoded;
   MUST_EQUAL(tokenizer.Decode(token_ids, decoded), CharacterTokenizer::SUCCESS);
   MUST_TRUE(decoded == "cab", "decode mismatch");
+}
+
+TEST(Utf8CharTokenizer, EncodeDecodeUnicodeRoundTrip) {
+  const string ni("\xE4\xBD\xA0");
+  const string hao("\xE5\xA5\xBD");
+  const string text = ni + hao + "a" + ni;
+  auto vocabulary = Utf8CharTokenizer::BuildVocabularyFromText(text);
+  MUST_EQUAL(vocabulary.size(), 3);
+  MUST_TRUE(vocabulary[0] == ni, "first utf8 token mismatch");
+  MUST_TRUE(vocabulary[1] == hao, "second utf8 token mismatch");
+  MUST_TRUE(vocabulary[2] == "a", "third utf8 token mismatch");
+
+  Utf8CharTokenizer tokenizer;
+  MUST_EQUAL(tokenizer.Init(vocabulary), Utf8CharTokenizer::SUCCESS);
+
+  vector<int> token_ids;
+  MUST_EQUAL(tokenizer.Encode(text, token_ids), Utf8CharTokenizer::SUCCESS);
+  MUST_EQUAL(token_ids.size(), 4);
+  MUST_EQUAL(token_ids[0], 0);
+  MUST_EQUAL(token_ids[1], 1);
+  MUST_EQUAL(token_ids[2], 2);
+  MUST_EQUAL(token_ids[3], 0);
+
+  string decoded;
+  MUST_EQUAL(tokenizer.Decode(token_ids, decoded), Utf8CharTokenizer::SUCCESS);
+  MUST_TRUE(decoded == text, "utf8 decode mismatch");
+  MUST_EQUAL(tokenizer.Lookup(hao), 1);
+}
+
+TEST(Utf8CharTokenizer, RejectInvalidUtf8) {
+  vector<string> tokens;
+  MUST_TRUE(!Utf8CharTokenizer::SplitUtf8(string("\xE4\xBD", 2), tokens),
+            "truncated utf8 should fail");
+
+  Utf8CharTokenizer tokenizer;
+  MUST_EQUAL(tokenizer.Init({string("\xE4\xBD\xA0")}),
+             Utf8CharTokenizer::SUCCESS);
+  vector<int> token_ids;
+  MUST_EQUAL(tokenizer.Encode(string("\xE4\xBD", 2), token_ids),
+             Utf8CharTokenizer::INVALID_DATA);
 }
 
 TEST(CharacterDataset, BuildNextTokenSamples) {

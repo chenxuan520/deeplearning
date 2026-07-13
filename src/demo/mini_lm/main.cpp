@@ -4,6 +4,7 @@
 #include "transformer/character_tokenizer.h"
 #include "transformer/mini_transformer_lm.h"
 #include "transformer/mini_transformer_lm_loader.h"
+#include "transformer/utf8_char_tokenizer.h"
 
 #include <algorithm>
 #include <chrono>
@@ -12,6 +13,7 @@
 #include <deque>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -47,6 +49,7 @@ constexpr int kRecentLossWindowSize = 100;
 
 enum TokenizerKind {
   TOKENIZER_CHAR,
+  TOKENIZER_UTF8_CHAR,
   TOKENIZER_WORD,
 };
 
@@ -109,7 +112,8 @@ void PrintCommandUsage(const char *prog, const string &verb) {
   if (verb == "init") {
     cout << "  --model <path>              output model path (default "
             "mini_lm.param)\n"
-         << "  --tokenizer <char|word>     tokenizer granularity (default char)\n"
+         << "  --tokenizer <char|utf8-char|word>\n"
+         << "                              tokenizer granularity (default char)\n"
          << "  --max-vocab-size <int>      for word tokenizer, keep top-N words "
             "plus <unk> (0 = all)\n"
          << "  --unknown-policy <map|drop> for word tokenizer, map OOV to "
@@ -384,14 +388,23 @@ TokenizerKind ParseTokenizerKind(const string &tokenizer) {
   if (tokenizer == "char") {
     return TOKENIZER_CHAR;
   }
+  if (tokenizer == "utf8-char") {
+    return TOKENIZER_UTF8_CHAR;
+  }
   if (tokenizer == "word") {
     return TOKENIZER_WORD;
   }
-  throw std::runtime_error("Invalid tokenizer, expected char or word");
+  throw std::runtime_error("Invalid tokenizer, expected char, utf8-char or word");
 }
 
 const char *TokenizerName(TokenizerKind tokenizer_kind) {
-  return tokenizer_kind == TOKENIZER_WORD ? "word" : "char";
+  if (tokenizer_kind == TOKENIZER_WORD) {
+    return "word";
+  }
+  if (tokenizer_kind == TOKENIZER_UTF8_CHAR) {
+    return "utf8-char";
+  }
+  return "char";
 }
 
 WordTokenizer::UnknownPolicy ParseUnknownPolicy(const string &policy) {
@@ -411,6 +424,7 @@ const char *UnknownPolicyName(WordTokenizer::UnknownPolicy policy) {
 struct TokenizerBundle {
   TokenizerKind kind = TOKENIZER_CHAR;
   CharacterTokenizer char_tokenizer;
+  Utf8CharTokenizer utf8_char_tokenizer;
   WordTokenizer word_tokenizer;
 };
 
@@ -610,6 +624,66 @@ string DisplayWordVocab(const vector<string> &vocabulary) {
   return out;
 }
 
+string DisplayUtf8Vocab(const vector<string> &vocabulary) {
+  string out;
+  for (const auto &token : vocabulary) {
+    if (!out.empty()) {
+      out += " ";
+    }
+    out.push_back('[');
+    if (token == "\n") {
+      out += "\\n";
+    } else if (token == "\r") {
+      out += "\\r";
+    } else if (token == "\t") {
+      out += "\\t";
+    } else {
+      out += token;
+    }
+    out.push_back(']');
+  }
+  return out;
+}
+
+string HexEncode(const string &text) {
+  std::ostringstream oss;
+  oss << std::hex << std::setfill('0');
+  for (unsigned char ch : text) {
+    oss << std::setw(2) << static_cast<int>(ch);
+  }
+  return oss.str();
+}
+
+int HexValue(char ch) {
+  if (ch >= '0' && ch <= '9') {
+    return ch - '0';
+  }
+  if (ch >= 'a' && ch <= 'f') {
+    return ch - 'a' + 10;
+  }
+  if (ch >= 'A' && ch <= 'F') {
+    return ch - 'A' + 10;
+  }
+  return -1;
+}
+
+bool HexDecode(const string &hex_text, string &text) {
+  if (hex_text.empty() || hex_text.size() % 2 != 0) {
+    return false;
+  }
+  text.clear();
+  text.reserve(hex_text.size() / 2);
+  for (int i = 0; i < static_cast<int>(hex_text.size()); i += 2) {
+    const int hi = HexValue(hex_text[i]);
+    const int lo = HexValue(hex_text[i + 1]);
+    if (hi < 0 || lo < 0) {
+      return false;
+    }
+    text.push_back(static_cast<char>((hi << 4) | lo));
+  }
+  return true;
+}
+
 bool WriteVocabSidecar(const string &path, const TokenizerBundle &tokenizer,
                        string &err) {
   std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
@@ -619,6 +693,11 @@ bool WriteVocabSidecar(const string &path, const TokenizerBundle &tokenizer,
   }
   if (tokenizer.kind == TOKENIZER_CHAR) {
     ofs << tokenizer.char_tokenizer.vocabulary();
+  } else if (tokenizer.kind == TOKENIZER_UTF8_CHAR) {
+    ofs << "tokenizer=utf8-char\n";
+    for (const auto &token : tokenizer.utf8_char_tokenizer.vocabulary()) {
+      ofs << HexEncode(token) << '\n';
+    }
   } else {
     ofs << "tokenizer=word\n";
     if (tokenizer.word_tokenizer.unknown_policy() ==
@@ -644,7 +723,7 @@ bool InitTokenizerFromCorpus(const TokenizerBuildOption &build_option,
     return false;
   }
   tokenizer.kind = build_option.kind;
-  if (tokenizer.kind == TOKENIZER_CHAR) {
+  if (tokenizer.kind == TOKENIZER_CHAR || tokenizer.kind == TOKENIZER_UTF8_CHAR) {
     if (build_option.word_config.max_vocab_size != 0) {
       err = "--max-vocab-size is only supported with --tokenizer word";
       return false;
@@ -654,10 +733,21 @@ bool InitTokenizerFromCorpus(const TokenizerBuildOption &build_option,
       err = "--unknown-policy is only supported with --tokenizer word";
       return false;
     }
+  }
+  if (tokenizer.kind == TOKENIZER_CHAR) {
     const string vocabulary = CharacterTokenizer::BuildVocabularyFromText(corpus);
     if (tokenizer.char_tokenizer.Init(vocabulary) !=
         CharacterTokenizer::SUCCESS) {
       err = "Tokenizer init failed: " + tokenizer.char_tokenizer.err_msg();
+      return false;
+    }
+    return true;
+  }
+  if (tokenizer.kind == TOKENIZER_UTF8_CHAR) {
+    const auto vocabulary = Utf8CharTokenizer::BuildVocabularyFromText(corpus);
+    if (tokenizer.utf8_char_tokenizer.Init(vocabulary) !=
+        Utf8CharTokenizer::SUCCESS) {
+      err = "Tokenizer init failed: " + tokenizer.utf8_char_tokenizer.err_msg();
       return false;
     }
     return true;
@@ -701,6 +791,29 @@ bool InitTokenizerFromSidecar(const string &content, TokenizerBundle &tokenizer,
     StripTrailingNewlines(rest);
     if (tokenizer.char_tokenizer.Init(rest) != CharacterTokenizer::SUCCESS) {
       err = "Tokenizer init failed: " + tokenizer.char_tokenizer.err_msg();
+      return false;
+    }
+    return true;
+  }
+  if (tokenizer.kind == TOKENIZER_UTF8_CHAR) {
+    vector<string> vocabulary;
+    string line;
+    std::istringstream vocab_stream(rest);
+    while (std::getline(vocab_stream, line)) {
+      line = TrimLineEnd(line);
+      if (line.empty()) {
+        continue;
+      }
+      string token;
+      if (!HexDecode(line, token)) {
+        err = "Invalid utf8-char vocab sidecar";
+        return false;
+      }
+      vocabulary.push_back(token);
+    }
+    if (tokenizer.utf8_char_tokenizer.Init(vocabulary) !=
+        Utf8CharTokenizer::SUCCESS) {
+      err = "Tokenizer init failed: " + tokenizer.utf8_char_tokenizer.err_msg();
       return false;
     }
     return true;
@@ -755,8 +868,13 @@ bool InitTokenizerFromSidecar(const string &content, TokenizerBundle &tokenizer,
 }
 
 int TokenizerVocabSize(const TokenizerBundle &tokenizer) {
-  return tokenizer.kind == TOKENIZER_WORD ? tokenizer.word_tokenizer.vocab_size()
-                                          : tokenizer.char_tokenizer.vocab_size();
+  if (tokenizer.kind == TOKENIZER_WORD) {
+    return tokenizer.word_tokenizer.vocab_size();
+  }
+  if (tokenizer.kind == TOKENIZER_UTF8_CHAR) {
+    return tokenizer.utf8_char_tokenizer.vocab_size();
+  }
+  return tokenizer.char_tokenizer.vocab_size();
 }
 
 bool EncodeForTraining(TokenizerBundle &tokenizer, const string &text,
@@ -767,6 +885,33 @@ bool EncodeForTraining(TokenizerBundle &tokenizer, const string &text,
     if (tokenizer.word_tokenizer.TokenizeFlatWithPolicy(
             text, token_ids, unknown_count) != WordTokenizer::SUCCESS) {
       err = "Encode corpus failed: " + tokenizer.word_tokenizer.err_msg();
+      return false;
+    }
+    return true;
+  }
+  if (tokenizer.kind == TOKENIZER_UTF8_CHAR) {
+    vector<string> text_tokens;
+    if (!Utf8CharTokenizer::SplitUtf8(text, text_tokens)) {
+      err = "Encode corpus failed: invalid UTF-8 text";
+      return false;
+    }
+    string filtered;
+    for (const auto &token : text_tokens) {
+      const int token_id =
+          tokenizer.utf8_char_tokenizer.Lookup(token);
+      if (token_id < 0) {
+        unknown_count++;
+        continue;
+      }
+      filtered += token;
+    }
+    if (filtered.empty()) {
+      err = "No trainable text left after filtering to the model vocabulary";
+      return false;
+    }
+    if (tokenizer.utf8_char_tokenizer.Encode(filtered, token_ids) !=
+        Utf8CharTokenizer::SUCCESS) {
+      err = "Encode corpus failed: " + tokenizer.utf8_char_tokenizer.err_msg();
       return false;
     }
     return true;
@@ -805,6 +950,33 @@ bool EncodePrompt(TokenizerBundle &tokenizer, const string &text,
     }
     return true;
   }
+  if (tokenizer.kind == TOKENIZER_UTF8_CHAR) {
+    vector<string> text_tokens;
+    if (!Utf8CharTokenizer::SplitUtf8(text, text_tokens)) {
+      err = "Encode prompt failed: invalid UTF-8 text";
+      return false;
+    }
+    prompt.clear();
+    for (const auto &token : text_tokens) {
+      const int token_id =
+          tokenizer.utf8_char_tokenizer.Lookup(token);
+      if (token_id < 0) {
+        unknown_count++;
+        continue;
+      }
+      prompt += token;
+    }
+    if (prompt.empty()) {
+      err = "Prompt is empty after filtering to the model vocabulary";
+      return false;
+    }
+    if (tokenizer.utf8_char_tokenizer.Encode(prompt, token_ids) !=
+        Utf8CharTokenizer::SUCCESS) {
+      err = "Encode prompt failed: " + tokenizer.utf8_char_tokenizer.err_msg();
+      return false;
+    }
+    return true;
+  }
 
   long long dropped = 0;
   prompt = FilterToVocab(tokenizer.char_tokenizer.vocabulary(), text, dropped);
@@ -831,6 +1003,15 @@ bool DecodeGenerated(TokenizerBundle &tokenizer, const vector<int> &token_ids,
     }
     return true;
   }
+  if (tokenizer.kind == TOKENIZER_UTF8_CHAR) {
+    if (tokenizer.utf8_char_tokenizer.Decode(token_ids, text) !=
+        Utf8CharTokenizer::SUCCESS) {
+      err = "Decode generated text failed: " +
+            tokenizer.utf8_char_tokenizer.err_msg();
+      return false;
+    }
+    return true;
+  }
   if (tokenizer.char_tokenizer.Decode(token_ids, text) !=
       CharacterTokenizer::SUCCESS) {
     err = "Decode generated text failed: " + tokenizer.char_tokenizer.err_msg();
@@ -842,6 +1023,9 @@ bool DecodeGenerated(TokenizerBundle &tokenizer, const vector<int> &token_ids,
 string DisplayTokenizerVocab(const TokenizerBundle &tokenizer) {
   if (tokenizer.kind == TOKENIZER_WORD) {
     return DisplayWordVocab(tokenizer.word_tokenizer.vocabulary());
+  }
+  if (tokenizer.kind == TOKENIZER_UTF8_CHAR) {
+    return DisplayUtf8Vocab(tokenizer.utf8_char_tokenizer.vocabulary());
   }
   return DisplayCharVocab(tokenizer.char_tokenizer.vocabulary());
 }

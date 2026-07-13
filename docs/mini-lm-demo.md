@@ -1,12 +1,13 @@
 # mini_lm 基座模型 Demo
 
-`src/bin/mini_lm` 是一个围绕 `deeplearning::MiniTransformerLM` 的**小型语言模型命令行工具**，把「定义结构 → 喂语料训练 → 加载推理」拆成独立子命令，方便当作一个小小的**基座模型**来用：先初始化一个空模型，再用任意文本把它喂大，最后加载参数做文本续写。它默认使用字符级 tokenizer，也可以通过 `--tokenizer word` 切到词级 tokenizer。
+`src/bin/mini_lm` 是一个围绕 `deeplearning::MiniTransformerLM` 的**小型语言模型命令行工具**，把「定义结构 → 喂语料训练 → 加载推理」拆成独立子命令，方便当作一个小小的**基座模型**来用：先初始化一个空模型，再用任意文本把它喂大，最后加载参数做文本续写。它默认使用字节级字符 tokenizer，也可以通过 `--tokenizer utf8-char` 切到 UTF-8 字符级 tokenizer，或通过 `--tokenizer word` 切到词级 tokenizer。
 
 它复用的是仓库已有的 Transformer 模块（`src/deeplearning/transformer/`）；demo 层负责命令调度、数据 IO、tokenizer sidecar 读写，词级模式复用并扩展了 `src/deeplearning/embedding/word_tokenizer.*`。
 
 ## 能力边界（先说清楚，别误解）
 
-- 默认是**字符级续写模型**：逐个字符地学「看到这些字符，下一个字符最可能是什么」。训练充分后它能续写出**像英文的字符流**（真实单词、空格、标点），而不是背 `abcabc`。
+- 默认是**字节级字符续写模型**：逐个字节地学「看到这些字节，下一个字节最可能是什么」。训练充分后它能续写出**像英文的字符流**（真实单词、空格、标点），而不是背 `abcabc`。
+- 也支持 **UTF-8 字符级续写模型**：`--tokenizer utf8-char` 会按 Unicode codepoint 切分，一个汉字、一个英文字母、一个标点各算一个 token。它保留原有 `char` 的兼容性，同时更适合中文或中英混合语料。
 - 也支持**词级续写模型**：`--tokenizer word` 会按英文单词切分，小写化后预测下一个词，生成结果用空格拼回文本，例如 `alice was beginning to get very tired`。可用 `--max-vocab-size` 只保留高频词，词表外单词默认映射到 `<unk>`，也可用 `--unknown-policy drop` 直接丢弃，控制输出层大小和生成可读性。
 - 它**不是对话模型**。你对它说 `hello` 它不会"理解并回答 hello"——它只会沿着 `hello` 这个前缀，按训练语料的统计继续往下写字符。想要"问答/指令遵循"需要指令微调 + 大得多的模型，超出本库范围。
 - 底层是**朴素实现**（纯 `std::vector`、逐样本、无 batch、无 BLAS/SIMD、Debug 构建），算力有限。请把它当**教学/实验**用途，模型规模和语料都要按「你的机器能训得动」来选（见 [训练成本与选参](#10-训练成本与选参)）。
@@ -57,7 +58,17 @@ cd src
 
 ### `.vocab` sidecar 格式
 
-字符级模型为了兼容旧文件，仍然把字符表按原始字节直接写进 `.vocab`。词级模型会写成可区分的行格式：
+字节级 `char` 模型为了兼容旧文件，仍然把字符表按原始字节直接写进 `.vocab`。`utf8-char` 和词级模型会写成可区分的行格式：
+
+```text
+tokenizer=utf8-char
+e4bda0
+e5a5bd
+61
+...
+```
+
+`utf8-char` 每行是一个 UTF-8 codepoint 的十六进制字节串，行号就是 token id。这样换行、空格、中文和 emoji 都能无歧义保存。
 
 ```text
 tokenizer=word
@@ -85,7 +96,7 @@ said
 
 `init` 会根据 `--tokenizer` 选择不同词表生成方式。
 
-字符级默认走 `CharacterTokenizer::BuildVocabularyFromText`（`character_tokenizer.cpp:5`）扫一遍语料，逻辑非常朴素——见过的字符跳过，没见过的就分配下一个编号：
+字符级默认走 `CharacterTokenizer::BuildVocabularyFromText`（`character_tokenizer.cpp:5`）扫一遍语料，逻辑非常朴素——见过的字节跳过，没见过的就分配下一个编号：
 
 - **字节级**：粒度就是单个 `char`，不做 BPE、不切词。`hello` = `h/e/l/o` 四个 token（`l` 去重）。
 - **按首次出现顺序编号**：语料里第一个出现的字符拿 id 0，第二个新字符拿 id 1…… 所以 `info` 打出来的词表顺序，就是语料开头的字符顺序。
@@ -93,6 +104,12 @@ said
 - **大小 = distinct 字符数**：它同时等于 embedding 的行数和输出 softmax 的维度，属于模型结构，所以 `init` 后**冻结**（词表外的字符在 `train`/`generate` 时被 `FilterToVocab` 丢弃并告警）。
 
 一个副作用：编号跟“语料开头长什么样”绑定，**相同字符集、不同语料开头 → 不同的 id 分配**。所以两个模型的 `.vocab` 不能互换，`LoadModel` 里 `vocab_size` 那道校验就是为此。
+
+如果语料里有中文或其他非 ASCII 文本，可以在 `init` 时用 `--tokenizer utf8-char`。它和默认 `char` 的区别是：
+
+- **Unicode codepoint 级**：一个汉字是一个 token，不会被拆成 3 个 UTF-8 字节。
+- **保留 UTF-8 原文**：编码前会验证 UTF-8 合法性，解码时直接拼回每个 token 的 UTF-8 字节。
+- **兼容旧模型**：老的无 header `.vocab` 仍按 `char` 读取；只有新建模型显式选择 `utf8-char` 才会写 `tokenizer=utf8-char`。
 
 词级模式走 `WordTokenizer::InitFromText(text, config)`，其中 `config` 统一描述 `<unk>`、词表上限等词级 tokenizer 构建策略：
 
@@ -123,7 +140,7 @@ said
 | 参数 | 含义 | 默认 |
 |------|------|------|
 | `--model <path>` | 输出模型路径 | `mini_lm.param` |
-| `--tokenizer <char\|word>` | tokenizer 粒度：字符级或词级 | `char` |
+| `--tokenizer <char\|utf8-char\|word>` | tokenizer 粒度：字节级字符、UTF-8 字符或词级 | `char` |
 | `--max-vocab-size <int>` | 词级模式保留 top-N 高频普通词；`0` 表示全量词表 | `0` |
 | `--unknown-policy <map\|drop>` | 词级 OOV 策略：映射到 `<unk>` 或直接丢弃 | `map` |
 | `--corpus <text>` | 内联文本，用来建词表 | 一段占位串 |
@@ -188,7 +205,7 @@ checkpoint 由三份 sidecar 组成：
 |------|------|------|
 | `--model <path>` | 要加载的模型 | `mini_lm.param` |
 | `--prompt <text>` | 起始文本 | `ab` |
-| `--generate-num <int>` | 续写多少个 token（字符级=字符数，词级=词数） | 20 |
+| `--generate-num <int>` | 续写多少个 token（`char`=字节数，`utf8-char`=Unicode 字符数，`word`=词数） | 20 |
 | `--temperature <double>` | 采样温度（**给了就切采样模式**） | — |
 | `--top-k <int>` | top-k 采样 | — |
 | `--top-p <double>` | top-p (nucleus) 采样 | — |
@@ -201,7 +218,7 @@ checkpoint 由三份 sidecar 组成：
 
 ## 6. 准备训练数据（清洗 → 喂给模型）
 
-字符级模型对"字符集大小"很敏感：语料里每多一个稀有字符（花引号、emoji、非拉丁字母……）词表就大一圈，小模型更难学。词级模型对"词表大小"敏感：低频词越多，embedding 和输出层越大，小模型越难训。所以**喂给模型前先清洗成干净的 ASCII 文本**，必要时用 `--max-vocab-size` 只保留高频词。
+字符级模型对"字符集大小"很敏感：语料里每多一个稀有字符（花引号、emoji、非拉丁字母……）词表就大一圈，小模型更难学。默认 `char` 更适合干净 ASCII 文本；中文或中英混合语料优先用 `--tokenizer utf8-char`，避免一个汉字被拆成多个字节。词级模型对"词表大小"敏感：低频词越多，embedding 和输出层越大，小模型越难训，必要时用 `--max-vocab-size` 只保留高频词。
 
 `src/demo/mini_lm/tools/` 下提供两个只依赖标准库的脚本（都已纳入 git，可直接改）：
 
@@ -283,7 +300,7 @@ cp /tmp/base.param.vocab /tmp/tuned.param.vocab
 ```
 
 要点：
-- 字符级微调语料的字符必须落在基座 `init` 时定的词表内，否则会被跳过（有告警）；词级微调语料里的新词会按模型初始化时保存的 unknown policy 映射到 `<unk>` 或被丢弃。想真正支持新字符/新词，只能重新 `init` + 重新预训练。
+- 字节级 / UTF-8 字符级微调语料的 token 必须落在基座 `init` 时定的词表内，否则会被跳过（有告警）；词级微调语料里的新词会按模型初始化时保存的 unknown policy 映射到 `<unk>` 或被丢弃。想真正支持新字符/新词，只能重新 `init` + 重新预训练。
 - 微调学习率通常**比预训练小一个量级**（例：预训练 `0.002` → 微调 `0.0005`），避免把基座学到的东西冲掉。
 - 这是**风格/领域适配**，不是"教它对话"。无论字符级还是词级，只靠普通续写语料都做不到"你问它答"。
 
@@ -380,7 +397,7 @@ Vocabulary: [<unk>] [alice] [was] [beginning] [to] [get] [very] [tired]
 
 - **`Vocab sidecar not found`**：`.vocab` 文件丢了或没跟 `.param` 放一起。两个文件必须成对；模型要重新 `init`。
 - **`model-dim must be divisible by head-num`**：`--model-dim` 必须能被 `--head-num` 整除（多头要均分维度）。
-- **训练时 `skipped N characters outside the model vocabulary`**：字符级训练语料含 `init` 词表外的字符，已自动跳过。要支持这些字符得用覆盖它们的语料重新 `init`。
+- **训练时 `skipped N characters outside the model vocabulary`**：字节级 / UTF-8 字符级训练语料含 `init` 词表外的 token，已自动跳过。要支持这些 token 得用覆盖它们的语料重新 `init`。
 - **训练/生成时 `mapped N words outside the model vocabulary to <unk>`**：词级模型使用默认 `map` 策略，遇到没见过的词会映射到 `<unk>`。如果用了 `--max-vocab-size`，这通常是低频词被主动裁掉；想让模型真正学会这些词，需要增大词表或用覆盖它们的语料重新 `init`。
 - **训练/生成时 `dropped N words outside the model vocabulary`**：词级模型使用 `drop` 策略，遇到没见过的词会直接跳过。这通常让生成更可读，但会损失少量长尾词上下文。
 - **训练中断后怎么继续**：默认会写 `<model>.ckpt`，重新运行 `train` 时加 `--resume-checkpoint`，并把 `--epochs` 设为目标总轮数。
