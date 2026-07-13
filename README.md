@@ -83,7 +83,8 @@ deeplearning/
 | `optimizer_bench` | 同一 MLP 上对比 SGD / Momentum / Adam / AdamW / RMSProp |
 | `rl_tictactoe` | 井字棋 Q-learning：ε-greedy 训练、对战随机/最优对手，见 [`docs/rl-tictactoe-demo.md`](./docs/rl-tictactoe-demo.md) |
 | `word2vec` | skip-gram/CBOW + 负采样词向量训练，见 [`docs/word2vec-demo.md`](./docs/word2vec-demo.md) |
-| `mini_lm` | 小型基座模型 CLI：默认字符级，也支持 `--tokenizer word` 词级续写；init/train/generate/info 四段式，见 [`docs/mini-lm-demo.md`](./docs/mini-lm-demo.md) |
+| `mini_lm` | 小型基座模型 CLI：默认字符级，也支持 `--tokenizer utf8-char` / `--tokenizer word`；init/train/generate/info 四段式，见 [`docs/mini-lm-demo.md`](./docs/mini-lm-demo.md) |
+| `web_model_export` | 把 `.param` 模型导出成浏览器更容易加载的 JSON（支持 MLP / mini-LM） |
 
 ---
 
@@ -110,7 +111,8 @@ cd src
 ./bin/optimizer_bench       # 优化器对比
 ./bin/rl_tictactoe          # 井字棋 Q-learning
 ./bin/word2vec              # word2vec 词向量训练
-./bin/mini_lm               # 小型基座模型 CLI（char/word tokenizer，init/train/generate/info）
+./bin/mini_lm               # 小型基座模型 CLI（char/utf8-char/word tokenizer，init/train/generate/info）
+./bin/web_model_export      # 导出 Web 演示用模型 JSON
 ```
 
 安装头文件与静态库（可选）：

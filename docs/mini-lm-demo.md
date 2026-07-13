@@ -216,6 +216,33 @@ checkpoint 由三份 sidecar 组成：
 
 打印结构超参、词表大小与词表内容。`--model <path>`（默认 `mini_lm.param`）。
 
+### 导出 Web 演示模型
+
+电子书网页里不直接解析 C++ 的 `.param` 二进制格式。仓库提供 `web_model_export` 工具,先复用 C++ loader 读取 `.param` 和 `.vocab`,再导出浏览器更容易加载的 JSON:
+
+```bash
+./bin/web_model_export --type mini-lm \
+  --model /tmp/base.param \
+  --out docs/dl-book/assets/demos/mini-lm/base.model.json
+```
+
+如果 `.vocab` 不在默认的 `<model>.vocab`,可以显式传:
+
+```bash
+./bin/web_model_export --type mini-lm \
+  --model /tmp/base.param \
+  --vocab /tmp/base.param.vocab \
+  --out /tmp/base.model.json
+```
+
+导出的 JSON 会包含结构超参、tokenizer、词表、embedding、LM head 和 Transformer block 权重,适合前端只做推理演示。MNIST / MLP 模型也可以用同一个工具导出:
+
+```bash
+./bin/web_model_export --type mlp \
+  --model demo/mnist/mnist/demo.v2.param \
+  --out docs/dl-book/assets/demos/mnist/model.json
+```
+
 ## 6. 准备训练数据（清洗 → 喂给模型）
 
 字符级模型对"字符集大小"很敏感：语料里每多一个稀有字符（花引号、emoji、非拉丁字母……）词表就大一圈，小模型更难学。默认 `char` 更适合干净 ASCII 文本；中文或中英混合语料优先用 `--tokenizer utf8-char`，避免一个汉字被拆成多个字节。词级模型对"词表大小"敏感：低频词越多，embedding 和输出层越大，小模型越难训，必要时用 `--max-vocab-size` 只保留高频词。
