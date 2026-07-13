@@ -191,7 +191,8 @@
           <li><span class="term">前向传播(forward)</span>:把输入从头到尾算一遍,得到预测。</li>
           <li><span class="term">反向传播(backward)</span>:把“错误”从输出反着传回去,算出每个旋钮该怎么调。</li>
           <li><span class="term">学习率(learning rate)</span>:每次拧旋钮的“步子大小”。</li>
-          <li><span class="term">训练轮次(epoch / step)</span>:训练循环跑了多少遍。</li>
+          <li><span class="term">训练轮次(epoch)</span>:把整个训练集扫完一遍叫一个 epoch。</li>
+          <li><span class="term">训练步(step)</span>:用一小批样本更新一次参数叫一步;后文会和 epoch 严格区分。</li>
         </ul>
         <p>
           有“标准答案(标签)”可学的这种设定,叫<span class="term">监督学习(supervised learning)</span>,
@@ -211,7 +212,7 @@
               <tr><td><strong>强化学习</strong><br />reinforcement</td><td>没有标准答案,靠<strong>奖励/惩罚</strong>试错</td><td>下棋赢了给分,自己摸索策略</td><td><a class="xref" href="chapter-12.html">第 12 章</a></td></tr>
             </tbody>
           </table>
-          <p class="calc-table__cap">监督学习和强化学习是本书主线;“无监督”(自己发现结构)完整分支地图和时间线放在<a class="xref" href="chapter-26.html">番外第 26 章</a>,那支“没有标签也能学”的范式放在<a class="xref" href="chapter-27.html">第 27 章</a>专门展开。你也会在<a class="xref" href="chapter-15.html">词嵌入</a>、大模型<a class="xref" href="chapter-20.html#7-大模型是怎么炼成的-预训练--后训练">预训练</a>里见到它的影子。</p>
+          <p class="calc-table__cap">监督学习是本书主线;强化学习在<a class="xref" href="chapter-12.html">第 12 章</a>另开一条支线。“无监督”(自己发现结构)完整分支地图和时间线放在<a class="xref" href="chapter-26.html">番外第 26 章</a>,那支“没有标签也能学”的范式放在<a class="xref" href="chapter-27.html">第 27 章</a>专门展开。你也会在<a class="xref" href="chapter-15.html">词嵌入</a>、大模型<a class="xref" href="chapter-20.html#7-大模型是怎么炼成的-预训练--后训练">预训练</a>里见到它的影子。</p>
         </div>
         <div class="callout callout--note reveal">
           <span class="callout__title">插一句:自监督——大模型为什么能吃下整个互联网</span>
@@ -277,7 +278,7 @@
         <h2>7. 这本书会怎么带你走</h2>
         <p>我们会严格按照“从简单到复杂”的顺序,每一步都踩在上一步的肩膀上:</p>
         <ul>
-          <li><strong>第一部分 · 打地基(第 1–3 章)</strong>:先补齐<em>看懂公式的一点点数学</em>,再看懂<em>一个神经元</em>,把它堆成网络、让数据向前流动。</li>
+          <li><strong>第一部分 · 打地基(第 0–3 章)</strong>:先补齐<em>看懂公式的一点点数学</em>,再看懂<em>一个神经元</em>,把它堆成网络、让数据向前流动。</li>
           <li><strong>第二部分 · 学习是怎么发生的(第 4–12 章)</strong>:让网络“学起来”——损失、梯度下降、反向传播、激活函数、优化器,以及正则化、评估;最后再认识一种和它们都不同的学习范式——<em>强化学习</em>(不看标准答案,靠奖励试错)。</li>
           <li><strong>第三部分 · 经典网络结构(第 13–15 章)</strong>:处理图像的 <em>CNN</em>、处理序列的 <em>RNN/LSTM</em>,以及让词有语义的<em>词嵌入</em>。</li>
           <li><strong>第四部分 · 序列与 Transformer(第 16–18 章)</strong>:处理“一句话”这种序列数据,引出<em>注意力机制</em>,拼出完整的 <em>Transformer</em>。</li>

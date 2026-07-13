@@ -61,8 +61,8 @@ double MSELoss::DerivLoss(double target, double output) {
   return -2.0 * (target - output);                      <b class="cw-tag">2</b>
 }</code></pre>
           <ol class="code-walk__notes">
-            <li><strong>Loss</strong>:就是上面的公式,算出“这一个输出错了多少”。</li>
-            <li><strong>DerivLoss</strong>:损失对输出的<em>导数</em>,反向传播要用它(<a class="xref" href="chapter-06.html">第 6 章</a>)。这里你只要先看懂它的<strong>符号</strong>:当 <var>o</var> 比 <var>t</var> 小,(t − o) 为正,导数为负——它在告诉网络“你预测得太低了,把输出往大调”。导数前面的常数(这里是 2)不影响方向,只是缩放,会被学习率吸收。</li>
+            <li><strong>Loss</strong>:就是上面的公式,算出“这一个输出错了多少”。前面的 <span class="frac"><span>1</span><span>2</span></span> 让求导时能抵消平方带来的系数 2。</li>
+            <li><strong>DerivLoss</strong>:损失对输出的<em>导数</em>,反向传播要用它(<a class="xref" href="chapter-06.html">第 6 章</a>)。严格说 <var>L</var> = <span class="frac"><span>1</span><span>2</span></span>(<var>t</var> − <var>o</var>)<sup>2</sup> 的导数应是 <code>−(t − o)</code>;仓库实现写成 <code>−2(t − o)</code>,相当于多了一个常数 2——<strong>方向完全一样</strong>,只是整体缩放,会被学习率吸收。你只要先看懂符号:当 <var>o</var> 比 <var>t</var> 小,(t − o) 为正,导数为负——它在告诉网络“你预测得太低了,把输出往大调”。</li>
           </ol>
         </figure>
 
@@ -195,8 +195,8 @@ double CrossEntropyLoss::DerivLoss(double target, double output) {
   return 0;
 }</code></pre>
           <ol class="code-walk__notes">
-            <li>这就是上面说的 <var>δ</var> = <var>p</var> − <var>t</var>。它会作为反向传播的“起点”(<a class="xref" href="chapter-06.html">第 6 章</a>)。</li>
-            <li>直觉太顺了:预测概率比答案高多少,就往回传多少“正向误差”;低多少,就传多少“负向误差”。这也是为什么分类任务几乎总是用“softmax + 交叉熵”这对黄金搭档。</li>
+            <li><strong>交叉熵分支</strong>才是上面推导的那条美妙巧合:<var>δ</var> = <var>p</var> − <var>t</var>(对 logit)。它会作为反向传播的“起点”(<a class="xref" href="chapter-06.html">第 6 章</a>)。</li>
+            <li><strong>MSE 分支</strong>这里返回同一个式子,是仓库为了接口统一做的<strong>简化</strong>——严格说,softmax + MSE 对 logit 的梯度还要过 softmax 雅可比,一般<strong>不等于</strong> <var>p</var> − <var>t</var>。分类请用交叉熵;回归用 MSE 时通常<strong>不要</strong>再套 softmax。直觉上(对 CE):预测概率比答案高多少,就往回传多少“正向误差”。</li>
           </ol>
         </figure>
 

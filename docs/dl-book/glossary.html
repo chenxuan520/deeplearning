@@ -15,7 +15,7 @@
         <h1>术语表:名词速查</h1>
 
         <p class="lead">
-          只收录<strong>深度学习 / 大模型里的专用名词</strong>(如 model_dim、causal mask、MoE),每个一句话讲清并链到详解章节。
+          收录<strong>深度学习 / 大模型</strong>以及番外里的<strong>经典机器学习 / 无监督</strong>专用名词,每个一句话讲清并链到详解章节。
           普通数学词(向量、矩阵、张量)、太泛的词(模型、训练、token)不在此列。
           正文里<strong>蓝色虚线</strong>的词可点击查看释义。
         </p>
@@ -121,7 +121,7 @@
           <li id="g-selfsup"><strong>自监督 self-supervised</strong> — 答案从数据本身自动抠出(如遮词预测),不用人工标注。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-pretrain"><strong>预训练 / 后训练</strong> — 海量文本上练底座 / SFT+RLHF+蒸馏调成好用的助手。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-llm-eval" data-aliases="大模型测评,模型评测,evaluation,benchmark,评测集,红队,上线门禁"><strong>大模型测评 / benchmark</strong> — 用固定题集、真实任务、人工规则和线上反馈做质量控制:预训练选 checkpoint、后训练看对齐效果、上线前做门禁、上线后抓回归。<a href="chapter-20.html#测评-贯穿训练和上线的质检系统">→ 第 20 章</a></li>
-          <li id="g-rlhf"><strong>RLHF / SFT</strong> — 按人类偏好对齐 / 用指令范文微调。<a href="chapter-20.html">→ 第 20 章</a> · <a href="chapter-12.html">RL → 第 12 章</a></li>
+          <li id="g-rlhf" data-aliases="SFT,RLHF,DPO"><strong>RLHF / SFT / DPO</strong> — 按人类偏好对齐 / 用指令范文微调 / 直接用偏好对做对齐(跳过单独奖励模型)。<a href="chapter-20.html">→ 第 20 章</a> · <a href="chapter-12.html">RL → 第 12 章</a></li>
           <li id="g-rl"><strong>强化学习 RL</strong> — 靠奖励试错学策略;MDP / Q-learning / PPO。<a href="chapter-12.html">→ 第 12 章</a> · <a href="chapter-25.html">代码 → 第 25 章</a></li>
           <li id="g-align-tax"><strong>对齐税 alignment tax</strong> — RLHF 后更安全听话,但部分能力/创造性可能下降。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-forget"><strong>灾难性遗忘</strong> — 微调新任务时旧本领丢失;可用 LoRA/混训缓解。<a href="chapter-20.html">→ 第 20 章</a></li>
@@ -151,6 +151,17 @@
           <li id="g-agent"><strong>function calling / Agent</strong> — 让模型调用工具、多步做事,从“会聊”变“能办”。<a href="chapter-22.html#25-agent-从回答问题到循环做事">→ 第 22 章</a></li>
           <li id="g-context-engineering" data-aliases="上下文工程,context engineering,context rot,compaction,memory,agent memory,上下文压缩"><strong>上下文工程</strong> — 每步为 Agent 选择最小高信号上下文;靠动态压缩、外部 memory、经验手册和子 Agent 隔离噪声。<a href="chapter-22.html#2-context-engineering-让模型看见该看的">→ 第 22 章</a></li>
           <li id="g-harness" data-aliases="Harness,harness engineering,Harness 工程,Agent harness,外骨骼,工程壳"><strong>Harness 工程</strong> — 模型外面的工程外壳:执行循环、工具注册表、上下文管理器、状态存储、生命周期 hooks 和验证接口共同把模型接成可靠系统。<a href="chapter-22.html#3-harness-engineering-让模型可靠做事">→ 第 22 章</a></li>
+        </ul>
+
+        <h2>无监督与经典机器学习</h2>
+        <ul class="glossary">
+          <li id="g-clustering" data-aliases="聚类,clustering"><strong>聚类 clustering</strong> — 无标签时把相似样本自动分成几群。<a href="chapter-27.html#2-聚类-让数据自己物以类聚">→ 第 27 章</a></li>
+          <li id="g-kmeans" data-aliases="K-means,kmeans,k-means"><strong>K-means</strong> — 最经典的聚类:交替做“归队”和“挪中心”直到稳定。<a href="chapter-27.html#21-k-means-最经典的聚类">→ 第 27 章</a></li>
+          <li id="g-pca" data-aliases="PCA,主成分分析,principal component analysis"><strong>PCA 主成分分析</strong> — 找方差最大的方向,把高维数据压到更少维还尽量保信息。<a href="chapter-27.html#31-pca-找到数据最舒展的方向">→ 第 27 章</a></li>
+          <li id="g-decision-tree" data-aliases="决策树,decision tree"><strong>决策树</strong> — 从数据里自动长出一串 if-else;预测时从根走到叶子。<a href="chapter-28.html#2-决策树-把-if-else-学出来">→ 第 28 章</a></li>
+          <li id="g-gini" data-aliases="基尼不纯度,Gini impurity,基尼"><strong>基尼不纯度 Gini</strong> — 衡量节点“有多杂”;越纯越接近 0,用来给候选切分打分。<a href="chapter-28.html#21-怎么选该问哪个问题-基尼与信息增益">→ 第 28 章</a></li>
+          <li id="g-random-forest" data-aliases="随机森林,Random Forest,Bagging"><strong>随机森林 / Bagging</strong> — 多样本+多特征随机种许多树再投票,主要降方差。<a href="chapter-28.html#3-随机森林-三个臭皮匠顶个诸葛亮">→ 第 28 章</a></li>
+          <li id="g-gbdt" data-aliases="GBDT,梯度提升树,Boosting,XGBoost,LightGBM"><strong>GBDT / Boosting</strong> — 串行种树,每棵专门拟合前面的残差,主要降偏差。<a href="chapter-28.html#4-梯度提升树-一棵接一棵地纠错">→ 第 28 章</a></li>
         </ul>
 
         <p class="muted">

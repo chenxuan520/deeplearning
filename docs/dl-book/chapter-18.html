@@ -1028,7 +1028,7 @@ score = Q * K^T / sqrt(head_dim)</code></pre>
   →  LayerNorm(X + A)              H₁  [n × d]     [3 × 2]
   →  FFN(每行独立,共用 W1/W2)      F   [n × d]     [3 × 2]   (中间升到 [3 × 4])
   →  LayerNorm(H₁ + F)             H₂  [n × d]     [3 × 2]   ← 1 层时即 H_final
-  →  H₂ · W_lm + b_lm              L   [n × V]     [3 × 5]   ← 每个位置一份 logits
+  →  H₂ · W_lmᵀ + b_lm            L   [n × V]     [3 × 5]   ← 每个位置一份 logits
   →  softmax(最后一行)             p   [V]         [5]       ← 生成时只取最后一个位置</code></pre>
 
         <div class="table-wrap reveal">
@@ -1081,8 +1081,8 @@ score = Q * K^T / sqrt(head_dim)</code></pre>
               </tr>
               <tr>
                 <td>⑪ LM Head</td>
-                <td><code>L = H₂·W_lm + b_lm</code></td>
-                <td><code>[3, 2]·[2, 5]</code></td>
+                <td><code>L = H₂·W_lmᵀ + b_lm</code></td>
+                <td><code>[3, 2]·[2, 5]</code>(<code>W_lm</code> 为 <code>[5, 2]</code>)</td>
                 <td><code>[3, 5]</code></td>
               </tr>
               <tr>
@@ -1285,10 +1285,10 @@ Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code>
 
         <p><strong>⑪⑫ LM Head + Softmax</strong> — 把每个位置的 2 维向量投影到 5 个字的分数:</p>
         <div class="mathblock reveal">
-          <code>L = H₂·W_lm + b_lm</code> · <code>L</code> 是 <code>[3×5]</code>
-          <span class="label"><code>[3×2]·[2×5]=[3×5]</code> · 训练时 3 行都算 loss · 生成时只取最后一行 <code>L[2]</code> → softmax → 选「月」</span>
+          <code>L = H₂·W_lmᵀ + b_lm</code> · <code>L</code> 是 <code>[3×5]</code>
+          <span class="label"><code>[3×2]·[2×5]=[3×5]</code>(<code>W_lm</code> 为 <code>V×d=[5×2]</code>,右乘其转置) · 训练时 3 行都算 loss · 生成时只取最后一行 <code>L[2]</code> → softmax → 选「月」</span>
         </div>
-        <pre class="code-walk__code reveal" style="margin:0.6rem 0"><code>H₂[2]  (1×2)  ·  W_lm (2×5)  +  b_lm  →  logits (1×5)
+        <pre class="code-walk__code reveal" style="margin:0.6rem 0"><code>H₂[2]  (1×2)  ·  W_lmᵀ (2×5)  +  b_lm  →  logits (1×5)
                                               →  softmax  →  p(月) 最高</code></pre>
 
         <p>
@@ -1350,7 +1350,7 @@ Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code>
             <div class="step-track__body">
               <span class="step-track__phase">FFN(逐 token)</span>
               <span class="step-track__title">每个位置独立跑同一个小 MLP</span>
-              <span class="step-track__detail step-track__formula">F[t] = W₂·ReLU(W₁·H₁[t] + b₁) + b₂ · <code>2→4→2</code> 维(中间升到 <code>d_ff=4</code>)</span>
+              <span class="step-track__detail step-track__formula">F[t] = ReLU(H₁[t]·W₁ + b₁)·W₂ + b₂ · <code>2→4→2</code> 维(中间升到 <code>d_ff=4</code>)</span>
               <span class="step-track__detail">“明”行: <code>H₁[2]</code>(2 维)→ 升到 4 维 → ReLU → 降回 2 维 → <code>F[2] = [0.08, 0.62]</code> · token 之间<strong>不通信</strong></span>
             </div>
           </li>
@@ -1360,7 +1360,7 @@ Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code>
               <span class="step-track__phase">Add &amp; Norm</span>
               <span class="step-track__title">Block 出口</span>
               <span class="step-track__detail step-track__formula">H₂ = LayerNorm(H₁ + F) → <code>H_final ∈ R^(3×2)</code></span>
-              <span class="step-track__detail">最后一行 <code>h = H_final[2] = [0.18, 0.92]</code> = “看完床前明后,这个位置对下一字的判断”</span>
+              <span class="step-track__detail">最后一行 <code>h = H_final[2] ≈ [−1.0, 1.0]</code> = “看完床前明后,这个位置对下一字的判断”(γ=1、β=0 时 2 维 LayerNorm 仍是零均值)</span>
             </div>
           </li>
           <li class="step-track__item step-track__item--forward">
@@ -1378,7 +1378,7 @@ Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code>
               <span class="step-track__phase">Softmax</span>
               <span class="step-track__title">分数 → 概率</span>
               <span class="step-track__detail step-track__formula">p = softmax(logits) · 生成时取 <code>argmax</code> 或采样 → 下一 token <strong>月</strong></span>
-              <span class="step-track__detail">示意概率: 月 ≈ 0.42(最高) · 明 0.21 · 前 0.18 · …</span>
+              <span class="step-track__detail">示意概率: 月 ≈ 0.44(最高) · 明 0.18 · 山 0.15 · 前 0.13 · 床 0.11</span>
             </div>
           </li>
         </ol>
@@ -1398,7 +1398,7 @@ Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code>
               <tr><td>④ 注意力</td><td><code>[3, 2]</code></td><td>单头:<code>Q,K,V=X·W</code> · <code>S→M→M·V·W_O</code> · 多头:按列切 h 段各算再 Concat</td><td><code>[3, 2]</code>(中间 <code>S/M</code> 是 <code>[3, 3]</code>)</td></tr>
               <tr><td>⑤⑦ Add&amp;Norm</td><td><code>[3, 2]</code></td><td><code>LayerNorm(残差相加)</code> 逐行</td><td><code>[3, 2]</code></td></tr>
               <tr><td>⑥ FFN</td><td><code>[3, 2]</code></td><td><code>ReLU(H₁·W₁+b₁)·W₂+b₂</code> 每行独立</td><td><code>[3, 2]</code>(中间 <code>[3, 4]</code>)</td></tr>
-              <tr><td>⑧⑨ LM Head</td><td><code>[3, 2]</code></td><td><code>H₂·W_lm+b_lm</code> · 取最后一行 softmax</td><td><code>[3, 5]</code> → 末行 <code>[5]</code> 概率</td></tr>
+              <tr><td>⑧⑨ LM Head</td><td><code>[3, 2]</code></td><td><code>H₂·W_lmᵀ+b_lm</code> · 取最后一行 softmax</td><td><code>[3, 5]</code> → 末行 <code>[5]</code> 概率</td></tr>
             </tbody>
           </table>
           <p class="calc-table__cap">与上文「整矩阵流水线」表一致:从 ② 到 ⑩ 主形状始终是 <code>seq_len × d_model = 3×2</code>;变的是<strong>矩阵里每个位置的数值</strong>,以及中间几步短暂撑出的 <code>3×3</code>(注意力)、<code>3×4</code>(FFN)、<code>3×5</code>(LM Head)。</p>

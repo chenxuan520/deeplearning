@@ -33,12 +33,12 @@
     { num: "20", title: "通往大模型:原理与训练", file: "chapter-20.html", part: "第五部分 · 通往大模型", core: true },
     { num: "21", title: "大模型的工程与基础设施", file: "chapter-21.html", part: "第五部分 · 通往大模型" },
     { num: "22", title: "用好大模型:Context、Harness 与 Agent", file: "chapter-22.html", part: "第五部分 · 通往大模型" },
-    { num: "23", title: "MNIST 实战:第一、二部分", file: "chapter-23.html", part: "第六部分 · 代码实战" },
-    { num: "24", title: "mini-LM 实战:第四、五部分", file: "chapter-24.html", part: "第六部分 · 代码实战" },
-    { num: "25", title: "井字棋 Q-learning 实战:强化学习", file: "chapter-25.html", part: "第六部分 · 代码实战" },
+    { num: "23", title: "MNIST 实战:把第一、二部分跑起来", file: "chapter-23.html", part: "第六部分 · 代码实战" },
+    { num: "24", title: "mini-LM 实战:把第四、五部分跑起来", file: "chapter-24.html", part: "第六部分 · 代码实战" },
+    { num: "25", title: "井字棋 Q-learning 实战:把强化学习跑起来", file: "chapter-25.html", part: "第六部分 · 代码实战" },
     { num: "26", title: "机器学习全景图", file: "chapter-26.html", part: "第七部分 · 番外" },
     { num: "27", title: "无监督与自监督学习", file: "chapter-27.html", part: "第七部分 · 番外" },
-    { num: "28", title: "决策树与随机森林", file: "chapter-28.html", part: "第七部分 · 番外" },
+    { num: "28", title: "经典机器学习:决策树与随机森林", file: "chapter-28.html", part: "第七部分 · 番外" },
     { num: "29", title: "从沙子到 CPU/GPU", file: "chapter-29.html", part: "第七部分 · 番外" }
   ];
 

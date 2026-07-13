@@ -357,7 +357,7 @@
         <h2>7. 不能偷看未来:causal mask</h2>
         <p>
           语言模型要做的事是“根据前文预测下一个词”。训练和生成时有一条铁律:
-          预测第 <var>t</var> 个词时,<strong>只能看第 1 到 <var>t</var> 个词,绝不能看到它后面的词</strong>
+          在位置 <var>t</var>(已经读入前 <var>t</var> 个词)预测第 <var>t</var>+1 个词时,<strong>只能看第 1 到 <var>t</var> 个词,绝不能看到它后面的词</strong>
           ——否则就是“偷看答案”,学不到真本事。这条铁律有个正式名字,叫
           <span class="term">causal mask(因果掩码)</span>,也叫“自回归掩码”。
         </p>

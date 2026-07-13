@@ -365,7 +365,7 @@
               <tr><td><strong>上下文窗口</strong> context window / <code>context_size</code></td><td>一次<strong>最多能塞进去多少字/token</strong>(窗口多大)</td><td><a class="xref" href="chapter-19.html">19</a></td></tr>
               <tr><td><strong>长上下文</strong> long context</td><td>把窗口做得很大(几十万 token),能一次读一本书</td><td><a class="xref" href="chapter-20.html">20</a> · <a class="xref" href="chapter-21.html">21</a></td></tr>
               <tr><td><strong>上下文学习</strong> in-context learning</td><td><strong>不改任何参数</strong>,只靠你在输入里给的例子/说明,让它临场学会做题(few-shot)</td><td><a class="xref" href="chapter-22.html">22</a></td></tr>
-              <tr><td><strong>KV cache</strong> 缓存的“上文”</td><td>生成时把<strong>已经算过的前文</strong>的中间结果存起来复用,省得每步重算</td><td><a class="xref" href="chapter-21.html">21</a></td></tr>
+              <tr><td><strong>KV cache</strong> 缓存的“上文”</td><td>生成时把<strong>已经算过的前文</strong>的中间结果存起来复用,省得每步重算</td><td><a class="xref" href="chapter-19.html#9-kv-cache-别让自回归每步都重算前文">19</a>(原理) · <a class="xref" href="chapter-21.html">21</a>(工程)</td></tr>
             </tbody>
           </table>
           <p class="calc-table__cap">同一个词,五种意思。记住:前三种都在说“<strong>能看到多少前文</strong>”,第四种是“<strong>靠前文临场学</strong>”,第五种是“<strong>把前文的计算缓存起来</strong>”。</p>

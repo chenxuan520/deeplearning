@@ -462,6 +462,7 @@ rnn_.Forward(input_sequence, hidden_sequence);     <b class="cw-tag">2</b>
 for (int t = 0; t &lt; seq_len; t++) {
   probs = Softmax(logits_t);
   loss += -log(probs[position_targets[t]]);        <b class="cw-tag">3</b>
+  grad_logits = probs;                             <b class="cw-tag">3</b>
   grad_logits[target] -= 1.0;
 }
 rnn_.Backward(grad_hidden, grad_inputs);           <b class="cw-tag">4</b>
@@ -469,7 +470,7 @@ rnn_.ApplyGradient(lr);                            <b class="cw-tag">5</b></code
           <ol class="code-walk__notes">
             <li>先把每一步真正该猜的目标词准备好:前几个位置猜“下一个真实词”,最后一个位置猜样本外面接着的那个目标词。</li>
             <li>整条前缀先走一遍前向,拿到所有时间步的隐藏状态。</li>
-            <li>每一步各算一次 softmax + 交叉熵,把损失累起来。</li>
+            <li>每一步各算一次 softmax + 交叉熵,把损失累起来;logits 梯度先抄一份概率再对目标类减 1,即 <code>probs − one-hot</code>(与第 4 章 <var>δ</var> = <var>p</var> − <var>t</var> 同形)。</li>
             <li>把所有时间步的梯度一起交给 BPTT,让误差沿时间倒着传回去。</li>
             <li>最后更新 RNN 主干和输出头参数。也就是说,训练不是“只改最后一步”,而是整条序列一起学。</li>
           </ol>

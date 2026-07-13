@@ -16,7 +16,7 @@
 
         <p class="lead">
           你已经亲手把一个完整的语言模型从一个神经元拆到了底。现在我们站远一点,看看把<a class="xref" href="chapter-19.html">第 19 章</a>那个小模型
-          <strong>放大一万倍</strong>会发生什么。这一章讲清楚三件事:大模型<strong>怎么读懂文字</strong>(分词与词嵌入)、
+          <strong>放大上千万到上亿倍</strong>会发生什么。这一章讲清楚三件事:大模型<strong>怎么读懂文字</strong>(分词与词嵌入)、
           <strong>为什么越大越强</strong>(规模定律与涌现)、以及<strong>是怎么“炼”出来的</strong>(预训练 → 微调 → 对齐 → 蒸馏)。
           讲完训练链路后,我们还会把“为什么偏偏是这几年爆发”拆成<strong>数据、算法、算力、工程</strong>四个卡点来看。
           至于它靠什么硬件跑起来、你又该怎么用好它,留给第 21、22 章。
@@ -39,7 +39,7 @@
             <span class="chain-map__sep">›</span>
             <a class="chain-map__step" href="chapter-22.html">22 用好它</a>
           </nav>
-          <p class="chain-map__note">上一站(<a class="xref" href="chapter-19.html">第 19 章</a>)你已亲手搭出迷你语言模型;<strong>本站</strong>把它放大一万倍——分词 / 词嵌入、规模定律与涌现、预训练 → SFT → RLHF → 蒸馏(全景图第 ⑦ 步);下一站(<a class="xref" href="chapter-21.html">第 21 章</a>)讲它靠什么硬件才跑得起来。</p>
+          <p class="chain-map__note">上一站(<a class="xref" href="chapter-19.html">第 19 章</a>)你已亲手搭出迷你语言模型;<strong>本站</strong>把它放大上千万到上亿倍——分词 / 词嵌入、规模定律与涌现、预训练 → SFT → RLHF → 蒸馏(全景图「放大成大模型」那一站);下一站(<a class="xref" href="chapter-21.html">第 21 章</a>)讲它靠什么硬件才跑得起来。</p>
         </div>
 
         <section class="objectives reveal">
@@ -128,7 +128,7 @@
                 <td><strong>⑤ 上下文长度</strong></td>
                 <td>一次能看多长的前文</td>
                 <td>几十个 token</td>
-                <td>数千 ~ 上百万 token</td>
+                <td>约 2k(GPT-3);现代可达上百万</td>
                 <td><a class="xref" href="chapter-20.html#更长的上下文">§9 更长的上下文</a></td>
               </tr>
               <tr>
@@ -249,7 +249,7 @@
         <div class="callout callout--note reveal">
           <span class="callout__title">和本书 mini LM 比一比</span>
           <p>
-            若 <var>L</var>=2、<var>d</var>=64、<var>V</var>=几十(字符级词表),Block 部分只有 <var>L</var>×12<var>d</var>² ≈ 几万到十万量级,再加嵌入/LM Head 也就<strong>十万级参数</strong>——和 GPT-3 差将近<strong>九</strong>个数量级,但矩阵名字、乘法形状完全一样。
+            若 <var>L</var>=2、<var>d</var>=64、<var>V</var>=几十(字符级词表),Block 部分只有 <var>L</var>×12<var>d</var>² ≈ 几万到十万量级,再加嵌入/LM Head 也就<strong>十万级参数</strong>——和 GPT-3 差大约<strong>六到七</strong>个数量级,但矩阵名字、乘法形状完全一样。
             想逐步看 <code>[n×d]×[d×d]</code> 怎么乘,可回
             <a class="xref" href="chapter-19.html#44-每一步矩阵有多大-n2-走一遍">第 19 章 §4.4</a>。
           </p>
@@ -1248,7 +1248,7 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           <table class="calc-table calc-table--wrap">
           <thead><tr><th>模态</th><th>切法</th><th>直觉</th></tr></thead>
           <tbody>
-            <tr><td>文字</td><td>BPE / 子词</td><td>本章 §2</td></tr>
+            <tr><td>文字</td><td>BPE / 子词</td><td>本章 §3</td></tr>
             <tr><td>图像</td><td>16×16 等 <span class="term">patch</span> 小块</td><td>一张图 ≈ 一句由上百个“图块词”组成的句子(<a class="xref" href="chapter-13.html">第 13 章</a>局部块思想)</td></tr>
             <tr><td>音频</td><td>频谱片段或神经 codec 码</td><td>声音也排成 token 序列</td></tr>
             <tr><td>视频</td><td>抽帧后每帧走图像流程</td><td>序列更长,更吃算力</td></tr>
@@ -1560,7 +1560,7 @@ loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">
           <details class="quiz__item">
             <summary class="quiz__q">问题 3:为什么用“向量夹角/点积”而不是“距离”来衡量词的语义相似度?</summary>
             <div class="quiz__a">
-              <p>因为训练中向量会被整体拉伸或缩放,距离会“强烈波动”,不稳定;而方向(夹角)更能反映本质的语义关系。<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦相似度只看方向,点积越大夹角越小、语义越近。</p>
+              <p>因为训练中向量会被整体拉伸或缩放,距离会“强烈波动”,不稳定;而方向(夹角)更能反映本质的语义关系。<strong>余弦相似度</strong>只看方向;未归一化的<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>还受模长影响——模长相当时点积也可作近似,点积越大夹角往往越小、语义越近。</p>
             </div>
           </details>
           <details class="quiz__item">

@@ -332,10 +332,10 @@ LayerNorm           →  H_final:  [2×4]
 若堆 N 层 Block, 从第 3 步到第 11 步重复 N 遍, 每次进出都是 [2×4]</code></pre>
 
         <h4>第 12 步:LM Head</h4>
-        <pre class="code-walk__code reveal"><code>W_lm:  [4 × 5]
+        <pre class="code-walk__code reveal"><code>W_lm:  [5 × 4]     ← vocab_size × model_dim(与 §4.1 / 代码一致:每字一行模板)
 b_lm:  长度 5
 
-logits = H_final · W_lm + b_lm    [2×4] × [4×5] = [2×5]
+logits = H_final · W_lmᵀ + b_lm    [2×4] × [4×5] = [2×5]
 
 变成 2×5: 每一行是「这个位置, 词表里 5 个字各多少分」</code></pre>
 
@@ -357,7 +357,7 @@ softmax       →  5 个概率, 挑最大的当下一个字
   ↓ ×[4×8]                  Z          [2×8]   ← 变宽
   ↓ ×[8×4]                  F          [2×4]   ← 压回
   ↓ +残差Norm               H_final    [2×4]
-  ↓ ×[4×5]                  logits     [2×5]   ← 变到词表
+  ↓ ·W_lmᵀ([4×5])           logits     [2×5]   ← 变到词表(W_lm 本身是 [5×4])
   ↓ 取第 2 行               下一个字    [5]</code></pre>
 
         <h4>换输入长度:只改行数 n</h4>
@@ -837,7 +837,7 @@ perplexity = std::exp(average_loss);                     <b class="cw-tag">2</b>
 
         <p class="muted">
           你已经亲手把一个完整的语言模型从零拆到底了。最后一章,我们站远一点看:
-          把这个小模型<strong>放大一万倍</strong>会发生什么?预训练、微调、RLHF、涌现……大模型的故事,就从这里开始。
+          把这个小模型<strong>放大上千万到上亿倍</strong>会发生什么?预训练、微调、RLHF、涌现……大模型的故事,就从这里开始。
         </p>
       </div>
     </main>

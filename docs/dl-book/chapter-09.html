@@ -398,11 +398,11 @@ if (norm &gt; grad_clip_norm_ &amp;&amp; norm &gt; 0.0) {
           </li>
           <li>
             <strong><code>warmup_steps</code> — 用多少步爬到峰值</strong>:取总步数的一小截,常见 <strong>3%~10%</strong>,或干脆“1 个 epoch”。<br />
-            <span class="muted">仓库里:MNIST = <code>steps_per_epoch</code>(1 个 epoch = 938 步);transformer = <code>epoch_num / 20</code>(≈5%)。</span>
+            <span class="muted">仓库里:MNIST = <code>steps_per_epoch</code>(1 个 epoch = 938 步,按 minibatch);transformer demo 的调度计数按 <strong>epoch</strong> 走,<code>warmup = epoch_num / 20</code>(≈5%)。</span>
           </li>
           <li>
             <strong><code>t_max</code> — 退火铺满多少步(退火终点)</strong>:一般 = <strong>整个训练的总步数</strong>,让 lr 正好在训练<strong>结束时</strong>降到底,不多不少。<br />
-            <span class="muted">仓库里:MNIST = <code>epochs × steps_per_epoch</code> = 5 × 938 = <strong>4690</strong>;transformer = <code>epoch_num</code>。</span>
+            <span class="muted">仓库里:MNIST = <code>epochs × steps_per_epoch</code> = 5 × 938 = <strong>4690</strong>(minibatch step);transformer demo = <code>epoch_num</code>(按轮计数,接口仍叫 <code>GetLR(step)</code>)。</span>
           </li>
           <li>
             <strong><code>min_lr</code> — 退火终点的最低学习率</strong>:取 <code>base_lr</code> 的一个小比例,常见 <strong>×0.1 或 ×0.01</strong>(也有人直接设 0)。<br />
