@@ -13,6 +13,7 @@ cd docs/dl-book
 | `check_anchors.py` | 跨章/跨节 `#锚点` 是否指向存在的 h2/h3 | ✅ [dl-book-check.yml](../../../.github/workflows/dl-book-check.yml) |
 | `check_structure.py` | HTML 标签配平 + 每章 h2 主编号是否连续 | ✅ 同上 |
 | `count_chars.py` | 统计全书汉字与篇幅（本地自查用） | — |
+| `build_demo_assets.sh` | 发布前生成 MNIST / 井字棋演示 JSON，随 Pages artifact 发布但不进 git | ✅ [dl-book-pages.yml](../../../.github/workflows/dl-book-pages.yml) |
 
 ---
 
@@ -58,6 +59,23 @@ python3 tools/count_chars.py --json       # JSON 输出
 ```
 
 默认扫描 `docs/dl-book/*.html`（各章 + `index.html` + `glossary.html`）。
+
+---
+
+## `build_demo_assets.sh`
+
+```bash
+tools/build_demo_assets.sh
+```
+
+这个脚本按发布产物方式生成：
+
+```text
+docs/dl-book/assets/demos/mnist/model.json
+docs/dl-book/assets/demos/tictactoe/q_table.json
+```
+
+`assets/demos/` 已在仓库根 `.gitignore` 中忽略。这些 JSON 不提交进 git，只在 GitHub Actions 的 `dl-book-pages.yml` 中生成，然后随 `docs/dl-book` 作为 Pages artifact 上传。MNIST 模型文件会通过 Actions cache 复用，cache miss 时脚本会下载 MNIST 数据并训练一次生成 `demo.v2.param`。
 
 ---
 

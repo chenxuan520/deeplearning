@@ -220,6 +220,11 @@ double TabularQLearning::epsilon() const { return config_.epsilon; }
 
 size_t TabularQLearning::q_table_size() const { return q_table_.size(); }
 
+const std::unordered_map<int, std::vector<double>> &
+TabularQLearning::q_table() const {
+  return q_table_;
+}
+
 std::string TabularQLearning::err_msg() const { return err_msg_; }
 
 } // namespace deeplearning

@@ -1,9 +1,13 @@
 #include "rl/tabular_q_learning.h"
 #include "rl/tic_tac_toe_env.h"
 
+#include <algorithm>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 using namespace std;
 using namespace deeplearning;
@@ -20,6 +24,7 @@ struct DemoOption {
   double epsilon_min = 0.05;
   double epsilon_decay = 0.9995;
   string opponent = "random";
+  string export_json;
   bool play = false;
   bool show_sample = false;
 };
@@ -35,6 +40,7 @@ void PrintUsage(const char *prog) {
        << "  --epsilon-min <double>\n"
        << "  --epsilon-decay <double>\n"
        << "  --opponent random|optimal   training opponent (default random)\n"
+       << "  --export-json <path>        export trained Q table and metrics\n"
        << "  --play                      play one game vs trained agent (stdin)\n"
        << "  --show-sample               print one greedy eval game\n"
        << "  --help\n";
@@ -69,6 +75,8 @@ bool ParseArgs(int argc, char **argv, DemoOption &option) {
       option.epsilon_decay = std::stod(need_value("--epsilon-decay"));
     } else if (arg == "--opponent") {
       option.opponent = need_value("--opponent");
+    } else if (arg == "--export-json") {
+      option.export_json = need_value("--export-json");
     } else if (arg == "--play") {
       option.play = true;
     } else if (arg == "--show-sample") {
@@ -188,6 +196,70 @@ void PrintEval(const char *title, const TabularQLearning::EvalStats &stats,
   cout << "\n";
 }
 
+void WriteEvalJson(ostream &os, const TabularQLearning::EvalStats &stats,
+                   int game_num) {
+  os << "{\"games\":" << game_num << ",\"win\":" << stats.win_num
+     << ",\"draw\":" << stats.draw_num << ",\"loss\":" << stats.loss_num
+     << ",\"winRate\":" << setprecision(12)
+     << (game_num > 0 ? stats.win_num * 1.0 / game_num : 0.0)
+     << ",\"unbeatenRate\":"
+     << (game_num > 0 ? (stats.win_num + stats.draw_num) * 1.0 / game_num
+                      : 0.0)
+     << "}";
+}
+
+bool ExportTrainingJson(const string &filename, const DemoOption &option,
+                        const TabularQLearning &agent, int train_win,
+                        int train_draw, int train_loss,
+                        const TabularQLearning::EvalStats &random_eval,
+                        const TabularQLearning::EvalStats &optimal_eval) {
+  std::ofstream os(filename, std::ios::binary | std::ios::trunc);
+  if (!os.is_open()) {
+    cout << "Open export json failed: " << filename << "\n";
+    return false;
+  }
+
+  vector<int> keys;
+  keys.reserve(agent.q_table().size());
+  for (const auto &item : agent.q_table()) {
+    keys.push_back(item.first);
+  }
+  std::sort(keys.begin(), keys.end());
+
+  os << "{\"format\":\"deeplearning.tictactoe_demo\",\"version\":1,";
+  os << "\"training\":{\"episodes\":" << option.episodes
+     << ",\"randSeed\":" << option.rand_seed << ",\"opponent\":\""
+     << option.opponent << "\",\"alpha\":" << setprecision(12) << option.alpha
+     << ",\"gamma\":" << option.gamma << ",\"epsilonStart\":"
+     << option.epsilon << ",\"epsilonMin\":" << option.epsilon_min
+     << ",\"epsilonDecay\":" << option.epsilon_decay << ",\"epsilonFinal\":"
+     << agent.epsilon() << ",\"trainWin\":" << train_win
+     << ",\"trainDraw\":" << train_draw << ",\"trainLoss\":" << train_loss
+     << ",\"qStates\":" << keys.size() << "},";
+  os << "\"evaluation\":{\"random\":";
+  WriteEvalJson(os, random_eval, option.eval_games);
+  os << ",\"optimal\":";
+  WriteEvalJson(os, optimal_eval, option.eval_games);
+  os << "},\"qTable\":{";
+  for (int i = 0; i < static_cast<int>(keys.size()); i++) {
+    if (i != 0) {
+      os << ",";
+    }
+    const int key = keys[i];
+    const auto &row = agent.q_table().at(key);
+    os << "\"" << key << "\":[";
+    for (int action = 0; action < static_cast<int>(row.size()); action++) {
+      if (action != 0) {
+        os << ",";
+      }
+      os << setprecision(12) << row[action];
+    }
+    os << "]";
+  }
+  os << "}}\n";
+  return os.good();
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -255,6 +327,15 @@ int main(int argc, char **argv) {
                      option.eval_games);
   PrintEval("Eval vs random (greedy)", random_eval, option.eval_games);
   PrintEval("Eval vs optimal (greedy)", optimal_eval, option.eval_games);
+
+  if (!option.export_json.empty()) {
+    if (!ExportTrainingJson(option.export_json, option, agent, win_total,
+                            draw_total, loss_total, random_eval,
+                            optimal_eval)) {
+      return 1;
+    }
+    cout << "Exported demo json: " << option.export_json << "\n";
+  }
 
   if (option.show_sample) {
     cout << "\n";

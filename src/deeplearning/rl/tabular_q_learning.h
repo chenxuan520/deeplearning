@@ -56,6 +56,7 @@ public:
 
   double epsilon() const;
   size_t q_table_size() const;
+  const std::unordered_map<int, std::vector<double>> &q_table() const;
   double QValue(int state_key, int action) const;
   std::string err_msg() const;
 

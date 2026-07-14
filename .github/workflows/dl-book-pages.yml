@@ -31,6 +31,32 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v6
 
+      - name: Install build tools
+        run: |
+          retry() {
+            local max=3
+            local attempt=1
+            until "$@"; do
+              if [ "$attempt" -ge "$max" ]; then
+                return 1
+              fi
+              echo "Attempt $attempt failed; retrying in 10s..."
+              attempt=$((attempt + 1))
+              sleep 10
+            done
+          }
+          retry sudo apt-get update
+          retry sudo apt-get install -y build-essential cmake wget
+
+      - name: Restore MNIST demo model cache
+        uses: actions/cache@v4
+        with:
+          path: src/demo/mnist/mnist/demo.v2.param
+          key: ${{ runner.os }}-dl-book-mnist-demo-v2-param-v1
+
+      - name: Generate demo assets
+        run: docs/dl-book/tools/build_demo_assets.sh
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
