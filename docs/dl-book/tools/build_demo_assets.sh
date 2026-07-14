@@ -18,6 +18,13 @@ retry() {
   done
 }
 
+cleanup_failed_download() {
+  local target="$1"
+  if [ -f "${target}" ] && [ ! -s "${target}" ]; then
+    rm -f "${target}"
+  fi
+}
+
 download_mnist_data() {
   mkdir -p "${SRC_DIR}/demo/mnist/mnist"
   retry wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/t10k-labels-idx1-ubyte -O "${SRC_DIR}/demo/mnist/mnist/t10k-labels-idx1-ubyte"
@@ -26,19 +33,42 @@ download_mnist_data() {
   retry wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/train-images-idx3-ubyte -O "${SRC_DIR}/demo/mnist/mnist/train-images-idx3-ubyte"
 }
 
+download_mnist_model() {
+  mkdir -p "${SRC_DIR}/demo/mnist/mnist"
+  retry wget https://github.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/demo.v2.param -O "${SRC_DIR}/demo/mnist/mnist/demo.v2.param" || cleanup_failed_download "${SRC_DIR}/demo/mnist/mnist/demo.v2.param"
+  if [ ! -s "${SRC_DIR}/demo/mnist/mnist/demo.v2.param" ]; then
+    retry wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/demo.v2.param -O "${SRC_DIR}/demo/mnist/mnist/demo.v2.param" || cleanup_failed_download "${SRC_DIR}/demo/mnist/mnist/demo.v2.param"
+  fi
+  if [ ! -s "${SRC_DIR}/demo/mnist/mnist/demo.v2.param" ] && [ ! -s "${SRC_DIR}/demo/mnist/mnist/demo.param" ]; then
+    retry wget https://github.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/demo.param -O "${SRC_DIR}/demo/mnist/mnist/demo.param" || cleanup_failed_download "${SRC_DIR}/demo/mnist/mnist/demo.param"
+  fi
+  if [ ! -s "${SRC_DIR}/demo/mnist/mnist/demo.v2.param" ] && [ ! -s "${SRC_DIR}/demo/mnist/mnist/demo.param" ]; then
+    retry wget https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta/demo.param -O "${SRC_DIR}/demo/mnist/mnist/demo.param" || cleanup_failed_download "${SRC_DIR}/demo/mnist/mnist/demo.param"
+  fi
+}
+
 build_binaries() {
   (cd "${SRC_DIR}" && ./build.sh false Release)
 }
 
 build_mnist_asset() {
   mkdir -p "${OUT_DIR}/mnist"
-  if [ ! -f "${SRC_DIR}/demo/mnist/mnist/demo.v2.param" ]; then
-    download_mnist_data
-    (cd "${SRC_DIR}" && ./bin/mnist)
+  if [ ! -s "${SRC_DIR}/demo/mnist/mnist/demo.v2.param" ] && [ ! -s "${SRC_DIR}/demo/mnist/mnist/demo.param" ]; then
+    download_mnist_model
   fi
+  local model_file=""
+  if [ -s "${SRC_DIR}/demo/mnist/mnist/demo.v2.param" ]; then
+    model_file="demo/mnist/mnist/demo.v2.param"
+  elif [ -s "${SRC_DIR}/demo/mnist/mnist/demo.param" ]; then
+    model_file="demo/mnist/mnist/demo.param"
+  else
+    echo "MNIST model snapshot not found" >&2
+    exit 1
+  fi
+  echo "Using MNIST model snapshot: ${model_file}"
   (cd "${SRC_DIR}" && ./bin/web_model_export \
     --type mlp \
-    --model demo/mnist/mnist/demo.v2.param \
+    --model "${model_file}" \
     --out ../docs/dl-book/assets/demos/mnist/model.json)
 }
 
