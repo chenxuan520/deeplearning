@@ -60,6 +60,11 @@
           </p>
         </div>
 
+        <div class="figure reveal">
+          <div data-lab="tictactoe-demo"></div>
+          <p class="figure__cap">这里直接读取发布产物里的真实 Q 表。你执 O,页面里的智能体执 X;每一步都会把合法动作的 Q 值展开给你看。</p>
+        </div>
+
         <h2>2. 第一步 · 环境:棋盘、状态编码与奖励</h2>
         <p>
           <code>TicTacToeEnv</code> 就是<a class="xref" href="chapter-12.html">第 12 章</a>的“环境”。它维护 9 格棋盘、判断输赢、在轮到智能体时返回 <code>state_key</code>。
@@ -297,5 +302,6 @@ if (option.play)
     </main>
 
     <script src="assets/book.js"></script>
+    <script src="assets/labs.js"></script>
   </body>
 </html>

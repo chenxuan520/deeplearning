@@ -1075,6 +1075,412 @@
     render();
   }
 
+  /* ===================== 书页 Demo: MNIST ===================== */
+  var MNIST_TPL =
+    '<div class="lab lab--demo">' +
+    '  <div class="lab__controls lab__controls--demo">' +
+    '    <div class="demo-toolbar">' +
+    '      <button type="button" class="button button--primary" data-mnist-act="prev">上一个样例</button>' +
+    '      <button type="button" class="button button--ghost" data-mnist-act="next">下一个样例</button>' +
+    '      <button type="button" class="button button--ghost" data-mnist-act="reshuffle">换一组样例</button>' +
+    '    </div>' +
+    '    <p class="explain" data-mnist-status>正在加载模型…</p>' +
+    '  </div>' +
+    '  <div class="lab__viz lab__viz--demo-grid">' +
+    '    <div class="formula-card">' +
+    '      <h3>当前样例</h3>' +
+    '      <div class="mnist-demo__canvas-wrap"><canvas class="mnist-demo__canvas" width="280" height="280" data-mnist-canvas></canvas></div>' +
+    '      <p class="explain" data-mnist-meta></p>' +
+    '    </div>' +
+    '    <div class="formula-card">' +
+    '      <h3>预测结果</h3>' +
+    '      <p class="formula" data-mnist-prediction>—</p>' +
+    '      <div class="mnist-demo__bars" data-mnist-bars></div>' +
+    '    </div>' +
+    '  </div>' +
+    '</div>';
+
+  function initMnistDemo(root) {
+    root.innerHTML = MNIST_TPL;
+    var modelUrl = "assets/demos/mnist/model.json";
+    var SAMPLE_COUNT = 12;
+    var DIGIT_SEGMENTS = {
+      0: [[0.2,0.1,0.8,0.1],[0.18,0.12,0.18,0.88],[0.82,0.12,0.82,0.88],[0.2,0.9,0.8,0.9]],
+      1: [[0.5,0.12,0.5,0.9],[0.34,0.26,0.5,0.12],[0.36,0.9,0.64,0.9]],
+      2: [[0.2,0.16,0.78,0.16],[0.78,0.16,0.78,0.45],[0.2,0.5,0.78,0.5],[0.2,0.5,0.2,0.82],[0.2,0.84,0.8,0.84]],
+      3: [[0.2,0.16,0.8,0.16],[0.8,0.16,0.8,0.84],[0.24,0.5,0.76,0.5],[0.2,0.84,0.78,0.84]],
+      4: [[0.22,0.16,0.22,0.55],[0.22,0.55,0.8,0.55],[0.78,0.16,0.78,0.9]],
+      5: [[0.2,0.16,0.8,0.16],[0.2,0.16,0.2,0.48],[0.2,0.5,0.78,0.5],[0.8,0.5,0.8,0.84],[0.22,0.84,0.8,0.84]],
+      6: [[0.24,0.16,0.24,0.84],[0.24,0.16,0.78,0.16],[0.24,0.5,0.76,0.5],[0.78,0.5,0.78,0.84],[0.24,0.84,0.78,0.84]],
+      7: [[0.18,0.16,0.82,0.16],[0.82,0.16,0.46,0.9]],
+      8: [[0.22,0.16,0.78,0.16],[0.22,0.16,0.22,0.84],[0.78,0.16,0.78,0.84],[0.24,0.5,0.76,0.5],[0.22,0.84,0.78,0.84]],
+      9: [[0.2,0.16,0.78,0.16],[0.2,0.16,0.2,0.5],[0.2,0.5,0.78,0.5],[0.78,0.16,0.78,0.84],[0.2,0.84,0.78,0.84]]
+    };
+
+    var state = {
+      model: null,
+      samples: [],
+      index: 0,
+      shuffleSeed: 0
+    };
+
+    function mulberry32(seed) {
+      return function () {
+        var t = seed += 0x6d2b79f5;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function relu(x) {
+      return x > 0 ? x : 0;
+    }
+
+    function softmax(values) {
+      var maxValue = Math.max.apply(null, values);
+      var exps = values.map(function (v) { return Math.exp(v - maxValue); });
+      var sum = exps.reduce(function (a, b) { return a + b; }, 0);
+      return exps.map(function (v) { return v / sum; });
+    }
+
+    function drawDigit(label, seed) {
+      var random = mulberry32(seed);
+      var data = new Array(28 * 28).fill(0);
+      var segments = DIGIT_SEGMENTS[label] || [];
+      var jitter = function (value, amount) {
+        return value + (random() - 0.5) * amount;
+      };
+      segments.forEach(function (segment) {
+        var x1 = jitter(segment[0], 0.06);
+        var y1 = jitter(segment[1], 0.06);
+        var x2 = jitter(segment[2], 0.06);
+        var y2 = jitter(segment[3], 0.06);
+        var thickness = 1.1 + random() * 0.9;
+        var steps = 36;
+        for (var step = 0; step <= steps; step++) {
+          var t = step / steps;
+          var x = x1 + (x2 - x1) * t;
+          var y = y1 + (y2 - y1) * t;
+          var cx = x * 27;
+          var cy = y * 27;
+          for (var py = 0; py < 28; py++) {
+            for (var px = 0; px < 28; px++) {
+              var dx = px - cx;
+              var dy = py - cy;
+              var dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist > thickness * 2.2) continue;
+              var value = Math.max(0, 1.0 - dist / (thickness * 2.2));
+              var idx = py * 28 + px;
+              data[idx] = Math.max(data[idx], value);
+            }
+          }
+        }
+      });
+      for (var i = 0; i < data.length; i++) {
+        data[i] = Math.min(1, Math.max(0, data[i] * (0.88 + random() * 0.26)));
+      }
+      return data;
+    }
+
+    function buildSamples() {
+      var samples = [];
+      for (var i = 0; i < SAMPLE_COUNT; i++) {
+        var label = (state.shuffleSeed + i) % 10;
+        samples.push({
+          label: label,
+          pixels: drawDigit(label, state.shuffleSeed * 97 + i * 13 + 11)
+        });
+      }
+      return samples;
+    }
+
+    function forward(pixels) {
+      var layers = [];
+      layers.push(pixels);
+      for (var layer = 1; layer < state.model.weights.length; layer++) {
+        var weight = state.model.weights[layer];
+        var bias = state.model.biases[layer];
+        var input = layers[layer - 1];
+        var output = new Array(weight.length).fill(0);
+        for (var row = 0; row < weight.length; row++) {
+          var sum = bias[row];
+          for (var col = 0; col < weight[row].length; col++) {
+            sum += weight[row][col] * input[col];
+          }
+          if (layer + 1 === state.model.weights.length) {
+            output[row] = sum;
+          } else {
+            output[row] = relu(sum);
+          }
+        }
+        layers.push(output);
+      }
+      return softmax(layers[layers.length - 1]);
+    }
+
+    function renderCanvas(sample) {
+      var canvas = root.querySelector("[data-mnist-canvas]");
+      var ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#07111f";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      for (var y = 0; y < 28; y++) {
+        for (var x = 0; x < 28; x++) {
+          var value = sample.pixels[y * 28 + x];
+          var shade = Math.round(value * 255);
+          ctx.fillStyle = "rgb(" + shade + "," + shade + "," + shade + ")";
+          ctx.fillRect(x * 10, y * 10, 10, 10);
+        }
+      }
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+    }
+
+    function renderBars(probs, label) {
+      var bars = root.querySelector("[data-mnist-bars]");
+      bars.innerHTML = probs.map(function (p, idx) {
+        var active = idx === label ? " mnist-demo__bar--truth" : "";
+        return '<div class="mnist-demo__bar-row"><span class="mnist-demo__bar-label">' + idx +
+          '</span><div class="mnist-demo__bar-track"><div class="mnist-demo__bar' + active +
+          '" style="width:' + (p * 100).toFixed(2) + '%"></div></div><span class="mnist-demo__bar-value">' +
+          (p * 100).toFixed(1) + '%</span></div>';
+      }).join("");
+    }
+
+    function render() {
+      if (!state.model || !state.samples.length) {
+        return;
+      }
+      var sample = state.samples[state.index];
+      var probs = forward(sample.pixels);
+      var prediction = 0;
+      for (var i = 1; i < probs.length; i++) {
+        if (probs[i] > probs[prediction]) prediction = i;
+      }
+      renderCanvas(sample);
+      renderBars(probs, sample.label);
+      root.querySelector("[data-mnist-status]").textContent =
+        "模型已加载。这里用内置样例数字做一次和书里同结构的前向推理。";
+      root.querySelector("[data-mnist-meta]").textContent =
+        "样例 " + (state.index + 1) + "/" + state.samples.length + "，标签 " +
+        sample.label + "。这些样例是为了书页演示稳定生成的 28×28 灰度图。";
+      root.querySelector("[data-mnist-prediction]").textContent =
+        "预测 " + prediction + " · 真值 " + sample.label;
+    }
+
+    function loadModel() {
+      fetch(modelUrl + "?cb=" + Date.now(), { cache: "no-store" })
+        .then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.json();
+        })
+        .then(function (data) {
+          state.model = data;
+          state.samples = buildSamples();
+          state.index = 0;
+          render();
+        })
+        .catch(function (err) {
+          root.querySelector("[data-mnist-status]").textContent =
+            "演示资源未就绪: " + err.message + "。Pages workflow 发布成功后这里会自动可用。";
+        });
+    }
+
+    root.querySelectorAll("[data-mnist-act]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        if (!state.model) return;
+        var action = button.getAttribute("data-mnist-act");
+        if (action === "prev") {
+          state.index = (state.index + state.samples.length - 1) % state.samples.length;
+        } else if (action === "next") {
+          state.index = (state.index + 1) % state.samples.length;
+        } else if (action === "reshuffle") {
+          state.shuffleSeed += 1;
+          state.samples = buildSamples();
+          state.index = 0;
+        }
+        render();
+      });
+    });
+
+    loadModel();
+  }
+
+  /* ===================== 书页 Demo: TicTacToe ===================== */
+  var TICTACTOE_TPL =
+    '<div class="lab lab--demo">' +
+    '  <div class="lab__controls lab__controls--demo">' +
+    '    <div class="demo-toolbar">' +
+    '      <button type="button" class="button button--primary" data-ttt-act="reset">重新开局</button>' +
+    '      <button type="button" class="button button--ghost" data-ttt-act="show-values">切换 Q 值显示</button>' +
+    '    </div>' +
+    '    <p class="explain" data-ttt-status>正在加载 Q 表…</p>' +
+    '  </div>' +
+    '  <div class="lab__viz lab__viz--demo-grid">' +
+    '    <div class="formula-card">' +
+    '      <h3>对局棋盘</h3>' +
+    '      <div class="ttt-demo__board" data-ttt-board></div>' +
+    '      <p class="explain" data-ttt-meta></p>' +
+    '    </div>' +
+    '    <div class="formula-card">' +
+    '      <h3>当前状态 Q 值</h3>' +
+    '      <div class="ttt-demo__values" data-ttt-values></div>' +
+    '    </div>' +
+    '  </div>' +
+    '</div>';
+
+  function initTictactoeDemo(root) {
+    root.innerHTML = TICTACTOE_TPL;
+    var dataUrl = "assets/demos/tictactoe/q_table.json";
+    var WIN_LINES = [
+      [0, 1, 2], [3, 4, 5], [6, 7, 8],
+      [0, 3, 6], [1, 4, 7], [2, 5, 8],
+      [0, 4, 8], [2, 4, 6]
+    ];
+    var state = {
+      data: null,
+      board: new Array(9).fill(0),
+      showValues: true,
+      message: ""
+    };
+
+    function legalActions(board) {
+      var out = [];
+      for (var i = 0; i < 9; i++) if (board[i] === 0) out.push(i);
+      return out;
+    }
+
+    function encodeBoard(board) {
+      var key = 0;
+      var base = 1;
+      for (var i = 0; i < 9; i++) {
+        key += board[i] * base;
+        base *= 3;
+      }
+      return String(key);
+    }
+
+    function result(board) {
+      for (var i = 0; i < WIN_LINES.length; i++) {
+        var line = WIN_LINES[i];
+        var a = board[line[0]];
+        if (a !== 0 && a === board[line[1]] && a === board[line[2]]) return a;
+      }
+      return legalActions(board).length ? 0 : 3;
+    }
+
+    function bestAction(board) {
+      var key = encodeBoard(board);
+      var row = (state.data.qTable && state.data.qTable[key]) || [];
+      var actions = legalActions(board);
+      if (!actions.length) return -1;
+      var best = actions[0];
+      var bestValue = row[best] || 0;
+      for (var i = 1; i < actions.length; i++) {
+        var action = actions[i];
+        var value = row[action] || 0;
+        if (value > bestValue) {
+          bestValue = value;
+          best = action;
+        }
+      }
+      return best;
+    }
+
+    function renderValues() {
+      var el = root.querySelector("[data-ttt-values]");
+      var key = encodeBoard(state.board);
+      var row = (state.data.qTable && state.data.qTable[key]) || [];
+      var actions = legalActions(state.board);
+      if (!actions.length) {
+        el.innerHTML = '<p class="muted">终局状态没有可选动作。</p>';
+        return;
+      }
+      el.innerHTML = actions.map(function (action) {
+        var value = row[action] || 0;
+        return '<div class="ttt-demo__value-row"><span>落子 ' + action +
+          '</span><span>' + value.toFixed(4) + '</span></div>';
+      }).join("");
+    }
+
+    function renderBoard() {
+      var boardEl = root.querySelector("[data-ttt-board]");
+      boardEl.innerHTML = state.board.map(function (cell, idx) {
+        var text = cell === 1 ? "X" : cell === 2 ? "O" : "";
+        var disabled = cell !== 0 || result(state.board) !== 0 ? " disabled" : "";
+        return '<button type="button" class="ttt-demo__cell" data-ttt-cell="' + idx + '"' + disabled + '>' +
+          '<span>' + text + '</span>' +
+          (state.showValues && cell === 0 && state.data && state.data.qTable ? '<small>' +
+            (((state.data.qTable[encodeBoard(state.board)] || [])[idx] || 0).toFixed(2)) + '</small>' : '') +
+          '</button>';
+      }).join("");
+      renderValues();
+      var res = result(state.board);
+      var meta = "";
+      if (res === 1) meta = "X 获胜。";
+      else if (res === 2) meta = "你执 O，这局输了。";
+      else if (res === 3) meta = "这局和棋。";
+      else meta = "你执 O，点击空格落子；X 会按训练好的 Q 表选择动作。";
+      root.querySelector("[data-ttt-meta]").textContent = meta;
+    }
+
+    function reset() {
+      state.board = new Array(9).fill(0);
+      if (state.data) {
+        var action = bestAction(state.board);
+        if (action >= 0) state.board[action] = 1;
+      }
+      renderBoard();
+    }
+
+    function onPlayerMove(action) {
+      if (state.board[action] !== 0 || result(state.board) !== 0) return;
+      state.board[action] = 2;
+      if (result(state.board) !== 0) {
+        renderBoard();
+        return;
+      }
+      var reply = bestAction(state.board);
+      if (reply >= 0) state.board[reply] = 1;
+      renderBoard();
+    }
+
+    root.addEventListener("click", function (event) {
+      var cell = event.target.closest("[data-ttt-cell]");
+      if (cell) {
+        onPlayerMove(Number(cell.getAttribute("data-ttt-cell")));
+        return;
+      }
+      var actionButton = event.target.closest("[data-ttt-act]");
+      if (!actionButton) return;
+      var action = actionButton.getAttribute("data-ttt-act");
+      if (action === "reset") {
+        reset();
+      } else if (action === "show-values") {
+        state.showValues = !state.showValues;
+        renderBoard();
+      }
+    });
+
+    fetch(dataUrl + "?cb=" + Date.now(), { cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (data) {
+        state.data = data;
+        root.querySelector("[data-ttt-status]").textContent =
+          "Q 表已加载。这里展示的是训练 30000 局后的真实评估结果和当前局面各动作的 Q 值。";
+        reset();
+      })
+      .catch(function (err) {
+        root.querySelector("[data-ttt-status]").textContent =
+          "演示资源未就绪: " + err.message + "。Pages workflow 发布成功后这里会自动可用。";
+      });
+  }
+
   /* ===================== 自动挂载 ===================== */
   var INITS = {
     neuron: initNeuron,
@@ -1084,7 +1490,9 @@
     "real-attention": initRealAttention,
     "activation-curve": initActivationCurve,
     "gradient-descent": initGradientDescent,
-    "corpus-clean": initCorpusClean
+    "corpus-clean": initCorpusClean,
+    "mnist-demo": initMnistDemo,
+    "tictactoe-demo": initTictactoeDemo
   };
 
   function mountAll() {
