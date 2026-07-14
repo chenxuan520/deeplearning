@@ -48,7 +48,12 @@ download_mnist_model() {
 }
 
 build_binaries() {
-  (cd "${SRC_DIR}" && ./build.sh false Release)
+  mkdir -p "${SRC_DIR}/build"
+  (
+    cd "${SRC_DIR}/build"
+    cmake -DENABLE_DRAW=false -DCMAKE_BUILD_TYPE=Release ..
+    cmake --build . --target mnist rl_tictactoe web_model_export -j2
+  )
 }
 
 build_mnist_asset() {
