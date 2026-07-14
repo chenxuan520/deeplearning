@@ -103,6 +103,17 @@ public:
                          int sample_num, double average_loss,
                          bool &early_stop)>
           each_sample_call = nullptr);
+  RC TrainNextTokenBatchParallel(
+      const std::vector<std::vector<int>> &input_samples,
+      const std::vector<int> &target_tokens, int batch_size, int thread_num,
+      std::function<void(int epoch_num, double average_loss, bool &early_stop)>
+          each_epoch_call = nullptr,
+      int epoch_num = 1, double learning_rate = 0.1,
+      LRScheduler *lr_scheduler = nullptr,
+      std::function<void(int epoch_num, int finished_sample_num,
+                         int sample_num, double average_loss,
+                         bool &early_stop)>
+          each_sample_call = nullptr);
 
   void set_random_seed(int seed);
   void set_backbone_type(BackboneType backbone_type);
@@ -150,6 +161,13 @@ private:
                                  double block_learning_rate,
                                  double gradient_scale);
   void ClearAccumulatedGradients();
+  void AddAccumulatedGradientsFrom(const MiniTransformerLM &source);
+  RC BackwardBatchParallel(const std::vector<std::vector<int>> &input_samples,
+                           const std::vector<int> &target_tokens,
+                           const std::vector<int> &order, int begin, int end,
+                           int thread_num, double learning_rate,
+                           double block_learning_rate, double &loss_sum,
+                           long long &loss_count);
 
 private:
   int vocab_size_ = 0;

@@ -23,6 +23,21 @@ std::vector<double> ApplyLinear(const std::vector<double> &input,
 
 double Relu(double value) { return value > 0 ? value : 0; }
 
+void AddMatrix(Matrix &target, const Matrix &source) {
+  for (int row = 0; row < static_cast<int>(target.size()); row++) {
+    for (int col = 0; col < static_cast<int>(target[row].size()); col++) {
+      target[row][col] += source[row][col];
+    }
+  }
+}
+
+void AddVector(std::vector<double> &target,
+               const std::vector<double> &source) {
+  for (int i = 0; i < static_cast<int>(target.size()); i++) {
+    target[i] += source[i];
+  }
+}
+
 } // namespace
 
 TransformerBlock::RC TransformerBlock::Init(int model_dim, int head_num,
@@ -259,6 +274,18 @@ void TransformerBlock::ClearGradients() {
   attention_norm_.ClearGradients();
   feed_forward_norm_.ClearGradients();
   self_attention_.ClearGradients();
+}
+
+void TransformerBlock::AddGradientsFrom(const TransformerBlock &source) {
+  AddMatrix(grad_feed_forward_weight_1_,
+            source.grad_feed_forward_weight_1_);
+  AddMatrix(grad_feed_forward_weight_2_,
+            source.grad_feed_forward_weight_2_);
+  AddVector(grad_feed_forward_bias_1_, source.grad_feed_forward_bias_1_);
+  AddVector(grad_feed_forward_bias_2_, source.grad_feed_forward_bias_2_);
+  attention_norm_.AddGradientsFrom(source.attention_norm_);
+  feed_forward_norm_.AddGradientsFrom(source.feed_forward_norm_);
+  self_attention_.AddGradientsFrom(source.self_attention_);
 }
 
 void TransformerBlock::set_random_seed(int seed) { rand_seed_ = seed; }

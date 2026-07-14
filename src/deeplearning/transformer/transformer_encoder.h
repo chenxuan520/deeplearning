@@ -7,6 +7,8 @@
 
 namespace deeplearning {
 
+class MiniTransformerLM;
+
 class TransformerEncoder {
 public:
   using Matrix = std::vector<std::vector<double>>;
@@ -34,6 +36,10 @@ public:
   std::string err_msg();
 
 private:
+  void AddGradientsFrom(const TransformerEncoder &source);
+
+  friend class MiniTransformerLM;
+
   int block_num_ = 0;
   int model_dim_ = 0;
   int head_num_ = 0;

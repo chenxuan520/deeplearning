@@ -54,6 +54,10 @@ private:
   RC ValidateWeightShape(const Matrix &weight, int row, int col,
                          const char *func_name);
   void InitWeight(Matrix &weight, std::mt19937 &gen);
+  void AddGradientsFrom(const TransformerBlock &source);
+
+  friend class TransformerEncoder;
+  friend class TransformerDecoder;
 
 private:
   int model_dim_ = 0;

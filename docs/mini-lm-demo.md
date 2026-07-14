@@ -10,7 +10,7 @@
 - 也支持 **UTF-8 字符级续写模型**：`--tokenizer utf8-char` 会按 Unicode codepoint 切分，一个汉字、一个英文字母、一个标点各算一个 token。它保留原有 `char` 的兼容性，同时更适合中文或中英混合语料。
 - 也支持**词级续写模型**：`--tokenizer word` 会按英文单词切分，小写化后预测下一个词，生成结果用空格拼回文本，例如 `alice was beginning to get very tired`。可用 `--max-vocab-size` 只保留高频词，词表外单词默认映射到 `<unk>`，也可用 `--unknown-policy drop` 直接丢弃，控制输出层大小和生成可读性。
 - 它**不是对话模型**。你对它说 `hello` 它不会"理解并回答 hello"——它只会沿着 `hello` 这个前缀，按训练语料的统计继续往下写字符。想要"问答/指令遵循"需要指令微调 + 大得多的模型，超出本库范围。
-- 底层是**朴素实现**（纯 `std::vector`、逐样本、无 batch、无 BLAS/SIMD、Debug 构建），算力有限。请把它当**教学/实验**用途，模型规模和语料都要按「你的机器能训得动」来选（见 [训练成本与选参](#10-训练成本与选参)）。
+- 底层是**朴素实现**（纯 `std::vector`、默认单线程、无 BLAS/SIMD、Debug 构建），算力有限。请把它当**教学/实验**用途，模型规模和语料都要按「你的机器能训得动」来选（见 [训练成本与选参](#10-训练成本与选参)）。
 
 ## 1. 构建
 
@@ -166,6 +166,7 @@ said
 | `--corpus <text>` / `--corpus-file <path>` / `--corpus-dir <dir>` | 训练语料来源 | 内联占位串 |
 | `--epochs <int>` | 训练轮数 | 800 |
 | `--batch-size <int>` | mini-batch 大小；`1` 表示沿用单样本更新 | 1 |
+| `--thread-num <int>` | mini-batch 梯度计算线程数；`1` 表示单线程 | 1 |
 | `--learning-rate <double>` | 基础学习率（内部套 `WarmupCosineLR`） | 0.01 |
 | `--log-every <int>` | 每 N 个 epoch 打印一次汇总日志 | 1 |
 | `--progress-every-sec <int>` | 单个 epoch 内每 N 秒打印进度（0=关闭） | 5 |
@@ -175,7 +176,7 @@ said
 | `--resume-checkpoint` | 从 checkpoint 恢复并继续训到 `--epochs` 指定的总轮数 | 关闭 |
 | `--no-checkpoint` | 关闭周期性 checkpoint | 关闭 |
 
-训练用逐位置 next-token 交叉熵 + Adam，学习率走线性 warmup + cosine 退火（与仓库其他 demo 同款配方）。默认 `--batch-size 1` 沿用原来的单样本更新；传入更大的 batch size 时，会先累积一批样本的梯度，再统一做一次 Adam 更新。默认每个 epoch 都会打印 loss / recent_loss / perplexity / lr / elapsed / eta，其中 loss 是当前 epoch 累计平均，recent_loss 是最近一小段样本的滑动平均；默认保存一份 checkpoint，避免长时间训练完全黑盒。
+训练用逐位置 next-token 交叉熵 + Adam，学习率走线性 warmup + cosine 退火（与仓库其他 demo 同款配方）。默认 `--batch-size 1` 沿用原来的单样本更新；传入更大的 batch size 时，会先累积一批样本的梯度，再统一做一次 Adam 更新。`--thread-num > 1` 时，每个 mini-batch 会把样本分给多个 worker 线程并行计算梯度，主线程再合并梯度并执行一次 Adam 更新；默认 `1` 仍是原来的单线程路径。默认每个 epoch 都会打印 loss / recent_loss / perplexity / lr / elapsed / eta，其中 loss 是当前 epoch 累计平均，recent_loss 是最近一小段样本的滑动平均；默认保存一份 checkpoint，避免长时间训练完全黑盒。
 
 checkpoint 由三份 sidecar 组成：
 
@@ -385,7 +386,7 @@ Vocabulary: [<unk>] [alice] [was] [beginning] [to] [get] [very] [tired]
 
 ## 10. 训练成本与选参
 
-这是**单线程、无 batch** 的朴素实现，训练时间 ≈ `样本数 × epoch数 × 每样本耗时`，其中每样本耗时对 `model-dim` 和 `context-size` 很敏感（本机实测）：
+这是纯 `std::vector` 写出来的朴素实现，默认单线程；打开 `--batch-size` 和 `--thread-num` 后可以在 mini-batch 内并行计算梯度，但没有 BLAS/SIMD 这类底层加速。训练时间主要取决于 `样本数 × epoch数 × 每样本耗时`，其中每样本耗时对 `model-dim` 和 `context-size` 很敏感（本机实测）：
 
 | 配置 | 每样本耗时 |
 |------|-----------|

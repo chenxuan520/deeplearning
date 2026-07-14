@@ -46,6 +46,9 @@ public:
 private:
   RC ValidateWeight(const Matrix &weight, const char *func_name);
   void InitProjectionWeight(Matrix &weight, std::mt19937 &gen);
+  void AddGradientsFrom(const SelfAttention &source);
+
+  friend class TransformerBlock;
 
 private:
   int model_dim_ = 0;

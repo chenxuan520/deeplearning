@@ -130,6 +130,12 @@ void TransformerDecoder::ClearGradients() {
   }
 }
 
+void TransformerDecoder::AddGradientsFrom(const TransformerDecoder &source) {
+  for (int i = 0; i < block_num_; i++) {
+    blocks_[i].AddGradientsFrom(source.blocks_[i]);
+  }
+}
+
 void TransformerDecoder::set_random_seed(int seed) { rand_seed_ = seed; }
 
 TransformerBlock *TransformerDecoder::mutable_block(int index) {

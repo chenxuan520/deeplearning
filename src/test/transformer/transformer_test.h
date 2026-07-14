@@ -503,6 +503,96 @@ TEST(MiniTransformerLM, TrainBatchCharacterModel) {
   MUST_TRUE(generated_text == "abcabcab", "batch generation mismatch");
 }
 
+TEST(MiniTransformerLM, TrainBatchParallelCharacterModel) {
+  const string corpus = "abcabcabcabcabcabc";
+  CharacterTokenizer tokenizer;
+  MUST_EQUAL(tokenizer.Init(CharacterTokenizer::BuildVocabularyFromText(corpus)),
+             CharacterTokenizer::SUCCESS);
+
+  vector<int> corpus_token_ids;
+  MUST_EQUAL(tokenizer.Encode(corpus, corpus_token_ids),
+             CharacterTokenizer::SUCCESS);
+
+  CharacterDataset dataset;
+  MUST_EQUAL(dataset.Init(corpus_token_ids, 2), CharacterDataset::SUCCESS);
+
+  vector<vector<int>> input_samples;
+  vector<int> target_tokens;
+  MUST_EQUAL(dataset.BuildNextTokenSamples(input_samples, target_tokens),
+             CharacterDataset::SUCCESS);
+
+  MiniTransformerLM model;
+  model.set_random_seed(0);
+  model.set_use_positional_encoding(false);
+  model.set_scale_embedding(true);
+  MUST_EQUAL(model.Init(tokenizer.vocab_size(), 6, 1, 12, 0),
+             MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(model.TrainNextTokenBatchParallel(input_samples, target_tokens, 4,
+                                               2, nullptr, 250, 0.1),
+             MiniTransformerLM::SUCCESS);
+
+  double average_loss = 0.0;
+  MUST_EQUAL(model.CalcNextTokenLoss(input_samples, target_tokens, average_loss),
+             MiniTransformerLM::SUCCESS);
+  MUST_TRUE(average_loss < 0.1, "parallel batch trained loss too high");
+
+  vector<int> prompt_token_ids;
+  MUST_EQUAL(tokenizer.Encode("ab", prompt_token_ids),
+             CharacterTokenizer::SUCCESS);
+
+  vector<int> generated_token_ids;
+  MUST_EQUAL(model.Generate(prompt_token_ids, 6, generated_token_ids),
+             MiniTransformerLM::SUCCESS);
+  string generated_text;
+  MUST_EQUAL(tokenizer.Decode(generated_token_ids, generated_text),
+             CharacterTokenizer::SUCCESS);
+  MUST_TRUE(generated_text == "abcabcab",
+            "parallel batch generation mismatch");
+}
+
+TEST(MiniTransformerLM, TrainBatchParallelThreadOneFallsBack) {
+  const string corpus = "abcabcabcabcabcabc";
+  CharacterTokenizer tokenizer;
+  MUST_EQUAL(tokenizer.Init(CharacterTokenizer::BuildVocabularyFromText(corpus)),
+             CharacterTokenizer::SUCCESS);
+
+  vector<int> corpus_token_ids;
+  MUST_EQUAL(tokenizer.Encode(corpus, corpus_token_ids),
+             CharacterTokenizer::SUCCESS);
+
+  CharacterDataset dataset;
+  MUST_EQUAL(dataset.Init(corpus_token_ids, 2), CharacterDataset::SUCCESS);
+
+  vector<vector<int>> input_samples;
+  vector<int> target_tokens;
+  MUST_EQUAL(dataset.BuildNextTokenSamples(input_samples, target_tokens),
+             CharacterDataset::SUCCESS);
+
+  MiniTransformerLM batch_model;
+  batch_model.set_random_seed(3);
+  batch_model.set_use_positional_encoding(false);
+  batch_model.set_scale_embedding(true);
+  MUST_EQUAL(batch_model.Init(tokenizer.vocab_size(), 6, 1, 12, 0),
+             MiniTransformerLM::SUCCESS);
+
+  MiniTransformerLM fallback_model = batch_model;
+  MUST_EQUAL(batch_model.TrainNextTokenBatch(input_samples, target_tokens, 4,
+                                             nullptr, 20, 0.05),
+             MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(fallback_model.TrainNextTokenBatchParallel(
+                 input_samples, target_tokens, 4, 1, nullptr, 20, 0.05),
+             MiniTransformerLM::SUCCESS);
+
+  const auto &batch_weight = batch_model.output_weight();
+  const auto &fallback_weight = fallback_model.output_weight();
+  for (int row = 0; row < static_cast<int>(batch_weight.size()); row++) {
+    for (int col = 0; col < static_cast<int>(batch_weight[row].size()); col++) {
+      MUST_TRUE(NearlyEqual(batch_weight[row][col], fallback_weight[row][col]),
+                "thread-one fallback output weight mismatch");
+    }
+  }
+}
+
 TEST(MiniTransformerLM, TrainBatchSingleBlockDecoderCharacterModel) {
   const string corpus = "abcabcabcabcabcabc";
   CharacterTokenizer tokenizer;

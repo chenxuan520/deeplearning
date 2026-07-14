@@ -148,6 +148,13 @@ void LayerNorm::ClearGradients() {
   grad_bias_.assign(feature_dim_, 0.0);
 }
 
+void LayerNorm::AddGradientsFrom(const LayerNorm &source) {
+  for (int i = 0; i < feature_dim_; i++) {
+    grad_scale_[i] += source.grad_scale_[i];
+    grad_bias_[i] += source.grad_bias_[i];
+  }
+}
+
 LayerNorm::RC LayerNorm::set_scale(const std::vector<double> &scale) {
   if (!is_init_) {
     err_msg_ = "[LayerNorm::set_scale] LayerNorm not init";

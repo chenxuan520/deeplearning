@@ -72,6 +72,7 @@ struct Option {
   int checkpoint_every = 1;
   int progress_every_sec = 5;
   int batch_size = 1;
+  int thread_num = 1;
   double learning_rate = 0.01;
   double early_stop_loss = 0.02;
   double temperature = 1.0;
@@ -141,6 +142,8 @@ void PrintCommandUsage(const char *prog, const string &verb) {
          << "  --epochs <int>\n"
          << "  --batch-size <int>          train with a minibatch size "
             "(default 1)\n"
+         << "  --thread-num <int>          worker threads for minibatch "
+            "gradient calculation (default 1)\n"
          << "  --learning-rate <double>\n";
     cout << "  --log-every <int>           print epoch summary every N epochs "
             "(default 1)\n"
@@ -199,6 +202,8 @@ bool ParseArgs(int argc, char **argv, int start, Option &option) {
       option.epoch_num = std::stoi(need_value("--epochs"));
     } else if (arg == "--batch-size") {
       option.batch_size = std::stoi(need_value("--batch-size"));
+    } else if (arg == "--thread-num") {
+      option.thread_num = std::stoi(need_value("--thread-num"));
     } else if (arg == "--learning-rate") {
       option.learning_rate = std::stod(need_value("--learning-rate"));
     } else if (arg == "--log-every") {
@@ -1247,9 +1252,9 @@ int RunTrain(const Option &option) {
     return -1;
   }
   if (option.epoch_num <= 0 || option.batch_size <= 0 ||
-      option.learning_rate <= 0.0) {
-    cout << "Invalid training option (epochs, batch-size and learning-rate "
-            "must be > 0)"
+      option.thread_num <= 0 || option.learning_rate <= 0.0) {
+    cout << "Invalid training option (epochs, batch-size, thread-num and "
+            "learning-rate must be > 0)"
          << endl;
     return -1;
   }
@@ -1320,6 +1325,7 @@ int RunTrain(const Option &option) {
        << " vocab_size: " << TokenizerVocabSize(tokenizer) << endl;
   cout << "Epochs: " << start_epoch << " -> " << option.epoch_num
        << " batch_size: " << option.batch_size
+       << " thread_num: " << option.thread_num
        << " learning_rate: " << option.learning_rate
        << " warmup_epochs: " << warmup_epochs << endl;
   if (option.no_checkpoint) {
@@ -1417,13 +1423,20 @@ int RunTrain(const Option &option) {
       }
     };
 
-    MiniTransformerLM::RC train_rc =
-        option.batch_size > 1
-            ? model.TrainNextTokenBatch(input_samples, target_tokens,
-                                        option.batch_size, epoch_callback, 1,
-                                        current_lr, nullptr, sample_callback)
-            : model.TrainNextToken(input_samples, target_tokens, epoch_callback,
-                                   1, current_lr, nullptr, sample_callback);
+    MiniTransformerLM::RC train_rc = MiniTransformerLM::SUCCESS;
+    if (option.batch_size > 1 && option.thread_num > 1) {
+      train_rc = model.TrainNextTokenBatchParallel(
+          input_samples, target_tokens, option.batch_size, option.thread_num,
+          epoch_callback, 1, current_lr, nullptr, sample_callback);
+    } else if (option.batch_size > 1) {
+      train_rc = model.TrainNextTokenBatch(
+          input_samples, target_tokens, option.batch_size, epoch_callback, 1,
+          current_lr, nullptr, sample_callback);
+    } else {
+      train_rc = model.TrainNextToken(input_samples, target_tokens,
+                                      epoch_callback, 1, current_lr, nullptr,
+                                      sample_callback);
+    }
     if (train_rc != MiniTransformerLM::SUCCESS) {
       cout << "Train failed: " << model.err_msg() << endl;
       return -1;

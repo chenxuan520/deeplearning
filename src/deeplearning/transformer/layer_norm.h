@@ -36,6 +36,10 @@ public:
   const std::vector<double> &bias() const;
 
 private:
+  void AddGradientsFrom(const LayerNorm &source);
+
+  friend class TransformerBlock;
+
   int feature_dim_ = 0;
   double epsilon_ = 1e-6;
   std::vector<double> scale_;

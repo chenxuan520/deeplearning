@@ -6,6 +6,7 @@
 #include <cmath>
 #include <limits>
 #include <random>
+#include <thread>
 
 namespace deeplearning {
 namespace {
@@ -74,6 +75,21 @@ std::vector<int> BuildPositionTargets(const std::vector<int> &sample,
   }
   position_targets.back() = target_token;
   return position_targets;
+}
+
+void AddMatrix(Matrix &target, const Matrix &source) {
+  for (int row = 0; row < static_cast<int>(target.size()); row++) {
+    for (int col = 0; col < static_cast<int>(target[row].size()); col++) {
+      target[row][col] += source[row][col];
+    }
+  }
+}
+
+void AddVector(std::vector<double> &target,
+               const std::vector<double> &source) {
+  for (int i = 0; i < static_cast<int>(target.size()); i++) {
+    target[i] += source[i];
+  }
 }
 
 } // namespace
@@ -607,6 +623,93 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextTokenBatch(
   return SUCCESS;
 }
 
+MiniTransformerLM::RC MiniTransformerLM::TrainNextTokenBatchParallel(
+    const std::vector<std::vector<int>> &input_samples,
+    const std::vector<int> &target_tokens, int batch_size, int thread_num,
+    std::function<void(int epoch_num, double average_loss, bool &early_stop)>
+        each_epoch_call,
+    int epoch_num, double learning_rate, LRScheduler *lr_scheduler,
+    std::function<void(int epoch_num, int finished_sample_num, int sample_num,
+                       double average_loss, bool &early_stop)>
+        each_sample_call) {
+  if (!is_init_) {
+    err_msg_ =
+        "[MiniTransformerLM::TrainNextTokenBatchParallel] MiniTransformerLM "
+        "not init";
+    return NOT_INIT;
+  }
+  if (input_samples.empty() || input_samples.size() != target_tokens.size() ||
+      epoch_num <= 0 || learning_rate <= 0 || batch_size <= 0 ||
+      thread_num <= 0) {
+    err_msg_ =
+        "[MiniTransformerLM::TrainNextTokenBatchParallel] Invalid training "
+        "input";
+    return INVALID_DATA;
+  }
+  if (thread_num == 1 || batch_size == 1) {
+    return TrainNextTokenBatch(input_samples, target_tokens, batch_size,
+                               each_epoch_call, epoch_num, learning_rate,
+                               lr_scheduler, each_sample_call);
+  }
+
+  std::vector<int> order(input_samples.size(), 0);
+  for (int i = 0; i < static_cast<int>(input_samples.size()); i++) {
+    order[i] = i;
+  }
+
+  for (int epoch = 0; epoch < epoch_num; epoch++) {
+    std::shuffle(order.begin(), order.end(), train_rng_);
+    const double epoch_learning_rate =
+        lr_scheduler != nullptr ? lr_scheduler->GetLR(epoch) : learning_rate;
+    const double block_learning_rate =
+        block_num_ == 0 ? epoch_learning_rate
+                        : epoch_learning_rate * block_learning_rate_scale_;
+    double loss_sum = 0.0;
+    long long loss_count = 0;
+    bool stop_epoch = false;
+
+    for (int batch_begin = 0; batch_begin < static_cast<int>(order.size());
+         batch_begin += batch_size) {
+      const int batch_end =
+          std::min(batch_begin + batch_size, static_cast<int>(order.size()));
+      double batch_loss_sum = 0.0;
+      long long batch_loss_count = 0;
+      auto rc = BackwardBatchParallel(input_samples, target_tokens, order,
+                                      batch_begin, batch_end, thread_num,
+                                      epoch_learning_rate, block_learning_rate,
+                                      batch_loss_sum, batch_loss_count);
+      if (rc != SUCCESS) {
+        ClearAccumulatedGradients();
+        return rc;
+      }
+      const int batch_sample_num = batch_end - batch_begin;
+      ApplyAccumulatedGradients(epoch_learning_rate, block_learning_rate,
+                                1.0 / batch_sample_num);
+      loss_sum += batch_loss_sum;
+      loss_count += batch_loss_count;
+
+      if (each_sample_call != nullptr) {
+        each_sample_call(epoch, batch_end, static_cast<int>(input_samples.size()),
+                         loss_count == 0 ? 0.0 : loss_sum / loss_count,
+                         stop_epoch);
+      }
+      if (stop_epoch) {
+        break;
+      }
+    }
+
+    bool early_stop = stop_epoch;
+    if (each_epoch_call != nullptr) {
+      each_epoch_call(epoch, loss_count == 0 ? 0.0 : loss_sum / loss_count,
+                      early_stop);
+    }
+    if (early_stop) {
+      break;
+    }
+  }
+  return SUCCESS;
+}
+
 MiniTransformerLM::RC
 MiniTransformerLM::BackwardSample(const std::vector<int> &sample,
                                   int target_token, double learning_rate,
@@ -750,12 +853,81 @@ void MiniTransformerLM::ApplyAccumulatedGradients(double learning_rate,
   ClearAccumulatedGradients();
 }
 
+void MiniTransformerLM::AddAccumulatedGradientsFrom(
+    const MiniTransformerLM &source) {
+  AddMatrix(grad_output_weight_, source.grad_output_weight_);
+  AddVector(grad_output_bias_, source.grad_output_bias_);
+  AddMatrix(grad_embedding_, source.grad_embedding_);
+  if (backbone_type_ == BACKBONE_DECODER) {
+    decoder_.AddGradientsFrom(source.decoder_);
+  } else {
+    encoder_.AddGradientsFrom(source.encoder_);
+  }
+}
+
 void MiniTransformerLM::ClearAccumulatedGradients() {
   grad_output_weight_.assign(vocab_size_, std::vector<double>(model_dim_, 0));
   grad_output_bias_.assign(vocab_size_, 0);
   grad_embedding_.assign(vocab_size_, std::vector<double>(model_dim_, 0));
   encoder_.ClearGradients();
   decoder_.ClearGradients();
+}
+
+MiniTransformerLM::RC MiniTransformerLM::BackwardBatchParallel(
+    const std::vector<std::vector<int>> &input_samples,
+    const std::vector<int> &target_tokens, const std::vector<int> &order,
+    int begin, int end, int thread_num, double learning_rate,
+    double block_learning_rate, double &loss_sum, long long &loss_count) {
+  ClearAccumulatedGradients();
+
+  const int batch_sample_num = end - begin;
+  const int worker_num = std::min(thread_num, batch_sample_num);
+  std::vector<MiniTransformerLM> workers;
+  workers.reserve(worker_num);
+  for (int i = 0; i < worker_num; i++) {
+    workers.push_back(*this);
+    workers.back().ClearAccumulatedGradients();
+  }
+
+  std::vector<RC> worker_rc(worker_num, SUCCESS);
+  std::vector<double> worker_loss_sum(worker_num, 0.0);
+  std::vector<long long> worker_loss_count(worker_num, 0);
+  std::vector<std::thread> threads;
+  threads.reserve(worker_num);
+
+  for (int worker_idx = 0; worker_idx < worker_num; worker_idx++) {
+    threads.emplace_back([&, worker_idx]() {
+      for (int order_pos = begin + worker_idx; order_pos < end;
+           order_pos += worker_num) {
+        const int sample_idx = order[order_pos];
+        auto rc = workers[worker_idx].BackwardSample(
+            input_samples[sample_idx], target_tokens[sample_idx],
+            learning_rate, block_learning_rate, true,
+            worker_loss_sum[worker_idx], worker_loss_count[worker_idx]);
+        if (rc != SUCCESS) {
+          worker_rc[worker_idx] = rc;
+          return;
+        }
+      }
+    });
+  }
+
+  for (auto &thread : threads) {
+    thread.join();
+  }
+
+  loss_sum = 0.0;
+  loss_count = 0;
+  for (int worker_idx = 0; worker_idx < worker_num; worker_idx++) {
+    if (worker_rc[worker_idx] != SUCCESS) {
+      err_msg_ = workers[worker_idx].err_msg();
+      return worker_rc[worker_idx];
+    }
+    loss_sum += worker_loss_sum[worker_idx];
+    loss_count += worker_loss_count[worker_idx];
+    AddAccumulatedGradientsFrom(workers[worker_idx]);
+  }
+  return SUCCESS;
 }
 
 void MiniTransformerLM::set_random_seed(int seed) {

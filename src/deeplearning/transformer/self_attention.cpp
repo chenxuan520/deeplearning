@@ -283,6 +283,17 @@ void SelfAttention::ClearGradients() {
   grad_output_weight_.assign(model_dim_, std::vector<double>(model_dim_, 0));
 }
 
+void SelfAttention::AddGradientsFrom(const SelfAttention &source) {
+  for (int row = 0; row < model_dim_; row++) {
+    for (int col = 0; col < model_dim_; col++) {
+      grad_query_weight_[row][col] += source.grad_query_weight_[row][col];
+      grad_key_weight_[row][col] += source.grad_key_weight_[row][col];
+      grad_value_weight_[row][col] += source.grad_value_weight_[row][col];
+      grad_output_weight_[row][col] += source.grad_output_weight_[row][col];
+    }
+  }
+}
+
 void SelfAttention::set_random_seed(int seed) { rand_seed_ = seed; }
 
 SelfAttention::RC SelfAttention::set_query_weight(const Matrix &weight) {

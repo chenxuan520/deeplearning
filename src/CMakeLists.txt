@@ -18,6 +18,7 @@ set(PROJECT_ROOT_PATH .)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+find_package(Threads REQUIRED)
 
 # default is Release
 set(CMAKE_BUILD_TYPE "Debug")
@@ -44,6 +45,7 @@ file(GLOB_RECURSE DEEPLEARNING_SOURCES CONFIGURE_DEPENDS
 
 add_library(deeplearning STATIC ${DEEPLEARNING_SOURCES})
 target_include_directories(deeplearning PUBLIC ${PROJECT_SOURCE_DIR}/deeplearning)
+target_link_libraries(deeplearning PUBLIC Threads::Threads)
 
 add_library(drawtool STATIC ${PROJECT_SOURCE_DIR}/drawtool/matplot_draw.cpp)
 target_include_directories(drawtool PUBLIC ${PROJECT_SOURCE_DIR}/drawtool)
