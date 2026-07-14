@@ -56,6 +56,12 @@ jobs:
           path: src/demo/mnist/mnist/demo.v2.param
           key: ${{ runner.os }}-dl-book-mnist-demo-v2-param-v1
 
+      - name: Restore TicTacToe demo asset cache
+        uses: actions/cache@v4
+        with:
+          path: docs/dl-book/assets/demos/tictactoe/q_table.json
+          key: ${{ runner.os }}-dl-book-tictactoe-q-table-v2
+
       - name: Generate demo assets
         run: docs/dl-book/tools/build_demo_assets.sh
 

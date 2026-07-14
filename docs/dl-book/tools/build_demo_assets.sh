@@ -79,6 +79,10 @@ build_mnist_asset() {
 
 build_tictactoe_asset() {
   mkdir -p "${OUT_DIR}/tictactoe"
+  if [ -s "${OUT_DIR}/tictactoe/q_table.json" ]; then
+    echo "Using cached TicTacToe demo asset: ${OUT_DIR}/tictactoe/q_table.json"
+    return
+  fi
   (cd "${SRC_DIR}" && ./bin/rl_tictactoe \
     --episodes 300000 \
     --eval-games 1000 \

@@ -75,7 +75,7 @@ docs/dl-book/assets/demos/mnist/model.json
 docs/dl-book/assets/demos/tictactoe/q_table.json
 ```
 
-`assets/demos/` 已在仓库根 `.gitignore` 中忽略。这些 JSON 不提交进 git，只在 GitHub Actions 的 `dl-book-pages.yml` 中生成，然后随 `docs/dl-book` 作为 Pages artifact 上传。MNIST 模型文件会通过 Actions cache 复用，cache miss 时脚本会下载 MNIST 数据并训练一次生成 `demo.v2.param`。
+`assets/demos/` 已在仓库根 `.gitignore` 中忽略。这些 JSON 不提交进 git，只在 GitHub Actions 的 `dl-book-pages.yml` 中生成，然后随 `docs/dl-book` 作为 Pages artifact 上传。MNIST 模型文件会通过 Actions cache 复用，cache miss 时脚本会下载/回退模型快照再导出 JSON。井字棋的 `q_table.json` 也会通过 Actions cache 复用，cache miss 时才重新训练并导出。
 
 ---
 
