@@ -63,6 +63,34 @@
     return exps.map(function (v) { return v / sum; });
   }
 
+  function loadDemoJsonWithFallback(relativePath) {
+    var bases = [".", "https://chenxuan520.github.io/deeplearning"];
+    var lastError = null;
+    function tryIndex(index) {
+      if (index >= bases.length) {
+        return Promise.reject(lastError || new Error("demo asset unavailable"));
+      }
+      var base = bases[index];
+      var url = (base === "." ? "" : base) + "/" + relativePath;
+      return fetch(url + "?cb=" + Date.now(), { cache: "no-store" })
+        .then(function (r) {
+          if (!r.ok) {
+            throw new Error("HTTP " + r.status);
+          }
+          var type = r.headers.get("content-type") || "";
+          if (type.indexOf("application/json") === -1) {
+            throw new Error("non-json response");
+          }
+          return r.json();
+        })
+        .catch(function (err) {
+          lastError = err;
+          return tryIndex(index + 1);
+        });
+    }
+    return tryIndex(0);
+  }
+
   /* ===================== 1. 神经元实验台 ===================== */
   var NEURON_TPL =
     '<div class="lab">' +
@@ -1102,7 +1130,7 @@
 
   function initMnistDemo(root) {
     root.innerHTML = MNIST_TPL;
-    var modelUrl = "assets/demos/mnist/model.json";
+    var modelPath = "assets/demos/mnist/model.json";
     var SAMPLE_COUNT = 12;
     var DIGIT_SEGMENTS = {
       0: [[0.2,0.1,0.8,0.1],[0.18,0.12,0.18,0.88],[0.82,0.12,0.82,0.88],[0.2,0.9,0.8,0.9]],
@@ -1271,11 +1299,7 @@
     }
 
     function loadModel() {
-      fetch(modelUrl + "?cb=" + Date.now(), { cache: "no-store" })
-        .then(function (r) {
-          if (!r.ok) throw new Error("HTTP " + r.status);
-          return r.json();
-        })
+      loadDemoJsonWithFallback(modelPath)
         .then(function (data) {
           state.model = data;
           state.samples = buildSamples();
@@ -1333,7 +1357,7 @@
 
   function initTictactoeDemo(root) {
     root.innerHTML = TICTACTOE_TPL;
-    var dataUrl = "assets/demos/tictactoe/q_table.json";
+    var dataPath = "assets/demos/tictactoe/q_table.json";
     var WIN_LINES = [
       [0, 1, 2], [3, 4, 5], [6, 7, 8],
       [0, 3, 6], [1, 4, 7], [2, 5, 8],
@@ -1464,11 +1488,7 @@
       }
     });
 
-    fetch(dataUrl + "?cb=" + Date.now(), { cache: "no-store" })
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      })
+    loadDemoJsonWithFallback(dataPath)
       .then(function (data) {
         state.data = data;
         root.querySelector("[data-ttt-status]").textContent =
