@@ -1108,7 +1108,6 @@
     '<div class="lab lab--demo">' +
     '  <div class="lab__controls lab__controls--demo">' +
     '    <div class="demo-toolbar">' +
-    '      <button type="button" class="button button--primary" data-mnist-act="predict">识别</button>' +
     '      <button type="button" class="button button--ghost" data-mnist-act="clear">清除重写</button>' +
     '    </div>' +
     '    <p class="explain" data-mnist-status>正在加载模型…</p>' +
@@ -1428,8 +1427,6 @@
       var action = actionButton.getAttribute("data-mnist-act");
       if (action === "clear") {
         clearAll();
-      } else if (action === "predict") {
-        predictCurrentInput();
       }
     });
 
@@ -1611,7 +1608,7 @@
       .then(function (data) {
         state.data = data;
         root.querySelector("[data-ttt-status]").textContent =
-          "Q 表已加载。这里展示的是训练 30000 局后的真实评估结果和当前局面各动作的 Q 值。";
+          "Q 表已加载。这里展示的是导出的真实评估结果和当前局面各动作的 Q 值。";
         reset();
       })
       .catch(function (err) {

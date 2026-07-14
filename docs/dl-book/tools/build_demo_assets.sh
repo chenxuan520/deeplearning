@@ -80,7 +80,7 @@ build_mnist_asset() {
 build_tictactoe_asset() {
   mkdir -p "${OUT_DIR}/tictactoe"
   (cd "${SRC_DIR}" && ./bin/rl_tictactoe \
-    --episodes 30000 \
+    --episodes 300000 \
     --eval-games 1000 \
     --rand-seed 0 \
     --export-json ../docs/dl-book/assets/demos/tictactoe/q_table.json)
