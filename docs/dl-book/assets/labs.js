@@ -1108,17 +1108,22 @@
     '<div class="lab lab--demo">' +
     '  <div class="lab__controls lab__controls--demo">' +
     '    <div class="demo-toolbar">' +
-    '      <button type="button" class="button button--primary" data-mnist-act="prev">上一个样例</button>' +
-    '      <button type="button" class="button button--ghost" data-mnist-act="next">下一个样例</button>' +
-    '      <button type="button" class="button button--ghost" data-mnist-act="reshuffle">换一组样例</button>' +
+    '      <button type="button" class="button button--primary" data-mnist-act="predict">识别</button>' +
+    '      <button type="button" class="button button--ghost" data-mnist-act="clear">清除重写</button>' +
     '    </div>' +
     '    <p class="explain" data-mnist-status>正在加载模型…</p>' +
     '  </div>' +
     '  <div class="lab__viz lab__viz--demo-grid">' +
     '    <div class="formula-card">' +
-    '      <h3>当前样例</h3>' +
-    '      <div class="mnist-demo__canvas-wrap"><canvas class="mnist-demo__canvas" width="280" height="280" data-mnist-canvas></canvas></div>' +
-    '      <p class="explain" data-mnist-meta></p>' +
+    '      <h3>手写输入</h3>' +
+    '      <div class="mnist-demo__canvas-wrap">' +
+    '        <canvas class="mnist-demo__canvas" width="280" height="280" data-mnist-canvas></canvas>' +
+    '        <span class="mnist-demo__hint" data-mnist-hint>在这里写一个 0-9 的数字</span>' +
+    '      </div>' +
+    '      <div class="mnist-demo__preview-row">' +
+    '        <canvas class="mnist-demo__preview" width="28" height="28" data-mnist-preview></canvas>' +
+    '        <p class="explain" data-mnist-meta>右侧会显示当前画板下采样到 28x28 后的模型输入。</p>' +
+    '      </div>' +
     '    </div>' +
     '    <div class="formula-card">' +
     '      <h3>预测结果</h3>' +
@@ -1131,38 +1136,42 @@
   function initMnistDemo(root) {
     root.innerHTML = MNIST_TPL;
     var modelPath = "assets/demos/mnist/model.json";
-    var SAMPLE_COUNT = 12;
-    var DIGIT_SEGMENTS = {
-      0: [[0.2,0.1,0.8,0.1],[0.18,0.12,0.18,0.88],[0.82,0.12,0.82,0.88],[0.2,0.9,0.8,0.9]],
-      1: [[0.5,0.12,0.5,0.9],[0.34,0.26,0.5,0.12],[0.36,0.9,0.64,0.9]],
-      2: [[0.2,0.16,0.78,0.16],[0.78,0.16,0.78,0.45],[0.2,0.5,0.78,0.5],[0.2,0.5,0.2,0.82],[0.2,0.84,0.8,0.84]],
-      3: [[0.2,0.16,0.8,0.16],[0.8,0.16,0.8,0.84],[0.24,0.5,0.76,0.5],[0.2,0.84,0.78,0.84]],
-      4: [[0.22,0.16,0.22,0.55],[0.22,0.55,0.8,0.55],[0.78,0.16,0.78,0.9]],
-      5: [[0.2,0.16,0.8,0.16],[0.2,0.16,0.2,0.48],[0.2,0.5,0.78,0.5],[0.8,0.5,0.8,0.84],[0.22,0.84,0.8,0.84]],
-      6: [[0.24,0.16,0.24,0.84],[0.24,0.16,0.78,0.16],[0.24,0.5,0.76,0.5],[0.78,0.5,0.78,0.84],[0.24,0.84,0.78,0.84]],
-      7: [[0.18,0.16,0.82,0.16],[0.82,0.16,0.46,0.9]],
-      8: [[0.22,0.16,0.78,0.16],[0.22,0.16,0.22,0.84],[0.78,0.16,0.78,0.84],[0.24,0.5,0.76,0.5],[0.22,0.84,0.78,0.84]],
-      9: [[0.2,0.16,0.78,0.16],[0.2,0.16,0.2,0.5],[0.2,0.5,0.78,0.5],[0.78,0.16,0.78,0.84],[0.2,0.84,0.78,0.84]]
-    };
-
+    var SIZE = 280;
     var state = {
       model: null,
-      samples: [],
-      index: 0,
-      shuffleSeed: 0
+      drawing: false,
+      hasInk: false,
+      lastPoint: null
     };
+    var canvas = root.querySelector("[data-mnist-canvas]");
+    var ctx = canvas.getContext("2d");
+    var preview = root.querySelector("[data-mnist-preview]");
+    var previewCtx = preview.getContext("2d");
+    var hint = root.querySelector("[data-mnist-hint]");
 
-    function mulberry32(seed) {
-      return function () {
-        var t = seed += 0x6d2b79f5;
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-      };
-    }
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 18;
+    ctx.strokeStyle = "#f8fbff";
+    ctx.fillStyle = ctx.strokeStyle;
 
-    function relu(x) {
-      return x > 0 ? x : 0;
+    function activateValue(x) {
+      var name = state.model && state.model.config && state.model.config.activation;
+      if (name === "relu") return x > 0 ? x : 0;
+      if (name === "tanh") return Math.tanh(x);
+      if (name === "leaky_relu") return x > 0 ? x : 0.01 * x;
+      if (name === "gelu") {
+        var sign = x < 0 ? -1 : 1;
+        var ax = Math.abs(x / Math.SQRT2);
+        var t = 1 / (1 + 0.3275911 * ax);
+        var erfApprox =
+          sign *
+          (1 -
+            ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t +
+              0.254829592) * t * Math.exp(-ax * ax));
+        return 0.5 * x * (1 + erfApprox);
+      }
+      return 1 / (1 + Math.exp(-x));
     }
 
     function softmax(values) {
@@ -1170,57 +1179,6 @@
       var exps = values.map(function (v) { return Math.exp(v - maxValue); });
       var sum = exps.reduce(function (a, b) { return a + b; }, 0);
       return exps.map(function (v) { return v / sum; });
-    }
-
-    function drawDigit(label, seed) {
-      var random = mulberry32(seed);
-      var data = new Array(28 * 28).fill(0);
-      var segments = DIGIT_SEGMENTS[label] || [];
-      var jitter = function (value, amount) {
-        return value + (random() - 0.5) * amount;
-      };
-      segments.forEach(function (segment) {
-        var x1 = jitter(segment[0], 0.06);
-        var y1 = jitter(segment[1], 0.06);
-        var x2 = jitter(segment[2], 0.06);
-        var y2 = jitter(segment[3], 0.06);
-        var thickness = 1.1 + random() * 0.9;
-        var steps = 36;
-        for (var step = 0; step <= steps; step++) {
-          var t = step / steps;
-          var x = x1 + (x2 - x1) * t;
-          var y = y1 + (y2 - y1) * t;
-          var cx = x * 27;
-          var cy = y * 27;
-          for (var py = 0; py < 28; py++) {
-            for (var px = 0; px < 28; px++) {
-              var dx = px - cx;
-              var dy = py - cy;
-              var dist = Math.sqrt(dx * dx + dy * dy);
-              if (dist > thickness * 2.2) continue;
-              var value = Math.max(0, 1.0 - dist / (thickness * 2.2));
-              var idx = py * 28 + px;
-              data[idx] = Math.max(data[idx], value);
-            }
-          }
-        }
-      });
-      for (var i = 0; i < data.length; i++) {
-        data[i] = Math.min(1, Math.max(0, data[i] * (0.88 + random() * 0.26)));
-      }
-      return data;
-    }
-
-    function buildSamples() {
-      var samples = [];
-      for (var i = 0; i < SAMPLE_COUNT; i++) {
-        var label = (state.shuffleSeed + i) % 10;
-        samples.push({
-          label: label,
-          pixels: drawDigit(label, state.shuffleSeed * 97 + i * 13 + 11)
-        });
-      }
-      return samples;
     }
 
     function forward(pixels) {
@@ -1231,45 +1189,183 @@
         var bias = state.model.biases[layer];
         var input = layers[layer - 1];
         var output = new Array(weight.length).fill(0);
+        var isLastLayer = layer + 1 === state.model.weights.length;
         for (var row = 0; row < weight.length; row++) {
           var sum = bias[row];
           for (var col = 0; col < weight[row].length; col++) {
             sum += weight[row][col] * input[col];
           }
-          if (layer + 1 === state.model.weights.length) {
-            output[row] = sum;
+          if (isLastLayer) {
+            output[row] = state.model.config && state.model.config.softmax === "none"
+              ? activateValue(sum)
+              : sum;
           } else {
-            output[row] = relu(sum);
+            output[row] = activateValue(sum);
           }
         }
         layers.push(output);
       }
-      return softmax(layers[layers.length - 1]);
+      var logits = layers[layers.length - 1];
+      return state.model.config && state.model.config.softmax === "none" ? logits : softmax(logits);
     }
 
-    function renderCanvas(sample) {
-      var canvas = root.querySelector("[data-mnist-canvas]");
-      var ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#07111f";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      for (var y = 0; y < 28; y++) {
-        for (var x = 0; x < 28; x++) {
-          var value = sample.pixels[y * 28 + x];
-          var shade = Math.round(value * 255);
-          ctx.fillStyle = "rgb(" + shade + "," + shade + "," + shade + ")";
-          ctx.fillRect(x * 10, y * 10, 10, 10);
+    function normalizeOutput(values) {
+      if (state.model && state.model.config && state.model.config.softmax === "none") {
+        var clipped = values.map(function (value) { return Math.max(0, value); });
+        var total = clipped.reduce(function (acc, value) { return acc + value; }, 0);
+        if (total > 0) {
+          return clipped.map(function (value) { return value / total; });
         }
       }
-      ctx.strokeStyle = "rgba(255,255,255,0.12)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+      var sum = values.reduce(function (acc, value) { return acc + value; }, 0);
+      var minValue = Math.min.apply(null, values);
+      if (minValue >= 0 && sum > 0.99 && sum < 1.01) {
+        return values;
+      }
+      return softmax(values);
     }
 
-    function renderBars(probs, label) {
+    function eventPoint(event) {
+      var rect = canvas.getBoundingClientRect();
+      var point = event.touches ? event.touches[0] : event;
+      return {
+        x: (point.clientX - rect.left) * (SIZE / rect.width),
+        y: (point.clientY - rect.top) * (SIZE / rect.height)
+      };
+    }
+
+    function startDrawing(event) {
+      event.preventDefault();
+      if (!state.model) return;
+      state.drawing = true;
+      state.hasInk = true;
+      state.lastPoint = eventPoint(event);
+      hint.classList.add("is-hidden");
+      ctx.beginPath();
+      ctx.arc(state.lastPoint.x, state.lastPoint.y, ctx.lineWidth / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function moveDrawing(event) {
+      if (!state.drawing) return;
+      event.preventDefault();
+      var point = eventPoint(event);
+      ctx.beginPath();
+      ctx.moveTo(state.lastPoint.x, state.lastPoint.y);
+      ctx.lineTo(point.x, point.y);
+      ctx.stroke();
+      state.lastPoint = point;
+    }
+
+    function endDrawing(event) {
+      if (!state.drawing) return;
+      event.preventDefault();
+      state.drawing = false;
+      predictCurrentInput();
+    }
+
+    function clearAll() {
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      previewCtx.clearRect(0, 0, 28, 28);
+      state.hasInk = false;
+      state.lastPoint = null;
+      hint.classList.remove("is-hidden");
+      renderBars(new Array(10).fill(0), -1);
+      root.querySelector("[data-mnist-prediction]").textContent = "等待输入";
+      root.querySelector("[data-mnist-meta]").textContent =
+        "右侧会显示当前画板下采样到 28x28 后的模型输入。";
+      if (state.model) {
+        root.querySelector("[data-mnist-status]").textContent =
+          "模型已加载。直接在画板上写数字，松手后会在浏览器里完成一次前向推理。";
+      }
+    }
+
+    function extractPixels() {
+      var img = ctx.getImageData(0, 0, SIZE, SIZE).data;
+      var minX = SIZE;
+      var minY = SIZE;
+      var maxX = -1;
+      var maxY = -1;
+      for (var y = 0; y < SIZE; y++) {
+        for (var x = 0; x < SIZE; x++) {
+          if (img[(y * SIZE + x) * 4 + 3] > 32) {
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      var pixels = new Array(28 * 28).fill(0);
+      if (maxX < 0) return pixels;
+
+      var bw = maxX - minX + 1;
+      var bh = maxY - minY + 1;
+      var scale = 20 / Math.max(bw, bh);
+      var dw = Math.max(1, Math.round(bw * scale));
+      var dh = Math.max(1, Math.round(bh * scale));
+      var tmp = document.createElement("canvas");
+      tmp.width = 28;
+      tmp.height = 28;
+      var tmpCtx = tmp.getContext("2d");
+      tmpCtx.imageSmoothingEnabled = true;
+      var dx = Math.floor((28 - dw) / 2);
+      var dy = Math.floor((28 - dh) / 2);
+      tmpCtx.drawImage(canvas, minX, minY, bw, bh, dx, dy, dw, dh);
+
+      var data = tmpCtx.getImageData(0, 0, 28, 28).data;
+      var dense = new Array(28 * 28).fill(0);
+      var sx = 0;
+      var sy = 0;
+      var mass = 0;
+      for (var py = 0; py < 28; py++) {
+        for (var px = 0; px < 28; px++) {
+          var value = data[(py * 28 + px) * 4 + 3] / 255;
+          if (value <= 0.08) continue;
+          dense[py * 28 + px] = value;
+          sx += px * value;
+          sy += py * value;
+          mass += value;
+        }
+      }
+      if (mass <= 0) return pixels;
+
+      var shiftX = Math.round(14 - sx / mass);
+      var shiftY = Math.round(14 - sy / mass);
+      for (var row = 0; row < 28; row++) {
+        for (var col = 0; col < 28; col++) {
+          var source = dense[row * 28 + col];
+          if (source <= 0) continue;
+          var ny = row + shiftY;
+          var nx = col + shiftX;
+          if (ny >= 0 && ny < 28 && nx >= 0 && nx < 28) {
+            pixels[ny * 28 + nx] = Math.max(pixels[ny * 28 + nx], source);
+          }
+        }
+      }
+      return pixels;
+    }
+
+    function renderPreview(pixels) {
+      var im = previewCtx.createImageData(28, 28);
+      for (var y = 0; y < 28; y++) {
+        for (var x = 0; x < 28; x++) {
+          var value = pixels[y * 28 + x];
+          var shade = Math.round(value * 255);
+          var idx = (y * 28 + x) * 4;
+          im.data[idx] = shade;
+          im.data[idx + 1] = shade;
+          im.data[idx + 2] = shade;
+          im.data[idx + 3] = 255;
+        }
+      }
+      previewCtx.putImageData(im, 0, 0);
+    }
+
+    function renderBars(probs, prediction) {
       var bars = root.querySelector("[data-mnist-bars]");
       bars.innerHTML = probs.map(function (p, idx) {
-        var active = idx === label ? " mnist-demo__bar--truth" : "";
+        var active = idx === prediction ? " mnist-demo__bar--top" : "";
         return '<div class="mnist-demo__bar-row"><span class="mnist-demo__bar-label">' + idx +
           '</span><div class="mnist-demo__bar-track"><div class="mnist-demo__bar' + active +
           '" style="width:' + (p * 100).toFixed(2) + '%"></div></div><span class="mnist-demo__bar-value">' +
@@ -1277,34 +1373,40 @@
       }).join("");
     }
 
-    function render() {
-      if (!state.model || !state.samples.length) {
+    function predictCurrentInput() {
+      if (!state.model) {
         return;
       }
-      var sample = state.samples[state.index];
-      var probs = forward(sample.pixels);
-      var prediction = 0;
-      for (var i = 1; i < probs.length; i++) {
-        if (probs[i] > probs[prediction]) prediction = i;
+      if (!state.hasInk) {
+        root.querySelector("[data-mnist-status]").textContent = "请先在画板上写一个数字。";
+        return;
       }
-      renderCanvas(sample);
-      renderBars(probs, sample.label);
+      var pixels = extractPixels();
+      renderPreview(pixels);
+      var outputs = forward(pixels);
+      var probs = normalizeOutput(outputs);
+      var prediction = 0;
+      for (var i = 1; i < outputs.length; i++) {
+        if (outputs[i] > outputs[prediction]) prediction = i;
+      }
+      renderBars(probs, prediction);
       root.querySelector("[data-mnist-status]").textContent =
-        "模型已加载。这里用内置样例数字做一次和书里同结构的前向推理。";
+        "已用当前手写输入完成一次前向推理。继续补笔或清除重写都可以。";
       root.querySelector("[data-mnist-meta]").textContent =
-        "样例 " + (state.index + 1) + "/" + state.samples.length + "，标签 " +
-        sample.label + "。这些样例是为了书页演示稳定生成的 28×28 灰度图。";
+        "当前笔迹已裁剪、缩放并居中到 28x28，和 C++ MNIST demo 的输入维度一致。";
       root.querySelector("[data-mnist-prediction]").textContent =
-        "预测 " + prediction + " · 真值 " + sample.label;
+        (state.model.config && state.model.config.softmax === "none"
+          ? "预测 " + prediction + " · 相对分数 " + (probs[prediction] * 100).toFixed(1) + "%"
+          : "预测 " + prediction + " · 置信度 " + (probs[prediction] * 100).toFixed(1) + "%");
     }
 
     function loadModel() {
       loadDemoJsonWithFallback(modelPath)
         .then(function (data) {
           state.model = data;
-          state.samples = buildSamples();
-          state.index = 0;
-          render();
+          root.querySelector("[data-mnist-status]").textContent =
+            "模型已加载。直接在画板上写数字，松手后会在浏览器里完成一次前向推理。";
+          clearAll();
         })
         .catch(function (err) {
           root.querySelector("[data-mnist-status]").textContent =
@@ -1312,23 +1414,26 @@
         });
     }
 
-    root.querySelectorAll("[data-mnist-act]").forEach(function (button) {
-      button.addEventListener("click", function () {
-        if (!state.model) return;
-        var action = button.getAttribute("data-mnist-act");
-        if (action === "prev") {
-          state.index = (state.index + state.samples.length - 1) % state.samples.length;
-        } else if (action === "next") {
-          state.index = (state.index + 1) % state.samples.length;
-        } else if (action === "reshuffle") {
-          state.shuffleSeed += 1;
-          state.samples = buildSamples();
-          state.index = 0;
-        }
-        render();
-      });
+    canvas.addEventListener("mousedown", startDrawing);
+    canvas.addEventListener("mousemove", moveDrawing);
+    window.addEventListener("mouseup", endDrawing);
+    canvas.addEventListener("touchstart", startDrawing, { passive: false });
+    canvas.addEventListener("touchmove", moveDrawing, { passive: false });
+    canvas.addEventListener("touchend", endDrawing, { passive: false });
+    canvas.addEventListener("touchcancel", endDrawing, { passive: false });
+
+    root.addEventListener("click", function (event) {
+      var actionButton = event.target.closest("[data-mnist-act]");
+      if (!actionButton) return;
+      var action = actionButton.getAttribute("data-mnist-act");
+      if (action === "clear") {
+        clearAll();
+      } else if (action === "predict") {
+        predictCurrentInput();
+      }
     });
 
+    renderBars(new Array(10).fill(0), -1);
     loadModel();
   }
 
@@ -1367,7 +1472,8 @@
       data: null,
       board: new Array(9).fill(0),
       showValues: true,
-      message: ""
+      message: "",
+      agentViewBoard: null
     };
 
     function legalActions(board) {
@@ -1395,9 +1501,13 @@
       return legalActions(board).length ? 0 : 3;
     }
 
-    function bestAction(board) {
+    function rowForBoard(board) {
       var key = encodeBoard(board);
-      var row = (state.data.qTable && state.data.qTable[key]) || [];
+      return (state.data.qTable && state.data.qTable[key]) || [];
+    }
+
+    function bestAction(board) {
+      var row = rowForBoard(board);
       var actions = legalActions(board);
       if (!actions.length) return -1;
       var best = actions[0];
@@ -1415,9 +1525,9 @@
 
     function renderValues() {
       var el = root.querySelector("[data-ttt-values]");
-      var key = encodeBoard(state.board);
-      var row = (state.data.qTable && state.data.qTable[key]) || [];
-      var actions = legalActions(state.board);
+      var boardForValues = state.agentViewBoard || state.board;
+      var row = rowForBoard(boardForValues);
+      var actions = legalActions(boardForValues);
       if (!actions.length) {
         el.innerHTML = '<p class="muted">终局状态没有可选动作。</p>';
         return;
@@ -1431,13 +1541,15 @@
 
     function renderBoard() {
       var boardEl = root.querySelector("[data-ttt-board]");
+      var overlayBoard = state.agentViewBoard || state.board;
+      var overlayRow = rowForBoard(overlayBoard);
       boardEl.innerHTML = state.board.map(function (cell, idx) {
         var text = cell === 1 ? "X" : cell === 2 ? "O" : "";
         var disabled = cell !== 0 || result(state.board) !== 0 ? " disabled" : "";
         return '<button type="button" class="ttt-demo__cell" data-ttt-cell="' + idx + '"' + disabled + '>' +
           '<span>' + text + '</span>' +
-          (state.showValues && cell === 0 && state.data && state.data.qTable ? '<small>' +
-            (((state.data.qTable[encodeBoard(state.board)] || [])[idx] || 0).toFixed(2)) + '</small>' : '') +
+          (state.showValues && overlayBoard[idx] === 0 && state.data && state.data.qTable ? '<small>' +
+            ((overlayRow[idx] || 0).toFixed(2)) + '</small>' : '') +
           '</button>';
       }).join("");
       renderValues();
@@ -1446,12 +1558,17 @@
       if (res === 1) meta = "X 获胜。";
       else if (res === 2) meta = "你执 O，这局输了。";
       else if (res === 3) meta = "这局和棋。";
-      else meta = "你执 O，点击空格落子；X 会按训练好的 Q 表选择动作。";
+      else if (state.board.some(function (cell) { return cell === 2; })) {
+        meta = "棋盘显示的是当前局面；格子旁和右侧列表展示的是 X 上一步决策时评估过的动作值。";
+      } else {
+        meta = "你执 O，点击空格落子；X 会按训练好的 Q 表选择动作。";
+      }
       root.querySelector("[data-ttt-meta]").textContent = meta;
     }
 
     function reset() {
       state.board = new Array(9).fill(0);
+      state.agentViewBoard = state.board.slice();
       if (state.data) {
         var action = bestAction(state.board);
         if (action >= 0) state.board[action] = 1;
@@ -1463,9 +1580,11 @@
       if (state.board[action] !== 0 || result(state.board) !== 0) return;
       state.board[action] = 2;
       if (result(state.board) !== 0) {
+        state.agentViewBoard = state.board.slice();
         renderBoard();
         return;
       }
+      state.agentViewBoard = state.board.slice();
       var reply = bestAction(state.board);
       if (reply >= 0) state.board[reply] = 1;
       renderBoard();

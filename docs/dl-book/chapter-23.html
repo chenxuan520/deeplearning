@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>第 23 章 · MNIST 实战:把第一、二部分跑起来 | 从神经元到大模型</title>
     <link rel="icon" href="assets/favicon.svg" />
-    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/book.css?v=demo-layout-20260714b" />
     <link rel="stylesheet" href="assets/diagrams.css" />
   </head>
   <body data-chapter="23">
@@ -64,7 +64,7 @@
 
         <div class="figure reveal">
           <div data-lab="mnist-demo"></div>
-          <p class="figure__cap">这里直接读取发布产物里的真实模型参数,用书页里的样例图片做一次前向推理。若发布产物里暂时没有 demo 资源,实验台会明确显示缺失状态。</p>
+          <p class="figure__cap">这里直接读取发布产物里的真实模型参数,把你在画板上写的数字下采样成 28×28 输入并在浏览器里完成前向推理。若发布产物里暂时没有 demo 资源,实验台会明确显示缺失状态。</p>
         </div>
 
         <h2>2. 第一步 · 数据:把图片变成网络能吃的数字</h2>
@@ -287,6 +287,6 @@ NeuralNetworkLoader::ExportParamToFile(param, option, "demo.v2.param");</code></
     </main>
 
     <script src="assets/book.js"></script>
-    <script src="assets/labs.js?v=f32b49b"></script>
+    <script src="assets/labs.js?v=demo-labs-20260714b"></script>
   </body>
 </html>

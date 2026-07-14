@@ -38,25 +38,34 @@ double TabularQLearning::QValue(int state_key, int action) const {
 }
 
 int TabularQLearning::ArgmaxQ(int state_key,
-                              const std::vector<int> &legal_actions) const {
+                              const std::vector<int> &legal_actions) {
   if (legal_actions.empty()) {
     return -1;
   }
   int best_action = legal_actions.front();
   double best_value = QValue(state_key, best_action);
+  std::vector<int> tied_actions;
+  tied_actions.push_back(best_action);
   for (size_t i = 1; i < legal_actions.size(); i++) {
     int action = legal_actions[i];
     double value = QValue(state_key, action);
     if (value > best_value) {
       best_value = value;
       best_action = action;
+      tied_actions.clear();
+      tied_actions.push_back(action);
+    } else if (std::fabs(value - best_value) <= 1e-12) {
+      tied_actions.push_back(action);
     }
+  }
+  if (config_.random_tie_break && tied_actions.size() > 1) {
+    return TicTacToeEnv::ChooseRandomAction(tied_actions, random_counter_++);
   }
   return best_action;
 }
 
 double TabularQLearning::MaxQ(int state_key,
-                              const std::vector<int> &legal_actions) const {
+                              const std::vector<int> &legal_actions) {
   int best_action = ArgmaxQ(state_key, legal_actions);
   if (best_action < 0) {
     return 0.0;

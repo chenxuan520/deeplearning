@@ -283,6 +283,7 @@ int main(int argc, char **argv) {
   config.epsilon_min = option.epsilon_min;
   config.epsilon_decay = option.epsilon_decay;
   config.rand_seed = option.rand_seed;
+  config.random_tie_break = true;
   agent.Init(config);
 
   TicTacToeEnv env;

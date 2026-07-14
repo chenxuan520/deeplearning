@@ -1233,28 +1233,43 @@ details[open] .quiz__q::after {
   color: var(--text-dim);
 }
 
-.lab--demo {
+.lab.lab--demo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
+  padding: 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
 }
 
-.lab__controls--demo {
+.lab.lab--demo > .lab__controls--demo {
   display: grid;
   gap: 0.8rem;
+  width: 100%;
 }
 
 .demo-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 0.7rem;
+  align-items: center;
 }
 
-.lab__viz--demo-grid {
+.demo-toolbar .button {
+  flex: 0 0 auto;
+}
+
+.lab.lab--demo > .lab__viz--demo-grid {
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  width: 100%;
 }
 
 .mnist-demo__canvas-wrap {
+  position: relative;
   display: grid;
   place-items: center;
   padding: 0.8rem 0;
@@ -1265,9 +1280,47 @@ details[open] .quiz__q::after {
   height: auto;
   border-radius: 12px;
   border: 1px solid var(--line);
+  background:
+    linear-gradient(rgba(106, 195, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(106, 195, 255, 0.08) 1px, transparent 1px),
+    #07111f;
+  background-size: 40px 40px, 40px 40px, auto;
+  background-position: -1px -1px, -1px -1px, 0 0;
+  box-shadow: var(--shadow);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.mnist-demo__hint {
+  position: absolute;
+  inset: 0.8rem 0 0 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.mnist-demo__hint.is-hidden {
+  opacity: 0;
+}
+
+.mnist-demo__preview-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.mnist-demo__preview {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
   background: #07111f;
   image-rendering: pixelated;
-  box-shadow: var(--shadow);
+  flex: 0 0 auto;
 }
 
 .mnist-demo__bars {
@@ -1302,7 +1355,7 @@ details[open] .quiz__q::after {
   background: linear-gradient(90deg, var(--primary), var(--accent));
 }
 
-.mnist-demo__bar--truth {
+.mnist-demo__bar--top {
   background: linear-gradient(90deg, var(--accent), #d9ff8a);
 }
 

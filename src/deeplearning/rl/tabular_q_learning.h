@@ -18,6 +18,7 @@ public:
     double epsilon_decay = 0.9995;
     int rand_seed = 0;
     int action_num = 9;
+    bool random_tie_break = false;
   };
 
   enum class RC {
@@ -62,8 +63,8 @@ public:
 
 private:
   std::vector<double> &QRow(int state_key);
-  int ArgmaxQ(int state_key, const std::vector<int> &legal_actions) const;
-  double MaxQ(int state_key, const std::vector<int> &legal_actions) const;
+  int ArgmaxQ(int state_key, const std::vector<int> &legal_actions);
+  double MaxQ(int state_key, const std::vector<int> &legal_actions);
 
 private:
   Config config_;

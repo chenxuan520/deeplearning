@@ -68,3 +68,24 @@ TEST(TabularQLearning, LearnsAgainstRandomOpponent) {
             "agent should mostly win or draw vs random after training");
   MUST_TRUE(agent.q_table_size() > 100, "q-table should cover many states");
 }
+
+TEST(TabularQLearning, RandomTieBreakAvoidsAlwaysPickingFirstAction) {
+  TabularQLearning agent;
+  TabularQLearning::Config config;
+  config.rand_seed = 123;
+  config.random_tie_break = true;
+  agent.Init(config);
+
+  std::vector<int> legal_actions = {0, 1, 2, 3, 4, 5, 6, 7, 8};
+  bool saw_nonzero = false;
+  for (int i = 0; i < 32; i++) {
+    int action = agent.SelectAction(0, legal_actions, false);
+    MUST_TRUE(action >= 0 && action <= 8, "action should stay legal");
+    if (action != 0) {
+      saw_nonzero = true;
+      break;
+    }
+  }
+  MUST_TRUE(saw_nonzero,
+            "random tie break should not always choose the first legal action");
+}
