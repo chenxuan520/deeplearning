@@ -88,6 +88,7 @@ struct Option {
   bool train_control_specified = false;
   bool resume_checkpoint = false;
   bool no_checkpoint = false;
+  bool skip_final_eval = false;
   bool sampling_specified = false;
 };
 
@@ -157,7 +158,9 @@ void PrintCommandUsage(const char *prog, const string &verb) {
             "epochs (default 1)\n"
          << "  --resume-checkpoint         load the checkpoint and continue "
             "toward --epochs\n"
-         << "  --no-checkpoint             disable periodic checkpoint writes\n";
+         << "  --no-checkpoint             disable periodic checkpoint writes\n"
+         << "  --skip-final-eval           save immediately after training "
+            "without the final full-corpus loss/perplexity pass\n";
   } else if (verb == "generate") {
     cout << "  --model <path>              model to load (default "
             "mini_lm.param)\n"
@@ -227,6 +230,9 @@ bool ParseArgs(int argc, char **argv, int start, Option &option) {
       option.train_control_specified = true;
     } else if (arg == "--no-checkpoint") {
       option.no_checkpoint = true;
+      option.train_control_specified = true;
+    } else if (arg == "--skip-final-eval") {
+      option.skip_final_eval = true;
       option.train_control_specified = true;
     } else if (arg == "--rand-seed") {
       option.rand_seed = std::stoi(need_value("--rand-seed"));
@@ -1505,20 +1511,27 @@ int RunTrain(const Option &option) {
     return 130;
   }
 
-  double average_loss = 0.0;
-  double perplexity = 0.0;
-  if (model.CalcNextTokenLoss(input_samples, target_tokens, average_loss) !=
-      MiniTransformerLM::SUCCESS) {
-    cout << "Evaluate failed: " << model.err_msg() << endl;
-    return -1;
+  double average_loss = last_loss;
+  double perplexity = std::exp(average_loss);
+  if (!option.skip_final_eval) {
+    if (model.CalcNextTokenLoss(input_samples, target_tokens, average_loss) !=
+        MiniTransformerLM::SUCCESS) {
+      cout << "Evaluate failed: " << model.err_msg() << endl;
+      return -1;
+    }
+    perplexity = std::exp(average_loss);
   }
-  perplexity = std::exp(average_loss);
 
   if (!SaveModelWithVocab(option.model, model, tokenizer, err)) {
     cout << err << endl;
     return -1;
   }
-  cout << "Loss: " << average_loss << " Perplexity: " << perplexity << endl;
+  if (option.skip_final_eval) {
+    cout << "Skipped final evaluation; last training loss: " << average_loss
+         << " perplexity: " << perplexity << endl;
+  } else {
+    cout << "Loss: " << average_loss << " Perplexity: " << perplexity << endl;
+  }
   cout << "Saved updated weights: " << option.model << endl;
   if (stopped_by_loss) {
     cout << "Stopped early because loss dropped below "
