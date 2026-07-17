@@ -121,7 +121,7 @@ for (int i = 0; i &lt; input.size(); i++)
           直觉非常顺:如果模型给<strong>正确类</strong>的概率很高(接近 1),log 接近 0,损失很小;
           如果它给正确类的概率很低(接近 0),−log 会冲向<strong>很大</strong>——狠狠惩罚“自信地答错”。
         </p>
-        <p>项目里实现的是<strong>二元</strong>交叉熵(配合 Sigmoid 输出,判断“是/不是”):</p>
+        <p>先注意:上面这条是<strong>多分类 softmax 交叉熵</strong>。项目里的 <code>CrossEntropyLoss</code> 类实现的是<strong>二元</strong>交叉熵(配合 Sigmoid 输出,判断“是/不是”):</p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/loss/cross_entropy_loss.cpp</figcaption>
           <pre class="code-walk__code"><code>double CrossEntropyLoss::Loss(double target, double output) {
@@ -134,7 +134,7 @@ double CrossEntropyLoss::DerivLoss(double target, double output) {
 }</code></pre>
           <ol class="code-walk__notes">
             <li>当真实标签 <code>target</code> = 1,只剩前半项 <code>-log(output)</code>:输出越接近 1 损失越小;当 <code>target</code> = 0,只剩后半项 <code>-log(1-output)</code>:输出越接近 0 损失越小。</li>
-            <li>导数看起来有点吓人(分母里有 <code>output(1-output)</code>),但<strong>3.3 节</strong>你会看到,它和 Sigmoid/softmax 的导数<strong>正好抵消</strong>,变得无比清爽。</li>
+            <li>导数看起来有点吓人(分母里有 <code>output(1-output)</code>),但<strong>3.3 节</strong>你会看到,它和 Sigmoid 的导数<strong>正好抵消</strong>;多分类 softmax + 交叉熵也会抵消,最后都很清爽。</li>
           </ol>
         </figure>
 
@@ -195,7 +195,7 @@ double CrossEntropyLoss::DerivLoss(double target, double output) {
   return 0;
 }</code></pre>
           <ol class="code-walk__notes">
-            <li><strong>交叉熵分支</strong>才是上面推导的那条美妙巧合:<var>δ</var> = <var>p</var> − <var>t</var>(对 logit)。它会作为反向传播的“起点”(<a class="xref" href="chapter-06.html">第 6 章</a>)。</li>
+            <li><strong>交叉熵分支</strong>返回的是 softmax + 多分类交叉熵对 logit 的梯度快捷式:<var>δ</var> = <var>p</var> − <var>t</var>。注意:仓库的 <code>CrossEntropyLoss::Loss</code> 本身是逐输出二元交叉熵,用它对 one-hot softmax 输出求平均时,报告出的标量 loss 不等于上面的 <code>−log(p_correct)</code>;这里的重点是反向传播的“起点”(<a class="xref" href="chapter-06.html">第 6 章</a>)。</li>
             <li><strong>MSE 分支</strong>这里返回同一个式子,是仓库为了接口统一做的<strong>简化</strong>——严格说,softmax + MSE 对 logit 的梯度还要过 softmax 雅可比,一般<strong>不等于</strong> <var>p</var> − <var>t</var>。分类请用交叉熵;回归用 MSE 时通常<strong>不要</strong>再套 softmax。直觉上(对 CE):预测概率比答案高多少,就往回传多少“正向误差”。</li>
           </ol>
         </figure>

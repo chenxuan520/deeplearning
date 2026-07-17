@@ -798,15 +798,15 @@ mask : [   0      0  0  0  0      ...      0         1  1  1 1  1  1  1 ...  1 ]
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">SFT loss mask · 示意伪代码(帮助理解)</figcaption>
           <pre class="code-walk__code"><code>tokens = [prompt..., assistant..., &lt;eos&gt;];                    <b class="cw-tag">1</b>
-loss_mask = [0, 0, 0, ..., 1, 1, 1, 1];                      <b class="cw-tag">2</b>
+target_mask = [0, 0, 0, ..., 1, 1, 1, 1];                    <b class="cw-tag">2</b>
 
 logits = model(tokens[:-1]);                                 <b class="cw-tag">3</b>
-loss = Σ loss_mask[t] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">4</b></code></pre>
+loss = Σ target_mask[t+1] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-tag">4</b></code></pre>
           <ol class="code-walk__notes">
             <li>把完整 prompt + answer 拼成一条训练序列。</li>
-            <li>给每个位置配一个“计不计分”的开关。assistant 回答区域通常标 1,prompt 区通常标 0。</li>
+            <li>给每个<strong>被预测的目标位置</strong>配一个“计不计分”的开关。assistant 回答区域通常标 1,prompt 区通常标 0。</li>
             <li>前向时模型<strong>整段都看</strong>,因为回答必须依赖题目。</li>
-            <li>算 loss 时只在标了 1 的位置上计分。所以 SFT 真正在优化的是 <strong>“给定这个 prompt,回答该怎么写”</strong>。</li>
+            <li><code>logits[t]</code> 预测的是 <code>tokens[t+1]</code>,所以算 loss 时要看目标位置 <code>t+1</code> 是否标了 1。SFT 真正在优化的是 <strong>“给定这个 prompt,回答该怎么写”</strong>。</li>
           </ol>
         </figure>
         <p>

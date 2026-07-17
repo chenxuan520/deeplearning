@@ -234,15 +234,15 @@ WriteAttentionJson(attention_file, model, tokenizer, ...);           <b class="c
           <li><code>generate</code>:加载参数,从你的提示往下续写。</li>
         </ul>
         <p>
-          这恰好把上一节的<strong>预训练 → 后训练</strong>落成了能在本机跑的命令:先用大语料 <code>init</code> + <code>train</code> 得到一个基座,再对它换一份小语料、用更小的学习率 <code>train</code> 一次,就是最朴素的<strong>微调</strong>:
+          这恰好把语言模型的<strong>预训练 → 继续训练</strong>落成了能在本机跑的命令:先用大语料 <code>init</code> + <code>train</code> 得到一个基座,再对它换一份小语料、用更小的学习率 <code>train</code> 一次,就是最朴素的<strong>领域/风格微调</strong>(仍是 next-token 训练,不是 RLHF/DPO 那类后训练):
         </p>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">在 <code>src/</code> 下:预训练 → 后训练 → 推理</figcaption>
+          <figcaption class="code-walk__file">在 <code>src/</code> 下:预训练 → 继续训练 → 推理</figcaption>
           <pre class="code-walk__code"><code># 预训练:定结构 + 扫词表,再喂语料训练
 ./bin/mini_lm init  --model base.param --corpus-file corpus.txt --model-dim 32 --block-num 2
 ./bin/mini_lm train --model base.param --corpus-file corpus.txt --epochs 60
 
-# 后训练:对同一个基座,换语料、用更小的学习率再训一次
+# 继续训练/风格微调:对同一个基座,换语料、用更小的学习率再训一次
 ./bin/mini_lm train --model base.param --corpus-file my_style.txt --epochs 15 --learning-rate 0.0005
 
 # 推理:加载参数续写

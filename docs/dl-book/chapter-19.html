@@ -507,7 +507,7 @@ decoder_.Backward(grad_encoded, grad_hidden, lr);  // 或 encoder_    <b class="
             (相当于让模型对着标准答案的前半段做题),这叫 <span class="term">teacher forcing</span>,好处是每步互相独立、能高效并行。
             而<strong>生成</strong>时没有答案可抄,只能把<strong>自己刚吐出的字</strong>接回去继续(见第 8 节的自回归)。
             另外,真实大模型一次前向会<strong>同时预测所有位置</strong>的下一字(一遍算出一大批损失),
-            我们这个 mini 版为了好懂,一条样本只盯一个目标。
+            本仓库 mini 版也是这样:一个窗口内每个位置都会算 next-token loss,<code>target_tokens</code> 只是补上窗口最后一位的目标。
           </p>
         </div>
 

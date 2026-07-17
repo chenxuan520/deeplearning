@@ -420,12 +420,12 @@ QRow(state_key)[action] = old_q + config_.alpha * (target - old_q);    <b class=
           <table class="calc-table">
             <thead><tr><th></th><th>往左</th><th>往右</th><th>最优动作</th></tr></thead>
             <tbody>
-              <tr><td>格子0</td><td>≈0</td><td class="is-hot">8.1</td><td><strong>右</strong></td></tr>
-              <tr><td>格子1</td><td>≈0</td><td class="is-hot">9</td><td><strong>右</strong></td></tr>
-              <tr><td>格子2</td><td>≈0</td><td class="is-hot">10</td><td><strong>右</strong></td></tr>
+              <tr><td>格子0</td><td>≈7.3</td><td class="is-hot">8.1</td><td><strong>右</strong></td></tr>
+              <tr><td>格子1</td><td>≈7.3</td><td class="is-hot">9</td><td><strong>右</strong></td></tr>
+              <tr><td>格子2</td><td>≈8.1</td><td class="is-hot">10</td><td><strong>右</strong></td></tr>
             </tbody>
           </table>
-          <p class="calc-table__cap">每行挑 Q 最大的动作,就得到策略“一路向右”。<strong>学 Q,策略免费送。</strong></p>
+          <p class="calc-table__cap">往左只是绕远或撞墙不动,之后仍可能到奶酪,所以也有折扣后的未来价值;但每行挑 Q 最大的动作,仍得到策略“一路向右”。<strong>学 Q,策略免费送。</strong></p>
         </div>
 
         <h3>SARSA:若下一步按“实际会走的动作”来更新</h3>

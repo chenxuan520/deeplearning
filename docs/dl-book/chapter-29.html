@@ -575,7 +575,7 @@
           <p class="calc-table__cap">1 + 1 在二进制里写成 10,所以本位是 0,向高位进 1。</p>
         </div>
         <p>
-          这张表可以用逻辑门实现:本位结果 S 是 XOR,进位 C 是 AND。把许多一位加法器串起来,就能加多位二进制数。
+          这张表可以用逻辑门实现:本位结果 S 是 XOR,进位 C 是 AND。它叫<strong>半加器</strong>,只处理两个输入。真正做多位加法时,每一位还要接住低位传来的进位 <code>Cin</code>,用<strong>全加器</strong>:<code>S = A XOR B XOR Cin</code>,<code>Cout = (A AND B) OR (Cin AND (A XOR B))</code>。把许多全加器串起来,就能加多位二进制数。
           乘法也可以拆成“移位 + 多次加法”。于是从逻辑门出发,机器就长出了算术能力。
         </p>
         <p>

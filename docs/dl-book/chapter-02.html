@@ -222,16 +222,16 @@
         <h2>5. 为什么<strong>非得</strong>有激活函数?</h2>
         <p>
           这是初学者最容易忽略、但极其关键的一点。假如<strong>去掉</strong>激活函数,
-          神经元就只剩“加权求和”这一步,也就是一个<strong>线性变换</strong>。
+          神经元就只剩“加权求和 + 偏置”这一步,也就是一个<strong>仿射变换</strong>。
           这时候,你把很多层这样的神经元叠起来,会发生一件令人沮丧的事:
         </p>
         <div class="mathblock reveal">
-          第二层(第一层) = <var>W</var><sub>2</sub>(<var>W</var><sub>1</sub><var>x</var>) = (<var>W</var><sub>2</sub><var>W</var><sub>1</sub>)<var>x</var> = <var>W</var>′<var>x</var>
-          <span class="label">两层线性叠加,等价于一层线性。叠 100 层也一样,还是一条“直线”</span>
+          第二层(第一层) = <var>W</var><sub>2</sub>(<var>W</var><sub>1</sub><var>x</var> + <var>b</var><sub>1</sub>) + <var>b</var><sub>2</sub> = (<var>W</var><sub>2</sub><var>W</var><sub>1</sub>)<var>x</var> + (<var>W</var><sub>2</sub><var>b</var><sub>1</sub> + <var>b</var><sub>2</sub>) = <var>W</var>′<var>x</var> + <var>b</var>′
+          <span class="label">多层仿射变换叠加,仍等价于一层仿射变换</span>
         </div>
         <p>
-          换句话说,<strong>没有激活函数,叠再多层都白搭</strong>,整个网络的表达能力和单层一模一样,
-          只能学“按比例缩放”这种最简单的关系,学不会任何“拐弯”的、复杂的模式。
+          换句话说,<strong>没有激活函数,叠再多层都白搭</strong>,整个网络的表达能力和单层仿射层一样,
+          只能学直线 / 超平面式的边界,学不会任何“拐弯”的、复杂的模式。
         </p>
         <div class="callout callout--analogy reveal">
           <span class="callout__title">打个比方</span>
@@ -397,7 +397,7 @@ double GeluActivate::DerivActivate(const double &amp;input,
           <details class="quiz__item">
             <summary class="quiz__q">问题 2:如果把所有神经元的激活函数都拿掉,一个 100 层的网络还能学复杂模式吗?</summary>
             <div class="quiz__a">
-              <p>不能。100 层线性变换叠加仍然等价于一层线性变换(<var>W</var>′<var>x</var> + <var>b</var>′),表达能力和单层一样,学不会任何非线性的、需要“拐弯”的关系。</p>
+              <p>不能。100 层仿射变换叠加仍然等价于一层仿射变换(<var>W</var>′<var>x</var> + <var>b</var>′),表达能力和单层一样,学不会任何非线性的、需要“拐弯”的关系。</p>
             </div>
           </details>
           <details class="quiz__item">

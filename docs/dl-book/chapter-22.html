@@ -174,7 +174,7 @@
         <p>它的核心机制,处处都是你学过的东西:</p>
         <ol>
           <li>把你的文档切成<strong>小片段(chunk)</strong>,每段几百字;</li>
-          <li>用<a class="xref" href="chapter-20.html">第 20 章</a>的<strong>词嵌入</strong>把每段变成向量,存进“向量库”;</li>
+          <li>用专门的<strong>文本/句向量 embedding 模型</strong>把每段变成向量,存进“向量库”;</li>
           <li>提问时,把问题也变成向量,用<strong>向量相似度(<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积</a>/余弦)</strong>找出最相关的几段;</li>
           <li>把这几段和问题<strong>一起</strong>塞进提示,让模型“看着材料”回答。</li>
         </ol>

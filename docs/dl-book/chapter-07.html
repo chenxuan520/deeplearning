@@ -39,8 +39,8 @@
         <div class="callout callout--warn reveal">
           <span class="callout__title">没有激活函数,深度就白搭了</span>
           <p>
-            若每层都只是线性变换,那么无论你堆 <strong>2 层还是 100 层</strong>,整个网络能表达的都只是
-            <strong>一条直线(超平面)</strong>——画不出曲线、分不开复杂的边界。激活函数往中间塞进一点“<strong>拐弯</strong>”,
+            若每层都只是仿射变换(线性变换 + 偏置),那么无论你堆 <strong>2 层还是 100 层</strong>,整体仍等价于
+            <strong>一层仿射变换</strong>——分类边界还是直线 / 超平面,分不开复杂的边界。激活函数往中间塞进一点“<strong>拐弯</strong>”,
             层层叠加后,网络才能拟合任意复杂的函数。这就是“非线性”三个字的全部意义。
           </p>
         </div>

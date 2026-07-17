@@ -302,7 +302,7 @@ output_embeddings_.assign(vocab_size_, vector&lt;double&gt;(embed_dim, 0));
         </div>
         <p>
           实现时<strong>不会真构造 V 维 one-hot</strong>,而是直接用中心词 id 去 W<sub>in</sub> <strong>查一行</strong>——和第 3 节 embedding 查表完全一样。
-          输出侧也不是真的乘满 V×dim 矩阵,而是只算<strong>目标词那一行</strong>与 <var>h</var> 的点积(负采样时连全 V 都不算)。
+          如果用 full softmax,输出侧仍要把 <var>h</var> 和 W<sub>out</sub> 的所有 V 行点积,得到完整词表分布;本仓库实现的负采样版才只算目标词和若干负样本对应的行。
         </p>
 
         <h3>6.3 CBOW 结构图:上下文猜中心词</h3>
