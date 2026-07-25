@@ -210,11 +210,58 @@ while (!env.IsTerminal()) {
           <p class="figure__cap">监督学习的 <code>Train</code> 是“前向→损失→反向”;这里是“行动→奖励→改 Q 表”,<strong>没有标签、没有梯度</strong>。</p>
         </div>
 
+        <h3>跑起来会看到什么:训练日志速览</h3>
+        <p>
+          光看代码不够,跑一遍才踏实。下面是默认配置(<code>--episodes 30000 --opponent random</code>,seed 0)每 5000 局打印的真实日志,
+          三样东西同时在变——<strong>ε 在降、胜局在涨、Q 表在长</strong>:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>局数</th><th>累计 胜/和/负</th><th>这 5000 局胜率*</th><th>q_states</th><th>ε</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>5000</td><td>3764 / 383 / 853</td><td>75.3%</td><td>2010</td><td>0.082</td></tr>
+              <tr><td>10000</td><td>8498 / 529 / 973</td><td>94.7%</td><td>2062</td><td>0.05</td></tr>
+              <tr><td>15000</td><td>13273 / 666 / 1061</td><td>95.5%</td><td>2087</td><td>0.05</td></tr>
+              <tr><td>20000</td><td>18065 / 784 / 1151</td><td>95.8%</td><td>2107</td><td>0.05</td></tr>
+              <tr><td>25000</td><td>22834 / 939 / 1227</td><td>95.4%</td><td>2125</td><td>0.05</td></tr>
+              <tr><td>30000</td><td>27610 / 1087 / 1303</td><td>95.5%</td><td>2143</td><td>0.05</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">*“这 5000 局胜率”是用相邻两行的累计胜局差 ÷ 5000 现算的,反映<strong>那一段</strong>的水平(累计胜率会被早期乱下的局拖低)。可以看到:ε 从 1.0 一路衰减到下限 0.05 后,胜率就稳定在 95% 上下;<code>q_states</code>(见过的不同局面数)很快收敛到两千出头——井字棋的局面就这么多,这也是<strong>查表能行</strong>的根本原因。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">训练时抖、评估时稳:别被训练胜率吓到</span>
+          <p>
+            训练日志里还夹着 1300 局“负”,是因为训练时<strong>故意留着 ε=0.05 的随机探索</strong>,时不时自己走一步烂棋。
+            等 <a class="xref" href="chapter-25.html#6-第五步--评估与人机对战">第 6 节</a>评估时关掉探索、纯 greedy 下,胜率会更高更稳——这正是<a class="xref" href="chapter-25.html#动手与思考">下面第 3 题</a>要问的“训练和评估为什么不一样”。
+          </p>
+        </div>
+
         <h2>6. 第五步 · 评估与人机对战</h2>
         <p>
-          训练完用 <code>Evaluate</code> 关掉探索,纯 greedy 连下很多局,统计胜/和/负。
-          默认 3 万局后对<strong>随机对手</strong>约 99% 胜率,对<strong>最优对手</strong>可稳守和棋(不输)。
+          训练完用 <code>Evaluate</code> 关掉探索,纯 greedy 连下很多局,统计胜/和/负。程序会分别对<strong>随机</strong>和<strong>最优</strong>两种对手各评估一遍。
+          默认(对随机训练)的真实结果是:对<strong>随机对手</strong> 984 胜 / 13 和 / 3 负(<strong>不败率 99.7%</strong>);对<strong>最优对手</strong>则几乎全输。
         </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">一个诚实的坑:你跟谁练,就只擅长打谁</span>
+          <p>
+            默认拿<strong>随机对手</strong>陪练,智能体学到的是“怎么惩罚乱下的人”,专打随机对手很强,可它<strong>从没见过高手的严密下法</strong>,遇到 minimax 最优对手就成片地输。
+            反过来,加 <code>--opponent optimal</code> 拿最优对手陪练,它就能对最优对手<strong>稳守和棋(0 胜 0 负、全和,不败率 100%)</strong>——井字棋双方都不犯错本就必然是和棋;
+            但这么练出来的它,反而<strong>对随机对手只有约 59% 胜率</strong>(因为它学的是“稳不输”,而不是“逮住对方失误往死里赢”)。
+          </p>
+          <div class="table-wrap">
+            <table class="calc-table calc-table--wrap">
+              <thead><tr><th>训练对手</th><th>评估 vs 随机</th><th>评估 vs 最优</th><th>它学到的“打法”</th></tr></thead>
+              <tbody>
+                <tr><td><strong>random</strong>(默认)</td><td>胜 98.4% · 不败 <strong>99.7%</strong></td><td>几乎全输</td><td>逮失误猛攻,不会防守</td></tr>
+                <tr><td><strong>optimal</strong></td><td>胜 ~59% · 不败 72%</td><td>全和 · 不败 <strong>100%</strong></td><td>只求不输,不贪赢</td></tr>
+              </tbody>
+            </table>
+            <p class="calc-table__cap">同一套代码、同一套超参,只换了陪练对手,学出来的策略性格就完全不同。这不是 bug,而是强化学习的<strong>本质</strong>:智能体只能从它<strong>实际经历过的对局</strong>里学,<strong>训练分布决定能力边界</strong>——这也是<a class="xref" href="chapter-20.html">第 20 章 RLHF</a> 里“奖励从哪来、跟谁对齐”如此关键的原因。</p>
+          </div>
+        </div>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/demo/rl_tictactoe/main.cpp · 评估与可选对战(精简)</figcaption>
           <pre class="code-walk__code"><code>auto random_eval = agent.Evaluate(env, OpponentType::RANDOM, eval_games);
@@ -254,6 +301,7 @@ if (option.play)
             <li><code>TicTacToeEnv</code>:三进制 <code>state_key</code>、终局奖励、合法动作过滤,对应<a class="xref" href="chapter-12.html">第 12 章</a> MDP 五件套。</li>
             <li><code>TabularQLearning</code>:ε-greedy 选子、TD 更新 Q、<code>DecayEpsilon</code> 减探索。</li>
             <li><code>RunEpisode</code> = agent 走 → opponent 走 → <code>Update</code>;价值从赢棋终局倒灌回开局空盘。</li>
+            <li><strong>跟谁练就擅长打谁</strong>:对随机训练→对随机不败率 99.7% 但打不过最优;对最优训练→守和最优(不败 100%)但对随机只剩约 59% 胜。训练分布决定能力边界。</li>
             <li>状态/动作再变大 → DQN / PPO / RLHF(<a class="xref" href="chapter-12.html">第 12 章</a>、<a class="xref" href="chapter-20.html">第 20 章</a>)。</li>
           </ul>
         </section>
@@ -276,6 +324,12 @@ if (option.play)
             <summary class="quiz__q">问题 3:训练和评估时 SelectAction 的 explore 参数为什么不同?</summary>
             <div class="quiz__a">
               <p>训练要 ε-greedy 探索新走法;评估要测“学成之后有多强”,应关掉随机探索、纯 greedy 下——否则胜率会被探索的烂棋拉低,测不准真实水平。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:同一份代码,为什么对随机对手训练出来的智能体打不过最优对手,反过来对最优训练的又赢不了几个随机对手?</summary>
+            <div class="quiz__a">
+              <p>因为智能体只能从<strong>它实际经历过的对局</strong>里学。拿随机对手练,它见惯了“对方乱下”,学会的是逮失误猛攻,没见过高手的严密下法,遇到最优对手就成片输;拿最优对手练,它学会的是“怎么都不输”(井字棋双方无失误必和),却没练过“逮住对方失误往死里赢”,所以对爱犯错的随机对手反而赢得少。这就是强化学习的<strong>训练分布决定能力边界</strong>,也是 <a class="xref" href="chapter-20.html">第 20 章 RLHF</a> 里“奖励/对手跟谁对齐”特别关键的原因。</p>
             </div>
           </details>
         </div>

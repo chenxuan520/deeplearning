@@ -33,6 +33,8 @@
           <li id="g-crossentropy"><strong>交叉熵 cross-entropy</strong> — 分类常用损失,−log(正确类的预测概率)。<a href="chapter-04.html">→ 第 4 章</a></li>
           <li id="g-softmax"><strong>softmax</strong> — 把一排分数变成一排加起来为 1 的概率。<a href="chapter-04.html">→ 第 4 章</a></li>
           <li id="g-gd"><strong>梯度下降 gradient descent</strong> — 沿梯度反方向一小步步降低损失。<a href="chapter-05.html">→ 第 5 章</a></li>
+          <li id="g-gradient" data-aliases="梯度,gradient,偏导数,梯度向量"><strong>梯度 gradient</strong> — 损失对<strong>每个参数</strong>偏导排成的一个向量,和参数同长,指向“上升最快”的方向。<a href="chapter-05.html#梯度是一个向量-几百万个旋钮一起转">→ 第 5 章</a></li>
+          <li id="g-saddle" data-aliases="鞍点,saddle point,平坦区,高原,plateau"><strong>鞍点 saddle point</strong> — 有的方向上坡、有的方向下坡的点,梯度也≈0 却不是谷底;高维里比局部最小更常见,和平坦区一起是训练卡住的主因。<a href="chapter-05.html#8-比局部谷底更常拦路的-鞍点和大片平原">→ 第 5 章</a></li>
           <li id="g-lr"><strong>学习率 learning rate</strong> — 每步挪多大;太大发散、太小太慢。<a href="chapter-05.html">→ 第 5 章</a></li>
           <li id="g-batch"><strong>batch / epoch / step</strong> — 一小撮样本 / 全数据过一遍 / 一次参数更新。<a href="chapter-05.html">→ 第 5 章</a></li>
           <li id="g-backprop"><strong>反向传播 backpropagation</strong> — 用链式法则把误差从输出反传回每个参数。<a href="chapter-06.html">→ 第 6 章</a></li>

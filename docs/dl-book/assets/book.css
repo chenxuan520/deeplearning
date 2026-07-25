@@ -945,9 +945,18 @@ details[open] .quiz__q::after {
 
 @media (min-width: 1320px) {
   .book-layout {
-    max-width: 1380px;
-    grid-template-columns: 240px minmax(0, 50rem) 240px;
+    max-width: 1480px;
+    grid-template-columns: 248px minmax(0, 52rem) 248px;
     gap: 2.4rem;
+  }
+}
+
+/* 超宽屏: 让侧栏、间距和图/代码/表格吃掉多余留白, 正文文字仅适度放宽 */
+@media (min-width: 1680px) {
+  .book-layout {
+    max-width: 1600px;
+    grid-template-columns: 280px minmax(0, 56rem) 300px;
+    gap: 3rem;
   }
 }
 

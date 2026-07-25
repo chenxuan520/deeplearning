@@ -24,10 +24,12 @@
           <h2>读完这一章,你会明白</h2>
           <ul>
             <li>“梯度”到底是什么,为什么它指向“上升最快的方向”、更新时又要朝它的<strong>反方向</strong>走;</li>
+            <li>为什么梯度其实是<strong>一个向量</strong>——几百万个参数怎么“同时”决定往哪走;</li>
             <li>参数更新那条核心公式 <var>w</var> ← <var>w</var> − <var>η</var>·梯度;</li>
             <li>学习率 <var>η</var> 是什么、太大太小分别会怎样;</li>
             <li>什么是 mini-batch SGD,以及 <strong>batch / epoch / step</strong> 三个词到底谁管谁;</li>
-            <li>batch size 该取多大——“稳”和“快”之间的权衡,并逐行读懂参数更新的真实代码。</li>
+            <li>batch size 该取多大——“稳”和“快”之间的权衡,并逐行读懂参数更新的真实代码;</li>
+            <li>训练更容易卡在哪里:比起“局部谷底”,高维空间里其实<strong>鞍点</strong>和大片平原更常见。</li>
           </ul>
         </section>
 
@@ -91,6 +93,67 @@
           <span class="label">新参数 = 旧参数 − 学习率 × 梯度。对每一个参数都这么做一遍</span>
         </div>
 
+        <h3>梯度是一个“向量”:几百万个旋钮一起转</h3>
+        <p>
+          上面为了好懂,只画了<strong>一个</strong>参数的山谷。但真实网络有成千上万、乃至上亿个参数,
+          它们<strong>一起</strong>决定了你此刻站在哪、脚下海拔(损失)多高。这时“最陡的方向”就不再是一根数轴上的
+          左还是右,而是<strong>高维空间里的一个方向</strong>——朝这个方向,损失上升得最快。
+        </p>
+        <p>
+          怎么找到它?做法其实没变:对<strong>每一个</strong>参数,都单独算一个“它动一点点、损失会变多少”的
+          <a class="xref" href="chapter-01.html#5-导数-斜率告诉你往哪走会变大">导数</a>(叫<strong>偏导数</strong>,因为只看这一个、把别的暂时按住不动);
+          再把这些偏导数<strong>按参数顺序排成一串</strong>,就得到一个和参数<strong>一样长</strong>的向量——这才是
+          <span class="term">梯度(gradient)</span>的全貌。它的每个分量各管一个参数“该往哪调”,合在一起,恰好指向让损失
+          上升最快的那个方向(这正是<a class="xref" href="chapter-01.html#7-矩阵与向量求导-其实就是一堆标量求导打包">第 1 章“梯度和参数同形状”</a>那句话的意思)。
+        </p>
+
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 640 300" role="img" aria-label="两个参数的损失等高线图:梯度是两个偏导打包成的向量,指向上坡,它的反方向是下坡一步">
+              <defs>
+                <marker id="gvec-up" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#ff8fa3" /></marker>
+                <marker id="gvec-down" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8ef0d1" /></marker>
+                <marker id="gvec-comp" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#6ac3ff" /></marker>
+              </defs>
+              <!-- 平面坐标: 两个参数张成的平面 -->
+              <line x1="50" y1="275" x2="612" y2="275" stroke="#46587a" stroke-width="1.4" />
+              <line x1="50" y1="34" x2="50" y2="275" stroke="#46587a" stroke-width="1.4" />
+              <text x="606" y="294" text-anchor="end" fill="#8499bd" font-size="12">参数 w₁</text>
+              <text x="30" y="46" fill="#8499bd" font-size="12">参数 w₂</text>
+              <!-- 等高线: 同心椭圆, 中心是谷底; 一圈 = 损失相同的一条"等高线" -->
+              <g fill="none" stroke="#33507d">
+                <ellipse cx="250" cy="196" rx="220" ry="118" opacity="0.45" />
+                <ellipse cx="250" cy="196" rx="165" ry="90" opacity="0.6" />
+                <ellipse cx="250" cy="196" rx="110" ry="60" opacity="0.75" />
+                <ellipse cx="250" cy="196" rx="60" ry="32" opacity="0.9" />
+              </g>
+              <circle cx="250" cy="196" r="5" fill="#8ef0d1" />
+              <text x="250" y="216" text-anchor="middle" fill="#8ef0d1" font-size="12">谷底(损失最小)</text>
+              <!-- 分量: 两个偏导 -->
+              <line x1="420" y1="120" x2="502" y2="120" stroke="#6ac3ff" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#gvec-comp)" />
+              <text x="470" y="112" text-anchor="middle" fill="#6ac3ff" font-size="11">∂L/∂w₁</text>
+              <line x1="420" y1="120" x2="420" y2="58" stroke="#6ac3ff" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#gvec-comp)" />
+              <text x="420" y="50" text-anchor="middle" fill="#6ac3ff" font-size="11">∂L/∂w₂</text>
+              <!-- 合成梯度: 指向上坡(远离谷底) -->
+              <line x1="420" y1="120" x2="520" y2="76" stroke="#ff8fa3" stroke-width="2.8" marker-end="url(#gvec-up)" />
+              <text x="532" y="72" fill="#ff8fa3" font-size="12">梯度 g(最陡上坡)</text>
+              <!-- 更新: -η·g 指向下坡(朝谷底) -->
+              <line x1="420" y1="120" x2="322" y2="163" stroke="#8ef0d1" stroke-width="2.4" marker-end="url(#gvec-down)" />
+              <text x="300" y="150" text-anchor="end" fill="#8ef0d1" font-size="12">−η·g(下坡一步)</text>
+              <!-- 当前点 -->
+              <circle cx="420" cy="120" r="7" fill="#ffcf72" />
+              <text x="428" y="112" fill="#ffcf72" font-size="12">当前参数</text>
+            </svg>
+          </div>
+          <p class="figure__cap">俯视两个参数张成的平面:一圈“等高线”就是损失相同的一条线,越往里损失越低。两个偏导 ∂L/∂w₁、∂L/∂w₂ 是梯度的两个<strong>分量</strong>,合成的粉色向量 g 指向<strong>上坡</strong>;朝它<strong>反方向</strong>迈 η 那么大一步(绿色),就下坡了。参数一多,这张图只是从 2 维变成上百万维,道理一模一样。</p>
+        </div>
+
+        <p>
+          所以那条更新公式 <var>w</var> ← <var>w</var> − <var>η</var>·梯度,其实是<strong>对整串参数同时做</strong>的:
+          每个参数各自朝自己那个分量的反方向挪一点点,合起来,就是整个网络朝“损失下降最快”的方向迈了一步。
+          小结里那句“对每一个参数都做一遍”,做的就是这件事。
+        </p>
+
         <h2>3. 学习率 η:每一步迈多大</h2>
         <p>
           公式里的 <var>η</var>(读作 eta)就是<span class="term">学习率(learning rate)</span>,
@@ -141,6 +204,15 @@ ApplyGradient(B);                      <b class="cw-tag">4</b></code></pre>
             <li>用算好的梯度更新一次参数。<code>B</code> 是这批的样本数,用来把梯度取平均。</li>
           </ol>
         </figure>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">为什么是“取平均”而不是“求和”</span>
+          <p>
+            一批里每个样本都会各自贡献一份梯度,代码把它们<strong>累加</strong>后再<strong>除以 <var>B</var></strong>(见后面 <code>ApplyGradient</code> 里的 <code>1/B</code>)。
+            为什么要除?因为这样一来,梯度的<strong>大小就和“这批抓了多少个样本”无关</strong>了——batch 取 32 还是 256,得到的都是“平均每个样本希望参数往哪挪”,
+            步子大小只由学习率 <var>η</var> 说了算。要是只求和不平均,batch 越大梯度越大,等于偷偷放大了步长。
+            (正因如此,后面<a class="xref" href="chapter-05.html#6-batch-size-该取多大-一个现实的权衡">第 6 节</a>才敢说“batch 翻倍、学习率大致也翻倍”。)
+          </p>
+        </div>
 
         <h2>5. batch、epoch、step:三个最容易搞混的词</h2>
         <p>
@@ -299,6 +371,57 @@ w_row[i] -= w_change;                               <b class="cw-tag">3</b></cod
           <p class="figure__cap">动手玩:拖动学习率 η,点“走一步 / 自动跑”,看小球怎么滑向谷底。把 η 调到很大(如 &gt; 10),它会<strong>反复横跳直到发散</strong>——这就是“学习率太大”的样子。</p>
         </div>
 
+        <h2>8. 比“局部谷底”更常拦路的:鞍点和大片平原</h2>
+        <p>
+          第 2、3 节那张图是<strong>一个参数</strong>的直觉,很容易让人以为“训练卡住 = 掉进了某个局部谷底”。但在几百万维的真实空间里,
+          研究发现真正常见的“梯度接近 0、走不动”的地方,<strong>往往不是局部谷底,而是另外两种地形</strong>:
+        </p>
+        <ul>
+          <li><strong>鞍点(saddle point)</strong>:同一个点,<strong>有的方向是下坡、有的方向是上坡</strong>——就像一副<strong>马鞍</strong>(你坐上去:左右两侧往下垂,前后两头往上翘)。这里梯度也几乎为 0,但它<strong>根本不是谷底</strong>,只要挑对方向仍能继续往下走。维度越高,“所有方向都朝上”(真局部谷底)越罕见,“有上有下”(鞍点)越普遍。</li>
+          <li><strong>平坦区 / 高原(plateau)</strong>:大片近乎水平的区域,坡度极小,梯度小得可怜。参数不是不能动,而是每步都挪得微乎其微,训练像陷进泥潭、半天不见损失下降。</li>
+        </ul>
+        <p>
+          鞍点为什么“骗人”?关键在于:<strong>同一个点,从不同方向看,坡完全不一样</strong>。下面把马鞍<strong>切两刀</strong>看剖面——
+          一刀沿“下坡方向”,一刀沿“上坡方向”,你就明白为什么它梯度为 0 却不是谷底:
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 640 300" role="img" aria-label="鞍点的两个剖面:沿一个方向切开是向下凹的谷、沿另一个方向切开是向上凸的脊,同一个中心点梯度都为0">
+              <defs>
+                <marker id="sad-arrow" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" /></marker>
+              </defs>
+              <!-- ===== 左剖面: 沿"下坡方向"切, 是一个 U 形谷 (中心最低) ===== -->
+              <text x="165" y="34" text-anchor="middle" fill="#8ef0d1" font-size="13" font-weight="700">沿「下坡方向」切一刀</text>
+              <text x="165" y="52" text-anchor="middle" fill="#8499bd" font-size="11">两边高、中间低 → 中心是这条线的谷底</text>
+              <!-- U形谷曲线 -->
+              <path d="M40 80 Q 165 250 290 80" fill="none" stroke="#8ef0d1" stroke-width="3" />
+              <!-- 中心点 (最低) -->
+              <circle cx="165" cy="205" r="6.5" fill="#ffcf72" />
+              <!-- 两侧向下的箭头, 表示从中心往两边看都是... 实际这里中心是最低, 往两边是上坡; 箭头示意"从两边往中心滚"下坡 -->
+              <path d="M70 108 Q 120 175 158 200" fill="none" stroke="#8ef0d1" stroke-width="2" marker-end="url(#sad-arrow)" opacity="0.9" />
+              <path d="M260 108 Q 210 175 172 200" fill="none" stroke="#8ef0d1" stroke-width="2" marker-end="url(#sad-arrow)" opacity="0.9" />
+              <text x="165" y="232" text-anchor="middle" fill="#ffcf72" font-size="11">鞍点</text>
+              <!-- 分隔竖线 -->
+              <line x1="320" y1="30" x2="320" y2="285" stroke="#33507d" stroke-width="1.2" stroke-dasharray="5 6" />
+              <!-- ===== 右剖面: 沿"上坡方向"切, 是一个 ∩ 形脊 (中心最高) ===== -->
+              <text x="475" y="34" text-anchor="middle" fill="#ff8fa3" font-size="13" font-weight="700">沿「上坡方向」切一刀</text>
+              <text x="475" y="52" text-anchor="middle" fill="#8499bd" font-size="11">两边低、中间高 → 中心是这条线的顶</text>
+              <!-- ∩形脊曲线 -->
+              <path d="M350 235 Q 475 65 600 235" fill="none" stroke="#ff8fa3" stroke-width="3" />
+              <!-- 中心点 (最高), 与左图同一个鞍点 -->
+              <circle cx="475" cy="118" r="6.5" fill="#ffcf72" />
+              <text x="475" y="108" text-anchor="middle" fill="#ffcf72" font-size="11">同一个鞍点</text>
+              <text x="475" y="270" text-anchor="middle" fill="#8499bd" font-size="11">往两边都是下坡 → 中心其实是「山脊顶」</text>
+            </svg>
+          </div>
+          <p class="figure__cap">同一个黄点(鞍点),换个方向切开,面貌完全相反:<strong>左图</strong>沿一个方向切,它是<strong>谷底</strong>(往两边升);<strong>右图</strong>沿另一个方向切,它却是<strong>山脊顶</strong>(往两边降)。正因为“有的方向还能往下走”,它虽然梯度≈0,却<strong>不是真正的谷底</strong>——只要沿右图那种方向迈出去,损失还能继续降。</p>
+        </div>
+        <p>
+          好在<strong>这些“卡住”都有办法</strong>:mini-batch 带来的随机噪声能推着参数从鞍点上“滑”下去;
+          <a class="xref" href="chapter-08.html#3-momentum-给下山加惯性">第 8 章的动量(Momentum)</a>给下山加惯性,能冲过平坦区和鞍点;
+          <a class="xref" href="chapter-08.html#5-adam-把两者合体默认之选">Adam</a> 还会给每个参数配自适应步长,在坡度很小的方向也敢多挪一点。所以“卡住”并不可怕,它正是第 8 章那些优化器要解决的问题。
+        </p>
+
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
@@ -306,9 +429,11 @@ w_row[i] -= w_change;                               <b class="cw-tag">3</b></cod
             <li>梯度 = 损失对参数的导数,指向“上升最快”的方向;朝它的<strong>反方向</strong>走,损失下降。</li>
             <li>核心更新规则:<var>w</var> ← <var>w</var> − <var>η</var>·梯度,对每个参数都做一遍。</li>
             <li>学习率 <var>η</var> 是步长:太小慢、太大震荡发散、刚好又快又稳。</li>
-            <li>实践用 mini-batch SGD:每次随机抓一小批样本估算梯度并更新一次。</li>
+            <li>梯度其实是<strong>一个向量</strong>:把损失对每个参数的偏导排成一串,合起来指向“上升最快”的方向;更新就是让每个参数各自朝自己那个分量的反方向挪一点。</li>
+            <li>实践用 mini-batch SGD:每次随机抓一小批样本估算梯度并更新一次;梯度要<strong>除以 batch 大小取平均</strong>,步长才只由学习率决定。</li>
             <li><strong>batch</strong> 是一口吃多少、<strong>step</strong> 是更新几次、<strong>epoch</strong> 是全套数据刷几遍;三者用“样本数 ÷ batch”串起来。</li>
             <li>batch size 是“稳(大)vs 快而抖(小)”的权衡,常取 32/64/128;它一变,学习率通常要跟着线性缩放。</li>
+            <li>训练卡住多半不是掉进“局部谷底”,而是遇到<strong>鞍点</strong>或大片平原;mini-batch 噪声和第 8 章的动量 / Adam 能帮着走出来。</li>
           </ul>
         </section>
 
@@ -330,6 +455,12 @@ w_row[i] -= w_change;                               <b class="cw-tag">3</b></cod
             <summary class="quiz__q">问题 3:为什么用“一小批”样本而不是每次都用全部数据?</summary>
             <div class="quiz__a">
               <p>全量数据每走一步都要算很久,太慢。小批量用少量样本就能得到对梯度的合理估计,更新更频繁、训练更快,还能借助随机性帮助跳出一些差的局部谷底。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:一个有一百万个参数的网络,它某一步的“梯度”是一个数,还是一串数?为什么?</summary>
+            <div class="quiz__a">
+              <p>是<strong>一串数(一个向量)</strong>,而且正好有一百万个分量。因为梯度要告诉<strong>每一个</strong>参数“该往哪个方向、挪多少”,所以它对每个参数各存一个偏导数,长度和参数个数相同。这一整串合起来,才指向让损失上升最快的方向;更新时对每个分量取反方向走一小步。</p>
             </div>
           </details>
         </div>
