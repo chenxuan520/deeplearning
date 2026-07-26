@@ -152,6 +152,38 @@ Conv2D::RC Conv2D::Backward(const Tensor3D &grad_output, Tensor3D &grad_input,
     err_msg_ = "[Conv2D::Backward] Invalid learning rate";
     return INVALID_DATA;
   }
+  const int padded_height = static_cast<int>(last_input_padded_[0].size());
+  const int padded_width = static_cast<int>(last_input_padded_[0][0].size());
+  const int out_height = (padded_height - kernel_height_) / stride_ + 1;
+  const int out_width = (padded_width - kernel_width_) / stride_ + 1;
+  if (!Tensor3DHasShape(grad_output, output_channels_, out_height, out_width)) {
+    err_msg_ = "[Conv2D::Backward] Invalid grad_output shape";
+    return INVALID_DATA;
+  }
+  Tensor4D grad_weight;
+  std::vector<double> grad_bias;
+  auto rc = BackwardGradient(grad_output, grad_input, grad_weight, grad_bias);
+  if (rc != SUCCESS) {
+    return rc;
+  }
+  if (learning_rate > 0) {
+    return ApplyGradient(grad_weight, grad_bias, learning_rate);
+  }
+  return SUCCESS;
+}
+
+Conv2D::RC Conv2D::BackwardGradient(const Tensor3D &grad_output,
+                                    Tensor3D &grad_input,
+                                    Tensor4D &grad_weight,
+                                    std::vector<double> &grad_bias) {
+  if (!is_init_) {
+    err_msg_ = "[Conv2D::BackwardGradient] Conv2D not init";
+    return NOT_INIT;
+  }
+  if (!has_forward_cache_) {
+    err_msg_ = "[Conv2D::BackwardGradient] Missing forward cache";
+    return INVALID_DATA;
+  }
 
   const int padded_height = static_cast<int>(last_input_padded_[0].size());
   const int padded_width = static_cast<int>(last_input_padded_[0][0].size());
@@ -159,15 +191,15 @@ Conv2D::RC Conv2D::Backward(const Tensor3D &grad_output, Tensor3D &grad_input,
       (padded_height - kernel_height_) / stride_ + 1;
   const int out_width = (padded_width - kernel_width_) / stride_ + 1;
   if (!Tensor3DHasShape(grad_output, output_channels_, out_height, out_width)) {
-    err_msg_ = "[Conv2D::Backward] Invalid grad_output shape";
+    err_msg_ = "[Conv2D::BackwardGradient] Invalid grad_output shape";
     return INVALID_DATA;
   }
 
-  Tensor4D grad_weight(output_channels_,
-                       Tensor3D(input_channels_,
-                                Matrix(kernel_height_,
-                                       std::vector<double>(kernel_width_, 0.0))));
-  std::vector<double> grad_bias(output_channels_, 0.0);
+  grad_weight.assign(output_channels_,
+                     Tensor3D(input_channels_,
+                              Matrix(kernel_height_,
+                                     std::vector<double>(kernel_width_, 0.0))));
+  grad_bias.assign(output_channels_, 0.0);
   Tensor3D grad_input_padded =
       MakeTensor3D(input_channels_, padded_height, padded_width);
 
@@ -202,20 +234,59 @@ Conv2D::RC Conv2D::Backward(const Tensor3D &grad_output, Tensor3D &grad_input,
     }
   }
 
-  if (learning_rate > 0) {
-    for (int oc = 0; oc < output_channels_; oc++) {
-      bias_[oc] -= learning_rate * grad_bias[oc];
-      for (int ic = 0; ic < input_channels_; ic++) {
-        for (int kh = 0; kh < kernel_height_; kh++) {
-          for (int kw = 0; kw < kernel_width_; kw++) {
-            weight_[oc][ic][kh][kw] -=
-                learning_rate * grad_weight[oc][ic][kh][kw];
-          }
+  return SUCCESS;
+}
+
+Conv2D::RC Conv2D::ApplyGradient(const Tensor4D &grad_weight,
+                                 const std::vector<double> &grad_bias,
+                                 double learning_rate,
+                                 double gradient_scale) {
+  if (!is_init_) {
+    err_msg_ = "[Conv2D::ApplyGradient] Conv2D not init";
+    return NOT_INIT;
+  }
+  if (learning_rate < 0) {
+    err_msg_ = "[Conv2D::ApplyGradient] Invalid learning rate";
+    return INVALID_DATA;
+  }
+  if (static_cast<int>(grad_bias.size()) != output_channels_ ||
+      static_cast<int>(grad_weight.size()) != output_channels_) {
+    err_msg_ = "[Conv2D::ApplyGradient] Invalid gradient shape";
+    return INVALID_DATA;
+  }
+  for (const auto &out_channel : grad_weight) {
+    if (static_cast<int>(out_channel.size()) != input_channels_) {
+      err_msg_ = "[Conv2D::ApplyGradient] Invalid gradient shape";
+      return INVALID_DATA;
+    }
+    for (const auto &in_channel : out_channel) {
+      if (static_cast<int>(in_channel.size()) != kernel_height_) {
+        err_msg_ = "[Conv2D::ApplyGradient] Invalid gradient shape";
+        return INVALID_DATA;
+      }
+      for (const auto &row : in_channel) {
+        if (static_cast<int>(row.size()) != kernel_width_) {
+          err_msg_ = "[Conv2D::ApplyGradient] Invalid gradient shape";
+          return INVALID_DATA;
         }
       }
     }
   }
 
+  if (learning_rate == 0.0 || gradient_scale == 0.0) {
+    return SUCCESS;
+  }
+  for (int oc = 0; oc < output_channels_; oc++) {
+    bias_[oc] -= learning_rate * gradient_scale * grad_bias[oc];
+    for (int ic = 0; ic < input_channels_; ic++) {
+      for (int kh = 0; kh < kernel_height_; kh++) {
+        for (int kw = 0; kw < kernel_width_; kw++) {
+          weight_[oc][ic][kh][kw] -=
+              learning_rate * gradient_scale * grad_weight[oc][ic][kh][kw];
+        }
+      }
+    }
+  }
   return SUCCESS;
 }
 

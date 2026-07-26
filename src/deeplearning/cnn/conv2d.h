@@ -24,6 +24,11 @@ public:
   RC Forward(const Tensor3D &input, Tensor3D &output);
   RC Backward(const Tensor3D &grad_output, Tensor3D &grad_input,
               double learning_rate);
+  RC BackwardGradient(const Tensor3D &grad_output, Tensor3D &grad_input,
+                      Tensor4D &grad_weight, std::vector<double> &grad_bias);
+  RC ApplyGradient(const Tensor4D &grad_weight,
+                   const std::vector<double> &grad_bias, double learning_rate,
+                   double gradient_scale = 1.0);
 
   void set_random_seed(int seed);
   RC set_weight(const Tensor4D &weight);

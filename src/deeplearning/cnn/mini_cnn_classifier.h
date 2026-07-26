@@ -44,11 +44,19 @@ public:
   RC Predict(const Tensor3D &input, int &label);
   RC Train(const std::vector<Tensor3D> &images, const std::vector<int> &labels,
            std::function<void(int epoch_num, double average_loss,
-                              bool &early_stop)>
-               each_epoch_call = nullptr,
+                               bool &early_stop)>
+                each_epoch_call = nullptr,
            int epoch_num = 1, double learning_rate = 0.1);
+  RC TrainBatch(
+      const std::vector<Tensor3D> &images, const std::vector<int> &labels,
+      int batch_size,
+      std::function<void(int epoch_num, double average_loss, bool &early_stop)>
+          each_epoch_call = nullptr,
+      int epoch_num = 1, double learning_rate = 0.1);
 
   void set_random_seed(int seed);
+  void set_train_thread_num(int thread_num);
+  int train_thread_num() const { return train_thread_num_; }
   RC set_fc_weight(const Matrix &weight);
   RC set_fc_bias(const std::vector<double> &bias);
 
@@ -61,14 +69,42 @@ public:
   const std::vector<double> &fc_bias() const;
 
 private:
+  struct GradientBuffer {
+    Matrix fc_weight;
+    std::vector<double> fc_bias;
+    Conv2D::Tensor4D conv_weight;
+    std::vector<double> conv_bias;
+  };
+
   RC ValidateInput(const Tensor3D &input, const char *func_name);
+  bool InputHasValidShape(const Tensor3D &input) const;
   RC ForwardFeature(const Tensor3D &input, Tensor3D &conv_output,
                     Tensor3D &relu_output, Tensor3D &pooled_output,
                     std::vector<double> &flattened);
+  RC ForwardFeatureWithLayers(const Tensor3D &input, Conv2D &conv,
+                              MaxPool2D &pool, Tensor3D &conv_output,
+                              Tensor3D &relu_output,
+                              Tensor3D &pooled_output,
+                              std::vector<double> &flattened,
+                              std::string &err_msg) const;
+  void InitGradientBuffer(GradientBuffer &gradient) const;
+  void AddGradientBuffer(GradientBuffer &dst,
+                         const GradientBuffer &src) const;
+  RC ApplyGradientBuffer(const GradientBuffer &gradient, double learning_rate,
+                         double gradient_scale);
+  RC AccumulateGradientsRange(
+      const std::vector<Tensor3D> &images, const std::vector<int> &labels,
+      const std::vector<int> &order, int begin, int end,
+      GradientBuffer &gradient, double &loss_sum, std::string &err_msg) const;
+  RC AccumulateGradientsBatchParallel(
+      const std::vector<Tensor3D> &images, const std::vector<int> &labels,
+      const std::vector<int> &order, int begin, int end,
+      GradientBuffer &gradient, double &loss_sum);
 
 private:
   Config config_;
   int flattened_dim_ = 0;
+  int train_thread_num_ = 1;
   Matrix fc_weight_;
   std::vector<double> fc_bias_;
   Conv2D conv_;
