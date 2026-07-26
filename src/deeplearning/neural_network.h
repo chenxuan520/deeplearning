@@ -82,6 +82,10 @@ public:
   const std::vector<std::vector<double>> &neuron_bias();
 
   void set_learning_rate(double rate);
+  // Optional CPU parallelism for minibatch gradient calculation. Default is 1,
+  // which preserves the original single-threaded training path.
+  void set_train_thread_num(int thread_num);
+  int train_thread_num() const { return train_thread_num_; }
   void set_random_seed(int seed);
   RC set_loss_function(LossType type);
   RC set_activate_function(ActivateType type);
@@ -112,11 +116,30 @@ public:
   std::shared_ptr<LRScheduler> lr_scheduler() { return lr_scheduler_; }
 
 private:
+  struct GradientBuffer {
+    std::vector<std::vector<double>> bias;
+    std::vector<std::vector<std::vector<double>>> weight;
+  };
+
   void InitParamWithLayer(const std::vector<int> &layer);
 
   void ResizeBatchBuffers(int batch_size);
 
   void ResetGradients();
+
+  void InitGradientBuffer(GradientBuffer &buffer) const;
+
+  RC AccumulateGradientsBatchParallel(
+      const std::vector<std::vector<double>> &batch_data,
+      const std::vector<std::vector<double>> &batch_target);
+
+  RC AccumulateGradientsRange(
+      const std::vector<std::vector<double>> &batch_data,
+      const std::vector<std::vector<double>> &batch_target, int begin, int end,
+      const std::shared_ptr<LossFunction> &loss_function,
+      const std::shared_ptr<ActivateFunction> &activate_function,
+      const std::shared_ptr<SoftmaxFunction> &softmax_function,
+      GradientBuffer &gradient, std::string &err_msg) const;
 
   RC ForwardPropagationBatch(
       const std::vector<std::vector<double>> &batch_data);
@@ -143,6 +166,7 @@ private:
   NetworkStatus network_status_ = NETWORK_STATUS_UNINIT;
   int rand_seed_ = 0;
   double learning_rate_ = 0.1;
+  int train_thread_num_ = 1;
   std::vector<int> layer_;
 
   // 共享参数 (训练期间被 ApplyGradient 更新)

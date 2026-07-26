@@ -81,7 +81,75 @@ BuildNet(NeuralNetwork &net, int seed) {
   return NeuralNetwork::SUCCESS;
 }
 
+inline bool SameParams(NeuralNetwork &lhs, NeuralNetwork &rhs,
+                       double eps) {
+  const auto &lw = lhs.neuron_weight();
+  const auto &rw = rhs.neuron_weight();
+  const auto &lb = lhs.neuron_bias();
+  const auto &rb = rhs.neuron_bias();
+  if (lw.size() != rw.size() || lb.size() != rb.size()) {
+    return false;
+  }
+  for (int l = 0; l < (int)lb.size(); l++) {
+    if (lb[l].size() != rb[l].size()) {
+      return false;
+    }
+    for (int i = 0; i < (int)lb[l].size(); i++) {
+      if (std::fabs(lb[l][i] - rb[l][i]) > eps) {
+        return false;
+      }
+    }
+  }
+  for (int l = 0; l < (int)lw.size(); l++) {
+    if (lw[l].size() != rw[l].size()) {
+      return false;
+    }
+    for (int o = 0; o < (int)lw[l].size(); o++) {
+      if (lw[l][o].size() != rw[l][o].size()) {
+        return false;
+      }
+      for (int i = 0; i < (int)lw[l][o].size(); i++) {
+        if (std::fabs(lw[l][o][i] - rw[l][o][i]) > eps) {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
 } // namespace mini_batch_test_detail
+
+TEST(MiniBatch, TrainThreadNumConfig) {
+  using namespace deeplearning;
+
+  NeuralNetwork net;
+  MUST_EQUAL(net.train_thread_num(), 1);
+  net.set_train_thread_num(0);
+  MUST_EQUAL(net.train_thread_num(), 1);
+  net.set_train_thread_num(4);
+  MUST_EQUAL(net.train_thread_num(), 4);
+}
+
+TEST(MiniBatch, ParallelBatchMatchesSingleThreadOneStep) {
+  using namespace mini_batch_test_detail;
+  using namespace deeplearning;
+  std::vector<std::vector<double>> tr, tr_t;
+  MakeData(3, 4, tr, tr_t);
+
+  NeuralNetwork serial_net;
+  NeuralNetwork parallel_net;
+  MUST_EQUAL(BuildNet(serial_net, 7), NeuralNetwork::SUCCESS);
+  MUST_EQUAL(BuildNet(parallel_net, 7), NeuralNetwork::SUCCESS);
+  parallel_net.set_train_thread_num(4);
+
+  auto serial_rc = serial_net.Train(tr, tr_t, nullptr, 1, 4);
+  auto parallel_rc = parallel_net.Train(tr, tr_t, nullptr, 1, 4);
+  MUST_TRUE(serial_rc == NeuralNetwork::SUCCESS, serial_net.err_msg());
+  MUST_TRUE(parallel_rc == NeuralNetwork::SUCCESS, parallel_net.err_msg());
+  MUST_TRUE(SameParams(serial_net, parallel_net, 1e-12),
+            "parallel one-step params should match single-thread");
+}
 
 TEST(MiniBatch, ConvergeBatch1) {
   using namespace mini_batch_test_detail;
@@ -136,6 +204,25 @@ TEST(MiniBatch, ConvergeBatch32) {
   double acc = Accuracy(net, te, te_t);
   DEBUG("batch=32 acc=" << acc);
   MUST_TRUE(acc > 0.85, "batch=32 should converge");
+}
+
+TEST(MiniBatch, ConvergeBatch32Parallel) {
+  using namespace mini_batch_test_detail;
+  using namespace deeplearning;
+  std::vector<std::vector<double>> tr, tr_t, te, te_t;
+  MakeData(1, 2000, tr, tr_t);
+  MakeData(2, 500, te, te_t);
+
+  NeuralNetwork net;
+  MUST_EQUAL(BuildNet(net, 1), NeuralNetwork::SUCCESS);
+  net.set_train_thread_num(4);
+
+  auto rc = net.Train(tr, tr_t, nullptr, 4000, 32);
+  MUST_TRUE(rc == NeuralNetwork::SUCCESS, net.err_msg());
+
+  double acc = Accuracy(net, te, te_t);
+  DEBUG("batch=32 parallel acc=" << acc);
+  MUST_TRUE(acc > 0.8, "parallel batch=32 should converge");
 }
 
 // benchmark: 公平对比 (相同总样本数, 不同 batch_size)

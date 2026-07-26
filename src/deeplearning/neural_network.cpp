@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <system_error>
+#include <thread>
 
 namespace deeplearning {
 
@@ -88,12 +90,18 @@ NeuralNetwork::RC NeuralNetwork::Train(
       batch_target[j] = target[index_pos[batch_start + j]];
     }
 
-    auto rc = ForwardPropagationBatch(batch_data);
-    if (rc != SUCCESS) {
-      return rc;
+    RC rc = SUCCESS;
+    if (train_thread_num_ > 1 && B > 1) {
+      ResetGradients();
+      rc = AccumulateGradientsBatchParallel(batch_data, batch_target);
+    } else {
+      rc = ForwardPropagationBatch(batch_data);
+      if (rc != SUCCESS) {
+        return rc;
+      }
+      ResetGradients();
+      rc = BackPropagationBatch(batch_target);
     }
-    ResetGradients();
-    rc = BackPropagationBatch(batch_target);
     if (rc != SUCCESS) {
       return rc;
     }
@@ -254,6 +262,7 @@ NeuralNetwork::RC NeuralNetwork::Clone(const NeuralNetwork &old) {
   grad_weight_ = old.grad_weight_;
   batch_buffer_size_ = old.batch_buffer_size_;
   learning_rate_ = old.learning_rate_;
+  train_thread_num_ = old.train_thread_num_;
   rand_seed_ = old.rand_seed_;
   network_status_ = old.network_status_;
 
@@ -292,6 +301,10 @@ const std::vector<std::vector<double>> &NeuralNetwork::neuron_bias() {
 }
 
 void NeuralNetwork::set_learning_rate(double rate) { learning_rate_ = rate; }
+
+void NeuralNetwork::set_train_thread_num(int thread_num) {
+  train_thread_num_ = std::max(1, thread_num);
+}
 
 void NeuralNetwork::set_random_seed(int seed) {
   rand_seed_ = seed;
@@ -408,6 +421,232 @@ void NeuralNetwork::ResetGradients() {
       }
     }
   }
+}
+
+void NeuralNetwork::InitGradientBuffer(GradientBuffer &buffer) const {
+  int L = (int)layer_.size();
+  buffer.bias.assign(L, {});
+  buffer.weight.assign(L, {});
+  for (int l = 0; l < L; l++) {
+    buffer.bias[l].assign(layer_[l], 0.0);
+    if (l >= 1) {
+      buffer.weight[l].assign(layer_[l],
+                              std::vector<double>(layer_[l - 1], 0.0));
+    }
+  }
+}
+
+NeuralNetwork::RC NeuralNetwork::AccumulateGradientsBatchParallel(
+    const std::vector<std::vector<double>> &batch_data,
+    const std::vector<std::vector<double>> &batch_target) {
+  int B = (int)batch_data.size();
+  if (B == 0 || B != (int)batch_target.size()) {
+    err_msg_ =
+        "[NeuralNetwork::AccumulateGradientsBatchParallel] invalid batch";
+    return INVALID_DATA;
+  }
+
+  int worker_num = std::min(train_thread_num_, B);
+  int hardware_thread_num =
+      static_cast<int>(std::thread::hardware_concurrency());
+  if (hardware_thread_num > 0) {
+    worker_num = std::min(worker_num, hardware_thread_num);
+  }
+  std::vector<GradientBuffer> worker_grad(worker_num);
+  for (auto &gradient : worker_grad) {
+    InitGradientBuffer(gradient);
+  }
+
+  auto loss_type = loss_function_->GetLossType();
+  auto activate_type = activate_function_->GetActivateType();
+  auto softmax_type = softmax_function_->GetSoftmaxType();
+  std::vector<RC> worker_rc(worker_num, SUCCESS);
+  std::vector<std::string> worker_err(worker_num);
+  std::vector<std::thread> threads;
+  threads.reserve(worker_num);
+
+  try {
+    for (int worker_idx = 0; worker_idx < worker_num; worker_idx++) {
+      int begin = B * worker_idx / worker_num;
+      int end = B * (worker_idx + 1) / worker_num;
+      threads.emplace_back([&, worker_idx, begin, end]() {
+        auto worker_loss = LossFactory::Create(loss_type);
+        auto worker_activate = ActivateFactory::Create(activate_type);
+        auto worker_softmax = SoftmaxFactory::Create(softmax_type);
+        if (worker_loss == nullptr || worker_activate == nullptr ||
+            worker_softmax == nullptr) {
+          worker_err[worker_idx] =
+              "[NeuralNetwork::AccumulateGradientsBatchParallel] invalid "
+              "strategy";
+          worker_rc[worker_idx] = INVALID_DATA;
+          return;
+        }
+        worker_rc[worker_idx] = AccumulateGradientsRange(
+            batch_data, batch_target, begin, end, worker_loss, worker_activate,
+            worker_softmax, worker_grad[worker_idx], worker_err[worker_idx]);
+      });
+    }
+  } catch (const std::system_error &e) {
+    for (auto &thread : threads) {
+      if (thread.joinable()) {
+        thread.join();
+      }
+    }
+    err_msg_ =
+        std::string("[NeuralNetwork::AccumulateGradientsBatchParallel] failed ") +
+        "to create worker thread: " + e.what();
+    return INVALID_DATA;
+  }
+
+  for (auto &thread : threads) {
+    thread.join();
+  }
+
+  for (int worker_idx = 0; worker_idx < worker_num; worker_idx++) {
+    if (worker_rc[worker_idx] != SUCCESS) {
+      err_msg_ = worker_err[worker_idx];
+      return worker_rc[worker_idx];
+    }
+  }
+
+  int L = (int)layer_.size();
+  for (int worker_idx = 0; worker_idx < worker_num; worker_idx++) {
+    for (int l = 1; l < L; l++) {
+      int dim_l = layer_[l];
+      int dim_lm1 = layer_[l - 1];
+      for (int o = 0; o < dim_l; o++) {
+        grad_bias_[l][o] += worker_grad[worker_idx].bias[l][o];
+        for (int i = 0; i < dim_lm1; i++) {
+          grad_weight_[l][o][i] += worker_grad[worker_idx].weight[l][o][i];
+        }
+      }
+    }
+  }
+  return SUCCESS;
+}
+
+NeuralNetwork::RC NeuralNetwork::AccumulateGradientsRange(
+    const std::vector<std::vector<double>> &batch_data,
+    const std::vector<std::vector<double>> &batch_target, int begin, int end,
+    const std::shared_ptr<LossFunction> &loss_function,
+    const std::shared_ptr<ActivateFunction> &activate_function,
+    const std::shared_ptr<SoftmaxFunction> &softmax_function,
+    GradientBuffer &gradient, std::string &err_msg) const {
+  int L = (int)layer_.size();
+  int B = end - begin;
+  if (L == 0 || B <= 0) {
+    err_msg = "[NeuralNetwork::AccumulateGradientsRange] empty";
+    return INVALID_DATA;
+  }
+
+  std::vector<std::vector<std::vector<double>>> output(L), preact(L), delta(L);
+  for (int l = 0; l < L; l++) {
+    output[l].assign(B, std::vector<double>(layer_[l], 0.0));
+    preact[l].assign(B, std::vector<double>(layer_[l], 0.0));
+    delta[l].assign(B, std::vector<double>(layer_[l], 0.0));
+  }
+
+  for (int b = 0; b < B; b++) {
+    const auto &sample = batch_data[begin + b];
+    if ((int)sample.size() != layer_[0]) {
+      err_msg =
+          "[NeuralNetwork::AccumulateGradientsRange] sample dim mismatch";
+      return INVALID_DATA;
+    }
+    for (int j = 0; j < layer_[0]; j++) {
+      output[0][b][j] = sample[j];
+    }
+  }
+
+  for (int l = 1; l < L; l++) {
+    int out_dim = layer_[l];
+    int in_dim = layer_[l - 1];
+    for (int b = 0; b < B; b++) {
+      const auto &in_vec = output[l - 1][b];
+      auto &out_vec = output[l][b];
+      auto &pre_vec = preact[l][b];
+      for (int o = 0; o < out_dim; o++) {
+        double z = neuron_bias_[l][o];
+        const auto &w_row = neuron_weight_[l][o];
+        for (int i = 0; i < in_dim; i++) {
+          z += w_row[i] * in_vec[i];
+        }
+        pre_vec[o] = z;
+        out_vec[o] = activate_function->Activate(z);
+      }
+    }
+  }
+
+  if (softmax_function->GetSoftmaxType() != SOFTMAX_NONE) {
+    int now_layer = L - 1;
+    int last_layer = L - 2;
+    int out_dim = layer_[now_layer];
+    int in_dim = layer_[last_layer];
+    for (int b = 0; b < B; b++) {
+      std::vector<double> logits;
+      logits.reserve(out_dim);
+      const auto &in_vec = output[last_layer][b];
+      for (int o = 0; o < out_dim; o++) {
+        double z = neuron_bias_[now_layer][o];
+        const auto &w_row = neuron_weight_[now_layer][o];
+        for (int i = 0; i < in_dim; i++) {
+          z += w_row[i] * in_vec[i];
+        }
+        logits.push_back(z);
+      }
+      softmax_function->Normalize(logits, output[now_layer][b]);
+    }
+  }
+
+  int last = L - 1;
+  int out_dim = layer_[last];
+  bool use_softmax = (softmax_function->GetSoftmaxType() != SOFTMAX_NONE);
+  for (int b = 0; b < B; b++) {
+    const auto &target = batch_target[begin + b];
+    if ((int)target.size() != out_dim) {
+      err_msg =
+          "[NeuralNetwork::AccumulateGradientsRange] target dim mismatch";
+      return INVALID_DATA;
+    }
+    for (int o = 0; o < out_dim; o++) {
+      double d;
+      if (use_softmax) {
+        d = softmax_function->CalcDelta(output[last][b][o], target[o],
+                                        loss_function);
+      } else {
+        double dL = loss_function->DerivLoss(target[o], output[last][b][o]) /
+                    (double)out_dim;
+        d = dL * activate_function->DerivActivate(preact[last][b][o],
+                                                  output[last][b][o]);
+      }
+      delta[last][b][o] = d;
+    }
+    for (int l = last - 1; l >= 1; l--) {
+      int dim_l = layer_[l];
+      int dim_lp1 = layer_[l + 1];
+      for (int o = 0; o < dim_l; o++) {
+        double sum = 0.0;
+        for (int k = 0; k < dim_lp1; k++) {
+          sum += neuron_weight_[l + 1][k][o] * delta[l + 1][b][k];
+        }
+        delta[l][b][o] = sum * activate_function->DerivActivate(
+                                   preact[l][b][o], output[l][b][o]);
+      }
+    }
+    for (int l = 1; l < L; l++) {
+      int dim_l = layer_[l];
+      int dim_lm1 = layer_[l - 1];
+      const auto &in_vec = output[l - 1][b];
+      for (int o = 0; o < dim_l; o++) {
+        double d = delta[l][b][o];
+        gradient.bias[l][o] += d;
+        for (int i = 0; i < dim_lm1; i++) {
+          gradient.weight[l][o][i] += d * in_vec[i];
+        }
+      }
+    }
+  }
+  return SUCCESS;
 }
 
 NeuralNetwork::RC NeuralNetwork::ForwardPropagationBatch(
