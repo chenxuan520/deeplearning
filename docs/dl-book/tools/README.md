@@ -1,6 +1,6 @@
 # 电子书维护脚本 (`docs/dl-book/tools/`)
 
-改章节 HTML 后，可在 **`docs/dl-book/` 目录下**运行这些脚本（仅依赖 Python 3 标准库）。
+改章节 HTML 后，可在 **`docs/dl-book/` 目录下**运行这些脚本。除 PDF 导出工具外，其余 Python 脚本仅依赖标准库。
 
 ```bash
 cd docs/dl-book
@@ -14,6 +14,7 @@ cd docs/dl-book
 | `check_structure.py` | HTML 标签配平 + 每章 h2 主编号是否连续 | ✅ 同上 |
 | `count_chars.py` | 统计全书汉字与篇幅（本地自查用） | — |
 | `build_demo_assets.sh` | 发布前生成 MNIST / 井字棋演示 JSON，随 Pages artifact 发布但不进 git | ✅ [dl-book-pages.yml](../../../.github/workflows/dl-book-pages.yml) |
+| `export_pdf.py` | 用 Playwright 导出浅色整书 PDF（不包含交互实验） | ✅ [release.yml](../../../.github/workflows/release.yml) |
 
 ---
 
@@ -76,6 +77,28 @@ docs/dl-book/assets/demos/tictactoe/q_table.json
 ```
 
 `assets/demos/` 已在仓库根 `.gitignore` 中忽略。这些 JSON 不提交进 git，只在 GitHub Actions 的 `dl-book-pages.yml` 中生成，然后随 `docs/dl-book` 作为 Pages artifact 上传。MNIST 模型文件会通过 Actions cache 复用，cache miss 时脚本会下载/回退模型快照再导出 JSON。井字棋的 `q_table.json` 也会通过 Actions cache 复用，cache miss 时才重新训练并导出。
+
+---
+
+## `export_pdf.py`
+
+安装导出依赖：
+
+```bash
+python3 -m pip install -r tools/requirements-pdf.txt
+python3 -m playwright install chromium
+```
+
+导出：
+
+```bash
+python3 tools/export_pdf.py
+python3 tools/export_pdf.py --output /tmp/deeplearning-book.pdf
+```
+
+脚本通过 Playwright 逐章渲染，再用 `pypdf` 合并并添加章节书签。成品是浅色 A4 PDF，包含第 0–29 章、术语表和关于页面，保留正文、公式、表格、代码和静态示意图，并移除所有 `data-lab` 交互实验及其说明图块。默认输出到 `docs/dl-book/build/deeplearning-book.pdf`。
+
+推送 `v*` tag 后，`.github/workflows/release.yml` 会自动生成 `from-neuron-to-large-models.pdf`，并与各平台二进制一起上传到 GitHub Release。
 
 ---
 

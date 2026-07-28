@@ -127,6 +127,36 @@ jobs:
             mini_lm-${{ matrix.name }}.zip
           if-no-files-found: ignore
 
+  build-pdf:
+    name: Build DL Book PDF
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PDF dependencies
+        run: |
+          python3 -m pip install -r docs/dl-book/tools/requirements-pdf.txt
+          python3 -m playwright install --with-deps chromium
+          sudo apt-get install -y fonts-noto-cjk
+
+      - name: Export light-theme PDF
+        run: |
+          python3 docs/dl-book/tools/export_pdf.py \
+            --output dist/from-neuron-to-large-models.pdf
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dl-book-pdf
+          path: dist/from-neuron-to-large-models.pdf
+          if-no-files-found: error
+
   release:
     name: Publish Release
     needs: build
@@ -139,6 +169,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: mini_lm-*
 
       - name: Show downloaded files
         run: find artifacts -type f
@@ -149,3 +180,23 @@ jobs:
           files: artifacts/**/*
           fail_on_unmatched_files: false
           generate_release_notes: true
+
+  release-pdf:
+    name: Attach DL Book PDF
+    needs:
+      - build-pdf
+      - release
+    runs-on: ubuntu-latest
+    if: ${{ !cancelled() && needs.build-pdf.result == 'success' && needs.release.result == 'success' }}
+    steps:
+      - name: Download PDF artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dl-book-pdf
+          path: artifacts
+
+      - name: Attach PDF to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/from-neuron-to-large-models.pdf
+          fail_on_unmatched_files: true

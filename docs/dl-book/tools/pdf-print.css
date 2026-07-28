@@ -1,0 +1,492 @@
+@page {
+  size: A4;
+  margin: 15mm 16mm 18mm;
+}
+
+@page cover {
+  margin: 0;
+}
+
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f4f7fb;
+  --panel: #f7f9fc;
+  --panel-strong: #eef3f8;
+  --text: #172033;
+  --text-soft: #3f4b61;
+  --text-dim: #66738a;
+  --line: #d8deea;
+  --line-strong: #aeb9ca;
+  --primary: #1769aa;
+  --primary-strong: #5a49bf;
+  --accent: #087f6b;
+  --warn: #936000;
+  --danger: #b42345;
+  --shadow: none;
+  --radius: 10px;
+  --reading-width: 100%;
+  --header-height: 0px;
+  --font-sans: "STHeiti", "Noto Sans CJK SC", sans-serif;
+  --font-mono: "Courier New", monospace;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff !important;
+  color: var(--text);
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+html {
+  font-size: 10.5pt;
+  scroll-behavior: auto;
+}
+
+body.print-book {
+  background: none !important;
+  font-family: var(--font-sans);
+  line-height: 1.65;
+}
+
+body.print-book * {
+  font-family: var(--font-sans) !important;
+}
+
+.print-cover {
+  page: cover;
+  min-height: 297mm;
+  padding: 24mm 22mm 18mm;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  background:
+    linear-gradient(135deg, rgba(23, 105, 170, 0.08), transparent 45%),
+    linear-gradient(315deg, rgba(8, 127, 107, 0.08), transparent 45%),
+    #ffffff;
+  break-after: page;
+}
+
+.print-cover__inner {
+  width: 100%;
+  max-width: 165mm;
+}
+
+.print-cover__eyebrow,
+.print-toc__eyebrow {
+  margin: 0 0 4mm;
+  color: var(--accent);
+  font-size: 10pt;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.print-cover h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 34pt;
+  line-height: 1.16;
+  letter-spacing: 0.04em;
+}
+
+.print-cover__lead {
+  max-width: 140mm;
+  margin: 7mm auto 10mm;
+  color: var(--text-soft);
+  font-size: 13pt;
+  line-height: 1.8;
+}
+
+.print-cover__author {
+  margin: 0;
+  color: var(--text);
+  font-size: 12pt;
+  font-weight: 700;
+}
+
+.print-cover__url {
+  margin: 1.5mm 0 0;
+  color: var(--text-dim);
+  font-size: 9pt;
+}
+
+.print-toc {
+  break-after: page;
+}
+
+.print-toc > h1 {
+  margin: 0 0 8mm;
+  font-size: 26pt;
+  line-height: 1.2;
+}
+
+.print-toc__group {
+  margin: 0 0 6mm;
+  break-inside: avoid;
+}
+
+.print-toc__group h2 {
+  margin: 0 0 2mm;
+  padding-bottom: 1.5mm;
+  border-bottom: 1px solid var(--line);
+  color: var(--primary-strong);
+  font-size: 11pt;
+  letter-spacing: 0.04em;
+}
+
+.print-toc__group ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.print-toc__group li {
+  margin: 0;
+  border-bottom: 1px dotted #d5dbe5;
+}
+
+.print-toc__group a {
+  display: grid;
+  grid-template-columns: 22mm minmax(0, 1fr);
+  gap: 3mm;
+  padding: 1.2mm 0;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.print-toc__group a span {
+  color: var(--text-dim);
+  font-size: 8.5pt;
+}
+
+.print-toc__group a strong {
+  font-size: 9.5pt;
+  font-weight: 600;
+}
+
+.print-chapter {
+  padding: 0 !important;
+}
+
+.print-chapter .chapter__inner {
+  max-width: none;
+  margin: 0;
+}
+
+.print-chapter .chapter__eyebrow {
+  margin: 0 0 2mm;
+  color: var(--accent);
+  font-size: 8pt;
+  letter-spacing: 0.14em;
+}
+
+.print-chapter h1 {
+  margin: 0 0 7mm;
+  color: var(--text);
+  font-size: 24pt;
+  line-height: 1.2;
+  break-after: avoid;
+}
+
+.print-chapter h2 {
+  margin: 9mm 0 3mm;
+  padding-top: 2.5mm;
+  border-top: 1px solid var(--line);
+  color: var(--text);
+  font-size: 16pt;
+  line-height: 1.25;
+  break-after: avoid;
+}
+
+.print-chapter h3 {
+  margin: 6mm 0 2mm;
+  color: var(--text);
+  font-size: 13pt;
+  line-height: 1.3;
+  break-after: avoid;
+}
+
+.print-chapter h4 {
+  margin: 4mm 0 1.5mm;
+  color: var(--text);
+  font-size: 11pt;
+  break-after: avoid;
+}
+
+.print-chapter p,
+.print-chapter ul,
+.print-chapter ol {
+  margin-top: 2.5mm;
+  margin-bottom: 2.5mm;
+  color: var(--text-soft);
+}
+
+.print-chapter li {
+  margin: 1mm 0;
+}
+
+.print-chapter .lead {
+  color: var(--text);
+  font-size: 12pt;
+  line-height: 1.75;
+}
+
+.print-book a,
+.print-book a.xref {
+  color: var(--primary);
+  border-bottom-color: rgba(23, 105, 170, 0.35);
+}
+
+.print-book .term,
+.print-book .term--glossary,
+.print-book .term.term--glossary {
+  color: var(--accent);
+  border-bottom-color: rgba(8, 127, 107, 0.4);
+}
+
+.print-book .chapter code {
+  background: #eef0f8;
+  color: #493b98;
+}
+
+.print-book .objectives,
+.print-book .callout,
+.print-book .summary,
+.print-book .quiz__item,
+.print-book .diagram,
+.print-book .mathblock,
+.print-book .formula-card {
+  border-color: var(--line);
+  background: var(--panel);
+  box-shadow: none;
+}
+
+.print-book .callout--analogy {
+  background: #f4f1ff;
+}
+
+.print-book .callout--analogy .callout__title {
+  color: var(--primary-strong);
+}
+
+.print-book .summary {
+  background: linear-gradient(160deg, #eef7fc, #eff9f5);
+}
+
+.print-book .figure,
+.print-book .callout,
+.print-book .objectives,
+.print-book .summary,
+.print-book .mathblock,
+.print-book .formula-card,
+.print-book .quiz__item {
+  break-inside: avoid;
+}
+
+.print-book .figure {
+  max-width: 100%;
+  margin: 5mm auto;
+}
+
+.print-book .figure img,
+.print-book .figure__photo {
+  max-height: 220mm;
+  border-color: var(--line);
+  border-radius: 6px;
+  box-shadow: none;
+  object-fit: contain;
+}
+
+.print-book .diagram {
+  padding: 4mm;
+  border-radius: 8px;
+}
+
+.print-book .diagram svg,
+.print-book .figure > svg {
+  width: 100%;
+  max-height: 220mm;
+}
+
+.print-book .figure__cap,
+.print-book .calc-table__cap {
+  color: var(--text-dim);
+  font-size: 8pt;
+  line-height: 1.5;
+}
+
+.print-book svg text {
+  fill: var(--text-soft) !important;
+  font-family: var(--font-sans);
+}
+
+.print-book svg text[fill="#eef4ff"],
+.print-book svg text[fill="#dfe7ff"],
+.print-book svg text[fill="#f6f9ff"],
+.print-book svg text[fill="#ffffff"] {
+  fill: var(--text) !important;
+}
+
+.print-book svg text[fill="#6ac3ff"],
+.print-book svg text[fill="#58a6ff"] {
+  fill: var(--primary) !important;
+}
+
+.print-book svg text[fill="#8b7bff"],
+.print-book svg text[fill="#c4b7ff"] {
+  fill: var(--primary-strong) !important;
+}
+
+.print-book svg text[fill="#8ef0d1"] {
+  fill: var(--accent) !important;
+}
+
+.print-book svg text[fill="#ffcf72"] {
+  fill: var(--warn) !important;
+}
+
+.print-book svg text[fill="#ff8fa3"] {
+  fill: var(--danger) !important;
+}
+
+.print-book .pipe__box,
+.print-book .step-track__body {
+  background: #f5f7fa;
+}
+
+.print-book .step-track__badge {
+  color: var(--text);
+}
+
+.print-book .code-walk {
+  border-color: var(--line);
+  background: #f5f7fa;
+  box-shadow: none;
+  break-inside: auto;
+}
+
+.print-book .code-walk__file {
+  background: #e9eef5;
+  color: var(--text-dim);
+  break-after: avoid;
+}
+
+.print-book .code-walk__code {
+  overflow: visible;
+  color: #202b3c;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.print-book .code-walk__notes {
+  background: #f9fafc;
+}
+
+.print-book .cw-cmt {
+  color: #68758b;
+}
+
+.print-book .cw-key {
+  color: #5a49bf;
+}
+
+.print-book .cw-str {
+  color: #087f6b;
+}
+
+.print-book .cw-fn {
+  color: #1769aa;
+}
+
+.print-book .table-wrap {
+  max-width: 100%;
+  margin: 4mm 0;
+  overflow: visible;
+}
+
+.print-book table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.4pt;
+}
+
+.print-book thead {
+  display: table-header-group;
+}
+
+.print-book tr {
+  break-inside: avoid;
+}
+
+.print-book th {
+  background: #e9eef5;
+  color: var(--text);
+}
+
+.print-book td {
+  background: #ffffff;
+  color: var(--text-soft);
+}
+
+.print-book th,
+.print-book td {
+  border-color: var(--line);
+}
+
+.print-book details[open] > summary {
+  list-style: none;
+}
+
+.print-book .quiz__q {
+  color: var(--text);
+}
+
+.print-book .quiz__q::after {
+  display: none;
+}
+
+.print-book .quiz__a {
+  color: var(--text-soft);
+  border-top-color: var(--line);
+}
+
+.print-book blockquote {
+  color: var(--text-soft);
+}
+
+.print-book pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.print-book .reveal {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+}
+
+.print-book .print-anchor-probe {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  overflow: hidden;
+  color: transparent !important;
+  font-size: 4px;
+  line-height: 1;
+  opacity: 0.01;
+  text-decoration: none;
+}
+
+.print-book [data-lab],
+.print-book .book-header,
+.print-book .book-rail,
+.print-book .chapter-nav,
+.print-book .toc-drawer,
+.print-book .book-search,
+.print-book .glossary-popover,
+.print-book .glossary-backdrop,
+.print-book .button {
+  display: none !important;
+}
