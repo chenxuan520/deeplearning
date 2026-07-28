@@ -43,6 +43,7 @@
           <li id="g-gelu"><strong>GELU</strong> — 平滑版 ReLU,Transformer / GPT 常用。<a href="chapter-07.html">→ 第 7 章</a></li>
           <li id="g-silu" data-aliases="Swish,silu,swish"><strong>SiLU / Swish</strong> — <var>x</var> · sigmoid(<var>x</var>) 的平滑自门控激活,输入越大越放行。<a href="chapter-07.html#silu-和-swiglu-现代大模型里的门控激活">→ 第 7 章 §3</a></li>
           <li id="g-swiglu" data-aliases="SwiGLU,GLU,门控激活,门控FFN"><strong>SwiGLU</strong> — 现代 LLM FFN 常用的门控结构,一路做内容、一路做开关,再逐元素相乘。<a href="chapter-07.html#silu-和-swiglu-现代大模型里的门控激活">→ 第 7 章 §3</a></li>
+          <li id="g-situ-glu" data-aliases="SiTU-GLU,Sigmoid Tanh Unit GLU,softcap,激活异常值,activation outlier"><strong>SiTU-GLU</strong> — Kimi K3 在 SwiGLU 两个分支上加入 tanh 平滑限幅的门控 FFN;正常区间近似 SwiGLU,极端区间有明确上界,用于控制低精度训练中的激活异常值。<a href="chapter-07.html#situ-glu-给极端激活加一道软上限">→ 第 7 章 §3</a></li>
           <li id="g-vanish"><strong>梯度消失</strong> — 梯度反传时越乘越小、趋近 0,深层学不动(Sigmoid 易犯)。<a href="chapter-07.html">→ 第 7 章</a></li>
           <li id="g-optimizer"><strong>优化器 optimizer</strong> — 决定“拿到梯度后参数怎么挪”的策略。<a href="chapter-08.html">→ 第 8 章</a></li>
           <li id="g-adam"><strong>Adam / AdamW</strong> — Momentum + 自适应步长 + 偏差校正;训大模型的默认选择。<a href="chapter-08.html">→ 第 8 章</a></li>
@@ -84,7 +85,7 @@
           <li id="g-causal" data-aliases="causal mask,causal_mask,masked"><strong>causal mask 因果掩码</strong> — 屏蔽未来位置,保证生成时只看前文。<a href="chapter-17.html">→ 第 17 章</a></li>
           <li id="g-multihead" data-aliases="multi-head,multihead,multi_head,多头注意力"><strong>多头注意力</strong> — 同一输入先投影成 Q/K/V,再让多个头各自算一张 token×token 注意力表并拼接。<a href="chapter-17.html">→ 第 17 章</a></li>
           <li id="g-residual" data-aliases="残差连接,residual connection"><strong>残差连接 residual</strong> — 输出 = x + 子层(x),给梯度修高速公路。<a href="chapter-18.html">→ 第 18 章</a></li>
-          <li id="g-attnres" data-aliases="Attention Residuals,AttnRes,注意力残差,Block Attention Residuals"><strong>Attention Residuals / AttnRes</strong> — Kimi K3 采用的一种跨层连接:沿网络深度给 embedding 和历史层表示动态加权;其 Block 版本用层块汇总降低显存和通信。这不是所有 Transformer 的通用结构。<a href="chapter-18.html#attention-residuals-让深层按需回看浅层">→ 第 18 章</a></li>
+          <li id="g-attnres" data-aliases="Attention Residuals,AttnRes,注意力残差,Block Attention Residuals"><strong>Attention Residuals / AttnRes</strong> — Kimi K3 采用的一种跨层连接:沿网络深度给 embedding 和历史层表示动态加权;其 Block 版本用层块汇总降低显存和通信。<a href="chapter-18.html#attention-residuals-让深层按需回看浅层">→ 第 18 章</a></li>
           <li id="g-layernorm" data-aliases="LayerNorm,layernorm,layer norm"><strong>LayerNorm</strong> — 对每个词向量减均值除标准差,稳住训练。<a href="chapter-18.html">→ 第 18 章</a></li>
           <li id="g-ffn" data-aliases="FFN,Feed Forward,feed-forward,前馈网络"><strong>FFN 前馈网络</strong> — 对每个 token 向量独立做“升维→激活→降维”,不跨词通信。<a href="chapter-18.html">→ 第 18 章</a></li>
           <li id="g-posenc" data-aliases="positional encoding,position embedding,位置编码,位置嵌入"><strong>位置编码</strong> — 把顺序和距离信息注入模型的一类方法,可以加到 embedding 上,也可以改 Q/K 或 attention 分数。<a href="chapter-18.html#5-位置编码-告诉模型谁在前谁在后">→ 第 18 章</a></li>
@@ -119,7 +120,7 @@
           <li id="g-bpe"><strong>BPE 子词分词</strong> — 把高频组合合并成一个 token,序列更短更高效。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-open-weights" data-aliases="开放权重,open weights,open-weight model,开源模型"><strong>开放权重 open weights</strong> — 发布训练完成后的参数文件,可以本地推理或继续微调;但不自动代表训练代码、完整配方和数据也公开,更不等于训练过程可复现。<a href="chapter-20.html#4-词嵌入-给每个词一个语义坐标">→ 第 20 章</a></li>
           <li id="g-scaling"><strong>Scaling Law 规模定律</strong> — 参数/数据/算力一起放大,性能可预测提升。<a href="chapter-20.html#5-规模化scaling-law-大力真的出奇迹">→ 第 20 章</a></li>
-          <li id="g-training-data" data-aliases="训练数据,数据清洗,data cleaning,data curation,training data,pretraining data"><strong>训练数据 / 数据清洗</strong> — 原始网页、代码、数学、授权内容等要经过正文抽取、去重、过滤、分类、配比和分词打包,才会变成可训练 token。<a href="chapter-20.html#数据从哪来又怎么洗干净">→ 第 20 章</a></li>
+          <li id="g-training-data" data-aliases="训练数据,有效数据,有效token,effective data,数据清洗,data cleaning,data curation,training data,pretraining data"><strong>训练数据 / 有效数据 / 数据清洗</strong> — 原始网页、代码、数学、授权内容等要经过正文抽取、去重、过滤、分类、配比、验证和分词打包,才会变成正确、独特、信息密度高且能补能力缺口的有效训练信号。<a href="chapter-20.html#数据从哪来又怎么洗干净">数据工程 → 第 20 章</a> · <a href="chapter-20.html#真正的竞争底座-有效数据--有效算力--转化效率">数据、算力与算法 → 第 20 章</a></li>
           <li id="g-param-count" data-aliases="参数量,parameter count,num parameters"><strong>参数量</strong> — 可学习权重元素总数;GPT 系约 12<var>L</var><var>d</var>²+<var>V</var><var>d</var>。<a href="chapter-20.html#2-参数地图-1750-亿个旋钮装在哪儿gpt-举例">→ 第 20 章 §2</a></li>
           <li id="g-emergent"><strong>涌现能力 emergent abilities</strong> — 规模越过门槛后突然出现的新能力。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-selfsup"><strong>自监督 self-supervised</strong> — 答案从数据本身自动抠出(如遮词预测),不用人工标注。<a href="chapter-20.html">→ 第 20 章</a></li>

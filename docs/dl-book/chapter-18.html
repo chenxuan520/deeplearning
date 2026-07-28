@@ -133,7 +133,6 @@ attention_norm_.Forward(last_residual_1_, last_norm_1_);    <b class="cw-tag">3<
           最新的一份隐藏状态里;当前层虽然间接继承了它们,却不能直接说“这次我想多读浅层、少读中层”。
           Kimi K3 技术报告采用的 <span class="term">Attention Residuals(AttnRes,注意力残差)</span>把这条固定累加路径改成
           <strong>沿网络深度做一次注意力选择</strong>:当前层可以直接给 embedding 和以前各层的表示打分,再按权重混合成自己的输入。
-          <strong>这是 Kimi K3 的具体架构设计,不是所有现代 Transformer 的通用做法。</strong>
         </p>
         <figure class="figure reveal">
           <div class="diagram">
@@ -209,7 +208,7 @@ attention_norm_.Forward(last_residual_1_, last_norm_1_);    <b class="cw-tag">3<
         <p>
           <var>w</var><sub>l</sub> 是这一层训练出来的查询,而 <var>v</var><sub>t,i</sub> 会随输入和 token 改变,
           所以不同 token 最终可以偏爱不同深度的表示。浅层里常保留更原始的局部线索,深层里则有加工得更充分的上下文;
-          在 Kimi K3 的这个设计里,AttnRes 不必强迫所有信息都挤在最新状态里,而是让后面的层
+          在 Kimi K3 中,AttnRes 不必强迫所有信息都挤在最新状态里,而是让后面的层
           <strong>需要哪一版,就给哪一版更高权重</strong>。注意不是只选一层:Softmax 后通常是多份历史按不同比例混合。
         </p>
         <div class="table-wrap reveal">
@@ -290,15 +289,6 @@ attention_norm_.Forward(last_residual_1_, last_norm_1_);    <b class="cw-tag">3<
           </div>
           <p class="figure__cap">左边是假设每层都保留一份历史;右边才是 Kimi K3 报告采用的 Block AttnRes。每约 12 层先汇总成一份,当前层再在少量块级“纪要”之间分配权重。</p>
         </figure>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">别扩大理解:这里讲的是 Kimi K3</span>
-          <p>
-            本书配套的最小 Transformer 仍采用前面那条普通残差 <code>x + Sublayer(x)</code>,因为它最适合看清共同骨架。
-            Kimi K3 的 AttnRes 改的是<strong>层与层怎样传递历史表示</strong>,并没有改变“token 间用注意力、每层靠反向传播训练”的基本原理;
-            其他模型可能继续使用普通残差,也可能采用别的跨层连接,不能从这个案例推断“现在的模型都这样”。
-          </p>
-        </div>
-
         <h2>2. LayerNorm:把每个词的特征“拉回正常范围”</h2>
         <p>
           训练中,各层数值的大小、波动会乱飘,拖慢甚至搞崩训练。<span class="term">LayerNorm(层归一化)</span>
@@ -1682,7 +1672,7 @@ Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code>
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li><strong>残差连接</strong>(<var>x</var> + Sublayer(<var>x</var>)):给梯度修高速公路,让深网络训得动,每层只学“增量”;Kimi K3 是一个特例:它用 Attention Residuals 沿深度轴给历史层动态加权,再用 Block 版本控制显存和通信。</li>
+            <li><strong>残差连接</strong>(<var>x</var> + Sublayer(<var>x</var>)):给梯度修高速公路,让深网络训得动,每层只学“增量”;Kimi K3 使用 Attention Residuals 沿深度轴给历史层动态加权,再用 Block 版本控制显存和通信。</li>
             <li><strong>LayerNorm</strong>:对每个词向量减均值除标准差再缩放,稳住数值、加速收敛。</li>
             <li><strong>FFN</strong>:对每个词独立做“升维 → ReLU → 降维”,补充非线性加工。</li>
             <li>一块 Block = 注意力+残差+Norm,再 FFN+残差+Norm;输入输出同形,可无限堆叠。</li>

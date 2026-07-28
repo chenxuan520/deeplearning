@@ -1437,14 +1437,6 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           </table>
           <p class="calc-table__cap">KDA 不是“完全等价但更便宜的 softmax attention”。Kimi K3 的关键取舍正是让两者互补,而不是押注单一路线。</p>
         </div>
-        <div class="callout callout--warn reveal">
-          <span class="callout__title">别扩大理解:这是 Kimi K3 的具体架构</span>
-          <p>
-            KDA 和 <code>3:1</code> 混合比例不是所有长上下文模型的标准答案。其他模型可能用全量 attention、滑动窗口、动态稀疏或别的状态空间结构。
-            这里值得学习的是设计取舍:<strong>用固定状态换效率,再用周期性全局 attention 补精确交互</strong>。
-          </p>
-        </div>
-
         <h3>稀疏路线① 固定套路:按位置预先规定谁跟谁算</h3>
         <ul>
           <li><strong>滑动窗口(局部注意力)</strong>:每个 token 只跟最近的 <var>w</var> 个邻居算(如某些模型 <var>w</var>=4096)。计算量从 <var>n</var>² 降到 <var>n</var>×<var>w</var>(线性)。别担心看不到远处:多层叠起来,感受野会像 CNN 一样<strong>层层扩大</strong>,远处信息仍能“一跳一跳”传过来。</li>
