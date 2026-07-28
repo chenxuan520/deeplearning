@@ -9,8 +9,7 @@ name: Release Binaries
 # The CMake project root is src/. Each demo sets EXECUTABLE_OUTPUT_PATH to
 # ../../../bin relative to the build dir, so building inside src/build makes the
 # binaries land in a fixed src/bin. Windows uses the MSVC multi-config generator
-# (binaries land under a Release/ subfolder) and has never been compiled here, so
-# that leg is best-effort (continue-on-error) and must not block the others.
+# (binaries land under a Release/ subfolder).
 
 on:
   push:
@@ -38,7 +37,7 @@ jobs:
             experimental: false
           - name: windows-x64
             os: windows-2022
-            experimental: true
+            experimental: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -161,9 +160,7 @@ jobs:
     name: Publish Release
     needs: build
     runs-on: ubuntu-latest
-    # Run even if a best-effort leg (Windows) failed, as long as the workflow
-    # wasn't cancelled.
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
