@@ -84,6 +84,7 @@
           <li id="g-causal" data-aliases="causal mask,causal_mask,masked"><strong>causal mask 因果掩码</strong> — 屏蔽未来位置,保证生成时只看前文。<a href="chapter-17.html">→ 第 17 章</a></li>
           <li id="g-multihead" data-aliases="multi-head,multihead,multi_head,多头注意力"><strong>多头注意力</strong> — 同一输入先投影成 Q/K/V,再让多个头各自算一张 token×token 注意力表并拼接。<a href="chapter-17.html">→ 第 17 章</a></li>
           <li id="g-residual" data-aliases="残差连接,residual connection"><strong>残差连接 residual</strong> — 输出 = x + 子层(x),给梯度修高速公路。<a href="chapter-18.html">→ 第 18 章</a></li>
+          <li id="g-attnres" data-aliases="Attention Residuals,AttnRes,注意力残差,Block Attention Residuals"><strong>Attention Residuals / AttnRes</strong> — Kimi K3 采用的一种跨层连接:沿网络深度给 embedding 和历史层表示动态加权;其 Block 版本用层块汇总降低显存和通信。这不是所有 Transformer 的通用结构。<a href="chapter-18.html#attention-residuals-让深层按需回看浅层">→ 第 18 章</a></li>
           <li id="g-layernorm" data-aliases="LayerNorm,layernorm,layer norm"><strong>LayerNorm</strong> — 对每个词向量减均值除标准差,稳住训练。<a href="chapter-18.html">→ 第 18 章</a></li>
           <li id="g-ffn" data-aliases="FFN,Feed Forward,feed-forward,前馈网络"><strong>FFN 前馈网络</strong> — 对每个 token 向量独立做“升维→激活→降维”,不跨词通信。<a href="chapter-18.html">→ 第 18 章</a></li>
           <li id="g-posenc" data-aliases="positional encoding,position embedding,位置编码,位置嵌入"><strong>位置编码</strong> — 把顺序和距离信息注入模型的一类方法,可以加到 embedding 上,也可以改 Q/K 或 attention 分数。<a href="chapter-18.html#5-位置编码-告诉模型谁在前谁在后">→ 第 18 章</a></li>
@@ -116,6 +117,7 @@
           <li id="g-sampling"><strong>temperature / top-k / top-p</strong> — 控制生成随机性与确定性的解码旋钮。<a href="chapter-19.html#7-怎么挑下一个字-从-greedy-到采样">→ 第 19 章 §7</a></li>
           <li id="g-perplexity"><strong>困惑度 perplexity</strong> — 平均交叉熵取指数,衡量“平均在几个选项里纠结”。<a href="chapter-19.html">→ 第 19 章</a></li>
           <li id="g-bpe"><strong>BPE 子词分词</strong> — 把高频组合合并成一个 token,序列更短更高效。<a href="chapter-20.html">→ 第 20 章</a></li>
+          <li id="g-open-weights" data-aliases="开放权重,open weights,open-weight model,开源模型"><strong>开放权重 open weights</strong> — 发布训练完成后的参数文件,可以本地推理或继续微调;但不自动代表训练代码、完整配方和数据也公开,更不等于训练过程可复现。<a href="chapter-20.html#4-词嵌入-给每个词一个语义坐标">→ 第 20 章</a></li>
           <li id="g-scaling"><strong>Scaling Law 规模定律</strong> — 参数/数据/算力一起放大,性能可预测提升。<a href="chapter-20.html#5-规模化scaling-law-大力真的出奇迹">→ 第 20 章</a></li>
           <li id="g-training-data" data-aliases="训练数据,数据清洗,data cleaning,data curation,training data,pretraining data"><strong>训练数据 / 数据清洗</strong> — 原始网页、代码、数学、授权内容等要经过正文抽取、去重、过滤、分类、配比和分词打包,才会变成可训练 token。<a href="chapter-20.html#数据从哪来又怎么洗干净">→ 第 20 章</a></li>
           <li id="g-param-count" data-aliases="参数量,parameter count,num parameters"><strong>参数量</strong> — 可学习权重元素总数;GPT 系约 12<var>L</var><var>d</var>²+<var>V</var><var>d</var>。<a href="chapter-20.html#2-参数地图-1750-亿个旋钮装在哪儿gpt-举例">→ 第 20 章 §2</a></li>
@@ -145,7 +147,8 @@
           <li id="g-moe"><strong>MoE 混合专家</strong> — N 个并列 FFN 专家 + 路由器 top-k 门控;与专家端到端同训;总参多、算得少。<a href="chapter-21.html#8-moe-不是每次都动用全部参数">→ 第 21 章</a></li>
           <li id="g-dense-sparse" data-aliases="稠密模型,稀疏模型,Dense,Sparse,dense model,sparse model"><strong>稠密 / 稀疏模型</strong> — 按“每个 token 是否过全部参数”分:稠密模型全体参数都参与;稀疏模型(MoE)只激活 k 个专家,总参数 ≫ 激活参数。<a href="chapter-21.html#8-moe-不是每次都动用全部参数">→ 第 21 章</a></li>
           <li id="g-sparseattn"><strong>稀疏注意力</strong> — 只算部分 token 对,把 O(n²) 降下来。<a href="chapter-21.html">→ 第 21 章</a></li>
-          <li id="g-lightning-indexer" data-aliases="lightning indexer,闪电索引器,DSA indexer"><strong>闪电索引器 lightning indexer</strong> — 稀疏注意力里的轻量打分器:先估当前 query 与历史 token 的相关性,取 top-k,再让真正 attention 精算。<a href="chapter-21.html#9-稀疏注意力-不必人人都聊">→ 第 21 章 §9</a></li>
+          <li id="g-kda" data-aliases="KDA,Kimi Delta Attention,Delta Rule,递归注意力,线性注意力"><strong>KDA / Kimi Delta Attention</strong> — 用通道级遗忘与 Delta 纠错,把逐 token 历史持续写进固定大小状态;Kimi K3 以 3 层 KDA + 1 层全局 MLA 混合使用。<a href="chapter-21.html#kda-把历史压进一块固定大小的记忆板">→ 第 21 章 §9</a></li>
+          <li id="g-lightning-indexer" data-aliases="lightning indexer,闪电索引器,DSA indexer"><strong>闪电索引器 lightning indexer</strong> — 稀疏注意力里的轻量打分器:先估当前 query 与历史 token 的相关性,取 top-k,再让真正 attention 精算。<a href="chapter-21.html#9-长上下文注意力-少算连接还是压缩历史">→ 第 21 章 §9</a></li>
           <li id="g-mtp" data-aliases="MTP,Multi-Token Prediction,多token预测,多 token 预测,推测解码,speculative decoding"><strong>MTP / 推测解码</strong> — 训练时让同一隐藏状态预测多个未来 token,增加前瞻训练信号;推理时草稿器先提案,主模型批量验证并接受连续通过的 token,但接受率低时不一定加速。<a href="chapter-21.html#7-推理提速-让它回答得快">→ 第 21 章</a></li>
           <li id="g-generate-verify" data-aliases="生成验证修复选择,verifier,refiner,ranker,MaxProof,test-time scaling"><strong>生成-验证-修复-选择</strong> — 复杂任务的推理系统范式:多候选搜索、验证器挑错、修复器改稿、排序器选最终答案。<a href="chapter-22.html#22-可靠回答-幻觉证据与验证">→ 第 22 章</a></li>
           <li id="g-prompt"><strong>提示工程 / 思维链</strong> — 把话说清楚 / 让它“一步步想”提升推理。<a href="chapter-22.html">→ 第 22 章</a></li>

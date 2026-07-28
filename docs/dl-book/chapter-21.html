@@ -38,7 +38,7 @@
             <span class="chain-map__sep">›</span>
             <a class="chain-map__step" href="chapter-22.html">22 用好它</a>
           </nav>
-          <p class="chain-map__note">上一站(<a class="xref" href="chapter-20.html">第 20 章</a>)讲了大模型“怎么炼”;<strong>本站</strong>钻进机房,看它靠什么才跑得起来——GPU / 显存 / 并行 / KV cache / MoE / 稀疏注意力;下一站(<a class="xref" href="chapter-22.html">第 22 章</a>)讲你作为使用者怎么把它用好。</p>
+          <p class="chain-map__note">上一站(<a class="xref" href="chapter-20.html">第 20 章</a>)讲了大模型“怎么炼”;<strong>本站</strong>钻进机房,看它靠什么才跑得起来——GPU / 显存 / 并行 / KV cache / MoE / 长上下文注意力;下一站(<a class="xref" href="chapter-22.html">第 22 章</a>)讲你作为使用者怎么把它用好。</p>
         </div>
 
         <section class="objectives reveal">
@@ -50,8 +50,8 @@
             <li>AllReduce、NCCL、NVLink 这些通信黑话在干嘛;</li>
             <li>推理提速的关键:KV cache、批处理、量化,以及为什么服务链路一压缩就会造成“降智”体感;</li>
             <li><strong>MoE(混合专家)</strong>把什么换成并列专家、<code>N</code>/<code>k</code> 怎么定、Attention 是否共用、<strong>路由器和专家怎么一起训</strong>、负载均衡,以及<strong>压 k/缩专家会不会降智</strong>;</li>
-            <li><strong>稀疏注意力</strong>的几种套路(滑动窗口 / 全局 / 动态 top-k),以及它和 FlashAttention 的区别;</li>
-            <li><strong>1M 上下文到底怎么做到</strong>:RoPE 外推 + 位置插值/NTK/YaRN,再叠加少算 / 缓存 / 分块 / 并行 / 长训练的组合拳;并用 GLM-5.2 / DeepSeek-V4 看 IndexShare、CSA/HCA、MTP 与 effort level 如何落地;</li>
+            <li><strong>长上下文注意力</strong>的三条路线:FlashAttention 分块精算、稀疏注意力少算连接、KDA 把历史压进固定状态;</li>
+            <li><strong>1M 上下文到底怎么做到</strong>:位置表示 + 少算或压缩状态,再叠加缓存 / 分块 / 并行 / 长训练的组合拳;并用 Kimi K3 / GLM-5.2 / DeepSeek-V4 看不同路线如何落地;</li>
             <li><strong>推理服务怎么扛住海量用户</strong>:prefill/decode 两阶段、连续批处理、PagedAttention 分页复用 KV cache、多副本负载均衡,以及吞吐与延迟的取舍。</li>
           </ul>
         </section>
@@ -1151,12 +1151,12 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           <p>
             本章出现了两处“稀疏”,针对的<strong>不是同一段</strong>:<br />
             <strong>· 稀疏模型 / MoE(本节)</strong>:稀疏的是 <strong>FFN 那一段</strong>——N 个专家里每次只激活 k 个。<br />
-            <strong>· 稀疏注意力(<a class="xref" href="chapter-21.html#9-稀疏注意力-不必人人都聊">下一节</a>)</strong>:稀疏的是 <strong>Attention 那一段</strong>——不再让每个 token 和所有 token 两两打分,只保留一部分连接。<br />
+            <strong>· 稀疏注意力(<a class="xref" href="chapter-21.html#9-长上下文注意力-少算连接还是压缩历史">下一节</a>)</strong>:稀疏的是 <strong>Attention 那一段</strong>——不再让每个 token 和所有 token 两两打分,只保留一部分连接。<br />
             两者可以<strong>同时用在一个模型里</strong>:一个模型既是 MoE(FFN 稀疏),又用稀疏注意力(Attention 稀疏),互不冲突。
           </p>
         </div>
 
-        <h2>9. 稀疏注意力:不必“人人都聊”</h2>
+        <h2>9. 长上下文注意力:少算连接,还是压缩历史?</h2>
         <p>
           <a class="xref" href="chapter-17.html">第 17 章</a>的注意力是“<strong>稠密</strong>”的:每个 token 都要和其他<strong>所有</strong> token 两两打分。
           长度为 <var>n</var>,计算量就是 <var>n</var>×<var>n</var>——长度翻倍,计算和显存<strong>翻四倍</strong>。
@@ -1182,42 +1182,46 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           <span class="callout__title">关键转念:这个大矩阵<strong>从不被“整个造出来”</strong></span>
           <p>
             这里最容易误解的一点是:虽然它在数学上“存在”,但真实系统<strong>从不把完整的 <var>n</var>×<var>n</var> 矩阵物化(materialize)到显存里</strong>。
-            对付它有两条互补的路:
+            对付它有三条不同的路:
           </p>
           <p>
             <strong>· 不一次算、也不整个存(<a class="xref" href="chapter-19.html#9-kv-cache-别让自回归每步都重算前文">分块</a> + FlashAttention)</strong>:
             把序列切块,注意力一次只出现一小条,算完 softmax 就丢,只留最终输出。FlashAttention 就是这么干的——
             它<strong>一个都不少算(精确)</strong>,但<strong>全程不写出完整大矩阵</strong>,所以省下海量显存。<br />
             <strong>· 干脆不全算(稀疏注意力)</strong>:那一万亿个格子里绝大多数其实不相关,只保留窗口 / 全局 / top-k 的连接,
-            把 <var>n</var>² 降到接近线性——这是<strong>近似</strong>,下文细讲。
+            把 <var>n</var>² 降到接近线性——这是<strong>少算连接</strong>。<br />
+            <strong>· 不再保存逐 token 历史(KDA 等递归注意力)</strong>:把读过的内容不断压进固定大小的状态,新 token 直接读写这块“记忆板”,
+            从计算图上绕开 <var>n</var>×<var>n</var>——这是<strong>改变注意力形式</strong>,本节也会细讲。
           </p>
           <p>
-            所以要分清两件事:<strong>显存</strong>可以靠“不物化”省掉;但稠密注意力的<strong>计算量</strong>本身仍是 O(<var>n</var>²),
-            只有稀疏近似才能把复杂度真正降下来。
+            所以要分清两件事:<strong>显存</strong>可以靠“不物化”省掉;但标准稠密 softmax attention 的<strong>计算量</strong>本身仍是 O(<var>n</var>²)。
+            想真正降复杂度,可以保留 softmax 但稀疏掉连接,也可以像 KDA 那样换成固定状态的递归计算。
           </p>
         </div>
 
         <p>
           <span class="term">稀疏注意力(sparse attention)</span>的想法很朴素:<strong>没必要人人都聊</strong>。
           大多数 token 只跟少数几个真正相关的 token 有关系,那就<strong>只算这部分连接,其余干脆不算</strong>。
-          至于“算哪些”,分成两大流派。
+          至于“算哪些”,又分固定连接和动态挑选两大流派。下面先把 1M 上下文的整套约束串起来、讲 KDA 这条固定状态路线,
+          再回来展开这两类稀疏连接。
         </p>
         <h3>先拨开一个误会:1M token 不是把普通 attention 硬拉到 1,000,000</h3>
         <p>
           真要做百万级上下文,通常靠的是<strong>一整套组合拳</strong>,不是只把窗口数字改大。
-          算法上要<strong>少算</strong>(滑动窗口、全局 token、分块稀疏、动态 top-k……总之不再让所有 token 两两全聊);
+          算法上要<strong>少算或换表示</strong>(滑动窗口、动态 top-k,或像 KDA 那样把历史压进固定状态,总之不再让所有 token 两两全聊);
           系统上要更会<strong>存和搬</strong>(长前缀的 KV cache 得分页管理、压缩、复用,不然光缓存就先把显存吃爆);
           推理上往往得<strong>分块 prefill</strong>,再把计算摊到多卡上一起扛;训练时也要专门补长上下文,让位置编码和模型能力都真的撑到更远。
         </p>
         <p>
           所以今天很多“1M context”更准确的含义是:<strong>系统能处理百万级输入</strong>,但背后依赖的是
-          “少算 + 缓存 + 分块 + 并行 + 长上下文训练”这一整套工程,而不是朴素的全量稠密注意力。
+          “少算或压缩状态 + 缓存 + 分块 + 并行 + 长上下文训练”这一整套工程,而不是朴素的全量稠密注意力。
         </p>
 
-        <h4>还有一环:位置编码怎么“编”得到第 100 万个 token?</h4>
+        <h4>还有一环:模型怎么知道第 100 万个 token 的位置?</h4>
         <p>
           上面都在说“怎么少算、怎么存得下”,但有个更底层的问题:注意力本身<a class="xref" href="chapter-18.html#5-位置编码-告诉模型谁在前谁在后">对位置无感</a>,
-          全靠位置编码告诉它谁在前谁在后。要支持 1M,就得让位置编码<strong>一路编到第 100 万位还不乱</strong>。今天主流靠的是 <span class="term">RoPE(旋转位置编码)</span>:
+          必须有机制告诉它谁在前谁在后。对标准 softmax attention,今天主流靠的是 <span class="term">RoPE(旋转位置编码)</span>,
+          要支持 1M,就得让旋转角度<strong>一路编到第 100 万位还不乱</strong>:
         </p>
         <ul>
           <li><strong>RoPE 为什么天生能外推一点</strong>:它不给每个位置发“绝对号码牌”(那种一旦超出训练长度就没牌可发),而是<strong>按位置把 Q/K 向量旋转一个角度</strong>,角度和位置成正比。注意力打分只依赖两个 token 的<strong>相对角度差</strong>——换个绝对位置,只要相对距离没变,规律仍成立,所以它比可学习绝对位置更容易“往后多编一点”。</li>
@@ -1246,6 +1250,14 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           </table>
           <p class="calc-table__cap">这几招都在 RoPE 的“旋转角度”上做文章:让训练时只见过短序列的模型,推理时也能把位置编到远处而不乱——这就是模型能“事后加长”的关键(<a class="xref" href="chapter-20.html">第 20 章</a>提过它们的名字)。</p>
         </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">KDA 是一个例外:顺序写在“状态怎么更新”里</span>
+          <p>
+            Kimi K3 的 KDA 不给 Q/K 额外加 RoPE。它按 <code>token 1 → token 2 → ...</code> 的顺序不断更新循环状态,
+            先读 A 再读 B 与先读 B 再读 A 会得到不同状态,顺序因此已经隐含在递归过程里。K3 周期性插入的 MLA 层也采用 NoPE。
+            这不表示“位置编码没用”,而是<strong>位置信息换了一种进入计算图的方式</strong>。
+          </p>
+        </div>
 
         <h4>把“1M 怎么做到”一次串起来</h4>
         <p>综合前面所有内容,一个百万级上下文的模型,其实是这五层<strong>同时</strong>做到位的结果——缺哪一层都撑不到 1M:</p>
@@ -1256,17 +1268,17 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
               <tr>
                 <td><strong>① 位置编码</strong></td>
                 <td>位置能不能“编”到第 100 万位还不乱</td>
-                <td>RoPE + 位置插值 / NTK / YaRN 拉伸(本节上文)</td>
+                <td>标准 attention 用 RoPE + PI/NTK/YaRN;KDA 可用递归状态隐式携带顺序</td>
               </tr>
               <tr>
                 <td><strong>② 少算(算法)</strong></td>
                 <td>稠密注意力 O(n²),1M 时是天文数字</td>
-                <td>滑动窗口 / 全局 token / 分块稀疏 / 动态 top-k(本节下文)</td>
+                <td>滑动窗口 / 动态 top-k 少算连接,或 KDA 把历史压进固定状态</td>
               </tr>
               <tr>
                 <td><strong>③ 存得下(系统)</strong></td>
                 <td>百万长前缀的 KV cache 会先把显存吃爆</td>
-                <td><a class="xref" href="chapter-21.html#4-省显存两招-混合精度与量化">量化</a>、PagedAttention 分页复用(第 10 节)</td>
+                <td><a class="xref" href="chapter-21.html#4-省显存两招-混合精度与量化">量化</a>、PagedAttention 分页复用;KDA 状态固定大小</td>
               </tr>
               <tr>
                 <td><strong>④ 算得动(工程)</strong></td>
@@ -1280,10 +1292,160 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
               </tr>
             </tbody>
           </table>
-          <p class="calc-table__cap">所以“1M 上下文”是一套组合拳:<strong>位置编得到 + 少算 + 存得下 + 算得动 + 真训过</strong>,而不是把 full attention 的窗口数字改成 1000000。</p>
+          <p class="calc-table__cap">所以“1M 上下文”是一套组合拳:<strong>顺序表示得了 + 少算或压缩状态 + 存得下 + 算得动 + 真训过</strong>,而不是把 full attention 的窗口数字改成 1000000。</p>
         </div>
 
-        <h3>① 固定套路:按位置预先规定谁跟谁算</h3>
+        <h3>KDA:把历史压进一块固定大小的“记忆板”</h3>
+        <p>
+          稀疏注意力仍然保留“当前 token 去找一部分历史 token”的框架,只是少找一些。
+          <span class="term">KDA(Kimi Delta Attention)</span>走得更远:<strong>不再把所有历史 token 的 K/V 原样留给这一层查</strong>,
+          而是边读边把历史写进一块固定大小的状态矩阵 <var>S</var>。新 token 到来时先修改 <var>S</var>,再用自己的 Query 从中读取结果。
+          状态大小取决于 head 维度,不随已经读过的 token 数增长。
+        </p>
+        <figure class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 470" role="img" aria-label="标准 Attention 保存历史 K V 与 KDA 更新固定状态的对比">
+              <defs>
+                <marker id="kda-gray-arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#8499bd" /></marker>
+                <marker id="kda-blue-arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#58a6ff" /></marker>
+              </defs>
+
+              <rect x="18" y="18" width="724" height="190" rx="16" fill="rgba(149,176,227,0.05)" stroke="#46587a" />
+              <text x="42" y="49" fill="#eef4ff" font-size="17" font-weight="700">标准 Attention:原始历史越长,要保留的 K/V 越多</text>
+              <g fill="rgba(149,176,227,0.14)" stroke="#5b6f93">
+                <rect x="48" y="80" width="80" height="54" rx="9" /><rect x="146" y="80" width="80" height="54" rx="9" />
+                <rect x="244" y="80" width="80" height="54" rx="9" /><rect x="342" y="80" width="80" height="54" rx="9" />
+              </g>
+              <g fill="#dfe7ff" font-size="13" text-anchor="middle">
+                <text x="88" y="103">K₁,V₁</text><text x="88" y="121" fill="#8499bd" font-size="10">token 1</text>
+                <text x="186" y="103">K₂,V₂</text><text x="186" y="121" fill="#8499bd" font-size="10">token 2</text>
+                <text x="284" y="103">K₃,V₃</text><text x="284" y="121" fill="#8499bd" font-size="10">token 3</text>
+                <text x="382" y="103">… Kₙ,Vₙ</text><text x="382" y="121" fill="#8499bd" font-size="10">一路增长</text>
+              </g>
+              <path d="M422 107 H500" stroke="#8499bd" stroke-width="2.2" marker-end="url(#kda-gray-arrow)" />
+              <rect x="510" y="75" width="92" height="64" rx="11" fill="rgba(139,123,255,0.13)" stroke="#8b7bff" />
+              <text x="556" y="101" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">当前 Q</text>
+              <text x="556" y="121" text-anchor="middle" fill="#c4b7ff" font-size="11">逐个查历史</text>
+              <path d="M602 107 H648" stroke="#8499bd" stroke-width="2.2" marker-end="url(#kda-gray-arrow)" />
+              <text x="674" y="102" text-anchor="middle" fill="#eef4ff" font-size="13">输出</text>
+              <text x="380" y="174" text-anchor="middle" fill="#ff8fa3" font-size="13">序列越长,计算对象和 KV cache 越大</text>
+
+              <rect x="18" y="232" width="724" height="220" rx="16" fill="rgba(88,166,255,0.06)" stroke="#58a6ff" />
+              <text x="42" y="264" fill="#eef4ff" font-size="17" font-weight="700">KDA:每来一个 token,就纠正同一块状态 S</text>
+              <g fill="rgba(88,166,255,0.11)" stroke="#58a6ff">
+                <rect x="50" y="300" width="100" height="50" rx="9" /><rect x="50" y="368" width="100" height="50" rx="9" />
+              </g>
+              <text x="100" y="322" text-anchor="middle" fill="#eef4ff" font-size="13">旧状态 Sₜ₋₁</text>
+              <text x="100" y="340" text-anchor="middle" fill="#8499bd" font-size="10">压缩后的历史</text>
+              <text x="100" y="390" text-anchor="middle" fill="#eef4ff" font-size="13">新 token</text>
+              <text x="100" y="407" text-anchor="middle" fill="#8499bd" font-size="10">产生 q / k / v</text>
+              <path d="M150 325 C210 325, 210 337, 260 337" stroke="#58a6ff" stroke-width="2.2" fill="none" marker-end="url(#kda-blue-arrow)" />
+              <path d="M150 393 C210 393, 210 355, 260 348" stroke="#58a6ff" stroke-width="2.2" fill="none" marker-end="url(#kda-blue-arrow)" />
+              <rect x="270" y="307" width="162" height="82" rx="12" fill="rgba(88,166,255,0.18)" stroke="#58a6ff" stroke-width="2" />
+              <text x="351" y="333" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">遗忘 + Delta 修正</text>
+              <text x="351" y="356" text-anchor="middle" fill="#b6c5e1" font-size="11">旧答案哪里错了,只改差值</text>
+              <text x="351" y="375" text-anchor="middle" fill="#8ef0d1" font-size="11">得到新状态 Sₜ</text>
+              <path d="M432 348 H480" stroke="#58a6ff" stroke-width="2.2" marker-end="url(#kda-blue-arrow)" />
+              <rect x="490" y="316" width="104" height="64" rx="11" fill="rgba(139,123,255,0.16)" stroke="#8b7bff" />
+              <text x="542" y="341" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">用 q 查询 Sₜ</text>
+              <text x="542" y="361" text-anchor="middle" fill="#c4b7ff" font-size="11">不逐条翻历史</text>
+              <path d="M594 348 H640" stroke="#58a6ff" stroke-width="2.2" marker-end="url(#kda-blue-arrow)" />
+              <text x="674" y="343" text-anchor="middle" fill="#eef4ff" font-size="13">输出</text>
+              <text x="674" y="361" text-anchor="middle" fill="#8ef0d1" font-size="11">状态大小固定</text>
+            </svg>
+          </div>
+          <p class="figure__cap">标准 Attention 像保留全部原始记录再检索;KDA 像维护一块不断修订的记忆板。这里的“压缩历史”是帮助理解的类比,状态里存的是学习出来的矩阵表示,不是一段可读文字摘要。</p>
+        </figure>
+
+        <h4>Delta Rule:不是把新内容硬塞进去,而是“发现错多少就改多少”</h4>
+        <p>
+          对当前 token,KDA 先得到 Query <var>q</var><sub>t</sub>、Key <var>k</var><sub>t</sub>、Value <var>v</var><sub>t</sub>,
+          还会算出每个记忆通道的保留率 <var>α</var><sub>t</sub> 和写入强度 <var>β</var><sub>t</sub>。把原论文公式拆成更容易读的四步:
+        </p>
+        <div class="mathblock reveal">
+          <var>S̃</var><sub>t</sub> = Diag(<var>α</var><sub>t</sub>)<var>S</var><sub>t−1</sub><br />
+          <var>v̂</var><sub>t</sub> = <var>S̃</var><sub>t</sub><sup>T</sup><var>k</var><sub>t</sub><br />
+          <var>e</var><sub>t</sub> = <var>v</var><sub>t</sub> − <var>v̂</var><sub>t</sub>,　<var>S</var><sub>t</sub> = <var>S̃</var><sub>t</sub> + <var>β</var><sub>t</sub><var>k</var><sub>t</sub><var>e</var><sub>t</sub><sup>T</sup><br />
+          <var>o</var><sub>t</sub> = <var>S</var><sub>t</sub><sup>T</sup><var>q</var><sub>t</sub>
+          <span class="label">先选择性遗忘 → 用 key 问记忆当前会答什么 → 只写入“新 value − 旧答案”的差 → 再用 query 读取</span>
+        </div>
+        <ul>
+          <li><strong><var>α</var> 管“记多久”</strong>:每个 key 通道都有自己的保留率,有的快速更新,有的长期保留;</li>
+          <li><strong><var>β</var> 管“这次改多狠”</strong>:差值很重要时可以多写,不确定时少动;</li>
+          <li><strong>Delta 是“纠错”</strong>:若状态已经能用 <var>k</var><sub>t</sub> 读出接近 <var>v</var><sub>t</sub> 的答案,<var>e</var><sub>t</sub> 就很小,无需重复写一遍。</li>
+        </ul>
+
+        <h4>这些遗忘和写入规则,也是训练出来的</h4>
+        <p>
+          KDA 并没有人工规定“遇到人名记久一点、遇到标点马上忘”。产生 <var>q</var>/<var>k</var>/<var>v</var>/<var>α</var>/<var>β</var> 的投影参数
+          都是从初始化值开始学习;预测下一个 token 的 loss 会穿过读取公式和每一步状态更新反向传播,教它<strong>什么该保留、什么该覆盖、用什么 key 写、用什么 query 读</strong>。
+          学习机制仍是本书反复讲的“前向 → loss → 反向传播 → 优化器更新”,变化的是前向计算图。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">训练时不会真的一个 token 一个 token 慢慢算</span>
+          <p>
+            递归公式看起来必须串行。实际训练会把长序列切成 chunk:<strong>chunk 内改写成矩阵乘法并行算,chunk 之间只传状态</strong>。
+            Kimi K3 还给单步衰减设下界,把累计缩放限制在 BF16 能表示的范围内,让原本难算的块也能走 Tensor Core 密集矩阵乘法。
+            因此它既保留递归记忆,又能适配 GPU 的并行训练方式
+            <sup class="cite"><a class="xref" href="https://github.com/MoonshotAI/Kimi-K3/blob/main/k3_tech_report.pdf" target="_blank" rel="noopener">技术报告</a></sup>。
+          </p>
+        </div>
+
+        <h4>为什么还要周期性插入全局 MLA?</h4>
+        <p>
+          固定状态的容量不会随历史增长,效率高,但也意味着许多 token 的细节要挤进同一块记忆,可能互相覆盖。
+          标准全局 attention 则能直接回看某个原始位置,精确但昂贵。Kimi K3 没有二选一,而是采用混合结构:
+        </p>
+        <figure class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 300" role="img" aria-label="Kimi K3 三层 KDA 加一层 Gated MLA 的混合注意力结构">
+              <defs>
+                <marker id="hybrid-arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#8499bd" /></marker>
+              </defs>
+              <text x="380" y="34" text-anchor="middle" fill="#eef4ff" font-size="18" font-weight="700">一组 Hybrid Attention:3 层 KDA + 1 层 Gated MLA</text>
+              <g fill="rgba(88,166,255,0.14)" stroke="#58a6ff" stroke-width="1.7">
+                <rect x="42" y="82" width="130" height="66" rx="11" /><rect x="206" y="82" width="130" height="66" rx="11" />
+                <rect x="370" y="82" width="130" height="66" rx="11" />
+              </g>
+              <rect x="534" y="82" width="184" height="66" rx="11" fill="rgba(139,123,255,0.17)" stroke="#8b7bff" stroke-width="1.8" />
+              <g fill="#eef4ff" font-size="14" text-anchor="middle" font-weight="700">
+                <text x="107" y="108">KDA</text><text x="271" y="108">KDA</text><text x="435" y="108">KDA</text><text x="626" y="108">Gated MLA</text>
+              </g>
+              <g fill="#8499bd" font-size="10" text-anchor="middle">
+                <text x="107" y="130">更新固定状态</text><text x="271" y="130">更新固定状态</text><text x="435" y="130">更新固定状态</text>
+                <text x="626" y="130">重新做全局 token 交互</text>
+              </g>
+              <g stroke="#8499bd" stroke-width="2" marker-end="url(#hybrid-arrow)">
+                <line x1="172" y1="115" x2="196" y2="115" /><line x1="336" y1="115" x2="360" y2="115" /><line x1="500" y1="115" x2="524" y2="115" />
+              </g>
+              <path d="M626 148 V183 H107 V158" fill="none" stroke="#8b7bff" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#hybrid-arrow)" />
+              <text x="366" y="177" text-anchor="middle" fill="#c4b7ff" font-size="12">重复整组</text>
+              <rect x="174" y="211" width="412" height="56" rx="12" fill="rgba(149,176,227,0.06)" stroke="#46587a" />
+              <text x="380" y="234" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">Kimi K3 共 93 层 Attention</text>
+              <text x="380" y="254" text-anchor="middle" fill="#b6c5e1" font-size="12">69 层 KDA + 23 层组内 MLA + 主干末尾再 1 层 MLA = 24 层 MLA</text>
+            </svg>
+          </div>
+          <p class="figure__cap">KDA 负责用固定状态低成本传递长历史,MLA 定期恢复直接的全局 token-to-token 交互。可以类比为“平时维护动态笔记,隔几层重新翻一次原始资料”。</p>
+        </figure>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>机制</th><th>历史怎么留</th><th>优势</th><th>代价</th></tr></thead>
+            <tbody>
+              <tr><td><strong>KDA</strong></td><td>压进固定大小状态 <var>S</var></td><td>随序列近线性计算,状态不随长度增长</td><td>固定容量可能覆盖精确细节</td></tr>
+              <tr><td><strong>Gated MLA</strong></td><td>保存压缩后的逐 token KV</td><td>能直接做全局 token-to-token 交互</td><td>计算更贵,KV cache 仍随长度增长</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">KDA 不是“完全等价但更便宜的 softmax attention”。Kimi K3 的关键取舍正是让两者互补,而不是押注单一路线。</p>
+        </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">别扩大理解:这是 Kimi K3 的具体架构</span>
+          <p>
+            KDA 和 <code>3:1</code> 混合比例不是所有长上下文模型的标准答案。其他模型可能用全量 attention、滑动窗口、动态稀疏或别的状态空间结构。
+            这里值得学习的是设计取舍:<strong>用固定状态换效率,再用周期性全局 attention 补精确交互</strong>。
+          </p>
+        </div>
+
+        <h3>稀疏路线① 固定套路:按位置预先规定谁跟谁算</h3>
         <ul>
           <li><strong>滑动窗口(局部注意力)</strong>:每个 token 只跟最近的 <var>w</var> 个邻居算(如某些模型 <var>w</var>=4096)。计算量从 <var>n</var>² 降到 <var>n</var>×<var>w</var>(线性)。别担心看不到远处:多层叠起来,感受野会像 CNN 一样<strong>层层扩大</strong>,远处信息仍能“一跳一跳”传过来。</li>
           <li><strong>全局 token</strong>:留几个“公共联络员”token,它们<strong>对所有人可见、也能看所有人</strong>,专门负责跨全局传信息(比如句首的特殊标记)。</li>
@@ -1339,7 +1501,7 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           <p class="figure__cap">同一段 6 词序列(行 = 当前词,列 = 被看的词;只画下三角,因为 decoder 只能看前文)。稀疏,就是把大片格子“留白不算”。</p>
         </div>
 
-        <h3>② 动态挑选:让模型自己找“该聊的人”</h3>
+        <h3>稀疏路线② 动态挑选:让模型自己找“该聊的人”</h3>
         <p>
           固定套路有个软肋:万一“该关注的词”恰好落在窗口之外呢?于是有了<strong>内容自适应</strong>的稀疏——
           不按位置死板划定,而是<strong>当场挑出最相关的那几个</strong>。做法通常是:先用一个<strong>廉价的打分器</strong>快速估一下
@@ -1356,7 +1518,7 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           <var>k</var> 多半是配置,被选进来的 token / 压缩块才是每个 query 现场决定的。
         </p>
 
-        <h3>③ 闪电索引器:top-k 到底怎么选出来?</h3>
+        <h3>稀疏路线③ 闪电索引器:top-k 到底怎么选出来?</h3>
         <p>
           不是人工写规则,也不是先把完整注意力算完再裁剪。论文里的做法是:索引器给“当前 query token”和每个“历史 token”
           算一个很便宜的索引分 <var>I</var>(<var>t</var>,<var>s</var>),再按这个分数排序取前 <var>k</var> 个。
@@ -1388,7 +1550,7 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           避免索引器一开始就学歪。推理时才用它先粗筛,把非 top-k 位置遮掉,再让真正的 Q/K/V 注意力只在留下来的 token 上精算。
         </p>
 
-        <h3>④ 案例:百万上下文路线怎么继续省?</h3>
+        <h3>稀疏路线④ 百万上下文怎么继续省?</h3>
         <p>
           先别记名词。把 1M 上下文想成一本<strong>一百万页的书</strong>:模型每生成一个新 token,都要决定“该回头看哪些页”。
           真正的优化,不是假装能把整本书逐页重读,而是想办法<strong>少翻页、复用目录、把远处内容压成摘要</strong>。
@@ -1518,9 +1680,10 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
             它必须学会建目录、做摘要、复用缓存,再配合真正的长上下文训练。
           </p>
         <p>
-          最后把两种“稀疏”分清:<strong>MoE</strong> 稀疏的是<strong>参数 / 计算路径</strong>——每个 token 只走部分专家 FFN(第 8 节);
-          <strong>稀疏注意力</strong>稀疏的是<strong>token 两两连接</strong>——每个 token 只和部分 token 打分。
-          一个省在“<strong>哪些参数参与</strong>”,一个省在“<strong>哪些 token 互动</strong>”,超大模型里常常两个一起上。
+          最后把三种容易混淆的省法分清:<strong>MoE</strong> 稀疏的是<strong>参数 / 计算路径</strong>——每个 token 只走部分专家 FFN(第 8 节);
+          <strong>稀疏注意力</strong>省的是<strong>token 两两连接</strong>——只和部分历史位置打分;
+          <strong>KDA</strong>则不是 top-k 稀疏,而是把逐 token 历史改写成<strong>固定大小的递归状态</strong>。
+          三者分别回答“用哪些参数”“看哪些 token”“历史以什么形式保存”,可以同时出现在一个模型里。
         </p>
 
         <h2>10. 推理服务:几亿用户同时问,怎么扛得住</h2>
@@ -1707,10 +1870,11 @@ Router / Policy Engine
             <li>NCCL 管通信,NVLink/NVSwitch 是卡间高速公路;推理靠 KV cache、批处理、量化提速。</li>
             <li>MoE:FFN 换成 <strong>N 个并列专家</strong>(<code>N</code>/<code>k</code> 设计时定死),Attention <strong>共用 1 套</strong>;路由器 softmax 打分 + top-k 门控加权,与专家<strong>端到端</strong>同训;还得靠负载均衡防专家坍缩。参数多但算得少;全部专家仍要常驻显存。<strong>压 k/缩专家会掉能力</strong>,是另一类「降智」来源。</li>
             <li>离散 top-k 能训练的关键:不可微的是“谁入围”,可微的是<strong>入围前的打分器</strong>和<strong>入围后的加权路径</strong>;没入围的专家或 token 本轮通常没有直接梯度。</li>
-            <li>稀疏注意力:只算部分 token 对——固定套路(滑动窗口 + 全局)或动态挑 top-k,把 O(n²) 压下来;它是“少算”(近似),区别于 FlashAttention 的“精确加速”。</li>
-            <li><var>n</var>×<var>n</var> 注意力矩阵在 <var>n</var>=1M 时高达一万亿个数(单头单层就 ~2TB),但它<strong>从不被整个物化</strong>:FlashAttention 分块流式算(精确、不写出大矩阵、省显存),稀疏注意力干脆少算(近似、降复杂度)。</li>
+            <li>长上下文注意力有不同路线:FlashAttention 分块流式精算、不写出完整矩阵;稀疏注意力只算部分 token 对;KDA 把历史压进固定状态,用递归更新替代逐 token 全局检索。</li>
+            <li>KDA 用通道保留率 <var>α</var> 选择性遗忘,再按 <var>v</var>−<var>S</var><sup>T</sup><var>k</var> 的 Delta 误差纠正状态;这些读写规则由 next-token loss 端到端训练。Kimi K3 用 69 层 KDA + 24 层 Gated MLA,让低成本长记忆与精确全局交互互补。</li>
+            <li><var>n</var>×<var>n</var> 注意力矩阵在 <var>n</var>=1M 时高达一万亿个数(单头单层就 ~2TB),但它<strong>从不被整个物化</strong>:可以分块精算、稀疏少算,也可以改成 KDA 这类固定状态架构。</li>
             <li>动态 top-k 的“动态”通常是<strong>选中哪些历史位置</strong>,不是每个 query 自己决定 <var>k</var> 多大;<var>k</var> 多半是模型或服务档位里的预算。</li>
-            <li>百万级长上下文是<strong>五层组合拳</strong>:位置编码(RoPE + PI/NTK/YaRN 拉伸)编得到远处、稀疏注意力少算、量化/分页缓存存得下、分块 prefill+多卡算得动、长上下文续训真学过——不是把 full attention 的窗口数字改成 1M。</li>
+            <li>百万级长上下文是<strong>五层组合拳</strong>:顺序表示得到远处、注意力少算连接或压缩状态、缓存存得下、分块 prefill+多卡算得动、长上下文续训真学过——不是把 full attention 的窗口数字改成 1M。</li>
             <li>MTP 训练时让同一隐藏状态预测多个未来 token,提供更密训练信号并逼表示更前瞻;推理时当内置草稿器先猜一串,主模型批量验证,连续通过的 token 一次接受。代价是训练/验证额外计算、接受率不稳和服务实现复杂度。</li>
             <li>快模型也是组合拳:MoE 少激活专家、混合滑窗/全局注意力少看 token、MTP 既辅助训练又能做推测解码,一起把成本压下来。</li>
             <li>推理服务扛海量用户:分 prefill(并行、算得饱)/ decode(逐字、喂不饱)两阶段;用连续批处理把多请求拼一起、PagedAttention 分页复用 KV cache、多副本 + 负载均衡横向扩展;长上下文更占计算、显存和调度资源,所以常会按上下文档位收费。</li>
@@ -1762,9 +1926,9 @@ Router / Policy Engine
             </div>
           </details>
           <details class="quiz__item">
-            <summary class="quiz__q">问题 8:一个模型号称支持 1M 上下文,靠的是把 RoPE 直接编到 100 万吗?</summary>
+            <summary class="quiz__q">问题 8:一个模型号称支持 1M 上下文,只靠把 RoPE 编到 100 万就够了吗?KDA 路线又有何不同?</summary>
             <div class="quiz__a">
-              <p>不是,是组合拳:位置编码要靠 PI/NTK/YaRN 等方法把 RoPE 拉伸到更远;注意力要靠稀疏连接少算,而 FlashAttention 负责把仍需计算的块更高效地精确算完;KV cache 要靠量化和分页管理存得下;prefill 要分块、多卡并行算得动;模型还要真的在长序列上续训过。缺哪层都撑不到真正可用的 1M。</p>
+              <p>不够。标准 attention 路线还要靠 PI/NTK/YaRN 等方法拉伸 RoPE、用稀疏连接少算或用 FlashAttention 分块精算、管理 KV cache、分块多卡 prefill,并真的做长序列训练。KDA 则把顺序隐含在递归状态更新里,把历史压进固定状态,不依赖 RoPE 和不断增长的逐 token KDA cache;但固定状态可能丢精确细节,所以 Kimi K3 又周期性插入全局 MLA。两条路线都还需要系统并行和长上下文训练。</p>
             </div>
           </details>
           <details class="quiz__item">

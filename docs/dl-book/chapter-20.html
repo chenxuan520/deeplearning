@@ -357,6 +357,19 @@
             大模型时代更是如此:绝大多数人不会从头训一个,而是拿开源的“预训练模型”接着用。
           </p>
         </div>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">权重是成品菜,训练方法是菜谱</span>
+          <p>
+            更准确地说,许多被称为“开源”的大模型,核心是公开训练完成后的<strong>权重</strong>,也叫<span class="term">开放权重(open weights)</span>。
+            把训练模型想成做菜:<strong>权重是已经做好的成品菜</strong>,下载后可以直接“端上桌”,也能继续微调加工;
+            <strong>训练方法、超参数和数据配比是菜谱与火候</strong>;<strong>训练数据则是食材</strong>。
+            拿到成品菜,不等于知道每样食材从哪来、放多少、按什么顺序烹饪,也就不一定能从头原样复刻。
+          </p>
+          <p>
+            所以,<strong>能下载权重</strong>和<strong>训练全过程可复现</strong>是两回事。有些项目还会公开训练代码、技术报告、部分数据来源或训练配方,
+            但开放程度各不相同。看到“开源模型”,最好继续问一句:<strong>开放的是权重、代码、训练配方,还是数据?</strong>
+          </p>
+        </div>
 
         <h2>5. 规模化(Scaling Law):大力真的出奇迹</h2>
         <p>
@@ -1452,8 +1465,8 @@ loss = Σ target_mask[t+1] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-t
               </tr>
               <tr>
                 <td><strong>③ 算力 / 显存<br />(现实约束)</strong></td>
-                <td>注意力的计算与显存随长度<strong>平方</strong>增长,推理时 <a class="xref" href="chapter-19.html">KV cache</a> 又随长度<strong>线性</strong>膨胀吃显存</td>
-                <td>最卡脖子的一关:长度翻倍,注意力开销约 4 倍。<strong>FlashAttention、稀疏/滑窗注意力、PagedAttention</strong>(<a class="xref" href="chapter-21.html">第 21 章</a>)决定了厂商“愿意开多长”、你“用得起多长”</td>
+                <td>标准 softmax attention 的计算与显存随长度<strong>平方</strong>增长,推理时 <a class="xref" href="chapter-19.html">KV cache</a> 又随长度<strong>线性</strong>膨胀吃显存</td>
+                <td>最卡脖子的一关:长度翻倍,标准 attention 开销约 4 倍。<strong>FlashAttention、稀疏/滑窗注意力、KDA 等递归状态架构、PagedAttention</strong>(<a class="xref" href="chapter-21.html">第 21 章</a>)决定了厂商“愿意开多长”、你“用得起多长”</td>
               </tr>
             </tbody>
           </table>

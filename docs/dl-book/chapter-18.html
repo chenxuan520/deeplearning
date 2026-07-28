@@ -44,7 +44,7 @@
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>残差连接为什么能让“很深的网络”也训得动;</li>
+            <li>残差连接为什么能让“很深的网络”也训得动,以及 Kimi K3 的 Attention Residuals 怎样让当前层按需回看以前的层;</li>
             <li>LayerNorm 在归一化什么,为什么能稳住训练;</li>
             <li>前馈网络(FFN)在 attention 之后又补了什么;</li>
             <li>位置编码有哪些常见写法、分别改在计算图哪里,以及 encoder 和 decoder 的区别;</li>
@@ -124,6 +124,178 @@ attention_norm_.Forward(last_residual_1_, last_norm_1_);    <b class="cw-tag">3<
             反向传播是把梯度从后往前<strong>连乘</strong>回去。对 <var>y</var> = <var>x</var> + F(<var>x</var>) 求导:<code>∂y/∂x = 1 + ∂F/∂x</code>。
             关键是那个 <strong>“+1”</strong>——哪怕子层 F 的梯度 <code>∂F/∂x</code> 很小甚至接近 0,梯度也能靠这个 1 <strong>原样传回前一层</strong>,不会被一路乘没。
             没有残差时,深层梯度是一串小于 1 的数连乘,越乘越小(这就是<strong>梯度消失</strong>);有了残差,等于永远留了一条“直达车道”,几十上百层也传得回去。
+          </p>
+        </div>
+
+        <h3>Attention Residuals:让深层按需回看浅层</h3>
+        <p>
+          普通残差每次只做 <code>上一层状态 + 本层增量</code>。网络堆深后,最早的 embedding、浅层特征和中层特征都被反复揉进
+          最新的一份隐藏状态里;当前层虽然间接继承了它们,却不能直接说“这次我想多读浅层、少读中层”。
+          Kimi K3 技术报告采用的 <span class="term">Attention Residuals(AttnRes,注意力残差)</span>把这条固定累加路径改成
+          <strong>沿网络深度做一次注意力选择</strong>:当前层可以直接给 embedding 和以前各层的表示打分,再按权重混合成自己的输入。
+          <strong>这是 Kimi K3 的具体架构设计,不是所有现代 Transformer 的通用做法。</strong>
+        </p>
+        <figure class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 500" role="img" aria-label="普通残差与 Kimi K3 Attention Residuals 的信息流对比">
+              <defs>
+                <marker id="attnres-flow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#8499bd" /></marker>
+                <marker id="attnres-pick" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#8b7bff" /></marker>
+              </defs>
+
+              <rect x="18" y="18" width="724" height="172" rx="16" fill="rgba(149,176,227,0.05)" stroke="#46587a" />
+              <text x="42" y="49" fill="#eef4ff" font-size="17" font-weight="700">普通残差:只能接住上一层的最新版</text>
+              <g fill="rgba(149,176,227,0.12)" stroke="#5b6f93" stroke-width="1.5">
+                <rect x="48" y="83" width="130" height="52" rx="10" />
+                <rect x="226" y="83" width="130" height="52" rx="10" />
+                <rect x="404" y="83" width="130" height="52" rx="10" />
+                <rect x="582" y="83" width="130" height="52" rx="10" />
+              </g>
+              <g fill="#dfe7ff" font-size="14" text-anchor="middle">
+                <text x="113" y="105">Embedding</text><text x="113" y="124" fill="#8499bd" font-size="11">最初版本</text>
+                <text x="291" y="105">浅层输出</text><text x="291" y="124" fill="#8499bd" font-size="11">加工一次</text>
+                <text x="469" y="105">中层输出</text><text x="469" y="124" fill="#8499bd" font-size="11">继续揉进去</text>
+                <text x="647" y="105">当前层</text><text x="647" y="124" fill="#8499bd" font-size="11">只拿上一版</text>
+              </g>
+              <g stroke="#8499bd" stroke-width="2.2" marker-end="url(#attnres-flow)">
+                <line x1="178" y1="109" x2="216" y2="109" />
+                <line x1="356" y1="109" x2="394" y2="109" />
+                <line x1="534" y1="109" x2="572" y2="109" />
+              </g>
+              <text x="380" y="165" text-anchor="middle" fill="#8499bd" font-size="13">早期信息还在,但已经被层层混进最新状态</text>
+
+              <rect x="18" y="214" width="724" height="268" rx="16" fill="rgba(139,123,255,0.06)" stroke="#8b7bff" />
+              <text x="42" y="247" fill="#eef4ff" font-size="17" font-weight="700">Kimi K3 的 AttnRes:同一个 token,直接翻不同深度的版本</text>
+              <text x="61" y="278" fill="#8499bd" font-size="12">同一个 token 的历史表示</text>
+              <g fill="rgba(88,166,255,0.11)" stroke="#58a6ff" stroke-width="1.5">
+                <rect x="50" y="296" width="150" height="44" rx="9" />
+                <rect x="50" y="357" width="150" height="44" rx="9" />
+                <rect x="50" y="418" width="150" height="44" rx="9" />
+              </g>
+              <g fill="#dfe7ff" font-size="13" text-anchor="middle">
+                <text x="125" y="323">Embedding 版</text>
+                <text x="125" y="384">浅层加工版</text>
+                <text x="125" y="445">中层加工版</text>
+              </g>
+              <g stroke="#8b7bff" stroke-width="2.2" fill="none" marker-end="url(#attnres-pick)">
+                <path d="M200 318 C310 318, 330 350, 426 365" />
+                <path d="M200 379 C310 379, 330 379, 426 379" />
+                <path d="M200 440 C310 440, 330 408, 426 393" />
+              </g>
+              <g fill="#c4b7ff" font-size="13" font-weight="700">
+                <text x="292" y="318">α₀</text><text x="310" y="373">α₁</text><text x="292" y="447">α₂</text>
+              </g>
+              <rect x="436" y="341" width="142" height="76" rx="13" fill="rgba(139,123,255,0.23)" stroke="#8b7bff" stroke-width="2" />
+              <text x="507" y="371" text-anchor="middle" fill="#eef4ff" font-size="14" font-weight="700">按权重混合</text>
+              <text x="507" y="394" text-anchor="middle" fill="#c4b7ff" font-size="13">α₀v₀ + α₁v₁ + α₂v₂</text>
+              <line x1="578" y1="379" x2="616" y2="379" stroke="#8b7bff" stroke-width="2.2" marker-end="url(#attnres-pick)" />
+              <rect x="626" y="350" width="86" height="58" rx="11" fill="rgba(142,240,209,0.12)" stroke="#8ef0d1" stroke-width="1.8" />
+              <text x="669" y="374" text-anchor="middle" fill="#eef4ff" font-size="13" font-weight="700">当前层</text>
+              <text x="669" y="393" text-anchor="middle" fill="#8ef0d1" font-size="11">拿到新输入</text>
+            </svg>
+          </div>
+          <p class="figure__cap">上:普通残差沿层顺序一直传最新版。下:Kimi K3 的 AttnRes 为同一个 token 的不同深度版本分配 α 权重,混合后再交给当前层。图中只画 3 份历史以便理解。</p>
+        </figure>
+        <p>
+          对第 <var>t</var> 个 token,设 <var>v</var><sub>t,i</sub> 是它在 embedding 或前面第 <var>i</var> 层留下的表示;
+          当前第 <var>l</var> 层有一条可学习的“伪查询”向量 <var>w</var><sub>l</sub>。简化写成三步:
+        </p>
+        <div class="mathblock reveal">
+          <var>s</var><sub>t,i</sub> = <var>w</var><sub>l</sub> · RMSNorm(<var>v</var><sub>t,i</sub>)<br />
+          <var>α</var><sub>t,i</sub> = Softmax<sub>i</sub>(<var>s</var><sub>t,i</sub>)<br />
+          <var>h</var><sub>t,l</sub> = Σ<sub>i&lt;l</sub> <var>α</var><sub>t,i</sub><var>v</var><sub>t,i</sub>
+          <span class="label">先给这个 token 的各层历史打分,再沿“深度轴”加权求和;α 的总和为 1</span>
+        </div>
+        <p>
+          <var>w</var><sub>l</sub> 是这一层训练出来的查询,而 <var>v</var><sub>t,i</sub> 会随输入和 token 改变,
+          所以不同 token 最终可以偏爱不同深度的表示。浅层里常保留更原始的局部线索,深层里则有加工得更充分的上下文;
+          在 Kimi K3 的这个设计里,AttnRes 不必强迫所有信息都挤在最新状态里,而是让后面的层
+          <strong>需要哪一版,就给哪一版更高权重</strong>。注意不是只选一层:Softmax 后通常是多份历史按不同比例混合。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>机制</th><th>沿哪条轴选择</th><th>它在问什么</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Self-Attention</strong></td><td>序列轴(token ↔ token)</td><td>当前 token 应该看前文哪些 token?</td></tr>
+              <tr><td><strong>Attention Residuals</strong></td><td>深度轴(layer ↔ layer)</td><td>当前层应该读取这个 token 以前哪些层的表示?</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">两者不是替代关系:Self-Attention 负责词与词之间通信,AttnRes 负责同一个 token 在不同网络深度之间取信息。</p>
+        </div>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">从“层层传话”变成“翻会议纪要”</span>
+          <p>
+            普通残差像层层传话:每个人只拿到上一位整理过的最新版本。Kimi K3 的 Attention Residuals 像给当前层开放历次会议纪要:
+            它可以按当前内容直接翻早期、中期或最近的记录。这样更灵活,代价是要保存和读取更多历史版本。
+          </p>
+        </div>
+        <p>
+          完整版若让第 <var>l</var> 层读取前面所有层,计算量约随 <var>L</var><sup>2</sup><var>d</var> 增长;
+          更麻烦的是所有历史表示都要留在显存里,流水线并行时还要跨设备传。Kimi K3 因此使用
+          <strong>Block Attention Residuals</strong>:把 93 层分成 8 个层块(每块约 12 层,最后一块较短),
+          块内保留局部累加,跨块只保存一份汇总;再加上 embedding,当前层只需在约 9 份块级来源中选择。
+          这保留了“跨深度查资料”的主要好处,又把存储和通信从逐层历史压缩到逐块历史
+          <sup class="cite"><a class="xref" href="https://github.com/MoonshotAI/Kimi-K3/blob/main/k3_tech_report.pdf" target="_blank" rel="noopener">技术报告</a></sup>。
+        </p>
+        <figure class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 760 390" role="img" aria-label="逐层 Attention Residuals 与 Kimi K3 Block Attention Residuals 的存储对比">
+              <defs>
+                <marker id="blockres-arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#8b7bff" /></marker>
+              </defs>
+              <rect x="18" y="20" width="345" height="350" rx="16" fill="rgba(149,176,227,0.05)" stroke="#46587a" />
+              <rect x="397" y="20" width="345" height="350" rx="16" fill="rgba(139,123,255,0.06)" stroke="#8b7bff" />
+              <text x="190" y="52" text-anchor="middle" fill="#eef4ff" font-size="16" font-weight="700">如果逐层回看</text>
+              <text x="570" y="52" text-anchor="middle" fill="#eef4ff" font-size="16" font-weight="700">Kimi K3 实际:按 Block 回看</text>
+
+              <g fill="rgba(149,176,227,0.14)" stroke="#5b6f93">
+                <rect x="48" y="78" width="112" height="30" rx="6" /><rect x="48" y="116" width="112" height="30" rx="6" />
+                <rect x="48" y="154" width="112" height="30" rx="6" /><rect x="48" y="192" width="112" height="30" rx="6" />
+                <rect x="48" y="250" width="112" height="30" rx="6" /><rect x="48" y="288" width="112" height="30" rx="6" />
+              </g>
+              <g fill="#dfe7ff" font-size="12" text-anchor="middle">
+                <text x="104" y="98">第 1 层输出</text><text x="104" y="136">第 2 层输出</text><text x="104" y="174">第 3 层输出</text>
+                <text x="104" y="212">第 4 层输出</text><text x="104" y="270">第 92 层输出</text><text x="104" y="308">第 93 层输出</text>
+              </g>
+              <text x="104" y="241" text-anchor="middle" fill="#8499bd" font-size="18">⋮</text>
+              <g stroke="#8499bd" stroke-width="1.5" fill="none">
+                <path d="M160 93 C210 93, 205 176, 248 191" /><path d="M160 131 C210 131, 205 176, 248 196" />
+                <path d="M160 169 C210 169, 205 186, 248 201" /><path d="M160 207 C210 207, 205 196, 248 206" />
+                <path d="M160 265 C210 265, 205 216, 248 211" /><path d="M160 303 C210 303, 205 226, 248 216" />
+              </g>
+              <rect x="252" y="174" width="82" height="62" rx="11" fill="rgba(149,176,227,0.14)" stroke="#8499bd" />
+              <text x="293" y="199" text-anchor="middle" fill="#eef4ff" font-size="12" font-weight="700">当前层</text>
+              <text x="293" y="218" text-anchor="middle" fill="#8499bd" font-size="11">读逐层历史</text>
+              <text x="190" y="346" text-anchor="middle" fill="#ff8fa3" font-size="13">约 93 份表示要保存 / 传输</text>
+
+              <g fill="rgba(88,166,255,0.10)" stroke="#58a6ff">
+                <rect x="425" y="82" width="134" height="42" rx="8" /><rect x="425" y="143" width="134" height="42" rx="8" />
+                <rect x="425" y="204" width="134" height="42" rx="8" /><rect x="425" y="265" width="134" height="42" rx="8" />
+              </g>
+              <g fill="#dfe7ff" font-size="12" text-anchor="middle">
+                <text x="492" y="100">Block 1</text><text x="492" y="116" fill="#8499bd" font-size="10">第 1-12 层汇总</text>
+                <text x="492" y="161">Block 2</text><text x="492" y="177" fill="#8499bd" font-size="10">第 13-24 层汇总</text>
+                <text x="492" y="222">…</text><text x="492" y="238" fill="#8499bd" font-size="10">中间各块汇总</text>
+                <text x="492" y="283">Block 8</text><text x="492" y="299" fill="#8499bd" font-size="10">最后一块汇总</text>
+              </g>
+              <g stroke="#8b7bff" stroke-width="2" fill="none" marker-end="url(#blockres-arrow)">
+                <path d="M559 103 C610 103, 600 178, 634 190" /><path d="M559 164 C610 164, 600 188, 634 197" />
+                <path d="M559 225 C610 225, 600 207, 634 204" /><path d="M559 286 C610 286, 600 217, 634 211" />
+              </g>
+              <rect x="638" y="174" width="76" height="62" rx="11" fill="rgba(139,123,255,0.23)" stroke="#8b7bff" stroke-width="1.8" />
+              <text x="676" y="199" text-anchor="middle" fill="#eef4ff" font-size="12" font-weight="700">当前层</text>
+              <text x="676" y="218" text-anchor="middle" fill="#c4b7ff" font-size="11">读块摘要</text>
+              <text x="570" y="346" text-anchor="middle" fill="#8ef0d1" font-size="13">8 个层块 + embedding,约 9 份来源</text>
+            </svg>
+          </div>
+          <p class="figure__cap">左边是假设每层都保留一份历史;右边才是 Kimi K3 报告采用的 Block AttnRes。每约 12 层先汇总成一份,当前层再在少量块级“纪要”之间分配权重。</p>
+        </figure>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">别扩大理解:这里讲的是 Kimi K3</span>
+          <p>
+            本书配套的最小 Transformer 仍采用前面那条普通残差 <code>x + Sublayer(x)</code>,因为它最适合看清共同骨架。
+            Kimi K3 的 AttnRes 改的是<strong>层与层怎样传递历史表示</strong>,并没有改变“token 间用注意力、每层靠反向传播训练”的基本原理;
+            其他模型可能继续使用普通残差,也可能采用别的跨层连接,不能从这个案例推断“现在的模型都这样”。
           </p>
         </div>
 
@@ -1510,7 +1682,7 @@ Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code>
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li><strong>残差连接</strong>(<var>x</var> + Sublayer(<var>x</var>)):给梯度修高速公路,让深网络训得动,每层只学“增量”。</li>
+            <li><strong>残差连接</strong>(<var>x</var> + Sublayer(<var>x</var>)):给梯度修高速公路,让深网络训得动,每层只学“增量”;Kimi K3 是一个特例:它用 Attention Residuals 沿深度轴给历史层动态加权,再用 Block 版本控制显存和通信。</li>
             <li><strong>LayerNorm</strong>:对每个词向量减均值除标准差再缩放,稳住数值、加速收敛。</li>
             <li><strong>FFN</strong>:对每个词独立做“升维 → ReLU → 降维”,补充非线性加工。</li>
             <li>一块 Block = 注意力+残差+Norm,再 FFN+残差+Norm;输入输出同形,可无限堆叠。</li>
@@ -1554,6 +1726,12 @@ Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code>
             <summary class="quiz__q">问题 5:GPT 这种 decoder-only 模型,相对“完整 Transformer 全图”删掉了哪些部分?</summary>
             <div class="quiz__a">
               <p>删掉了<strong>整个编码器塔</strong>,也删掉了解码器中部那层<strong>交叉注意力</strong>。保留下来的主干,就是很多层“带 causal mask 的自注意力 + FFN”反复堆叠,最顶上再接一个 LM Head 去预测下一个 token。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 6:Attention Residuals 和 Self-Attention 分别在“看”什么?为什么 Kimi K3 要按 Block 做?</summary>
+            <div class="quiz__a">
+              <p>Self-Attention 沿<strong>序列轴</strong>选择相关 token;Attention Residuals 沿<strong>网络深度轴</strong>选择同一个 token 在 embedding 和历史层中的表示。若每层都回看全部历史层,就要保存、读取并跨设备传输大量中间表示;Block 版本把若干层汇总成一份块级表示,用更少的存储和通信保留主要的跨深度选择能力。</p>
             </div>
           </details>
         </div>
