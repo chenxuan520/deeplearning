@@ -543,6 +543,9 @@ def export_pdf(chrome: Path | None, output: Path) -> None:
                 "/Subject": "用 C++ 从零写懂深度学习",
             }
         )
+        writer.compress_identical_objects(
+            remove_duplicates=True, remove_unreferenced=True
+        )
         with output.open("wb") as pdf_file:
             writer.write(pdf_file)
 
