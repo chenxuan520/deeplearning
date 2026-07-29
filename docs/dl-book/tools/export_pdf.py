@@ -10,6 +10,7 @@ import sys
 import tempfile
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import Any
 from urllib.parse import unquote
 
 
@@ -388,6 +389,72 @@ def normalize_browser_fragment(fragment: str) -> str:
     )
 
 
+def page_number_stream_data(page_number: int, page_width: float) -> bytes:
+    label = str(page_number)
+    font_size = 8.5
+    text_width = len(label) * font_size * 0.556
+    x = (page_width - text_width) / 2
+    return (
+        "Q\nq\nBT\n/FPageNum 8.5 Tf\n"
+        "0.4 0.45 0.55 rg\n"
+        f"1 0 0 1 {x:.2f} 20 Tm\n"
+        f"({label}) Tj\nET\nQ\n"
+    ).encode("ascii")
+
+
+def add_page_numbers(writer: Any) -> None:
+    from pypdf.generic import (  # type: ignore[import-not-found]
+        ArrayObject,
+        DecodedStreamObject,
+        DictionaryObject,
+        NameObject,
+    )
+
+    font = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/Font"),
+            NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+            NameObject("/Encoding"): NameObject("/WinAnsiEncoding"),
+        }
+    )
+    font_ref = writer._add_object(font)
+
+    for page_index, page in enumerate(writer.pages):
+        if page_index == 0:
+            continue
+
+        resources = page["/Resources"]
+        fonts = resources.get("/Font")
+        if fonts is None:
+            fonts = DictionaryObject()
+            resources[NameObject("/Font")] = fonts
+        fonts[NameObject("/FPageNum")] = font_ref
+
+        has_contents = "/Contents" in page
+        stream = DecodedStreamObject()
+        footer_data = page_number_stream_data(
+            page_index + 1, float(page.mediabox.width)
+        )
+        stream.set_data(footer_data if has_contents else footer_data[2:])
+        stream_ref = writer._add_object(stream)
+        if not has_contents:
+            page[NameObject("/Contents")] = stream_ref
+        else:
+            save_state = DecodedStreamObject()
+            save_state.set_data(b"q\n")
+            save_state_ref = writer._add_object(save_state)
+            contents = page.raw_get("/Contents")
+            if isinstance(contents, ArrayObject):
+                page[NameObject("/Contents")] = ArrayObject(
+                    [save_state_ref, *contents, stream_ref]
+                )
+            else:
+                page[NameObject("/Contents")] = ArrayObject(
+                    [save_state_ref, contents, stream_ref]
+                )
+
+
 def export_pdf(chrome: Path | None, output: Path) -> None:
     try:
         from playwright.sync_api import Error as PlaywrightError  # type: ignore[import-not-found]
@@ -543,6 +610,7 @@ def export_pdf(chrome: Path | None, output: Path) -> None:
                 "/Subject": "用 C++ 从零写懂深度学习",
             }
         )
+        add_page_numbers(writer)
         writer.compress_identical_objects(
             remove_duplicates=True, remove_unreferenced=True
         )
@@ -558,11 +626,39 @@ def export_pdf(chrome: Path | None, output: Path) -> None:
     outlines = [item for item in result.outline if not isinstance(item, list)]
     if len(outlines) != len(documents):
         raise RuntimeError(f"Expected {len(documents)} PDF bookmarks, found {len(outlines)}")
-    for page in result.pages:
+    for page_index, page in enumerate(result.pages):
         width = float(page.mediabox.width)
         height = float(page.mediabox.height)
         if abs(width - 595) > 2 or abs(height - 842) > 2:
             raise RuntimeError(f"Non-A4 page detected: {width:.2f} x {height:.2f} pt")
+
+        fonts = ((page.get("/Resources") or {}).get("/Font") or {})
+        if page_index == 0:
+            if "/FPageNum" in fonts:
+                raise RuntimeError("Cover page unexpectedly contains a page number")
+        else:
+            if "/FPageNum" not in fonts:
+                raise RuntimeError(f"Page {page_index + 1} has no page-number font")
+            page_number_font = fonts["/FPageNum"].get_object()
+            if (
+                page_number_font.get("/Subtype") != "/Type1"
+                or page_number_font.get("/BaseFont") != "/Helvetica"
+            ):
+                raise RuntimeError(f"Page {page_index + 1} has an invalid page-number font")
+            contents = page.raw_get("/Contents")
+            expected = page_number_stream_data(page_index + 1, width)
+            if isinstance(contents, ArrayObject):
+                if len(contents) < 3:
+                    raise RuntimeError(f"Page {page_index + 1} has invalid content streams")
+                if contents[0].get_object().get_data() != b"q\n":
+                    raise RuntimeError(f"Page {page_index + 1} does not isolate its original content")
+                footer_data = contents[-1].get_object().get_data()
+            else:
+                footer_data = contents.get_object().get_data()
+                expected = expected[2:]
+            if footer_data != expected:
+                raise RuntimeError(f"Page {page_index + 1} has an invalid page-number footer")
+
         for annotation_ref in page.get("/Annots", []):
             action = annotation_ref.get_object().get("/A")
             if action and action.get("/S") == "/URI":
