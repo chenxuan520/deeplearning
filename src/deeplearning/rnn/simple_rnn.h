@@ -21,6 +21,9 @@ public:
 public:
   RC Init(int input_dim, int hidden_dim);
   RC Forward(const Matrix &input_sequence, Matrix &hidden_sequence);
+  RC ForwardStep(const std::vector<double> &input,
+                 const std::vector<double> &prev_hidden,
+                 std::vector<double> &hidden) const;
   RC Backward(const Matrix &grad_hidden_sequence, Matrix &grad_input_sequence);
   void ApplyGradient(double learning_rate);
 
@@ -40,6 +43,9 @@ public:
   const std::vector<double> &grad_bias() const;
   double GradSquaredNorm() const;
   void ScaleGradients(double scale);
+  RC SetGradients(const Matrix &grad_input_weight,
+                  const Matrix &grad_hidden_weight,
+                  const std::vector<double> &grad_bias);
 
 private:
   void ResetGradients();

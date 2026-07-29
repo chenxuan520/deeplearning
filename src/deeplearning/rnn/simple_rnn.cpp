@@ -89,6 +89,31 @@ SimpleRNN::RC SimpleRNN::Forward(const Matrix &input_sequence,
   return SUCCESS;
 }
 
+SimpleRNN::RC SimpleRNN::ForwardStep(
+    const std::vector<double> &input,
+    const std::vector<double> &prev_hidden,
+    std::vector<double> &hidden) const {
+  if (!is_init_) {
+    return NOT_INIT;
+  }
+  if (static_cast<int>(input.size()) != input_dim_ ||
+      static_cast<int>(prev_hidden.size()) != hidden_dim_) {
+    return INVALID_DATA;
+  }
+  hidden.assign(hidden_dim_, 0.0);
+  for (int h = 0; h < hidden_dim_; h++) {
+    double sum = bias_[h];
+    for (int i = 0; i < input_dim_; i++) {
+      sum += input_weight_[h][i] * input[i];
+    }
+    for (int i = 0; i < hidden_dim_; i++) {
+      sum += hidden_weight_[h][i] * prev_hidden[i];
+    }
+    hidden[h] = std::tanh(sum);
+  }
+  return SUCCESS;
+}
+
 SimpleRNN::RC SimpleRNN::Backward(const Matrix &grad_hidden_sequence,
                                   Matrix &grad_input_sequence) {
   if (!is_init_) {
@@ -258,6 +283,37 @@ void SimpleRNN::ScaleGradients(double scale) {
   for (double &value : grad_bias_) {
     value *= scale;
   }
+}
+
+SimpleRNN::RC SimpleRNN::SetGradients(
+    const Matrix &grad_input_weight, const Matrix &grad_hidden_weight,
+    const std::vector<double> &grad_bias) {
+  if (!is_init_) {
+    err_msg_ = "[SimpleRNN::SetGradients] SimpleRNN not init";
+    return NOT_INIT;
+  }
+  if (static_cast<int>(grad_input_weight.size()) != hidden_dim_ ||
+      static_cast<int>(grad_hidden_weight.size()) != hidden_dim_ ||
+      static_cast<int>(grad_bias.size()) != hidden_dim_) {
+    err_msg_ = "[SimpleRNN::SetGradients] Invalid gradient size";
+    return INVALID_DATA;
+  }
+  for (const auto &row : grad_input_weight) {
+    if (static_cast<int>(row.size()) != input_dim_) {
+      err_msg_ = "[SimpleRNN::SetGradients] Invalid gradient size";
+      return INVALID_DATA;
+    }
+  }
+  for (const auto &row : grad_hidden_weight) {
+    if (static_cast<int>(row.size()) != hidden_dim_) {
+      err_msg_ = "[SimpleRNN::SetGradients] Invalid gradient size";
+      return INVALID_DATA;
+    }
+  }
+  grad_input_weight_ = grad_input_weight;
+  grad_hidden_weight_ = grad_hidden_weight;
+  grad_bias_ = grad_bias;
+  return SUCCESS;
 }
 
 void SimpleRNN::ResetGradients() {
