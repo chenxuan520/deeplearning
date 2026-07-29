@@ -26,7 +26,7 @@
   --radius: 10px;
   --reading-width: 100%;
   --header-height: 0px;
-  --font-sans: "STHeiti", "Noto Sans CJK SC", sans-serif;
+  --font-sans: "STHeiti", "Droid Sans Fallback", "Noto Sans CJK SC", sans-serif;
   --font-mono: "Courier New", monospace;
 }
 

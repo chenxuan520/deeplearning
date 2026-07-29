@@ -142,9 +142,11 @@ jobs:
         run: |
           python3 -m pip install -r docs/dl-book/tools/requirements-pdf.txt
           python3 -m playwright install --with-deps chromium
-          sudo apt-get install -y fonts-noto-cjk
+          sudo apt-get install -y fonts-droid-fallback
 
       - name: Export light-theme PDF
+        env:
+          DL_BOOK_PDF_FONT: /usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf
         run: |
           python3 docs/dl-book/tools/export_pdf.py \
             --output dist/from-neuron-to-large-models.pdf
@@ -158,15 +160,16 @@ jobs:
 
   release:
     name: Publish Release
-    needs: build
+    needs:
+      - build
+      - build-pdf
     runs-on: ubuntu-latest
-    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.build-pdf.result == 'success' }}
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: mini_lm-*
 
       - name: Show downloaded files
         run: find artifacts -type f
@@ -177,23 +180,3 @@ jobs:
           files: artifacts/**/*
           fail_on_unmatched_files: false
           generate_release_notes: true
-
-  release-pdf:
-    name: Attach DL Book PDF
-    needs:
-      - build-pdf
-      - release
-    runs-on: ubuntu-latest
-    if: ${{ !cancelled() && needs.build-pdf.result == 'success' && needs.release.result == 'success' }}
-    steps:
-      - name: Download PDF artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dl-book-pdf
-          path: artifacts
-
-      - name: Attach PDF to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/from-neuron-to-large-models.pdf
-          fail_on_unmatched_files: true

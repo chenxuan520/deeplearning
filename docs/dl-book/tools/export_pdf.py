@@ -262,6 +262,21 @@ def preprocessing_script() -> str:
 
 def document_html(title: str, body: str) -> str:
     base_uri = BOOK_DIR.as_uri().rstrip("/") + "/"
+    font_style = ""
+    font_file = os.environ.get("DL_BOOK_PDF_FONT")
+    if font_file:
+        font_path = Path(font_file).expanduser().resolve()
+        if not font_path.is_file():
+            raise ValueError(f"PDF font not found: {font_path}")
+        font_style = f"""
+  <style>
+    @font-face {{
+      font-family: "DL Book PDF";
+      src: url("{font_path.as_uri()}") format("truetype");
+      font-display: block;
+    }}
+    :root {{ --font-sans: "DL Book PDF", sans-serif; }}
+  </style>"""
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -273,6 +288,7 @@ def document_html(title: str, body: str) -> str:
   <link rel="stylesheet" href="assets/book.css" />
   <link rel="stylesheet" href="assets/diagrams.css" />
   <link rel="stylesheet" href="tools/pdf-print.css" />
+{font_style}
 </head>
 <body class="print-book">
 {body}
@@ -417,6 +433,10 @@ def export_pdf(chrome: Path | None, output: Path) -> None:
                     page.goto(html_path.as_uri(), wait_until="load")
                     page.locator('html[data-print-ready="true"]').wait_for(timeout=10_000)
                     page.evaluate("document.fonts.ready")
+                    if os.environ.get("DL_BOOK_PDF_FONT") and not page.evaluate(
+                        'document.fonts.check("16px DL Book PDF")'
+                    ):
+                        raise RuntimeError(f"Configured PDF font failed to load in {key}")
                     if page.locator("[data-lab]").count():
                         raise RuntimeError(f"Interactive lab remained in print document: {key}")
                     broken_images = page.evaluate(

@@ -98,6 +98,8 @@ python3 tools/export_pdf.py --output /tmp/deeplearning-book.pdf
 
 脚本通过 Playwright 逐章渲染，再用 `pypdf` 合并并添加章节书签。成品是浅色 A4 PDF，包含第 0–29 章、术语表和关于页面，保留正文、公式、表格、代码和静态示意图，并移除所有 `data-lab` 交互实验及其说明图块。默认输出到 `docs/dl-book/build/deeplearning-book.pdf`。
 
+CI 会通过 `DL_BOOK_PDF_FONT` 指定系统已安装的普通 TTF 中文字体，避免 Linux Chromium 把大量汉字重复转成 Type 3 字形。这个变量本地可不设置。
+
 推送 `v*` tag 后，`.github/workflows/release.yml` 会自动生成 `from-neuron-to-large-models.pdf`，并与各平台二进制一起上传到 GitHub Release。
 
 ---
