@@ -325,15 +325,24 @@
         <h3>② 张量并行:一层太大,横切开分给几张卡</h3>
         <p>
           如果模型大到<strong>单层的权重矩阵</strong>一张卡都放不下,就得把这个矩阵本身切块,分给多张卡各算一部分,
-          再把结果<strong>拼接</strong>起来。因为权重是用<strong>张量</strong>表示的,这种切法叫
-          <span class="term">张量并行(也叫模型并行)</span>。
+          再把各卡的结果<strong>合并</strong>成完整答案。因为权重是用<strong>张量</strong>表示的,这种切法叫
+          <span class="term">张量并行(也叫模型并行)</span>。这里“怎么合并”是关键,下面这个类比就专门讲它。
         </p>
         <div class="callout callout--analogy reveal">
-          <span class="callout__title">像把一张大拼图分给几个人</span>
+          <span class="callout__title">像把一道大乘法拆给几个人算</span>
           <p>
-            想象你在一张大拼图上画了整个神经网络,然后把拼图<strong>掰成几块</strong>,每块交给一张 GPU——
-            每张卡只负责网络的一部分计算。算完再把碎片<strong>拼回去</strong>凑成完整结果。这种“只搬运、拼接,不改变数值”的通信,
-            有个专门的名字叫 <span class="term">AllGather</span>(区别于 AllReduce 的“求和平均”)。
+            回到<a class="xref" href="chapter-06.html#退一步-w-其实是矩阵一层前向就是一次矩阵乘法">第 6 章</a>那件事:一层前向就是一次矩阵乘。
+            矩阵能<strong>竖着切</strong>也能<strong>横着切</strong>,而这两种切法算完之后要做的事<strong>完全不同</strong>:
+          </p>
+          <ul>
+            <li><strong>竖着切(按输出维)</strong>:每张卡算出的是完整结果的<strong>不同几列</strong>——各人负责的部分互不重叠,横向<strong>拼起来</strong>就是答案。</li>
+            <li><strong>横着切(按输入维)</strong>:每张卡只拿到输入的一部分,算出来的是完整结果的一个<strong>部分和</strong>——形状虽然对了,数值却都不完整,<strong>必须把几张卡的结果逐元素相加</strong>才是答案。</li>
+          </ul>
+          <p style="margin-bottom:0">
+            真实的 Transformer 层(Megatron 那套做法)是<strong>先竖切、再横切</strong>配成一对,所以每层最后总要落到“逐元素相加”这一步——
+            也就是说<strong>张量并行的主通信仍然是 <span class="term">AllReduce</span>,不是单纯的拼接</strong>。
+            这也解释了它为什么最“娇贵”:每一层前向都要 AllReduce 一次(反向再来一次),通信频繁得多,所以张量并行一般<strong>只在同一台机器内</strong>用下面第 6 节的 NVLink 来做。
+            (纯拼接式的通信也确实有个名字叫 <span class="term">AllGather</span>,但它主要出现在 ZeRO/FSDP 那类“把参数分片存、用时再收集”的省显存方案里,和这里切矩阵不是一回事。)
           </p>
         </div>
 
@@ -352,7 +361,8 @@
           <li><span class="pill">NCCL</span>英伟达的集合通信库。开发者只要调 <code>allreduce()</code>、<code>allgather()</code> 这些函数,
           底层怎么高效传由它搞定,不用操心。</li>
           <li><span class="pill">NVLink / NVSwitch</span>同一台服务器内,GPU 之间的<strong>专用高速公路</strong>(带宽远超普通网络),
-          让 8 张卡像一张大卡一样紧密协作。</li>
+          让 8 张卡像一张大卡一样紧密协作。上面张量并行之所以只敢关在机内,就是因为它<strong>每层都要 AllReduce 一次</strong>,
+          只有这条高速公路才喂得起这么频繁的通信。</li>
           <li><span class="pill">跨服务器</span>成千上万张卡分布在很多台机器上,靠高速网卡 + 交换机(接入层 leaf、汇聚层 spine)连起来——
           这套“分层组网”思想,和普通数据中心网络一脉相承。</li>
         </ul>
@@ -1174,7 +1184,7 @@ out    = Σ scores[e] · FFN_e(h)  // ③ 用门控分加权 k 个输出, 不是
           <span class="label">按半精度每个数 2 字节 ≈ 2 TB —— 而这还只是「一个头、一层」的一个中间矩阵</span>
         </div>
         <p>
-          一张顶级 GPU 的显存也就 80 GB 上下,而这一个矩阵就要<strong>约 2 TB</strong>,再乘上几十层、几十个头,更是天文数字。
+          一张顶级 GPU 的显存也就<strong>一两百 GB</strong>(H100 是 80 GB、H200 是 141 GB、B200 是 192 GB),而这一个矩阵就要<strong>约 2 TB</strong>,再乘上几十层、几十个头,更是天文数字。
           <strong>结论很硬:<var>n</var>=1M 的稠密注意力矩阵,根本不可能被整个存下来、更别说一次算出来。</strong>
           这就是长上下文一切麻烦的总根源。
         </p>
@@ -1858,7 +1868,7 @@ Router / Policy Engine
             <li>GPU 靠上万个 CUDA 核并行,天然适合矩阵乘法;CUDA 平台负责调度。</li>
             <li>显存是第一堵墙(要放参数+梯度+优化器状态+激活);混合精度、量化能大幅省显存。</li>
             <li>很多“降智”体感来自推理调用链路被压缩:serving policy 可能把请求路由到便宜后端,并收紧推理预算、上下文、工具链、超时和安全策略。</li>
-            <li>三种并行:数据并行(人手一份模型,AllReduce 同步梯度)、张量并行(切开单层矩阵,AllGather 拼接)、流水线并行(不同层放不同卡)。</li>
+            <li>三种并行:数据并行(人手一份模型,AllReduce 同步梯度)、张量并行(切开单层矩阵,各卡算出部分和后 <strong>AllReduce</strong> 相加,通信最频繁、通常只在机内做)、流水线并行(不同层放不同卡)。</li>
             <li>NCCL 管通信,NVLink/NVSwitch 是卡间高速公路;推理靠 KV cache、批处理、量化提速。</li>
             <li>MoE:FFN 换成 <strong>N 个并列专家</strong>(<code>N</code>/<code>k</code> 设计时定死),Attention <strong>共用 1 套</strong>;路由器 softmax 打分 + top-k 门控加权,与专家<strong>端到端</strong>同训;还得靠负载均衡防专家坍缩。参数多但算得少;全部专家仍要常驻显存。<strong>压 k/缩专家会掉能力</strong>,是另一类「降智」来源。</li>
             <li>离散 top-k 能训练的关键:不可微的是“谁入围”,可微的是<strong>入围前的打分器</strong>和<strong>入围后的加权路径</strong>;没入围的专家或 token 本轮通常没有直接梯度。</li>
@@ -1890,7 +1900,7 @@ Router / Policy Engine
           <details class="quiz__item">
             <summary class="quiz__q">问题 3:数据并行、张量并行、流水线并行分别切开的是什么?</summary>
             <div class="quiz__a">
-              <p>数据并行切的是<strong>数据</strong>:每卡放完整模型、各吃一部分样本,再用 AllReduce 同步梯度。张量并行切的是<strong>单层大矩阵</strong>:一层太大,就把权重矩阵分块放到多卡再拼接结果。流水线并行切的是<strong>层</strong>:前几层放一组卡、后几层放另一组卡,像流水线一样接力。</p>
+              <p>数据并行切的是<strong>数据</strong>:每卡放完整模型、各吃一部分样本,再用 AllReduce 同步梯度。张量并行切的是<strong>单层大矩阵</strong>:一层太大,就把权重矩阵分块放到多卡,各卡算出的往往只是完整结果的<strong>部分和</strong>,所以要用 AllReduce 逐元素相加才能合并。流水线并行切的是<strong>层</strong>:前几层放一组卡、后几层放另一组卡,像流水线一样接力。</p>
             </div>
           </details>
           <details class="quiz__item">

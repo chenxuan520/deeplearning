@@ -31,7 +31,9 @@
         <ul class="glossary">
           <li id="g-loss"><strong>损失函数 loss</strong> — 把“错得多离谱”量化成一个数;越小越好。<a href="chapter-04.html">→ 第 4 章</a></li>
           <li id="g-crossentropy"><strong>交叉熵 cross-entropy</strong> — 分类常用损失,−log(正确类的预测概率)。<a href="chapter-04.html">→ 第 4 章</a></li>
-          <li id="g-softmax"><strong>softmax</strong> — 把一排分数变成一排加起来为 1 的概率。<a href="chapter-04.html">→ 第 4 章</a></li>
+          <li id="g-softmax"><strong>softmax</strong> — 把一排分数变成一排加起来为 1 的概率。实现时要先<strong>减去这排里的最大值</strong>再取指数(见 log-sum-exp trick),否则会溢出。<a href="chapter-04.html#31-softmax-先把分数变成概率">→ 第 4 章</a></li>
+          <li id="g-logsumexp" data-aliases="log-sum-exp,logsumexp,log sum exp,减最大值,数值稳定"><strong>log-sum-exp trick</strong> — 算 softmax 前先给每个分数减去这组里的最大值。数学上完全等价(分子分母同乘 e<sup>−max</sup>),但能避免 <code>exp</code> 溢出成 inf 或整体下溢成 0。<a href="chapter-04.html#31-softmax-先把分数变成概率">→ 第 4 章</a></li>
+          <li id="g-kl" data-aliases="KL 散度,KL divergence,KL,Kullback-Leibler"><strong>KL 散度 KL divergence</strong> — 衡量两个概率分布差多远:完全相同为 0,越不像越大。PPO 用它限制新旧策略别差太多,RLHF 用它拴住模型别偏离原模型。<a href="chapter-12.html#9-动作太多怎么办-直接学策略策略梯度--actor-critic--ppo">→ 第 12 章</a></li>
           <li id="g-gd"><strong>梯度下降 gradient descent</strong> — 沿梯度反方向一小步步降低损失。<a href="chapter-05.html">→ 第 5 章</a></li>
           <li id="g-gradient" data-aliases="梯度,gradient,偏导数,梯度向量"><strong>梯度 gradient</strong> — 损失对<strong>每个参数</strong>偏导排成的一个向量,和参数同长,指向“上升最快”的方向。<a href="chapter-05.html#梯度是一个向量-几百万个旋钮一起转">→ 第 5 章</a></li>
           <li id="g-saddle" data-aliases="鞍点,saddle point,平坦区,高原,plateau"><strong>鞍点 saddle point</strong> — 有的方向上坡、有的方向下坡的点,梯度也≈0 却不是谷底;高维里比局部最小更常见,和平坦区一起是训练卡住的主因。<a href="chapter-05.html#8-比局部谷底更常拦路的-鞍点和大片平原">→ 第 5 章</a></li>
@@ -87,6 +89,8 @@
           <li id="g-residual" data-aliases="残差连接,residual connection"><strong>残差连接 residual</strong> — 输出 = x + 子层(x),给梯度修高速公路。<a href="chapter-18.html">→ 第 18 章</a></li>
           <li id="g-attnres" data-aliases="Attention Residuals,AttnRes,注意力残差,Block Attention Residuals"><strong>Attention Residuals / AttnRes</strong> — Kimi K3 采用的一种跨层连接:沿网络深度给 embedding 和历史层表示动态加权;其 Block 版本用层块汇总降低显存和通信。<a href="chapter-18.html#attention-residuals-让深层按需回看浅层">→ 第 18 章</a></li>
           <li id="g-layernorm" data-aliases="LayerNorm,layernorm,layer norm"><strong>LayerNorm</strong> — 对每个词向量减均值除标准差,稳住训练。<a href="chapter-18.html">→ 第 18 章</a></li>
+          <li id="g-prenorm" data-aliases="Pre-LN,Post-LN,pre-norm,post-norm,PreNorm,PostNorm,前置归一化,归一化位置"><strong>Pre-LN / Post-LN</strong> — 归一化摆在子层前还是后。Post-LN 是原论文写法 <code>LN(x+Sublayer(x))</code>;GPT-2 之后主流改成 Pre-LN <code>x+Sublayer(LN(x))</code>,让残差主干保持纯加法、深了不易训崩,代价是主干顶部要补一个 Final Norm。<a href="chapter-18.html#4-把它们拼成一块-block">→ 第 18 章</a></li>
+          <li id="g-rmsnorm" data-aliases="RMSNorm,rmsnorm,RMS Norm"><strong>RMSNorm</strong> — LayerNorm 的简化版:不减均值、只除以均方根,通常还省掉偏置 β。少一半统计量、更快,现代大模型的常用替代。<a href="chapter-18.html#4-把它们拼成一块-block">→ 第 18 章</a></li>
           <li id="g-ffn" data-aliases="FFN,Feed Forward,feed-forward,前馈网络"><strong>FFN 前馈网络</strong> — 对每个 token 向量独立做“升维→激活→降维”,不跨词通信。<a href="chapter-18.html">→ 第 18 章</a></li>
           <li id="g-posenc" data-aliases="positional encoding,position embedding,位置编码,位置嵌入"><strong>位置编码</strong> — 把顺序和距离信息注入模型的一类方法,可以加到 embedding 上,也可以改 Q/K 或 attention 分数。<a href="chapter-18.html#5-位置编码-告诉模型谁在前谁在后">→ 第 18 章</a></li>
           <li id="g-rope" data-aliases="RoPE,rotary position embedding,旋转位置编码"><strong>RoPE 旋转位置编码</strong> — 按位置旋转 Q/K 向量,让注意力点积天然带相对位置信息。<a href="chapter-18.html#rope-到底怎么转-为什么位置的影响只看相对距离">→ 第 18 章</a></li>

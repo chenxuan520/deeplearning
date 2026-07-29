@@ -128,15 +128,19 @@ for (int token_id : token_ids)
           cos(θ) = (<var>a</var> · <var>b</var>) / (|<var>a</var>| · |<var>b</var>|)
           <span class="label">取值 −1~1;越接近 1 越相似。注意力里的 Q·K 也是同一套几何(<a class="xref" href="chapter-17.html">第 17 章</a>)</span>
         </div>
-        <p>手算二维例子(已归一化长度):</p>
+        <p>手算两个二维例子(向量随手取的,长度不必是 1——余弦公式里除以模长这一步会替我们归一化):</p>
         <div class="table-wrap reveal">
           <table class="calc-table calc-table--wrap">
-            <thead><tr><th>词对</th><th>向量(示意)</th><th>余弦 ≈</th><th>直觉</th></tr></thead>
+            <thead><tr><th>词对</th><th>向量(示意)</th><th>点积 <var>a</var>·<var>b</var></th><th>模长 |<var>a</var>|·|<var>b</var>|</th><th>余弦 ≈</th><th>直觉</th></tr></thead>
             <tbody>
-              <tr><td>猫 / 狗</td><td>(0.9, 0.4) vs (0.85, 0.45)</td><td class="is-hot">0.98</td><td>方向很接近</td></tr>
-              <tr><td>猫 / 苹果</td><td>(0.9, 0.4) vs (−0.2, 0.95)</td><td>≈ 0.1</td><td>几乎无关</td></tr>
+              <tr><td>猫 / 狗</td><td>(0.9, 0.4) vs (0.85, 0.45)</td><td>0.945</td><td>0.985 × 0.962 = 0.947</td><td class="is-hot">1.00</td><td>方向几乎重合</td></tr>
+              <tr><td>猫 / 苹果</td><td>(0.9, 0.4) vs (−0.2, 0.95)</td><td>0.200</td><td>0.985 × 0.971 = 0.956</td><td>0.21</td><td>几乎无关</td></tr>
             </tbody>
           </table>
+          <p class="calc-table__cap">
+            猫/狗:0.9×0.85 + 0.4×0.45 = 0.945,除以 0.947 得 ≈ <strong>1.00</strong>——两个方向本来就差不了几度,余弦在接近 1 的地方非常“钝”,所以别看到 1.00 就以为算错了。
+            猫/苹果:0.9×(−0.2) + 0.4×0.95 = 0.20,除以 0.956 得 ≈ <strong>0.21</strong>,一眼就能和上面拉开差距。
+          </p>
         </div>
         <p>
           word2vec 的训练,本质上就是在海量句子里,把<strong>常一起出现的词</strong>的向量夹角<strong>拧小</strong>,
@@ -156,7 +160,8 @@ for (int token_id : token_ids)
           </p>
         </div>
         <p>
-          这正好能变成<strong>自监督</strong>任务(<a class="xref" href="chapter-11.html">第 11 章</a>):文本里<strong>被遮住的词</strong>就是标签,
+          这正好能变成<span class="term">自监督(self-supervised)</span>任务——<strong>不用人工标注,却能自己造出标准答案来学</strong>
+          (<a class="xref" href="chapter-00.html#机器学习的三大学习范式">第 0 章</a>提过一句,完整展开见<a class="xref" href="chapter-27.html#53-自监督-无监督和监督的合体">番外第 27 章</a>):文本里<strong>被遮住的词</strong>就是标签,
           周围词是输入,不需要人工标注。word2vec 和<a class="xref" href="chapter-19.html">语言模型预测下一个 token</a>用的是<strong>同一哲学</strong>,
           只是 word2vec 只管学一张静态词表,语言模型还要学上下文动态表示。
         </p>
@@ -471,11 +476,25 @@ const double score = Dot(input_vec, output_vec);
 loss = -log(sigmoid(score));                         <b class="cw-tag">1</b>
 
 const double grad_scale = 1.0 - sigmoid(score);
+// 下面两行在 for (dim) 循环里, 逐个维度更新
 input_vec[dim]  += grad_scale * lr * output_vec[dim];
 output_vec[dim] += grad_scale * lr * input_vec[dim]; <b class="cw-tag">2</b></code></pre>
           <ol class="code-walk__notes">
-            <li>正样本:中心词向量 u 与上下文词向量 v 点积,希望 sigmoid(score)→1。损失是 −log σ(u·v)。</li>
-            <li>对 u、v 同步更新,把共现对<strong>拉近</strong>——对应书上第 8 节第 ⑥ 步“反传更新”。</li>
+            <li>
+              正样本:中心词向量 u 与上下文词向量 v 点积,希望 sigmoid(score)→1,损失是 −log σ(u·v)。
+              <strong>注意这里的目标函数换了</strong>:上面七步图为了讲清原理用的是“<strong>全词表 softmax + 交叉熵</strong>”,而仓库实现直接上了
+              <a class="xref" href="chapter-15.html#9-词表太大-负采样把输出层瘦身">下一节的负采样</a>版本——把“在 V 个词里选对一个”换成“对这一对答是/否”,所以是 sigmoid 而不是 softmax。
+              两者的<strong>更新方向一致</strong>(都在拉近共现对),只是负采样便宜得多。
+            </li>
+            <li>
+              两个方向各挪一小步,把共现对<strong>拉近</strong>——对应上面七步图第 ⑥ 步“反传更新”。
+              <strong>但这两行有个值得当反例看的细节</strong>:严格说 u 的梯度是 (1−σ)·<em>v</em>、v 的梯度是 (1−σ)·<em>u</em>,两条都该用<strong>同一次前向时</strong>的
+              u、v;而第二行用到的 <code>input_vec</code> 已经被第一行改过了,等于拿“更新后的 u”去算 v 的梯度。
+              这正是<a class="xref" href="chapter-06.html">第 6 章</a>强调的“所有梯度都基于同一次前向快照”被打破的样子。
+              规范写法是<strong>先把旧值存进临时变量</strong>再原地改。好在这里引入的偏差只有 (η·grad_scale)²·v 这个二阶小量
+              (学习率 0.025 时约 0.06%),方向没变、也不影响收敛,所以词向量照样能训出语义——
+              和<a class="xref" href="chapter-04.html">第 4 章</a>那个 <code>MseLoss::DerivLoss</code> 多出常数 2 是同类情况:<strong>不致命,但自己写的时候别学</strong>。
+            </li>
           </ol>
         </figure>
 

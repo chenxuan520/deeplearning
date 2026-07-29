@@ -18,7 +18,8 @@
           注意力是发动机,但光有发动机还开不了车。要把注意力堆成又深又能训的网络,
           还需要几个关键配件:<strong>残差连接、LayerNorm、前馈网络</strong>,
           再加上让模型知道词序的<strong>位置编码</strong>。把它们组装起来,就是一块完整的
-          <span class="term">Transformer Block</span>——今天所有大模型的基本积木。
+          <span class="term">Transformer Block</span>——今天所有大模型都是拿这块积木堆出来的
+          (现代模型换过其中几个配件、也挪动过归一化的位置,我们会在<a class="xref" href="chapter-18.html#4-把它们拼成一块-block">第 4 节</a>末尾和本章最后交代清楚)。
         </p>
 
         <div class="callout callout--note reveal" aria-label="本章在整条链路的位置">
@@ -535,6 +536,34 @@ for (int i = 0; i &lt; feature_dim_; i++)
           所以它能像乐高一样<strong>一块叠一块</strong>:堆 6 块、12 块、96 块……越深,模型能力越强。
           这正是“GPT-3 有 96 层”这类说法的含义。
         </p>
+
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">一个位置之差:Post-LN 与 Pre-LN(现代模型换了哪一处)</span>
+          <p>
+            上面这张图和本书配套代码,画的都是 2017 年原论文的写法:<strong>先残差相加,再归一化</strong>,即
+            <code>H = LayerNorm(x + Sublayer(x))</code>。这种把 Norm 摆在子层<strong>之后</strong>的做法叫
+            <span class="term">Post-LN</span>。它好理解、好画,所以我们用它当教学起点。
+          </p>
+          <p>
+            但它和<a class="xref" href="chapter-18.html#1-残差连接-给信息和梯度修一条高速公路">第 1 节</a>那个“高速公路”的比喻有点<strong>矛盾</strong>:
+            既然 LayerNorm 就压在残差主干上,梯度反传时每过一层都要先穿过一次归一化,那条捷径其实<strong>并不干净</strong>。
+            实践中这会带来一个很具体的麻烦:Post-LN 一深就容易训崩,必须小心地配 warmup 才压得住。
+          </p>
+          <p>
+            于是 GPT-2 之后,业界几乎全部换成了 <span class="term">Pre-LN</span>——把 Norm 挪到子层<strong>之前</strong>,让残差主干只做纯加法:
+          </p>
+          <div class="mathblock">
+            <strong>Post-LN(原论文 / 本书代码)</strong>&nbsp; <var>x</var> ← LayerNorm(<var>x</var> + Sublayer(<var>x</var>))<br />
+            <strong>Pre-LN(GPT-2 之后的主流)</strong>&nbsp; <var>x</var> ← <var>x</var> + Sublayer(LayerNorm(<var>x</var>))
+            <span class="label">只是把 LayerNorm 从“加完之后”挪到了“进子层之前”;主干上那个 <strong>+</strong> 从此再没被任何东西挡住</span>
+          </div>
+          <p style="margin-bottom:0">
+            这个改动还留下一个可见的痕迹:因为残差主干一路<strong>没被归一化过</strong>,数值会随层数累积变大,
+            所以 Pre-LN 模型必须在<strong>整个主干的最顶上补一次归一化</strong>——就是后面 GPT 架构图里那个
+            <a class="xref" href="chapter-18.html#8-gpt-这种模型-把右塔堆很多层再接一个-lm-head">Final LayerNorm</a>。
+            以后你看别人的架构图,只要看见顶部有个孤零零的 Final Norm,基本就能判断它是 Pre-LN。
+          </p>
+        </div>
 
         <h2>5. 位置编码:告诉模型“谁在前谁在后”</h2>
         <p>
@@ -1065,7 +1094,7 @@ score = Q * K^T / sqrt(head_dim)</code></pre>
         <ol>
           <li><strong>Prompt tokens → Embedding + Position</strong>:先把输入提示切成 token,查表变向量,再加上位置信息。到这一步,模型拿到的是“一串带顺序的词向量”。</li>
           <li><strong>N× Decoder Block</strong>:整座主干就是很多层一模一样的 decoder block。每一层都只有两段:带 <strong>causal mask</strong> 的自注意力,再加一个逐 token 的 FFN。它没有 encoder,也没有 cross-attention,因为它不需要“回头看原文”那条支路。更重要的是: <strong>每一层都有自己的一套 attention 参数</strong>,不是全网共用同一套 Q/K/V 投影矩阵。</li>
-          <li><strong>Final LayerNorm + LM Head</strong>:最顶上把最后一层隐藏状态做一次归一化,再投影到词表大小,得到的是<strong>每个位置</strong>的 logits,还不是最终选出来的 token。</li>
+          <li><strong>Final LayerNorm + LM Head</strong>:最顶上把最后一层隐藏状态做一次归一化,再投影到词表大小,得到的是<strong>每个位置</strong>的 logits,还不是最终选出来的 token。(这个孤立的 Final Norm 正是<a class="xref" href="chapter-18.html#4-把它们拼成一块-block">第 4 节</a>末尾说的 <strong>Pre-LN</strong> 留下的痕迹:主干一路只做加法没归一化过,进 LM Head 前得补一次。)</li>
           <li><strong>训练</strong>:拿所有位置的 logits 和“正确的下一个 token”去算交叉熵;这就是大模型预训练时那条最核心的 loss 链路。</li>
           <li><strong>生成</strong>:只取最后一个位置的 logits,过 softmax 后 greedy 或采样选一个新 token,把它追加到序列末尾。这个循环就是<a class="xref" href="chapter-19.html#8-自回归-把刚写的字接回去再写下一个">自回归生成</a>。</li>
         </ol>
@@ -1663,11 +1692,42 @@ Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code>
         </p>
         <p>
           <strong>真正的 GPT 家族会换配件,但骨架不变。</strong> 上图画的是最稳定的共通骨架。真实模型会在细节上换代:
-          位置编码可能从论文里的 sin/cos 换成<strong>可学习位置向量</strong>或 <strong>RoPE</strong>;LayerNorm 可能换成
-          <strong>RMSNorm</strong>;FFN 里的激活可能从 ReLU / GELU 变成
-          <a class="xref" href="chapter-07.html#3-全家福-逐个认识"><strong>SwiGLU</strong></a>。但它们都没改那件根本事实:
-          <strong>这是一个 decoder-only Transformer,目标仍是预测下一个 token</strong>。
         </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>配件</th><th>原论文 / 本书代码</th><th>现代大模型常用</th><th>换它图什么</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>位置编码</td>
+                <td>固定 sin/cos 加到词向量上</td>
+                <td><strong>RoPE</strong>(也有用可学习位置向量的)</td>
+                <td>只影响“谁注意谁”,且更好外推到训练时没见过的长度(<a class="xref" href="chapter-21.html">第 21 章</a>)</td>
+              </tr>
+              <tr>
+                <td><strong>归一化的位置</strong></td>
+                <td><strong>Post-LN</strong>:<code>LN(x + Sublayer(x))</code></td>
+                <td><strong>Pre-LN</strong>:<code>x + Sublayer(LN(x))</code>,主干顶部补一个 Final Norm</td>
+                <td>残差主干变成纯加法,深了也不容易训崩(见<a class="xref" href="chapter-18.html#4-把它们拼成一块-block">第 4 节</a>末尾)</td>
+              </tr>
+              <tr>
+                <td>归一化的算法</td>
+                <td>LayerNorm(减均值、除标准差、乘 γ 加 β)</td>
+                <td><strong>RMSNorm</strong>:不减均值、只除均方根,常连 β 也省掉</td>
+                <td>少一半统计量、少一组参数,更快且效果基本不掉</td>
+              </tr>
+              <tr>
+                <td>FFN 的激活</td>
+                <td>ReLU / GELU,两个矩阵</td>
+                <td><a class="xref" href="chapter-07.html#3-全家福-逐个认识"><strong>SwiGLU</strong></a>,三个矩阵(通常把中间维压到约 8/3 <var>d</var> 保持同量级)</td>
+                <td>同样算力下效果更好</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">
+            这四处都是“换零件”,没有一处改掉那件根本事实:<strong>这是一个 decoder-only Transformer,目标仍是预测下一个 token</strong>。
+            所以本章这套骨架读懂了,再看任何一份现代模型的 config 都能对上号。
+          </p>
+        </div>
 
         <section class="summary reveal">
           <h2>小结</h2>
@@ -1676,6 +1736,7 @@ Q₂[2] = [ q1 ]          ← 只在维 1 上,可能盯完全不同的词</code>
             <li><strong>LayerNorm</strong>:对每个词向量减均值除标准差再缩放,稳住数值、加速收敛。</li>
             <li><strong>FFN</strong>:对每个词独立做“升维 → ReLU → 降维”,补充非线性加工。</li>
             <li>一块 Block = 注意力+残差+Norm,再 FFN+残差+Norm;输入输出同形,可无限堆叠。</li>
+            <li><strong>Norm 摆在哪很关键</strong>:原论文和本书代码是 <strong>Post-LN</strong>(<code>LN(x+Sublayer(x))</code>),GPT-2 之后主流换成 <strong>Pre-LN</strong>(<code>x+Sublayer(LN(x))</code>)——让残差主干保持纯加法、深了不易训崩,代价是主干顶部要补一个 Final Norm。看见图上有孤立的 Final Norm,基本就是 Pre-LN。</li>
             <li><strong>位置编码</strong>把词序注入模型:本项目和原始 Transformer 用 sin/cos 加到向量上,现代模型也常用 RoPE / ALiBi 等改 attention 的方案;encoder 双向看全句,decoder 带 causal mask 只看前文。</li>
             <li><strong>别混三条轴</strong>:context window 决定“看多长”,model_dim 决定“每个 token 多厚”,head_num 决定“把这份厚度切成几个头”。</li>
             <li><strong>完整架构</strong> = 编码器塔 + 解码器塔;图中三处注意力(自注意力 / 掩码自注意力 / 交叉注意力)是同一套机制,只是 Q/K/V 来源不同。</li>

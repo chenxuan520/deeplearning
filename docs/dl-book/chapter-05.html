@@ -382,39 +382,44 @@ w_row[i] -= w_change;                               <b class="cw-tag">3</b></cod
         </ul>
         <p>
           鞍点为什么“骗人”?关键在于:<strong>同一个点,从不同方向看,坡完全不一样</strong>。下面把马鞍<strong>切两刀</strong>看剖面——
-          一刀沿“下坡方向”,一刀沿“上坡方向”,你就明白为什么它梯度为 0 却不是谷底:
+          一刀沿“上坡方向”,一刀沿“下坡方向”(都是指<strong>从鞍点出发往外走</strong>会升还是会降),你就明白为什么它梯度为 0 却不是谷底:
         </p>
         <div class="figure reveal">
           <div class="diagram">
             <svg viewBox="0 0 640 300" role="img" aria-label="鞍点的两个剖面:沿一个方向切开是向下凹的谷、沿另一个方向切开是向上凸的脊,同一个中心点梯度都为0">
               <defs>
                 <marker id="sad-arrow" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8ef0d1" /></marker>
+                <marker id="sad-arrow-down" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ff8fa3" /></marker>
               </defs>
-              <!-- ===== 左剖面: 沿"下坡方向"切, 是一个 U 形谷 (中心最低) ===== -->
-              <text x="165" y="34" text-anchor="middle" fill="#8ef0d1" font-size="13" font-weight="700">沿「下坡方向」切一刀</text>
-              <text x="165" y="52" text-anchor="middle" fill="#8499bd" font-size="11">两边高、中间低 → 中心是这条线的谷底</text>
+              <!-- ===== 左剖面: 沿"上坡方向"切, 是一个 U 形谷 (中心最低, 往外走上升) ===== -->
+              <text x="165" y="34" text-anchor="middle" fill="#8ef0d1" font-size="13" font-weight="700">沿「上坡方向」切一刀</text>
+              <text x="165" y="52" text-anchor="middle" fill="#8499bd" font-size="11">两边高、中间低 → 从鞍点往外走,损失<tspan font-weight="700">上升</tspan></text>
               <!-- U形谷曲线 -->
               <path d="M40 80 Q 165 250 290 80" fill="none" stroke="#8ef0d1" stroke-width="3" />
               <!-- 中心点 (最低) -->
               <circle cx="165" cy="205" r="6.5" fill="#ffcf72" />
-              <!-- 两侧向下的箭头, 表示从中心往两边看都是... 实际这里中心是最低, 往两边是上坡; 箭头示意"从两边往中心滚"下坡 -->
-              <path d="M70 108 Q 120 175 158 200" fill="none" stroke="#8ef0d1" stroke-width="2" marker-end="url(#sad-arrow)" opacity="0.9" />
-              <path d="M260 108 Q 210 175 172 200" fill="none" stroke="#8ef0d1" stroke-width="2" marker-end="url(#sad-arrow)" opacity="0.9" />
+              <!-- 从鞍点出发往两边走: 都是往上爬 -->
+              <path d="M158 200 Q 120 175 70 108" fill="none" stroke="#8ef0d1" stroke-width="2" marker-end="url(#sad-arrow)" opacity="0.9" />
+              <path d="M172 200 Q 210 175 260 108" fill="none" stroke="#8ef0d1" stroke-width="2" marker-end="url(#sad-arrow)" opacity="0.9" />
               <text x="165" y="232" text-anchor="middle" fill="#ffcf72" font-size="11">鞍点</text>
+              <text x="165" y="272" text-anchor="middle" fill="#8499bd" font-size="11">往两边都是上坡 → 这条线上它是「谷底」</text>
               <!-- 分隔竖线 -->
               <line x1="320" y1="30" x2="320" y2="285" stroke="#33507d" stroke-width="1.2" stroke-dasharray="5 6" />
-              <!-- ===== 右剖面: 沿"上坡方向"切, 是一个 ∩ 形脊 (中心最高) ===== -->
-              <text x="475" y="34" text-anchor="middle" fill="#ff8fa3" font-size="13" font-weight="700">沿「上坡方向」切一刀</text>
-              <text x="475" y="52" text-anchor="middle" fill="#8499bd" font-size="11">两边低、中间高 → 中心是这条线的顶</text>
+              <!-- ===== 右剖面: 沿"下坡方向"切, 是一个 ∩ 形脊 (中心最高, 往外走下降) ===== -->
+              <text x="475" y="34" text-anchor="middle" fill="#ff8fa3" font-size="13" font-weight="700">沿「下坡方向」切一刀</text>
+              <text x="475" y="52" text-anchor="middle" fill="#8499bd" font-size="11">两边低、中间高 → 从鞍点往外走,损失<tspan font-weight="700">下降</tspan></text>
               <!-- ∩形脊曲线 -->
               <path d="M350 235 Q 475 65 600 235" fill="none" stroke="#ff8fa3" stroke-width="3" />
               <!-- 中心点 (最高), 与左图同一个鞍点 -->
               <circle cx="475" cy="118" r="6.5" fill="#ffcf72" />
               <text x="475" y="108" text-anchor="middle" fill="#ffcf72" font-size="11">同一个鞍点</text>
-              <text x="475" y="270" text-anchor="middle" fill="#8499bd" font-size="11">往两边都是下坡 → 中心其实是「山脊顶」</text>
+              <!-- 从鞍点出发往两边走: 都是往下滑, 这才是还能继续优化的方向 -->
+              <path d="M462 130 Q 420 168 368 220" fill="none" stroke="#ff8fa3" stroke-width="2" marker-end="url(#sad-arrow-down)" opacity="0.9" />
+              <path d="M488 130 Q 530 168 582 220" fill="none" stroke="#ff8fa3" stroke-width="2" marker-end="url(#sad-arrow-down)" opacity="0.9" />
+              <text x="475" y="272" text-anchor="middle" fill="#8499bd" font-size="11">往两边都是下坡 → 这条线上它是「山脊顶」</text>
             </svg>
           </div>
-          <p class="figure__cap">同一个黄点(鞍点),换个方向切开,面貌完全相反:<strong>左图</strong>沿一个方向切,它是<strong>谷底</strong>(往两边升);<strong>右图</strong>沿另一个方向切,它却是<strong>山脊顶</strong>(往两边降)。正因为“有的方向还能往下走”,它虽然梯度≈0,却<strong>不是真正的谷底</strong>——只要沿右图那种方向迈出去,损失还能继续降。</p>
+          <p class="figure__cap">同一个黄点(鞍点),换个方向切开,面貌完全相反:<strong>左图</strong>那个方向上它是<strong>谷底</strong>(往两边走都升,所以叫“上坡方向”);<strong>右图</strong>那个方向上它却是<strong>山脊顶</strong>(往两边走都降,所以叫“下坡方向”)。正因为“有的方向还能往下走”,它虽然梯度≈0,却<strong>不是真正的谷底</strong>——只要沿右图那种方向迈出去,损失还能继续降。</p>
         </div>
         <p>
           好在<strong>这些“卡住”都有办法</strong>:mini-batch 带来的随机噪声能推着参数从鞍点上“滑”下去;

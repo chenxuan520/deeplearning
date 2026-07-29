@@ -103,9 +103,41 @@ for (int i = 0; i &lt; input.size(); i++)
   output[i] = std::exp(input[i]) / sum;      <b class="cw-tag">2</b></code></pre>
           <ol class="code-walk__notes">
             <li>第一遍循环:把每个 logit 取指数 <code>exp</code>,全部加起来得到分母 <code>sum</code>。</li>
-            <li>第二遍循环:每个类别的概率 = 自己的指数 ÷ 总和。这样所有 <code>output[i]</code> 都在 (0, 1) 之间,且加起来正好是 1——一组合法的概率。</li>
+            <li>第二遍循环:每个类别的概率 = 自己的指数 ÷ 总和。这样所有 <code>output[i]</code> 都在 (0, 1) 之间,且加起来正好是 1——一组合法的概率。<strong>不过这份实现少了一步工程上的必备动作</strong>,见下面的提示框。</li>
           </ol>
         </figure>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">工程必备:算 softmax 前要先减掉最大值(仓库这份实现没做)</span>
+          <p>
+            上面照公式直接写 <code>exp(z) / Σexp(z)</code>,数学上没错,但<strong>放到浮点数里会炸</strong>。
+            <code>double</code> 能表示的最大值大约是 1.8×10<sup>308</sup>,而 <code>exp(710)</code> 就已经溢出成 <code>inf</code>;
+            反过来,如果所有 logits 都很负(比如都是 −800),每一项都下溢成 0,分母变成 0,直接除零。
+            深层网络训练到后期 logits 冲到几百并不罕见。
+          </p>
+          <p>
+            解法只有一步:<strong>先把每个 logit 都减去这组里的最大值,再取指数</strong>。这在数学上<strong>完全等价</strong>——
+            分子分母同时乘 e<sup>−max</sup> 就约掉了:
+          </p>
+          <div class="mathblock">
+            <span class="frac"><span>e<sup>z<sub>i</sub></sup></span><span>Σ<sub>j</sub> e<sup>z<sub>j</sub></sup></span></span>
+            =
+            <span class="frac"><span>e<sup>z<sub>i</sub></sup> · e<sup>−max</sup></span><span>Σ<sub>j</sub> e<sup>z<sub>j</sub></sup> · e<sup>−max</sup></span></span>
+            =
+            <span class="frac"><span>e<sup>z<sub>i</sub>−max</sup></span><span>Σ<sub>j</sub> e<sup>z<sub>j</sub>−max</sup></span></span>
+            <span class="label">概率一个都没变,但所有指数的输入都变成 ≤ 0,<code>exp</code> 的结果全落在 (0, 1] 内,永不溢出</span>
+          </div>
+          <p>
+            还白捡一个好处:减完之后<strong>最大的那一项恰好是 e<sup>0</sup> = 1</strong>,分母一定 ≥ 1,连“除以 0”都不可能发生。
+            这个技巧叫 <span class="term">log-sum-exp trick</span>。
+          </p>
+          <p style="margin-bottom:0">
+            <strong>那为什么仓库这份 <code>StdSoftmax</code> 没减?</strong>
+            因为它服务的是 MNIST 这类小网络,logits 量级离 710 差得很远,实际碰不到溢出,所以留成了最贴公式的写法、便于对照上面的式子。
+            但同一个仓库里另一处就<strong>老老实实减了</strong>——<a class="xref" href="chapter-17.html#9-逐行读懂-self-attention-的前向">第 17 章</a>注意力里的
+            <code>self_attention.cpp</code> 写的是 <code>exp(score[i] - max_score)</code>,因为注意力分数本来就容易冲大。
+            <strong>结论:自己动手写 softmax 时,请照第 17 章那份来,永远带上减最大值这一步。</strong>
+          </p>
+        </div>
 
         <h3>3.2 交叉熵:衡量两个概率的差距(这才是损失)</h3>
         <p>
@@ -269,7 +301,7 @@ double CrossEntropyLoss::DerivLoss(double target, double output) {
           <details class="quiz__item">
             <summary class="quiz__q">问题 3:为什么分类几乎总是“softmax + 交叉熵”一起用?</summary>
             <div class="quiz__a">
-              <p>除了它们各自合理,组合起来梯度还特别干净:末层误差 <var>δ</var> = <var>p</var> − <var>t</var>。计算简单、数值稳定,反向传播也更不容易出问题。</p>
+              <p>除了它们各自合理,组合起来梯度还特别干净:末层误差 <var>δ</var> = <var>p</var> − <var>t</var>。这个形式免掉了“先算 log、再算除法、再乘激活导数”的一串中间步骤,计算简单、反向传播也更不容易出问题。(注意别把这个“干净”和 softmax 自己的溢出风险混为一谈——那个要靠上面 3.1 的<strong>减最大值</strong>解决。)</p>
             </div>
           </details>
         </div>

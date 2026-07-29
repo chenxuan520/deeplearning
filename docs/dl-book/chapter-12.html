@@ -550,12 +550,25 @@ QRow(state_key)[action] = old_q + config_.alpha * (target - old_q);    <b class=
 
         <h3>PPO:别一次更新迈太大</h3>
         <p>
-          纯策略梯度容易“步子迈太大”——一次更新就把好不容易学到的策略带偏。<span class="term">PPO(近端策略优化)</span> 在 Actor-Critic 上加两道保险:
+          纯策略梯度容易“步子迈太大”——一次更新就把好不容易学到的策略带偏。<span class="term">PPO(近端策略优化)</span>
+          的核心思路就是给更新<strong>套一个“别跑太远”的缰绳</strong>,而缰绳有两种做法(论文里是<strong>二选一</strong>的两个变体,不是叠加两道保险):
         </p>
         <ul>
-          <li><strong>裁剪(clipping)</strong>:新策略相对旧策略的概率比若偏离 1 太远,就把梯度<strong>截断</strong>,单次更新幅度受限;</li>
-          <li><strong>KL 惩罚</strong>:显式惩罚新策略与旧策略的 KL 散度,别让分布一夜之间面目全非。</li>
+          <li><strong>裁剪(clipping)</strong>:新策略相对旧策略的概率比若偏离 1 太远,就把它<strong>截断</strong>,让这部分不再贡献梯度,单次更新幅度自然受限。<strong>这是今天通行的做法</strong>,也是大家说“PPO”时默认指的那个。</li>
+          <li><strong>KL 惩罚</strong>:在目标里显式加一项惩罚,盯住新旧策略的 KL 散度别太大。这是论文里的另一个变体(PPO-Penalty),实际用得少。</li>
         </ul>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">插一句:KL 散度是什么</span>
+          <p>
+            <span class="term">KL 散度(KL divergence)</span>是衡量<strong>两个概率分布差多远</strong>的一个数:两个分布完全一样时它是 0,
+            差得越离谱它越大。你已经很熟悉它的近亲了——<a class="xref" href="chapter-04.html#32-交叉熵-衡量两个概率的差距这才是损失">第 4 章的交叉熵</a>
+            也是在比两个分布,只不过那里比的是“预测概率 vs one-hot 标准答案”,这里比的是“新策略 vs 旧策略”这两组<strong>动作概率</strong>。
+          </p>
+          <p style="margin-bottom:0">
+            所以“加 KL 惩罚”翻译成大白话就是:<strong>你可以改,但别一夜之间变成另一个人。</strong>
+            后面 RLHF(第 11 节)也会用同样的手段,只是那里拴的对象不是“上一步的自己”,而是<strong>一个冻结不动的原模型</strong>。
+          </p>
+        </div>
         <p>
           正因为<strong>实现简单、训练相对稳定</strong>,PPO 成了<a class="xref" href="chapter-20.html">第 20 章</a> RLHF 与许多大模型后训练里的默认选项之一。
           语言场景里,动作是离散 token,策略网络就是<strong>语言模型本身</strong>,输出层 softmax 即 π(·|s)。
@@ -741,7 +754,7 @@ auto eval = agent.Evaluate(env, OpponentType::RANDOM, eval_games); <b class="cw-
             <li><strong>稀疏奖励</strong>让学习变慢;ε-greedy 在探索与利用间折中。</li>
             <li><strong>Q-learning</strong>(off-policy) 用 TD 目标把价值从终点<strong>倒灌</strong>回起点;<strong>SARSA</strong>(on-policy) 用实际下一步动作更新。</li>
             <li>状态太多 → <strong>DQN</strong>:神经网络近似 Q,配合<strong>经验回放</strong>与<strong>目标网络</strong>稳定训练。</li>
-            <li>动作太多 → <strong>策略梯度 / Actor-Critic / PPO</strong> 直接学 π;PPO 用裁剪与 KL 限制更新幅度。</li>
+            <li>动作太多 → <strong>策略梯度 / Actor-Critic / PPO</strong> 直接学 π;PPO 给更新套缰绳,通行做法是<strong>裁剪</strong>(KL 惩罚是论文里的另一个变体)。KL 散度 = 衡量两个概率分布差多远。</li>
             <li>典型训练循环:reset → 采样动作 → step → 更新 Q;<code>RunEpisode</code> 封装内层,<code>main.cpp</code> 外层重复多回合。</li>
             <li><strong>RLHF</strong>(<a class="xref" href="chapter-20.html">第 20 章</a>)= 大模型当策略、奖励模型当裁判、PPO 当优化器的一次强化学习。</li>
             <li><code>TicTacToeEnv</code> + <code>TabularQLearning</code> 见 <code>src/demo/rl_tictactoe</code>;<a class="xref" href="chapter-25.html">第 25 章</a> 逐行精读。</li>
@@ -777,7 +790,7 @@ auto eval = agent.Evaluate(env, OpponentType::RANDOM, eval_games); <b class="cw-
           <details class="quiz__item">
             <summary class="quiz__q">问题 5:动作空间巨大(如语言模型的几万 token)时,为什么偏爱策略梯度/PPO 而不是 Q-learning?</summary>
             <div class="quiz__a">
-              <p>Q-learning 每步要 <code>max Q(s′,·)</code>,得把所有动作比一遍;动作有几万个时代价太大。策略梯度直接用网络输出各动作的概率、按“回报高就加大概率”来学,不必逐个估价值。PPO 再加裁剪和 KL 惩罚保持更新稳定,因此成为 RLHF 的常用算法。</p>
+              <p>Q-learning 每步要 <code>max Q(s′,·)</code>,得把所有动作比一遍;动作有几万个时代价太大。策略梯度直接用网络输出各动作的概率、按“回报高就加大概率”来学,不必逐个估价值。PPO 再用裁剪把单次更新幅度限住(RLHF 里通常还额外用 KL 拴住冻结的原模型),因此成为 RLHF 的常用算法。</p>
             </div>
           </details>
           <details class="quiz__item">

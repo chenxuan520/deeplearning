@@ -1038,8 +1038,20 @@ loss = Σ target_mask[t+1] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-t
           <span class="callout__title">这里用上了<a class="xref" href="chapter-19.html">第 19 章</a>的温度</span>
           <p>
             蒸馏时常把 softmax 的<strong>温度调高</strong>(<a class="xref" href="chapter-19.html">第 19 章</a>),让那些低概率但有意义的选项“显形”,
-            学生才学得到这些“隐藏知识”。DeepSeek 就曾用 R1 蒸馏出多个小模型(如
-            <code>DeepSeek-R1-Distill-Qwen-14B</code>,140 亿参数)开源给社区——学生虽小,却继承了老师不少本事。
+            学生才学得到这些“隐藏知识”。
+          </p>
+        </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">当心:大模型时代说“蒸馏”,多半不是上面这件事</span>
+          <p>
+            上面讲的是经典蒸馏(Hinton 那一套):学生对着教师的<strong>软概率分布</strong>学,所以才需要调温度。
+            但今天在 LLM 圈里,大家口头说的“蒸馏”通常指另一种更省事的做法:<strong>让教师模型生成一大批高质量回答,再拿这些回答当普通训练数据去
+            <a class="xref" href="chapter-20.html#②-指令微调sft-把博学调教成听话">SFT</a> 学生</strong>——学的是<strong>硬答案</strong>(一个个 token),完全不碰概率分布,也就不涉及温度。
+          </p>
+          <p style="margin-bottom:0">
+            举个真实例子:DeepSeek 开源的 <code>DeepSeek-R1-Distill-Qwen-14B</code>(140 亿参数)虽然名字里带 Distill,
+            走的其实就是后一条路——用 R1 生成的约 80 万条推理轨迹去 SFT 一个 Qwen 底座。
+            所以听到“蒸馏”时最好追问一句:<strong>学的是软分布,还是老师写出来的答案?</strong>两者都能让小模型继承不少本事,但机制不是一回事。
           </p>
         </div>
         <div class="callout callout--warn reveal">
@@ -1158,12 +1170,17 @@ loss = Σ target_mask[t+1] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-t
             <thead><tr><th>迭代类型</th><th>怎么做</th><th>要重训<a class="xref" href="chapter-20.html#7-大模型是怎么炼成的-预训练--后训练">底座</a>吗</th><th>成本 / 频率</th><th>例子</th></tr></thead>
             <tbody>
               <tr><td><strong>大版本</strong></td><td>从随机初始化<strong>重新预训练</strong>一个新底座</td><td><strong>是</strong></td><td>极高 / 一两年一次</td><td>GPT-4 → GPT-5</td></tr>
-              <tr><td><strong>中版本</strong></td><td>底座不变,重做/加强<strong>后训练</strong>(SFT+RLHF)</td><td>否</td><td>中 / 几个月</td><td>GPT-4 → GPT-4-turbo</td></tr>
-              <tr><td><strong>小版本快照</strong></td><td>换更新的对齐数据、调安全策略、修 bug</td><td>否</td><td>低 / 常态</td><td>同名模型的日期后缀更新</td></tr>
-              <tr><td><strong>能力扩展</strong></td><td>加多模态 / 工具调用 / 更长上下文 / 推理模式</td><td>多为增量训练或微调</td><td>中</td><td>加视觉、加 reasoning</td></tr>
+              <tr><td><strong>中版本</strong></td><td>底座不变,重做/加强<strong>后训练</strong>(SFT+RLHF)</td><td>否</td><td>中 / 几个月</td><td>Llama-3 → Llama-3-Instruct(同一底座多做一遍后训练)</td></tr>
+              <tr><td><strong>小版本快照</strong></td><td>换更新的对齐数据、调安全策略、修 bug</td><td>否</td><td>低 / 常态</td><td>同名模型的日期后缀更新,如 DeepSeek-V3 → V3-0324</td></tr>
+              <tr><td><strong>能力扩展</strong></td><td>加多模态 / 工具调用 / 更长上下文 / 推理模式</td><td>多为增量训练或微调</td><td>中</td><td>加视觉、加 reasoning、把上下文从 32K 拉到 128K</td></tr>
               <tr><td><strong>蒸馏出轻量版</strong></td><td>用大模型当老师<a class="xref" href="chapter-20.html#④-知识蒸馏-让小模型拜大模型为师">蒸馏</a>出小模型</td><td>否(训小的)</td><td>中</td><td>大模型 → mini / lite 版</td></tr>
             </tbody>
           </table>
+          <p class="calc-table__cap">
+            提醒一句:商业模型改个名字(比如冒出个 <code>-turbo</code>)时,往往<strong>好几行一起发生了</strong>——
+            知识截止日往前挪要动预训练语料,上下文从 32K 拉到 128K 要续训,再叠上新的后训练和更便宜的推理配置。
+            闭源模型通常不公开细节,所以看到一个新名字时别急着往某一行里塞;这张表是帮你<strong>拆解可能变了什么</strong>,不是给商业版本号做分类。
+          </p>
         </div>
 
         <h3>那 Flash / Pro 这种区别是什么?</h3>
