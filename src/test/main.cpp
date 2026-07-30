@@ -1,6 +1,7 @@
 // this file is to include all test header
 #include "activate_test.h"
 #include "cnn/cnn_test.h"
+#include "dropout_test.h"
 #include "embedding/word2vec_test.h"
 #include "grad_clip_test.h"
 #include "lr_scheduler_test.h"

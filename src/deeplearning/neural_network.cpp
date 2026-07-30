@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <system_error>
 #include <thread>
 
@@ -25,6 +26,7 @@ NeuralNetwork::RC NeuralNetwork::Init(const std::vector<int> &layer) {
 
   learning_rate_ = 0.1;
   rand_seed_ = 0;
+  dropout_step_ = 0;
 
   softmax_function_ = SoftmaxFactory::Create(SOFTMAX_NONE);
   loss_function_ = LossFactory::Create(LOSS_MSE);
@@ -93,9 +95,10 @@ NeuralNetwork::RC NeuralNetwork::Train(
     RC rc = SUCCESS;
     if (train_thread_num_ > 1 && B > 1) {
       ResetGradients();
-      rc = AccumulateGradientsBatchParallel(batch_data, batch_target);
+      rc = AccumulateGradientsBatchParallel(batch_data, batch_target,
+                                            dropout_step_);
     } else {
-      rc = ForwardPropagationBatch(batch_data);
+      rc = ForwardPropagationBatch(batch_data, /*training=*/true);
       if (rc != SUCCESS) {
         return rc;
       }
@@ -112,6 +115,7 @@ NeuralNetwork::RC NeuralNetwork::Train(
     if (rc != SUCCESS) {
       return rc;
     }
+    dropout_step_++;
 
     auto early_stop = false;
     if (each_epoch_call != nullptr) {
@@ -217,6 +221,7 @@ NeuralNetwork::RC NeuralNetwork::ImportNetworkParam(
   neuron_weight_ = param.neuron_weight_;
   learning_rate_ = option.learning_rate_;
   rand_seed_ = option.rand_seed_;
+  dropout_step_ = 0;
 
   loss_function_ = LossFactory::Create(option.loss_type_);
   activate_function_ = ActivateFactory::Create(option.activate_type_);
@@ -264,6 +269,8 @@ NeuralNetwork::RC NeuralNetwork::Clone(const NeuralNetwork &old) {
   learning_rate_ = old.learning_rate_;
   train_thread_num_ = old.train_thread_num_;
   rand_seed_ = old.rand_seed_;
+  dropout_rate_ = old.dropout_rate_;
+  dropout_step_ = old.dropout_step_;
   network_status_ = old.network_status_;
 
   loss_function_ = LossFactory::Create(old.loss_function_->GetLossType());
@@ -308,6 +315,7 @@ void NeuralNetwork::set_train_thread_num(int thread_num) {
 
 void NeuralNetwork::set_random_seed(int seed) {
   rand_seed_ = seed;
+  dropout_step_ = 0;
   if (param_init_function_ != nullptr && seed != 0) {
     param_init_function_->set_seed(seed);
   }
@@ -438,7 +446,7 @@ void NeuralNetwork::InitGradientBuffer(GradientBuffer &buffer) const {
 
 NeuralNetwork::RC NeuralNetwork::AccumulateGradientsBatchParallel(
     const std::vector<std::vector<double>> &batch_data,
-    const std::vector<std::vector<double>> &batch_target) {
+    const std::vector<std::vector<double>> &batch_target, int train_step) {
   int B = (int)batch_data.size();
   if (B == 0 || B != (int)batch_target.size()) {
     err_msg_ =
@@ -483,7 +491,8 @@ NeuralNetwork::RC NeuralNetwork::AccumulateGradientsBatchParallel(
         }
         worker_rc[worker_idx] = AccumulateGradientsRange(
             batch_data, batch_target, begin, end, worker_loss, worker_activate,
-            worker_softmax, worker_grad[worker_idx], worker_err[worker_idx]);
+            worker_softmax, worker_grad[worker_idx], worker_err[worker_idx],
+            train_step);
       });
     }
   } catch (const std::system_error &e) {
@@ -531,7 +540,8 @@ NeuralNetwork::RC NeuralNetwork::AccumulateGradientsRange(
     const std::shared_ptr<LossFunction> &loss_function,
     const std::shared_ptr<ActivateFunction> &activate_function,
     const std::shared_ptr<SoftmaxFunction> &softmax_function,
-    GradientBuffer &gradient, std::string &err_msg) const {
+    GradientBuffer &gradient, std::string &err_msg,
+    int train_step) const {
   int L = (int)layer_.size();
   int B = end - begin;
   if (L == 0 || B <= 0) {
@@ -544,6 +554,25 @@ NeuralNetwork::RC NeuralNetwork::AccumulateGradientsRange(
     output[l].assign(B, std::vector<double>(layer_[l], 0.0));
     preact[l].assign(B, std::vector<double>(layer_[l], 0.0));
     delta[l].assign(B, std::vector<double>(layer_[l], 0.0));
+  }
+
+  // dropout: 掩码是本函数内的局部变量 (前向采样, 反向复用).
+  // 种子按 (rand_seed_, train_step, 样本在 batch 内的槽位) 派生,
+  // 每个样本一个生成器跨层连续采样 — 与单线程路径采出的掩码完全一致,
+  // 且与 worker 数/batch 切分方式无关.
+  bool use_dropout = dropout_rate_ > 0.0;
+  std::vector<std::vector<std::vector<double>>> mask;
+  if (use_dropout) {
+    mask.assign(L, {});
+    for (int l = 1; l < L - 1; l++) {
+      mask[l].assign(B, std::vector<double>(layer_[l], 1.0));
+    }
+    for (int b = 0; b < B; b++) {
+      std::mt19937 gen(DropoutSeed(rand_seed_, train_step, begin + b));
+      for (int l = 1; l < L - 1; l++) {
+        FillDropoutMask(gen, mask[l][b].data(), layer_[l]);
+      }
+    }
   }
 
   for (int b = 0; b < B; b++) {
@@ -561,6 +590,7 @@ NeuralNetwork::RC NeuralNetwork::AccumulateGradientsRange(
   for (int l = 1; l < L; l++) {
     int out_dim = layer_[l];
     int in_dim = layer_[l - 1];
+    bool drop_layer = use_dropout && l < L - 1;
     for (int b = 0; b < B; b++) {
       const auto &in_vec = output[l - 1][b];
       auto &out_vec = output[l][b];
@@ -572,7 +602,11 @@ NeuralNetwork::RC NeuralNetwork::AccumulateGradientsRange(
           z += w_row[i] * in_vec[i];
         }
         pre_vec[o] = z;
-        out_vec[o] = activate_function->Activate(z);
+        double a = activate_function->Activate(z);
+        if (drop_layer) {
+          a *= mask[l][b][o];
+        }
+        out_vec[o] = a;
       }
     }
   }
@@ -624,13 +658,22 @@ NeuralNetwork::RC NeuralNetwork::AccumulateGradientsRange(
     for (int l = last - 1; l >= 1; l--) {
       int dim_l = layer_[l];
       int dim_lp1 = layer_[l + 1];
+      bool drop_layer = use_dropout && l < L - 1;
       for (int o = 0; o < dim_l; o++) {
         double sum = 0.0;
         for (int k = 0; k < dim_lp1; k++) {
           sum += neuron_weight_[l + 1][k][o] * delta[l + 1][b][k];
         }
-        delta[l][b][o] = sum * activate_function->DerivActivate(
-                                   preact[l][b][o], output[l][b][o]);
+        double m = 1.0;
+        double a = output[l][b][o];
+        if (drop_layer) {
+          m = mask[l][b][o];
+          if (m > 0.0) {
+            a /= m; // 还原丢弃前的激活值, 供按 output 求导的激活使用
+          }
+        }
+        delta[l][b][o] =
+            sum * activate_function->DerivActivate(preact[l][b][o], a) * m;
       }
     }
     for (int l = 1; l < L; l++) {
@@ -650,7 +693,7 @@ NeuralNetwork::RC NeuralNetwork::AccumulateGradientsRange(
 }
 
 NeuralNetwork::RC NeuralNetwork::ForwardPropagationBatch(
-    const std::vector<std::vector<double>> &batch_data) {
+    const std::vector<std::vector<double>> &batch_data, bool training) {
   int L = (int)layer_.size();
   int B = (int)batch_data.size();
   if (L == 0) {
@@ -664,6 +707,20 @@ NeuralNetwork::RC NeuralNetwork::ForwardPropagationBatch(
 
   ResizeBatchBuffers(B);
 
+  // 训练且开启 dropout 时, 先为每个样本采样好全部隐藏层掩码:
+  // 每个样本一个生成器 (种子按 rand_seed_, dropout_step_, 槽位 派生),
+  // 跨层连续采样 — 多线程路径按同样规则采, 两条路径掩码完全一致.
+  bool use_dropout = training && dropout_rate_ > 0.0;
+  if (use_dropout) {
+    ResizeDropoutMask(B);
+    for (int b = 0; b < B; b++) {
+      std::mt19937 gen(DropoutSeed(rand_seed_, dropout_step_, b));
+      for (int l = 1; l < L - 1; l++) {
+        FillDropoutMask(gen, dropout_mask_[l][b].data(), layer_[l]);
+      }
+    }
+  }
+
   // layer 0: 输入原样拷贝
   for (int b = 0; b < B; b++) {
     if ((int)batch_data[b].size() != layer_[0]) {
@@ -676,9 +733,11 @@ NeuralNetwork::RC NeuralNetwork::ForwardPropagationBatch(
   }
 
   // 1..L-1: 全连接前向 + 激活, 同时记录 pre-activation
+  // 开启 dropout 的隐藏层: 激活值立即乘上掩码因子, 再喂给下一层
   for (int l = 1; l < L; l++) {
     int out_dim = layer_[l];
     int in_dim = layer_[l - 1];
+    bool drop_layer = use_dropout && l < L - 1;
     for (int b = 0; b < B; b++) {
       const auto &in_vec = neuron_output_[l - 1][b];
       auto &out_vec = neuron_output_[l][b];
@@ -690,7 +749,11 @@ NeuralNetwork::RC NeuralNetwork::ForwardPropagationBatch(
           z += w_row[i] * in_vec[i];
         }
         pre_vec[o] = z;
-        out_vec[o] = activate_function_->Activate(z);
+        double a = activate_function_->Activate(z);
+        if (drop_layer) {
+          a *= dropout_mask_[l][b][o];
+        }
+        out_vec[o] = a;
       }
     }
   }
@@ -773,17 +836,29 @@ NeuralNetwork::RC NeuralNetwork::BackPropagationBatch(
       neuron_delta_[last][b][o] = delta;
     }
     // 2) 反向传播到隐藏层 (layer 0 不需要)
+    // 开启 dropout 的层: delta 乘上前向时采样的同一份掩码因子;
+    // 由于 output 存的是丢弃后的值 (a * m), 先用 output / m 还原出
+    // 丢弃前的激活值 a, 供 sigmoid/tanh 这类按 output 求导的激活使用.
     for (int l = last - 1; l >= 1; l--) {
       int dim_l = layer_[l];
       int dim_lp1 = layer_[l + 1];
+      bool drop_layer = DropoutMaskActive(l, B);
       for (int o = 0; o < dim_l; o++) {
         double sum = 0.0;
         for (int k = 0; k < dim_lp1; k++) {
           sum += neuron_weight_[l + 1][k][o] * neuron_delta_[l + 1][b][k];
         }
+        double m = 1.0;
+        double a = neuron_output_[l][b][o];
+        if (drop_layer) {
+          m = dropout_mask_[l][b][o];
+          if (m > 0.0) {
+            a /= m;
+          }
+        }
         neuron_delta_[l][b][o] =
-            sum * activate_function_->DerivActivate(neuron_preact_[l][b][o],
-                                                    neuron_output_[l][b][o]);
+            sum *
+            activate_function_->DerivActivate(neuron_preact_[l][b][o], a) * m;
       }
     }
     // 3) 累加梯度: grad_bias += delta; grad_weight[o][i] += delta[o] * in[i]
@@ -909,6 +984,59 @@ void NeuralNetwork::set_gradient_clip_norm(double max_norm) {
 
 void NeuralNetwork::set_gradient_clip_value(double max_value) {
   grad_clip_value_ = max_value;
+}
+
+NeuralNetwork::RC NeuralNetwork::set_dropout_rate(double rate) {
+  if (rate < 0.0 || rate >= 1.0) {
+    err_msg_ = "[NeuralNetwork::set_dropout_rate] rate must be in [0, 1)";
+    return INVALID_DATA;
+  }
+  dropout_rate_ = rate;
+  return SUCCESS;
+}
+
+unsigned int NeuralNetwork::DropoutSeed(int rand_seed, int step, int slot) {
+  // splitmix64 混合: 输入差一位也会让输出彻底不同, 避免线性组合
+  // 带来的样本间掩码相关性.
+  uint64_t x = (uint64_t)(uint32_t)rand_seed;
+  x = x * 0x9e3779b97f4a7c15ull + (uint64_t)(uint32_t)step;
+  x = x * 0x9e3779b97f4a7c15ull + (uint64_t)(uint32_t)slot;
+  x += 0x9e3779b97f4a7c15ull;
+  x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
+  x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
+  x = x ^ (x >> 31);
+  return (unsigned int)(x & 0xffffffffu);
+}
+
+void NeuralNetwork::FillDropoutMask(std::mt19937 &gen, double *factors,
+                                    int n) const {
+  double keep = 1.0 - dropout_rate_;
+  // 直接用引擎的 uint32 输出转 [0,1), 不经过 uniform_real_distribution
+  // (其实现由各家 stdlib 自定): mt19937 引擎输出是标准规定的, 这样掩码
+  // 序列在不同平台/编译器下也完全一致.
+  for (int i = 0; i < n; i++) {
+    double u = (double)gen() * (1.0 / 4294967296.0);
+    factors[i] = (u < keep) ? 1.0 / keep : 0.0;
+  }
+}
+
+bool NeuralNetwork::DropoutMaskActive(int layer, int batch_size) const {
+  return dropout_rate_ > 0.0 && layer < (int)dropout_mask_.size() &&
+         (int)dropout_mask_[layer].size() == batch_size;
+}
+
+void NeuralNetwork::ResizeDropoutMask(int batch_size) {
+  int L = (int)layer_.size();
+  if ((int)dropout_mask_.size() == L && L > 1 &&
+      (int)dropout_mask_[1].size() == batch_size &&
+      (batch_size == 0 ||
+       (int)dropout_mask_[1][0].size() == layer_[1])) {
+    return;
+  }
+  dropout_mask_.assign(L, {});
+  for (int l = 1; l < L - 1; l++) {
+    dropout_mask_[l].assign(batch_size, std::vector<double>(layer_[l], 1.0));
+  }
 }
 
 void NeuralNetwork::set_lr_scheduler(std::shared_ptr<LRScheduler> scheduler) {

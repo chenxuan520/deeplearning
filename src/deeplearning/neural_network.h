@@ -8,6 +8,7 @@
 #include "util/random.h"
 #include <functional>
 #include <memory>
+#include <random>
 #include <string>
 #include <utility>
 #include <vector>
@@ -109,6 +110,16 @@ public:
   double gradient_clip_norm() const { return grad_clip_norm_; }
   double gradient_clip_value() const { return grad_clip_value_; }
 
+  // Dropout (inverted), 只作用在隐藏层 (1..L-2), rate 取值 [0, 1).
+  // rate <= 0 表示关闭 (默认). 开启后:
+  //  - Train 的每次前向都为每个隐藏单元重新采样掩码: 以概率 rate 置 0,
+  //    幸存输出乘 1/(1-rate) 补量, 反向时 delta 乘同一份掩码;
+  //  - Predict / PredictBatch / CalcLoss 等推理路径不受影响.
+  // 掩码是 (rand_seed_, 训练步数, 样本在 batch 内的槽位) 的确定函数:
+  // 相同 seed + 相同调用序列可复现, 且与线程数 / batch 切分方式无关.
+  RC set_dropout_rate(double rate);
+  double dropout_rate() const { return dropout_rate_; }
+
   // 学习率调度器: 设置之后, Train 会在每个 step 调用 scheduler->GetLR(step)
   // 并通过 set_learning_rate 更新. 传 nullptr 表示禁用 (Train 仍按
   // learning_rate_ / 入参覆盖的方式运作).
@@ -131,18 +142,24 @@ private:
 
   RC AccumulateGradientsBatchParallel(
       const std::vector<std::vector<double>> &batch_data,
-      const std::vector<std::vector<double>> &batch_target);
+      const std::vector<std::vector<double>> &batch_target, int train_step = 0);
 
+  // train_step 是当前 batch 的全局步数, 与 (rand_seed_, 样本槽位) 一起
+  // 派生 dropout 掩码种子, 保证掩码与线程数/batch 切分方式无关.
   RC AccumulateGradientsRange(
       const std::vector<std::vector<double>> &batch_data,
       const std::vector<std::vector<double>> &batch_target, int begin, int end,
       const std::shared_ptr<LossFunction> &loss_function,
       const std::shared_ptr<ActivateFunction> &activate_function,
       const std::shared_ptr<SoftmaxFunction> &softmax_function,
-      GradientBuffer &gradient, std::string &err_msg) const;
+      GradientBuffer &gradient, std::string &err_msg,
+      int train_step = 0) const;
 
+  // training = true 时按 dropout_rate_ 采样掩码 (Train 路径);
+  // 推理调用传 false, 不启用 dropout.
   RC ForwardPropagationBatch(
-      const std::vector<std::vector<double>> &batch_data);
+      const std::vector<std::vector<double>> &batch_data,
+      bool training = false);
 
   RC UpdateNeuronOutputBatchSoftMax();
 
@@ -155,6 +172,20 @@ private:
   // 调用前 grad 已经按 sum 累加 (未除 batch_size); 这里裁剪的是
   // 平均后的梯度, 故先除 batch_size 再判定.
   void ClipGradients(int batch_size);
+
+  // 由 (rand_seed, 训练步数, 样本槽位) 派生掩码种子 (splitmix64 混合),
+  // 让掩码绑定到样本而不是线程/batch 切分方式.
+  static unsigned int DropoutSeed(int rand_seed, int step, int slot);
+
+  // 用传入的 gen 填充 factors[0..n): 以 keep 概率填 1/keep, 否则 0.
+  // gen 由调用方按样本创建 (跨层连续采样), 保证单/多线程序列一致.
+  void FillDropoutMask(std::mt19937 &gen, double *factors, int n) const;
+
+  // 训练前向是否已为 layer l 采样好本 batch 的掩码.
+  bool DropoutMaskActive(int layer, int batch_size) const;
+
+  // 按需分配掩码缓冲 (形状不变时不重复分配).
+  void ResizeDropoutMask(int batch_size);
 
 private:
   std::shared_ptr<LossFunction> loss_function_ = nullptr;
@@ -190,6 +221,15 @@ private:
 
   // 可选 LR scheduler
   std::shared_ptr<LRScheduler> lr_scheduler_;
+
+  // Dropout: rate <= 0 关闭. 掩码存的是乘性因子 (0 或 1/keep),
+  // 单线程路径在训练前向时填充, 供同一次反向使用; 多线程路径的掩码
+  // 是 AccumulateGradientsRange 内的局部变量 (按槽位派生种子, 两条
+  // 路径采出的掩码完全一致).
+  double dropout_rate_ = 0.0;
+  int dropout_step_ = 0; // 已处理的 batch 数, 跨 Train 调用累计
+  // [layer][batch][neuron], 只填隐藏层
+  std::vector<std::vector<std::vector<double>>> dropout_mask_;
 
   std::string err_msg_;
 };

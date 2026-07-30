@@ -127,7 +127,8 @@ Transformer / CNN / RNN 等核心接口.
 
 ## 后续 roadmap (尚未实现, 仅记录方向)
 
-- Dropout 层 (训练 / eval 模式切换)
+- ~~Dropout 层 (训练 / eval 模式切换)~~ 已实现: `set_dropout_rate` 隐藏层
+  inverted dropout, 训练时采样掩码 / 推理自动关闭, 见 `src/test/dropout_test.h`
 - BatchNorm / LayerNorm 已部分存在于 transformer 里, 但还不是 NeuralNetwork 一等公民
 - DataLoader (多线程读 + 自动 shuffle)
 - Mixed precision (float vs double)

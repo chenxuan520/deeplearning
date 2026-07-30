@@ -8,6 +8,8 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -16,6 +18,57 @@ using namespace deeplearning;
 using namespace drawtool;
 
 namespace {
+
+struct DemoOption {
+  double dropout_rate = 0.0; // > 0 时开启隐藏层 dropout 消融实验
+  int epochs = 5;
+  int train_limit = 0; // > 0 时只用前 N 张训练图 (构造小数据/过拟合场景)
+};
+
+void PrintUsage(const char *prog) {
+  cout << "Usage: " << prog << " [options]\n"
+       << "  --dropout <double>   隐藏层 dropout 比例, 取值 [0, 1), 默认 0 关闭\n"
+       << "                       开启后使用独立的参数文件 (demo.dropout.param),\n"
+       << "                       不覆盖默认模型, 便于和基线做消融对比\n"
+       << "  --epochs <int>       训练轮数, 默认 5\n"
+       << "  --train-limit <int>  只用前 N 张训练图, 默认 0 表示全部 60000 张\n"
+       << "  --help\n";
+}
+
+bool ParseArgs(int argc, char **argv, DemoOption &option) {
+  for (int i = 1; i < argc; i++) {
+    string arg = argv[i];
+    auto need_value = [&](const char *name) -> const char * {
+      if (i + 1 >= argc) {
+        throw std::runtime_error(string("Missing value for ") + name);
+      }
+      i += 1;
+      return argv[i];
+    };
+
+    if (arg == "--dropout") {
+      option.dropout_rate = std::stod(need_value("--dropout"));
+      if (option.dropout_rate < 0.0 || option.dropout_rate >= 1.0) {
+        throw std::runtime_error("--dropout must be in [0, 1)");
+      }
+    } else if (arg == "--epochs") {
+      option.epochs = std::stoi(need_value("--epochs"));
+      if (option.epochs <= 0) {
+        throw std::runtime_error("--epochs must be positive");
+      }
+    } else if (arg == "--train-limit") {
+      option.train_limit = std::stoi(need_value("--train-limit"));
+      if (option.train_limit < 0) {
+        throw std::runtime_error("--train-limit must be >= 0");
+      }
+    } else if (arg == "--help") {
+      return false;
+    } else {
+      throw std::runtime_error(string("Unknown option: ") + arg);
+    }
+  }
+  return true;
+}
 
 // 用 PredictBatch 一次性前向, 比逐样本 Predict 快很多.
 double Accuracy(NeuralNetwork &net, const vector<vector<double>> &x,
@@ -38,7 +91,19 @@ double Accuracy(NeuralNetwork &net, const vector<vector<double>> &x,
 
 } // namespace
 
-int main() {
+int main(int argc, char **argv) {
+  DemoOption cli_option;
+  try {
+    if (!ParseArgs(argc, argv, cli_option)) {
+      PrintUsage(argv[0]);
+      return 0;
+    }
+  } catch (const std::exception &e) {
+    cout << "Parse args failed: " << e.what() << endl;
+    PrintUsage(argv[0]);
+    return -1;
+  }
+
   // ---- 1. 加载数据 (像素已在 mnist_data.h 内归一化到 [0,1]) ----
   char train_image_name[] = "./demo/mnist/mnist/train-images-idx3-ubyte";
   char train_label_name[] = "./demo/mnist/mnist/train-labels-idx1-ubyte";
@@ -54,7 +119,23 @@ int main() {
   }
   int N_train = (int)mnist_data.train_data().size();
   int N_test = (int)mnist_data.test_data().size();
-  cout << "train_data: " << N_train << "  test_data: " << N_test << endl;
+  if (cli_option.train_limit > 0 && cli_option.train_limit < N_train) {
+    N_train = cli_option.train_limit;
+  }
+  cout << "train_data: " << N_train << "  test_data: " << N_test;
+  if (N_train < (int)mnist_data.train_data().size()) {
+    cout << " (train-limit " << N_train << ")";
+  }
+  cout << endl;
+
+  // train_limit 生效时切片出训练子集 (避免整库拷贝)
+  vector<vector<double>> train_data_slice;
+  const vector<vector<double>> *train_x = &mnist_data.train_data();
+  if (N_train < (int)mnist_data.train_data().size()) {
+    train_data_slice.assign(mnist_data.train_data().begin(),
+                            mnist_data.train_data().begin() + N_train);
+    train_x = &train_data_slice;
+  }
 
   // one-hot target
   vector<vector<double>> train_target(N_train, vector<double>(10, 0.0));
@@ -72,7 +153,10 @@ int main() {
   // 初始化: He (配 ReLU)
   // 优化器: Adam
   NeuralNetwork demo_network;
-  std::string param_file_name = "./demo/mnist/mnist/demo.v2.param";
+  // 开启 dropout 消融时使用独立参数文件, 避免覆盖默认基线模型
+  std::string param_file_name = cli_option.dropout_rate > 0.0
+                                    ? "./demo/mnist/mnist/demo.dropout.param"
+                                    : "./demo/mnist/mnist/demo.v2.param";
 
   NeuralNetwork::NetworkParam demo_param = {};
   NeuralNetwork::NetworkOption demo_option = {};
@@ -103,9 +187,19 @@ int main() {
     demo_network.set_optimizer_function(OptimizerType::OPTIMIZER_ADAM);
   }
 
+  if (cli_option.dropout_rate > 0.0) {
+    auto rc = demo_network.set_dropout_rate(cli_option.dropout_rate);
+    if (rc != NeuralNetwork::SUCCESS) {
+      cout << "set_dropout_rate failed: " << demo_network.err_msg() << endl;
+      return -1;
+    }
+    cout << "Dropout enabled: hidden layers rate="
+         << cli_option.dropout_rate << endl;
+  }
+
   // ---- 3. 训练配置 + WarmupCosine 调度 ----
   int batch_size = 64;
-  int epochs = 5;
+  int epochs = cli_option.epochs;
   int steps_per_epoch = (N_train + batch_size - 1) / batch_size;
   int total_steps = epochs * steps_per_epoch;
   int warmup_steps = steps_per_epoch; // 1 个 epoch 做 warmup
@@ -129,11 +223,11 @@ int main() {
       return;
     }
     int ep = next_step / steps_per_epoch;
-    // train loss 只抽样 5000 个估计 (60000 太慢, CalcLoss 是单样本前向)
-    vector<vector<double>> probe_x(mnist_data.train_data().begin(),
-                                    mnist_data.train_data().begin() + 5000);
+    // train loss 只抽样一部分估计 (全量太慢, CalcLoss 是单样本前向)
+    int probe_n = std::min(5000, N_train);
+    vector<vector<double>> probe_x(train_x->begin(), train_x->begin() + probe_n);
     vector<vector<double>> probe_y(train_target.begin(),
-                                    train_target.begin() + 5000);
+                                    train_target.begin() + probe_n);
     double train_loss = 0, test_loss = 0;
     net.CalcLoss(probe_x, probe_y, train_loss);
     net.CalcLoss(mnist_data.test_data(), test_target, test_loss);
@@ -149,8 +243,8 @@ int main() {
          << net.learning_rate() << fixed << endl;
   };
 
-  auto rc = demo_network.Train(mnist_data.train_data(), train_target,
-                                each_step, total_steps, batch_size, base_lr);
+  auto rc = demo_network.Train(*train_x, train_target, each_step, total_steps,
+                               batch_size, base_lr);
   if (rc != NeuralNetwork::SUCCESS) {
     cout << "Train failed: " << demo_network.err_msg() << endl;
     return -1;
@@ -163,7 +257,7 @@ int main() {
        << " sec" << endl;
 
   // ---- 5. 最终评估 ----
-  double train_acc = Accuracy(demo_network, mnist_data.train_data(),
+  double train_acc = Accuracy(demo_network, *train_x,
                               mnist_data.train_labels());
   double test_acc = Accuracy(demo_network, mnist_data.test_data(),
                               mnist_data.test_labels());

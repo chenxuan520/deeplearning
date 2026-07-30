@@ -45,6 +45,24 @@ cd src
   rm src/demo/mnist/mnist/demo.v2.param
   ```
 
+### Dropout 消融开关
+- `./bin/mnist --dropout 0.2`: 给两个隐藏层加 inverted dropout (训练时按
+  概率丢单元 + 幸存输出乘 `1/keep` 补量, 推理自动关闭), 取值 `[0, 1)`。
+- 开启后使用独立的参数文件 `demo.dropout.param` (同样支持自动加载续训),
+  不会覆盖基线的 `demo.v2.param`, 便于和基线做消融对比。
+- 同一 seed=42 下实测 5 epochs: 基线 train 98.99% / test 97.82% (裂口
+  1.17 个点); `--dropout 0.2` train 98.35% / test 97.51% (裂口 0.84 个点)。
+  dropout 在全量 MNIST 上不提 test 精度, 但明显收窄 train/test 裂口。
+- 过拟合场景 (`--train-limit 4000 --epochs 30`, 同 seed): 基线 train 冲到
+  100.00% / test 93.62% / test_loss 0.0410; `--dropout 0.2` train 99.82% /
+  test **94.21%** / test_loss **0.0362** —— 双指标全胜并阻止 100% 死记;
+  `--dropout 0.5` 则因过量欠拟合 (train 98.38% / test 92.91%)。
+
+### 其他参数
+- `--epochs <int>`: 训练轮数, 默认 5。
+- `--train-limit <int>`: 只用前 N 张训练图 (默认 0 = 全部 60000 张),
+  用于构造小数据/过拟合场景。
+
 ### 输出示例
 ```
 train_data: 60000  test_data: 10000
@@ -140,7 +158,10 @@ net.Train(train_data, train_target, callback, total_steps, /*batch=*/64, 1e-3);
 - **加 weight decay**: `net.optimizer_function()->set_weight_decay(1e-4)`,
   缩小 train(98.99%) 和 test(97.82%) 之间的 ~1pp 过拟合差距。
 - **数据增强**: 随机平移 1~2 像素 / 小角度旋转, MLP 也能再涨 0.3~0.5pp。
-- **Dropout**: 当前 `NeuralNetwork` 库尚未实现 Dropout (见 CHANGELOG 的 roadmap)。
+- **Dropout**: 库已支持 `set_dropout_rate` (隐藏层 inverted dropout), demo 自带
+  `--dropout` 开关 (见上文「Dropout 消融开关」)。实测它能把 train/test 裂口
+  从 ~1.2 个点收到 ~0.7, 但在全量 MNIST 上不提 test 精度——适合数据更少、
+  过拟合更严重的场景。
 - **换 CNN**: 仓库现在已有最小 `conv + pool` 实现（见 `src/deeplearning/cnn/` 与 `src/demo/cnn_mnist/`），但要稳定到 99%+ 仍通常需要更深的 CNN、更多通道和更完整的数据增强。
 
 ## 5. 与 Baseline 的兼容性

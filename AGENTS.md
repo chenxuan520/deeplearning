@@ -82,6 +82,12 @@
 - `set_gradient_clip_value(double)`: 逐分量绝对值裁剪
 - 默认关闭 (设 ≤ 0). 两者可同时开, 先 by-value, 再 by-norm.
 
+**Dropout**
+- `set_dropout_rate(double)`: inverted dropout, 只作用隐藏层 (1..L-2), 取值 [0, 1), 默认 0 关闭。
+- 训练 (Train) 时每次前向重新采样掩码 (幸存输出乘 1/keep 补量, 反向 delta 乘同一份掩码); Predict/CalcLoss 等推理路径不受影响。
+- 掩码是 `(rand_seed_, 训练步数, 样本在 batch 内的槽位)` 的确定函数 (splitmix64 派生种子): 相同 seed 可复现, 且与线程数/batch 切分方式无关 (有 `ThreadCountInvariant` 测试看守)。
+- Dropout 是纯训练期超参, 不进入 `.param` 序列化格式。
+
 **模型序列化**
 - `src/deeplearning/neural_network_loader.h` 中的 `deeplearning::NeuralNetworkLoader` 提供模型参数的二进制导出/导入。
 - MNIST 演示使用它来缓存/加载 `demo.v2.param` (`src/demo/mnist/main.cpp`)。
@@ -176,6 +182,11 @@
   也共用同一份预处理。
 - 训练结束会把模型保存到 `./demo/mnist/mnist/demo.v2.param`；下一次运行检测到该
   文件会自动加载续训（`lr` 自动降到 `1e-4` 微调）。想冷启动直接 `rm` 它。
+- 常用参数：
+  - `--dropout <double>`：隐藏层 inverted dropout 比例（取值 `[0, 1)`，默认 0 关闭）。
+    开启后改用独立的 `demo.dropout.param` 读写，不覆盖基线模型，便于消融对比。
+  - `--epochs <int>`：训练轮数，默认 5。
+  - `--train-limit <int>`：只用前 N 张训练图（默认 0 = 全部），用于构造小数据/过拟合场景。
 - 详细配置与升级历程见 `docs/mnist-demo.md`。
 
 **Transformer 字符级演示**
