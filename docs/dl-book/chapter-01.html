@@ -130,6 +130,67 @@
           <var>X</var>·<var>W</var>、<var>QK</var><sup>T</sup> 全是矩阵乘法</strong>,这里一次讲透,后面就不会卡。
         </p>
 
+        <h3>先建立画面:矩阵在几何上把空间“掰”成什么样</h3>
+        <p>
+          上面说矩阵是“把向量变成另一个向量的机器”,可光看数字,看不出它到底在<strong>怎么变</strong>。
+          先给一个能记一辈子的画面:<strong>一个矩阵,就是把整个平面“均匀地掰一下”</strong>——
+          网格线依然是直的、依然互相平行,原点也钉在原地不动,只是整体被拉伸、压扁或斜切了。
+          数学上把满足这三条的变换叫<span class="term">线性变换(linear transformation)</span>,
+          “线性”说的就是<strong>不弯、不折、不挪原点</strong>。
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 460 260" role="img" aria-label="矩阵把单位正方形变成平行四边形的线性变换示意">
+              <defs>
+                <marker id="ai" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#6ac3ff" /></marker>
+                <marker id="aj" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8ef0d1" /></marker>
+              </defs>
+              <!-- 坐标轴 -->
+              <line x1="60" y1="220" x2="440" y2="220" stroke="#46587a" stroke-width="1.5" />
+              <line x1="60" y1="220" x2="60" y2="40" stroke="#46587a" stroke-width="1.5" />
+              <text x="432" y="238" fill="#8499bd" font-size="11">x</text>
+              <text x="44" y="48" fill="#8499bd" font-size="11">y</text>
+              <!-- 变换前:单位正方形(虚线) -->
+              <path d="M60,220 L105,220 L105,175 L60,175 Z" fill="rgba(132,153,189,0.12)" stroke="#8499bd" stroke-width="1.5" stroke-dasharray="4 3" />
+              <!-- 变换后:平行四边形 -->
+              <path d="M60,220 L150,220 L195,85 L105,85 Z" fill="rgba(106,195,255,0.13)" stroke="#6ac3ff" stroke-width="2" />
+              <!-- 图例:移到右侧空白区, 颜色对应各自图形, 避免压在图上 -->
+              <rect x="252" y="120" width="16" height="12" fill="rgba(106,195,255,0.13)" stroke="#6ac3ff" stroke-width="1.5" />
+              <text x="276" y="130" fill="#6ac3ff" font-size="12">掰成平行四边形(变换后)</text>
+              <rect x="252" y="150" width="16" height="12" fill="rgba(132,153,189,0.12)" stroke="#8499bd" stroke-width="1.5" stroke-dasharray="3 2" />
+              <text x="276" y="160" fill="#8499bd" font-size="12">单位正方形(变换前)</text>
+              <!-- î:变换前(虚)→落点 [2,0](实,矩阵第 1 列) -->
+              <line x1="60" y1="220" x2="105" y2="220" stroke="#6ac3ff" stroke-width="1.5" stroke-dasharray="3 3" />
+              <line x1="60" y1="220" x2="150" y2="220" stroke="#6ac3ff" stroke-width="3" marker-end="url(#ai)" />
+              <text x="112" y="238" fill="#6ac3ff" font-size="12">î → [2, 0]</text>
+              <!-- ĵ:变换前(虚)→落点 [1,3](实,矩阵第 2 列) -->
+              <line x1="60" y1="220" x2="60" y2="175" stroke="#8ef0d1" stroke-width="1.5" stroke-dasharray="3 3" />
+              <line x1="60" y1="220" x2="105" y2="85" stroke="#8ef0d1" stroke-width="3" marker-end="url(#aj)" />
+              <text x="110" y="96" fill="#8ef0d1" font-size="12">ĵ → [1, 3]</text>
+            </svg>
+          </div>
+          <p class="figure__cap">
+            矩阵 <var>W</var> =
+            <span class="frac"><span>[ 2&nbsp;&nbsp;1 ]</span><span>[ 0&nbsp;&nbsp;3 ]</span></span>
+            把虚线的“单位正方形”掰成了蓝色平行四边形:直线仍是直线、对边仍然平行、原点没动——这就是“线性”。
+          </p>
+        </div>
+        <p>
+          还有一条特别好用的读图法:<strong>矩阵的每一<em>列</em>,就是一个坐标基向量变换后的“落点”</strong>。
+          原来指向右的 <var>î</var> = [1, 0] 被送到了第 1 列 [2, 0],原来指向上的 <var>ĵ</var> = [0, 1] 被送到了第 2 列 [1, 3]。
+          只要知道这两个基向量落在哪,整个平面怎么变就<strong>被钉死了</strong>——任何向量 [<var>x</var>, <var>y</var>] 变换后,
+          不过是“<var>x</var> 份新 <var>î</var> 加上 <var>y</var> 份新 <var>ĵ</var>”。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">这和下面 4.1 的“一堆点积”是<strong>同一件事</strong>,只是换个视角</span>
+          <p>
+            别把“列 = 基向量落点”和 4.1 的“行 · 输入 = 点积”当成两套算法——它们的结果<strong>一模一样</strong>。
+            拿输入 [1, 2] 试:<strong>按列看</strong>,结果 = 1×[2, 0] + 2×[1, 3] = [4, 6](沿列加权求和);
+            <strong>按行看</strong>,结果第 1 个数 = [2, 1]·[1, 2] = 4、第 2 个数 = [0, 3]·[1, 2] = 6(逐行点积)。
+            两条路都得到 [4, 6],正是 4.1 那个例子。<strong>按列拆,看“空间被怎么掰”;按行拆,看“每个输出怎么算”</strong>——殊途同归。
+          </p>
+        </div>
+
         <h3>4.1 矩阵 × 向量 = 一堆点积</h3>
         <p>核心操作是<strong>矩阵 × 向量</strong>:</p>
         <div class="mathblock reveal">
@@ -161,6 +222,12 @@
         <p>
           真正让人犯怵的其实是<strong>矩阵 × 矩阵</strong>。但它一点都不神秘——无非是把上面那种“一行 · 一列”的点积,<strong>在每一对(行, 列)上都做一遍</strong>。
           规则只有一句话:<strong>结果的第 <var>i</var> 行第 <var>j</var> 列 = 左边矩阵的第 <var>i</var> 行 · 右边矩阵的第 <var>j</var> 列</strong>(还是点积!)。
+        </p>
+        <p>
+          你可能会嘀咕:这条“行×列”的规则乍看有点<strong>怪</strong>——好好的两张表,为什么不是对应格子直接相乘,偏要这么绕?
+          其实它<strong>不是硬凑的,而是被需求倒推出来的</strong>。回想 <a class="xref" href="chapter-01.html#41-矩阵--向量--一堆点积">4.1</a>:矩阵乘一个向量,本就是“拿矩阵<strong>每一行</strong>去和这个向量做点积”。
+          现在无非是把右边从“一个向量”换成“<strong>好几个向量并排站成的矩阵</strong>”——那自然要拿左边每一行,去和右边<strong>每一列</strong>各做一次点积。
+          所以矩阵乘法之所以这么定义,正是为了<strong>把“一层网络对一批输入各做一次加权求和”一步算完</strong>:规则看着绕,目的却极朴素。
         </p>
         <div class="mathblock reveal">
           <span class="frac"><span>[ 1&nbsp;&nbsp;2 ]</span><span>[ 3&nbsp;&nbsp;4 ]</span></span>
@@ -201,6 +268,18 @@
             <strong>矩阵乘法 = 对一批向量同时做同一种线性变换。</strong>
           </p>
         </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">但顺序不能随便换:<var>AB</var> ≠ <var>BA</var></span>
+          <p>
+            上面说“数据在左”和“数据在右”两种写法都对,别误会成“左右可以随便调换”——<strong>矩阵乘法<em>不满足</em>交换律</strong>。
+            普通数字 3×5 = 5×3,但矩阵 <var>A</var>·<var>B</var> 和 <var>B</var>·<var>A</var> <strong>通常不相等</strong>,甚至常常<strong>连乘都乘不了</strong>:
+            一个 <code>[2×3]</code> 乘 <code>[3×4]</code> 合法(中间的 3 对上了),反过来 <code>[3×4]</code> 乘 <code>[2×3]</code> 形状就对不上(4 ≠ 2)。这也是 <a class="xref" href="chapter-01.html#43-形状-能不能乘乘出来多大看一眼就知道">4.3 形状规则</a>的直接推论。
+          </p>
+          <p>
+            对写代码的人,这条特别实在:<strong><var>X</var>·<var>W</var> 和 <var>W</var>·<var>X</var> 是两回事</strong>,谁在左、谁在右、要不要转置,都得照“形状对得上、语义讲得通”来摆,不能凭感觉交换。
+            后面读注意力里 <var>Q</var>·<var>K</var><sup>T</sup> 这类式子时,<strong>乘的顺序和转置就是这么被形状“逼”出来的</strong>(<a class="xref" href="chapter-17.html">第 17 章</a>)。
+          </p>
+        </div>
 
         <h3>4.3 形状:能不能乘、乘出来多大,看一眼就知道</h3>
         <p>
@@ -210,7 +289,23 @@
           [ <var>m</var> × <var>n</var> ] × [ <var>n</var> × <var>k</var> ] = [ <var>m</var> × <var>k</var> ]
           <span class="label">左边的“列数”必须等于右边的“行数”(中间的 n 要对上),否则乘不了;结果的形状 = 左边行数 × 右边列数</span>
         </div>
-        <p>记住一句口诀:<strong>“中间对齐、两头留下”</strong>——中间的 <var>n</var> 必须相等并被“消掉”,剩下两头的 <var>m</var> 和 <var>k</var> 就是结果的形状。举几个后面天天见的例子:</p>
+        <p>记住一句口诀:<strong>“中间对齐、两头留下”</strong>——中间的 <var>n</var> 必须相等并被“消掉”,剩下两头的 <var>m</var> 和 <var>k</var> 就是结果的形状。</p>
+        <p>
+          前面 4.1、4.2 的例子都是<strong>正方形</strong>矩阵,恰好把“形状”藏起来了——你看不出哪个数决定行、哪个决定列。
+          这里特意换一个<strong>长方形</strong>的:一个 <strong>2×3</strong> 乘一个 <strong>3×2</strong>,亲眼看“中间的 3 被消掉、两头的 2 和 2 留下”:
+        </p>
+        <div class="mathblock reveal">
+          <span class="frac"><span>[ 1&nbsp;&nbsp;2&nbsp;&nbsp;3 ]</span><span>[ 4&nbsp;&nbsp;5&nbsp;&nbsp;6 ]</span></span>
+          <span style="color:var(--text-dim);font-size:0.9rem">(2×3)</span>
+          ×
+          <span class="frac"><span>[ 1&nbsp;&nbsp;0 ]</span><span>[ 0&nbsp;&nbsp;1 ]<br />[ 1&nbsp;&nbsp;1 ]</span></span>
+          <span style="color:var(--text-dim);font-size:0.9rem">(3×2)</span>
+          =
+          <span class="frac"><span>[ 4&nbsp;&nbsp;5 ]</span><span>[ 10&nbsp;&nbsp;11 ]</span></span>
+          <span style="color:var(--text-dim);font-size:0.9rem">(2×2)</span>
+          <span class="label">左上角 4 = 左边第 1 行 [1,2,3] · 右边第 1 列 [1,0,1] = 1+0+3;中间的“3”对齐后消掉,结果形状 = 左行数 2 × 右列数 2</span>
+        </div>
+        <p>再看几个后面天天见的例子:</p>
         <div class="table-wrap reveal">
           <table class="calc-table calc-table--wrap">
             <thead><tr><th>算式</th><th>形状</th><th>含义</th></tr></thead>
