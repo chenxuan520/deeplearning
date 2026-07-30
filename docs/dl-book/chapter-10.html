@@ -27,8 +27,9 @@
             <li>怎么从<strong>训练/验证曲线</strong>一眼看出过拟合、欠拟合;</li>
             <li><strong>偏差与方差</strong>为什么此消彼长,泛化的“甜区”在哪;</li>
             <li><strong>L2 / L1 / weight decay</strong> 为什么能让模型“更平滑、别太自信”;</li>
-            <li><strong>Dropout</strong> 怎么靠“随机罢工”逼网络别依赖个别神经元,以及测试时为什么要关掉它;</li>
-            <li><strong>early stopping</strong> 和<strong>数据增强</strong>这两招,以及“更多数据”为什么是最强正则。</li>
+            <li><strong>Dropout</strong> 怎么靠“随机罢工”逼网络别依赖个别神经元,测试时为什么要关掉它,以及它在仓库代码里怎么落;</li>
+            <li><strong>early stopping</strong> 和<strong>数据增强</strong>这两招,以及“更多数据”为什么是最强正则;</li>
+            <li><strong>大模型时代</strong>为什么 Dropout 基本退场、weight decay 反而成了标配——以及这一章的思想为什么依然不过时。</li>
           </ul>
         </section>
 
@@ -212,6 +213,82 @@
             <strong>Dropout 只在训练时开,测试/推理时关。</strong>训练时随机丢 + 给幸存者按 <code>1/p</code> 放大补量;测试时全员上岗、原样输出。两边总量对齐,所以切换时什么都不用改。
           </p>
         </div>
+        <h3>代码里怎么落:仓库的 inverted dropout</h3>
+        <p>
+          仓库里的实现就是上面这套,对外只有一个开关:<code>net.set_dropout_rate(0.2)</code>(隐藏层丢 20%)。
+          “测试时关”在这份代码里不是靠自觉,而是<strong>结构上保证</strong>的:只有 <code>Train</code> 会以训练模式走前向,
+          <code>Predict</code> / <code>CalcLoss</code> 等推理路径<strong>根本不会采样掩码</strong>。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/deeplearning/neural_network.cpp(精简)</figcaption>
+          <pre class="code-walk__code"><code>// 训练前向: 先给每个样本采好全部隐藏层掩码
+std::mt19937 gen(DropoutSeed(rand_seed_, dropout_step_, b));  <b class="cw-tag">1</b>
+FillDropoutMask(gen, dropout_mask_[l][b].data(), layer_[l]);  <b class="cw-tag">2</b>
+// ... 前向算到该层时, 激活值立刻乘上因子再喂下一层
+double a = activate_function_-&gt;Activate(z);
+if (drop_layer) a *= dropout_mask_[l][b][o];                  <b class="cw-tag">3</b>
+
+// 训练反向: delta 乘回同一份掩码
+double m = dropout_mask_[l][b][o];
+double a = neuron_output_[l][b][o];
+if (m &gt; 0.0) a /= m;                <b class="cw-tag">4</b>  // 还原丢弃前的激活值
+delta = sum * DerivActivate(pre, a) * m;</code></pre>
+          <ol class="code-walk__notes">
+            <li>掩码种子由 (<code>rand_seed</code>、训练步数、样本在 batch 里的槽位) 派生——相同 seed 结果可复现,而且<strong>和开几个线程训练无关</strong>。</li>
+            <li><code>FillDropoutMask</code> 做的就是上一节那件事:以保留概率 <var>keep = 1 − rate</var> 填 <code>1/keep</code>,否则填 0——<strong>训练时当场把缺的量补回来</strong>。</li>
+            <li>掩码存的是<strong>乘性因子</strong>(0 或 1/keep),前向采的样,反向<strong>原样用回</strong>:被丢单元的梯度也是 0,等价于“这步它根本没存在过”。</li>
+            <li><code>output</code> 存的是补过量的值(<var>a·m</var>),而 sigmoid/tanh 是<strong>按 output 求导</strong>的(<a class="xref" href="chapter-07.html">第 7 章</a>),所以先用 <code>a/m</code> 还原再求导;ReLU 不受影响(缩放不变号)。乘回掩码后,被丢单元的偏置和“连出去的边”这一步都拿不到梯度。</li>
+          </ol>
+        </figure>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">亲手做一次消融</span>
+          <p>
+            mnist demo 自带开关,两条命令对比(同一个 seed=42,唯一变量就是 dropout):
+          </p>
+          <pre class="reveal">cd src
+rm -f demo/mnist/mnist/demo.v2.param   # 清掉缓存, 冷启动基线
+./bin/mnist                            # 基线: 隐藏层无 dropout
+./bin/mnist --dropout 0.2              # 同一网络, 隐藏层丢 20%</pre>
+          <p>
+            <code>--dropout</code> 会使用独立的参数文件 <code>demo.dropout.param</code>,不会覆盖基线模型。实测 5 epochs 的结果:
+          </p>
+          <div class="table-wrap reveal">
+            <table class="calc-table calc-table--wrap">
+              <thead><tr><th>784→128→64→10</th><th>train 准确率</th><th>test 准确率</th><th>train/test 裂口</th></tr></thead>
+              <tbody>
+                <tr><td><strong>基线</strong></td><td>98.99%</td><td>97.82%</td><td>1.17 个点</td></tr>
+                <tr><td><strong>dropout 0.2</strong></td><td>98.35%</td><td>97.51%</td><td>0.84 个点</td></tr>
+              </tbody>
+            </table>
+            <p class="calc-table__cap">
+              注意:dropout <strong>没有</strong>把 test 刷得更高——MNIST 数据够多、任务简单,基线本就没怎么过拟合。
+              它做的是另一件事:<strong>把裂口从 1.17 收到 0.84</strong>,代价是训练表现略降。
+            </p>
+          </div>
+          <p>
+            那什么场景它才提分?<strong>制造一个真的会过拟合的场景</strong>:只用 4000 张图、训 30 个 epoch——
+          </p>
+          <pre class="reveal">./bin/mnist --train-limit 4000 --epochs 30                # 基线
+./bin/mnist --train-limit 4000 --epochs 30 --dropout 0.2  # + dropout 0.2
+./bin/mnist --train-limit 4000 --epochs 30 --dropout 0.5  # + dropout 0.5</pre>
+          <div class="table-wrap reveal">
+            <table class="calc-table calc-table--wrap">
+              <thead><tr><th>4000 图 · 30 epochs</th><th>train 准确率</th><th>test 准确率</th><th>test loss</th></tr></thead>
+              <tbody>
+                <tr><td><strong>基线</strong></td><td>100.00%(背完了)</td><td>93.62%</td><td>0.0410</td></tr>
+                <tr><td><strong>dropout 0.2</strong></td><td>99.82%</td><td><strong>94.21%</strong></td><td><strong>0.0362</strong></td></tr>
+                <tr><td><strong>dropout 0.5</strong></td><td>98.38%</td><td>92.91%</td><td>0.0413</td></tr>
+              </tbody>
+            </table>
+            <p class="calc-table__cap">
+              三组对照讲完了整节课:基线 train 冲到 <strong>100%</strong>(彻底背题)、test 卡在 93.62%;
+              <strong>dropout 0.2 双指标全胜</strong>——test 更高、test loss 低了 12%,还阻止了 100% 死记;
+              而 0.5 丢得太多,模型学不动了(<strong>欠拟合</strong>),反而掉分。
+              这就是正则化的真实性格:不是免费午餐,而是<strong>拿一点训练表现,换泛化的稳健</strong>——
+              剂量也要刚刚好,裂口越大它越值,过量反而伤模型。
+            </p>
+          </div>
+        </div>
 
         <h2>6. Early stopping:见好就收</h2>
         <p>
@@ -235,6 +312,49 @@
           </p>
         </div>
 
+        <h2>8. 大模型时代,正则化还管用吗?</h2>
+        <p>
+          这一章的招,几乎都诞生在同一个时代背景里:<strong>数据有限,要在同一批数据上反复训练很多遍(epoch)</strong>。
+          过拟合是那个时代的头号大敌。而到了大模型,<strong>这个前提本身变了</strong>:
+        </p>
+        <ul>
+          <li><strong>数据多到训不完</strong>:动辄十几万亿 token,模型基本<strong>只过一遍(约 1 个 epoch)</strong>——连“背题”的机会都没有,过拟合自然不再是主矛盾;</li>
+          <li><strong>主矛盾翻了个面</strong>:回到第 3 节的偏差-方差框架——海量数据把问题推向了<strong>另一侧:欠拟合 / 学得不够</strong>。<a class="xref" href="chapter-20.html#5-规模化scaling-law-大力真的出奇迹">规模定律</a>(第 20 章)说的正是“模型再大点、数据再多点、训再久点,损失就还能降”;</li>
+          <li><strong>招数开始退场</strong>:Dropout 在大模型预训练里基本消失(GPT-3 时代还常见 0.1,之后的主流模型大多不开);early stopping 也很少用——大家更心疼算力,恨不得把数据训到底。</li>
+        </ul>
+        <p>
+          但有两样东西留了下来,地位反而更高:
+        </p>
+        <ul>
+          <li><span class="pill">weight decay</span>AdamW 的 weight decay(如 0.1)至今是预训练标配——它管的已不只是“防背题”,更是让权重保持健康尺度、<strong>训练更稳</strong>(<a class="xref" href="chapter-08.html#6-adamw-把-weight-decay-解耦">第 8 章</a>);</li>
+          <li><span class="pill">数据</span>“更多更好的数据”这剂最强正则换了个形式继续统治:清洗、去重、配比成了大模型竞争的核心资源(第 20 章)。<strong>正则化的灵魂没死,只是从“约束模型”转移到了“经营数据”。</strong></li>
+        </ul>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th></th><th>经典时代(本书 MNIST)</th><th>大模型预训练</th></tr></thead>
+            <tbody>
+              <tr><td><strong>数据量</strong></td><td>几万~几百万样本</td><td>万亿级 token</td></tr>
+              <tr><td><strong>训练遍数</strong></td><td>几十上百个 epoch</td><td>约 1 遍</td></tr>
+              <tr><td><strong>主矛盾</strong></td><td>过拟合(高方差)</td><td>欠拟合 / 算力不够</td></tr>
+              <tr><td><strong>Dropout</strong></td><td>常用手段</td><td>基本退场</td></tr>
+              <tr><td><strong>主力手段</strong></td><td>dropout + weight decay + early stop</td><td>weight decay + 数据质量 + 规模</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">同一套“泛化”目标,两个时代的打法。</p>
+        </div>
+        <p>
+          那这一章还值得学吗?值得,三个理由:
+          <strong>①</strong> 小模型、小数据仍然是日常的大多数场景——本书的 MNIST 就是,该过拟合还是会过拟合;
+          <strong>②</strong> 大模型的<strong>微调</strong>是在小得多的数据上进行的(第 20 章后训练),过拟合立刻“回归”,weight decay、early stopping 马上又要捡起来;
+          <strong>③</strong> 最重要的不是记住哪几招,而是那个思想本身:<strong>给学习过程加约束,用一点偏差换方差</strong>——它永不过时。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">一句话收束</span>
+          <p>
+            正则化在大模型时代<strong>没有死,只是换了战场</strong>:从“防背题”变成“保稳定”,从“约束模型”变成“经营数据”。
+          </p>
+        </div>
+
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
@@ -242,8 +362,9 @@
             <li><strong>过拟合</strong> = 训练好、测试差(背题);<strong>欠拟合</strong> = 都差(没学会)。看训练/验证曲线的“裂口”即可判断。</li>
             <li><strong>偏差 vs 方差</strong>:欠拟合是高偏差、过拟合是高方差;总误差是 U 形,正则化用一点偏差换方差,逼近谷底“甜区”。</li>
             <li><strong>weight decay(L2)</strong>:惩罚大权重,让模型更平滑克制;<strong>L1</strong> 则会把部分权重压成 0,得到稀疏模型。</li>
-            <li><strong>Dropout</strong>:训练时随机关神经元(并做缩放),测试时全开;逼网络别依赖个别单元。</li>
+            <li><strong>Dropout</strong>:训练时随机关神经元(并做缩放),测试时全开;逼网络别依赖个别单元。代码上是一个开关 <code>set_dropout_rate</code>,mnist demo 可直接做消融。</li>
             <li><strong>early stopping</strong>:验证损失回升前收手;<strong>数据增强/更多数据</strong>是最本质的正则。</li>
+            <li><strong>大模型时代</strong>:数据海量 + 只训一遍,过拟合不再是主矛盾 → Dropout 退场、weight decay 留下;但在小数据/微调场景,经典正则化依然好使。</li>
           </ul>
         </section>
 

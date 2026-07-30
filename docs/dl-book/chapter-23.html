@@ -243,6 +243,8 @@ NeuralNetworkLoader::ExportParamToFile(param, option, "demo.v2.param");</code></
             你会看到每个 epoch 打印 <code>train_loss / test_loss / test_acc / lr</code>——
             <strong>损失一路下降、准确率一路上升</strong>。试着改改 <code>epochs</code>、把 <code>ACTIVATE_RELU</code> 换成
             <code>ACTIVATE_SIGMOID</code>、或把 <code>OPTIMIZER_ADAM</code> 换成 <code>OPTIMIZER_SGD</code>,亲眼感受前几章讲的差别。
+            还有一个不用改源码的开关:<code>./bin/mnist --dropout 0.2</code> 会给隐藏层加上 dropout——
+            <a class="xref" href="chapter-10.html#5-dropout-让神经元随机罢工">第 10 章</a>的消融实验用的就是这两条命令。
           </p>
         </div>
 
