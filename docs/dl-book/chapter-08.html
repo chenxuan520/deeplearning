@@ -62,7 +62,7 @@
               <text x="300" y="200" fill="#6ac3ff" font-size="11">Momentum:更顺地冲向谷底</text>
             </svg>
           </div>
-          <p class="figure__cap">狭长“峡谷”式损失面:SGD(黄)反复横跳,加了惯性的 Momentum(蓝)更直地滑向谷底。</p>
+          <p class="figure__cap">狭长“峡谷”式损失面:SGD(黄)反复横跳,加了惯性的 Momentum(蓝)更直地滑向谷底。学完四种优化器后,<a class="xref" href="#8-到底用哪个">第 8 节</a>有一个能亲手让它们赛跑的可交互版本。</p>
         </div>
 
         <h2>2. SGD 与 mini-batch:一次用多少数据?</h2>
@@ -210,6 +210,14 @@ class OptimizerFunction {
           <li>想要<strong>极致泛化</strong>、且愿意仔细调学习率 → <strong>SGD + Momentum</strong> 有时能训出更好的最终精度(经典 CV 里常见)。</li>
           <li>纯 <strong>SGD</strong> 一般只作为教学/基线。</li>
         </ul>
+        <div class="figure reveal">
+          <div data-lab="optimizer-race"></div>
+          <p class="figure__cap">
+            动手玩:四个优化器<strong>同一起点、同一学习率</strong>赛跑。先在狭长峡谷里看
+            SGD(黄)来回弹跳、Momentum(蓝)靠惯性把横跳抚平;再切到弯谷,或把 η 调大,
+            看谁先冲出发散。RMSProp(青)和 Adam(红)的步长是逐方向自适应的,轨迹明显更「懂路」。
+          </p>
+        </div>
         <div class="callout callout--tip reveal">
           <span class="callout__title">动手比一比</span>
           <p>
@@ -239,5 +247,6 @@ class OptimizerFunction {
     </main>
 
     <script src="assets/book.js"></script>
+    <script src="assets/labs.js"></script>
   </body>
 </html>

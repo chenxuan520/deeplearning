@@ -3,6 +3,8 @@
  * 用法: 在章节里放一个占位容器, 例如 <div data-lab="neuron"></div>,
  * 本脚本会自动往里塞入完整结构并接好交互逻辑。
  * 支持的 data-lab: neuron | propagation | attention | multihead | real-attention
+ *   | activation-curve | gradient-descent | optimizer-race | corpus-clean
+ *   | mnist-demo | tictactoe-demo
  * 迁移自 docs/attention-guide/script.js, 改为容器作用域 (各组件互不干扰)。
  */
 (function () {
@@ -1617,6 +1619,305 @@
       });
   }
 
+  /* ===================== 优化器赛跑(第 8 章) ===================== */
+  var OPT_TPL =
+    '<div class="lab">' +
+    '  <div class="lab__controls">' +
+    '    <p class="explain">同一条起跑线上,四个优化器用<strong>同一个学习率</strong>下山。看 SGD 怎么在陡壁间来回弹、Momentum 怎么用惯性抚平横跳、RMSProp/Adam 又怎么靠自适应步长各走各的节奏。</p>' +
+    '    <label>损失面<select data-opt="surface">' +
+    '      <option value="ravine">狭长峡谷(一个方向陡、一个方向平)</option>' +
+    '      <option value="bend">抛物线弯谷(谷底盘着弯)</option>' +
+    '    </select></label>' +
+    '    <label>学习率 η<input type="range" min="0.01" max="0.4" step="0.01" value="0.15" data-opt="lr" /><span class="lab__value" data-opt-read="lr"></span></label>' +
+    '    <label>惯性 β<input type="range" min="0" max="0.95" step="0.05" value="0.9" data-opt="beta" /><span class="lab__value" data-opt-read="beta"></span></label>' +
+    '    <label class="checkbox"><input type="checkbox" data-opt-run="sgd" checked /><span style="color:#ffcf72">●</span> SGD</label>' +
+    '    <label class="checkbox"><input type="checkbox" data-opt-run="momentum" checked /><span style="color:#6ac3ff">●</span> Momentum</label>' +
+    '    <label class="checkbox"><input type="checkbox" data-opt-run="rmsprop" checked /><span style="color:#8ef0d1">●</span> RMSProp</label>' +
+    '    <label class="checkbox"><input type="checkbox" data-opt-run="adam" checked /><span style="color:#ff8fa3">●</span> Adam</label>' +
+    '    <div class="lab__btns">' +
+    '      <button type="button" class="button button--primary" data-opt-act="run">开始赛跑</button>' +
+    '      <button type="button" class="button button--ghost" data-opt-act="reset">重置</button>' +
+    '    </div>' +
+    '    <p class="explain">RMSProp 的衰减取 0.9(和仓库 <code>RMSPropOptimizer</code> 默认一致);Adam 的 β₂=0.999、ε=1e-8(和正文一致);β 滑杆控制 Momentum 和 Adam 的一阶惯性 β₁。把 η 调大,看谁先发散。</p>' +
+    '  </div>' +
+    '  <div class="lab__viz">' +
+    '    <div class="formula-card">' +
+    '      <div data-opt-plot></div>' +
+    '      <p class="explain" data-opt-explain>点「开始赛跑」,四个优化器从 ★ 同时出发,各走 60 步。</p>' +
+    '    </div>' +
+    '  </div>' +
+    '</div>';
+
+  function initOptimizerRace(root) {
+    root.innerHTML = OPT_TPL;
+
+    var SURFACES = {
+      ravine: {
+        loss: function (x, y) { return 0.5 * x * x + 6 * y * y; },
+        grad: function (x, y) { return [x, 12 * y]; },
+        start: [-3.4, 2.3],
+        view: { xMin: -4, xMax: 4, yMin: -3, yMax: 3 },
+        lrDef: 0.15, lrMax: 0.4,
+        minAt: [0, 0],
+        hint: "峡谷:y 方向比 x 方向陡 12 倍。SGD 在陡壁间来回弹跳、横向前进缓慢;惯性把纵向的震荡相互抵消,自适应步长则直接给 y 方向换了小步。还有个细节:RMSProp 头几步偏大——它没有偏差校正,二阶估计从 0 冷启动,第一步步幅 ≈ η/√(1−0.9) ≈ 3.16η(仓库 RMSPropOptimizer 的默认衰减就是 0.9);Adam 的偏差校正(正文 §5)把起步压回 ≈η,走得最稳。把 η 调到 0.2 以上,SGD 会先发散。"
+      },
+      bend: {
+        loss: function (x, y) { var d = y - 0.3 * x * x; return x * x + 8 * d * d; },
+        grad: function (x, y) { var d = y - 0.3 * x * x; return [2 * x - 9.6 * x * d, 16 * d]; },
+        start: [-2.6, 2.6],
+        view: { xMin: -3.2, xMax: 3.2, yMin: -1.2, yMax: 3.2 },
+        lrDef: 0.05, lrMax: 0.2,
+        minAt: [0, 0],
+        hint: "弯谷:谷底本身是一条抛物线,方向一直在变。固定步长容易被甩出谷,带惯性和自适应步长的更能贴着谷底走。"
+      }
+    };
+    var OPT_DEFS = [
+      { key: "sgd", name: "SGD", color: "#ffcf72" },
+      { key: "momentum", name: "Momentum", color: "#6ac3ff" },
+      { key: "rmsprop", name: "RMSProp", color: "#8ef0d1" },
+      { key: "adam", name: "Adam", color: "#ff8fa3" }
+    ];
+    var STEPS = 60;
+
+    var state = {
+      surface: "ravine",
+      lr: 0.15,
+      beta: 0.9,
+      runners: [],
+      running: false
+    };
+    var W = 520, H = 320;
+    var canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    canvas.style.width = "100%";
+    canvas.style.height = "auto";
+    canvas.style.display = "block";
+    root.querySelector("[data-opt-plot]").appendChild(canvas);
+    var ctx = canvas.getContext("2d");
+    var heatCache = {};
+
+    function surf() { return SURFACES[state.surface]; }
+    function PX(x) { var v = surf().view; return (x - v.xMin) / (v.xMax - v.xMin) * W; }
+    function PY(y) { var v = surf().view; return (v.yMax - y) / (v.yMax - v.yMin) * H; }
+
+    function heatCanvas() {
+      if (heatCache[state.surface]) return heatCache[state.surface];
+      var v = surf().view;
+      var cols = 104, rows = 64;
+      var off = document.createElement("canvas");
+      off.width = cols;
+      off.height = rows;
+      var octx = off.getContext("2d");
+      var img = octx.createImageData(cols, rows);
+      var lmax = 0, grid = [];
+      for (var r = 0; r < rows; r++) {
+        grid.push([]);
+        for (var c = 0; c < cols; c++) {
+          var x = v.xMin + (v.xMax - v.xMin) * (c + 0.5) / cols;
+          var y = v.yMax - (v.yMax - v.yMin) * (r + 0.5) / rows;
+          var l = surf().loss(x, y);
+          grid[r].push(l);
+          if (l > lmax) lmax = l;
+        }
+      }
+      var denom = Math.log(1 + lmax);
+      for (var rr = 0; rr < rows; rr++) {
+        for (var cc = 0; cc < cols; cc++) {
+          var t = Math.log(1 + grid[rr][cc]) / denom;
+          // 低处亮(teal) → 高处暗(深蓝背景)
+          var R = Math.round(127 + (14 - 127) * t);
+          var G = Math.round(231 + (26 - 231) * t);
+          var B = Math.round(196 + (74 - 196) * t);
+          var idx = (rr * cols + cc) * 4;
+          img.data[idx] = R;
+          img.data[idx + 1] = G;
+          img.data[idx + 2] = B;
+          img.data[idx + 3] = 255;
+        }
+      }
+      octx.putImageData(img, 0, 0);
+      var scaled = document.createElement("canvas");
+      scaled.width = W;
+      scaled.height = H;
+      var sctx = scaled.getContext("2d");
+      sctx.imageSmoothingEnabled = true;
+      sctx.drawImage(off, 0, 0, W, H);
+      heatCache[state.surface] = scaled;
+      return scaled;
+    }
+
+    function makeRunners() {
+      return OPT_DEFS.map(function (def) {
+        return {
+          def: def,
+          enabled: root.querySelector('[data-opt-run="' + def.key + '"]').checked,
+          p: surf().start.slice(),
+          v: [0, 0],
+          s: [0, 0],
+          t: 0,
+          hist: [surf().start.slice()],
+          diverged: false,
+          convergedAt: 0
+        };
+      });
+    }
+
+    function stepRunner(r) {
+      if (r.diverged || r.convergedAt) return;
+      var g = surf().grad(r.p[0], r.p[1]);
+      var lr = state.lr, beta = state.beta, b2 = 0.999, eps = 1e-8;
+      var k = r.def.key;
+      if (k === "sgd") {
+        r.p[0] -= lr * g[0];
+        r.p[1] -= lr * g[1];
+      } else if (k === "momentum") {
+        r.v[0] = beta * r.v[0] + g[0];
+        r.v[1] = beta * r.v[1] + g[1];
+        r.p[0] -= lr * r.v[0];
+        r.p[1] -= lr * r.v[1];
+      } else if (k === "rmsprop") {
+        // 衰减 0.9: 与仓库 RMSPropOptimizer 默认值一致
+        var rmsDecay = 0.9;
+        r.s[0] = rmsDecay * r.s[0] + (1 - rmsDecay) * g[0] * g[0];
+        r.s[1] = rmsDecay * r.s[1] + (1 - rmsDecay) * g[1] * g[1];
+        r.p[0] -= lr * g[0] / (Math.sqrt(r.s[0]) + eps);
+        r.p[1] -= lr * g[1] / (Math.sqrt(r.s[1]) + eps);
+      } else {
+        r.t += 1;
+        r.v[0] = beta * r.v[0] + (1 - beta) * g[0];
+        r.v[1] = beta * r.v[1] + (1 - beta) * g[1];
+        r.s[0] = b2 * r.s[0] + (1 - b2) * g[0] * g[0];
+        r.s[1] = b2 * r.s[1] + (1 - b2) * g[1] * g[1];
+        var mh0 = r.v[0] / (1 - Math.pow(beta, r.t));
+        var mh1 = r.v[1] / (1 - Math.pow(beta, r.t));
+        var vh0 = r.s[0] / (1 - Math.pow(b2, r.t));
+        var vh1 = r.s[1] / (1 - Math.pow(b2, r.t));
+        r.p[0] -= lr * mh0 / (Math.sqrt(vh0) + eps);
+        r.p[1] -= lr * mh1 / (Math.sqrt(vh1) + eps);
+      }
+      var v = surf().view;
+      var l = surf().loss(r.p[0], r.p[1]);
+      if (!isFinite(l) || l > 1e6 ||
+          r.p[0] < v.xMin * 3 || r.p[0] > v.xMax * 3 ||
+          r.p[1] < v.yMin * 3 || r.p[1] > v.yMax * 3) {
+        r.diverged = true;
+        return;
+      }
+      r.hist.push(r.p.slice());
+      if (l < 0.02) r.convergedAt = r.hist.length - 1;
+    }
+
+    function draw() {
+      ctx.drawImage(heatCanvas(), 0, 0);
+      var m = surf().minAt;
+      // 谷底标记
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("谷", PX(m[0]), PY(m[1]) - 6);
+      // 起点标记
+      var st = surf().start;
+      ctx.fillStyle = "#ffcf72";
+      ctx.beginPath();
+      ctx.arc(PX(st[0]), PY(st[1]), 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#0e1a30";
+      ctx.font = "11px sans-serif";
+      ctx.fillText("★", PX(st[0]), PY(st[1]) + 4);
+      state.runners.forEach(function (r) {
+        if (!r.enabled) return;
+        ctx.strokeStyle = r.def.color;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        r.hist.forEach(function (p, i) {
+          var X = PX(p[0]), Y = PY(p[1]);
+          if (i === 0) ctx.moveTo(X, Y);
+          else ctx.lineTo(X, Y);
+        });
+        ctx.stroke();
+        var cur = r.hist[r.hist.length - 1];
+        ctx.fillStyle = r.def.color;
+        ctx.beginPath();
+        ctx.arc(PX(cur[0]), PY(cur[1]), 4.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function report() {
+      var parts = [];
+      state.runners.forEach(function (r) {
+        if (!r.enabled) return;
+        var l = surf().loss(r.p[0], r.p[1]);
+        var ltxt = "L=" + (l < 0.01 ? l.toExponential(1) : l.toFixed(3));
+        var status;
+        if (r.diverged) status = "发散了 ✗";
+        else if (r.convergedAt) status = r.convergedAt + " 步到谷 ✓ (" + ltxt + ")";
+        else status = STEPS + " 步后 " + ltxt;
+        parts.push('<span style="color:' + r.def.color + '">● ' + r.def.name + "</span> " + status);
+      });
+      var el = root.querySelector("[data-opt-explain]");
+      el.innerHTML = parts.length
+        ? parts.join(" · ") + "<br>" + surf().hint
+        : surf().hint;
+    }
+
+    function reset() {
+      state.runners = makeRunners();
+      state.running = false;
+      draw();
+      root.querySelector("[data-opt-explain]").textContent =
+        "点「开始赛跑」,四个优化器从 ★ 同时出发,各走 " + STEPS + " 步。" + surf().hint;
+    }
+
+    root.querySelector('[data-opt="surface"]').addEventListener("change", function () {
+      state.surface = this.value;
+      var s = surf();
+      state.lr = s.lrDef;
+      var slider = root.querySelector('[data-opt="lr"]');
+      slider.max = s.lrMax;
+      slider.value = s.lrDef;
+      root.querySelector('[data-opt-read="lr"]').textContent = s.lrDef.toFixed(2);
+      reset();
+    });
+    root.querySelector('[data-opt="lr"]').addEventListener("input", function () {
+      state.lr = parseFloat(this.value);
+      root.querySelector('[data-opt-read="lr"]').textContent = state.lr.toFixed(2);
+    });
+    root.querySelector('[data-opt="beta"]').addEventListener("input", function () {
+      state.beta = parseFloat(this.value);
+      root.querySelector('[data-opt-read="beta"]').textContent = state.beta.toFixed(2);
+    });
+    root.querySelectorAll("[data-opt-run]").forEach(function (c) {
+      c.addEventListener("change", reset);
+    });
+    root.querySelectorAll("[data-opt-act]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (b.getAttribute("data-opt-act") === "reset") {
+          reset();
+          return;
+        }
+        if (state.running) return;
+        state.runners = makeRunners();
+        state.running = true;
+        var n = 0;
+        (function loop() {
+          if (n++ >= STEPS) {
+            state.running = false;
+            report();
+            return;
+          }
+          state.runners.forEach(stepRunner);
+          draw();
+          setTimeout(loop, 70);
+        })();
+      });
+    });
+    root.querySelector('[data-opt-read="lr"]').textContent = state.lr.toFixed(2);
+    root.querySelector('[data-opt-read="beta"]').textContent = state.beta.toFixed(2);
+    reset();
+  }
+
   /* ===================== 自动挂载 ===================== */
   var INITS = {
     neuron: initNeuron,
@@ -1626,6 +1927,7 @@
     "real-attention": initRealAttention,
     "activation-curve": initActivationCurve,
     "gradient-descent": initGradientDescent,
+    "optimizer-race": initOptimizerRace,
     "corpus-clean": initCorpusClean,
     "mnist-demo": initMnistDemo,
     "tictactoe-demo": initTictactoeDemo
