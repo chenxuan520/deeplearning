@@ -5,6 +5,7 @@
 #include "embedding/word2vec_test.h"
 #include "grad_clip_test.h"
 #include "lr_scheduler_test.h"
+#include "model_expansion_test.h"
 #include "neural_network_batch_test.h"
 #include "neural_network_loader_test.h"
 #include "neural_network_test.h"

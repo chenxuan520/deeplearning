@@ -16,6 +16,8 @@ public:
 
   OptimizerType GetOptimizerType() override;
 
+  bool ResetState(const std::vector<int> &layer) override;
+
   void set_momentum(double m) { momentum_ = m; }
   double momentum() const { return momentum_; }
 

@@ -36,6 +36,7 @@ public:
   RC set_feed_forward_bias_1(const std::vector<double> &bias);
   RC set_feed_forward_weight_2(const Matrix &weight);
   RC set_feed_forward_bias_2(const std::vector<double> &bias);
+  RC set_depth_residual(double scale, bool trainable);
 
   SelfAttention &self_attention();
   const SelfAttention &self_attention() const;
@@ -47,6 +48,8 @@ public:
   const std::vector<double> &feed_forward_bias_1() const;
   const Matrix &feed_forward_weight_2() const;
   const std::vector<double> &feed_forward_bias_2() const;
+  double depth_residual_scale() const;
+  bool depth_residual_trainable() const;
   std::string err_msg();
 
 private:
@@ -76,6 +79,7 @@ private:
   Matrix last_feed_forward_hidden_;
   Matrix last_feed_forward_output_;
   Matrix last_residual_2_;
+  Matrix last_core_output_;
   Matrix grad_feed_forward_weight_1_;
   std::vector<double> grad_feed_forward_bias_1_;
   Matrix grad_feed_forward_weight_2_;
@@ -87,6 +91,10 @@ private:
   TensorOptimizer feed_forward_bias_1_optimizer_;
   TensorOptimizer feed_forward_weight_2_optimizer_;
   TensorOptimizer feed_forward_bias_2_optimizer_;
+  std::vector<double> depth_residual_scale_;
+  std::vector<double> grad_depth_residual_scale_;
+  TensorOptimizer depth_residual_optimizer_;
+  bool depth_residual_trainable_ = false;
   std::string err_msg_;
   bool is_init_ = false;
 };

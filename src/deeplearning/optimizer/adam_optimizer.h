@@ -30,6 +30,8 @@ public:
 
   OptimizerType GetOptimizerType() override;
 
+  bool ResetState(const std::vector<int> &layer) override;
+
   void set_beta1(double v) { beta1_ = v; }
   void set_beta2(double v) { beta2_ = v; }
   void set_epsilon(double v) { epsilon_ = v; }

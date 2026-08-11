@@ -82,6 +82,8 @@ TransformerBlock::RC TransformerBlock::Init(int model_dim, int head_num,
                                      std::vector<double>(feed_forward_dim_, 0));
   grad_feed_forward_bias_1_.assign(feed_forward_dim_, 0);
   grad_feed_forward_bias_2_.assign(model_dim_, 0);
+  depth_residual_scale_.assign(1, 1.0);
+  grad_depth_residual_scale_.assign(1, 0.0);
   InitWeight(feed_forward_weight_1_, gen);
   InitWeight(feed_forward_weight_2_, gen);
   is_init_ = true;
@@ -145,9 +147,23 @@ TransformerBlock::Forward(const Matrix &input, Matrix &output,
     }
   }
 
-  if (feed_forward_norm_.Forward(last_residual_2_, output) != LayerNorm::SUCCESS) {
+  if (feed_forward_norm_.Forward(last_residual_2_, last_core_output_) !=
+      LayerNorm::SUCCESS) {
     err_msg_ = feed_forward_norm_.err_msg();
     return INVALID_DATA;
+  }
+  const double scale = depth_residual_scale_[0];
+  if (scale == 0.0) {
+    output = input;
+  } else if (scale == 1.0) {
+    output = last_core_output_;
+  } else {
+    output = input;
+    for (int i = 0; i < static_cast<int>(output.size()); i++) {
+      for (int j = 0; j < model_dim_; j++) {
+        output[i][j] += scale * (last_core_output_[i][j] - input[i][j]);
+      }
+    }
   }
   return SUCCESS;
 }
@@ -178,8 +194,26 @@ TransformerBlock::BackwardAccumulate(const Matrix &grad_output,
     return INVALID_DATA;
   }
 
+  const double scale = depth_residual_scale_[0];
+  Matrix grad_core_output = grad_output;
+  for (auto &row : grad_core_output) {
+    for (double &value : row) {
+      value *= scale;
+    }
+  }
+  if (depth_residual_trainable_) {
+    for (int i = 0; i < static_cast<int>(grad_output.size()); i++) {
+      for (int j = 0; j < model_dim_; j++) {
+        grad_depth_residual_scale_[0] +=
+            grad_output[i][j] *
+            (last_core_output_[i][j] - last_input_[i][j]);
+      }
+    }
+  }
+
   Matrix grad_residual_2;
-  if (feed_forward_norm_.BackwardAccumulate(grad_output, grad_residual_2) !=
+  if (feed_forward_norm_.BackwardAccumulate(grad_core_output,
+                                             grad_residual_2) !=
       LayerNorm::SUCCESS) {
     err_msg_ = feed_forward_norm_.err_msg();
     return INVALID_DATA;
@@ -239,6 +273,7 @@ TransformerBlock::BackwardAccumulate(const Matrix &grad_output,
   for (int i = 0; i < static_cast<int>(grad_input.size()); i++) {
     for (int j = 0; j < model_dim_; j++) {
       grad_input[i][j] += grad_attention_input[i][j];
+      grad_input[i][j] += (1.0 - scale) * grad_output[i][j];
     }
   }
   return SUCCESS;
@@ -261,6 +296,11 @@ void TransformerBlock::ApplyGradient(double learning_rate,
   attention_norm_.ApplyGradient(learning_rate, gradient_scale);
   feed_forward_norm_.ApplyGradient(learning_rate, gradient_scale);
   self_attention_.ApplyGradient(learning_rate, gradient_scale);
+  if (depth_residual_trainable_) {
+    depth_residual_optimizer_.Apply(depth_residual_scale_,
+                                    grad_depth_residual_scale_, learning_rate,
+                                    gradient_scale);
+  }
   ClearGradients();
 }
 
@@ -271,6 +311,7 @@ void TransformerBlock::ClearGradients() {
       model_dim_, std::vector<double>(feed_forward_dim_, 0));
   grad_feed_forward_bias_1_.assign(feed_forward_dim_, 0);
   grad_feed_forward_bias_2_.assign(model_dim_, 0);
+  grad_depth_residual_scale_.assign(1, 0.0);
   attention_norm_.ClearGradients();
   feed_forward_norm_.ClearGradients();
   self_attention_.ClearGradients();
@@ -283,6 +324,8 @@ void TransformerBlock::AddGradientsFrom(const TransformerBlock &source) {
             source.grad_feed_forward_weight_2_);
   AddVector(grad_feed_forward_bias_1_, source.grad_feed_forward_bias_1_);
   AddVector(grad_feed_forward_bias_2_, source.grad_feed_forward_bias_2_);
+  AddVector(grad_depth_residual_scale_,
+            source.grad_depth_residual_scale_);
   attention_norm_.AddGradientsFrom(source.attention_norm_);
   feed_forward_norm_.AddGradientsFrom(source.feed_forward_norm_);
   self_attention_.AddGradientsFrom(source.self_attention_);
@@ -344,6 +387,22 @@ TransformerBlock::set_feed_forward_bias_2(const std::vector<double> &bias) {
   return SUCCESS;
 }
 
+TransformerBlock::RC TransformerBlock::set_depth_residual(double scale,
+                                                           bool trainable) {
+  if (!is_init_) {
+    err_msg_ =
+        "[TransformerBlock::set_depth_residual] TransformerBlock not init";
+    return NOT_INIT;
+  }
+  if (!std::isfinite(scale)) {
+    err_msg_ = "[TransformerBlock::set_depth_residual] Invalid scale";
+    return INVALID_DATA;
+  }
+  depth_residual_scale_[0] = scale;
+  depth_residual_trainable_ = trainable;
+  return SUCCESS;
+}
+
 SelfAttention &TransformerBlock::self_attention() { return self_attention_; }
 
 const SelfAttention &TransformerBlock::self_attention() const {
@@ -376,6 +435,14 @@ const TransformerBlock::Matrix &TransformerBlock::feed_forward_weight_2() const 
 
 const std::vector<double> &TransformerBlock::feed_forward_bias_2() const {
   return feed_forward_bias_2_;
+}
+
+double TransformerBlock::depth_residual_scale() const {
+  return depth_residual_scale_.empty() ? 1.0 : depth_residual_scale_[0];
+}
+
+bool TransformerBlock::depth_residual_trainable() const {
+  return depth_residual_trainable_;
 }
 
 std::string TransformerBlock::err_msg() { return err_msg_; }

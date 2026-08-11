@@ -1229,6 +1229,14 @@ loss = Σ target_mask[t+1] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-t
           <li><strong>数据变了</strong>:新一代会用更大、更新、更干净的数据<strong>重新配比</strong>;在旧模型上打补丁,改不动它已经“学歪”的底子。</li>
           <li><strong>要冷启动</strong>:想要能力发生<a class="xref" href="chapter-20.html#6-涌现能力-量变到质变">质变</a>,通常得从随机初始化<strong>重新走一遍完整预训练</strong>——几千上万张 GPU 跑几个月,烧掉的钱以千万美元计。所以大版本不会频繁出。</li>
         </ul>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">形状对不上,不等于所有旧知识都绝对搬不过去</span>
+          <p>
+            如果只是兼容地加宽或加深,可以用<a class="xref" href="chapter-03.html#扩容一定要从零训练吗">函数保持扩容</a>
+            显式映射旧权重。但真正的大版本常同时改变 tokenizer、架构、数据配比和训练目标,映射既不完整,
+            也未必是新结构的最好起点,所以前沿底座仍常重新预训练。
+          </p>
+        </div>
 
         <div class="figure reveal">
           <div class="diagram">

@@ -4,18 +4,24 @@ namespace deeplearning {
 
 MomentumOptimizer::MomentumOptimizer(const std::vector<int> &layer)
     : OptimizerFunction(layer) {
-  bias_velocity_.resize(layer.size());
-  weight_velocity_.resize(layer.size());
+  ResetState(layer);
+}
+
+bool MomentumOptimizer::ResetState(const std::vector<int> &layer) {
+  layer_ = layer;
+  bias_velocity_.assign(layer.size(), {});
+  weight_velocity_.assign(layer.size(), {});
 
   for (int i = 0; i < (int)layer.size(); i++) {
-    bias_velocity_[i].resize(layer[i], 0);
+    bias_velocity_[i].assign(layer[i], 0);
     if (i != 0) {
-      weight_velocity_[i].resize(layer[i]);
+      weight_velocity_[i].assign(layer[i], {});
       for (int j = 0; j < layer[i]; j++) {
-        weight_velocity_[i][j].resize(layer[i - 1], 0);
+        weight_velocity_[i][j].assign(layer[i - 1], 0);
       }
     }
   }
+  return true;
 }
 
 double MomentumOptimizer::CalcChangeValue(double delta, double learning_rate,

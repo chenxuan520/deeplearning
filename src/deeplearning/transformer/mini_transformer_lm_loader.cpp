@@ -1,9 +1,14 @@
 #include "mini_transformer_lm_loader.h"
 
+#include <cstring>
 #include <fstream>
+#include <utility>
 
 namespace deeplearning {
 namespace {
+
+constexpr char kExtensionMagic[] = "MTLMEX1";
+constexpr int kExtensionVersion = 1;
 
 bool WriteInt(std::ofstream &ofs, int value) {
   return ofs.write((const char *)&value, sizeof(value)).good();
@@ -171,12 +176,29 @@ MiniTransformerLMLoader::ExportModelToFile(const MiniTransformerLM &model,
   }
 
   const auto &blocks = model.backbone_type() == MiniTransformerLM::BACKBONE_DECODER
-                           ? model.decoder().blocks()
-                           : model.encoder().blocks();
+                            ? model.decoder().blocks()
+                            : model.encoder().blocks();
   for (const auto &block : blocks) {
     if (!WriteBlock(ofs, block)) {
       ofs.close();
       return EXPORT_ERROR;
+    }
+  }
+  if (!ofs.write(kExtensionMagic, sizeof(kExtensionMagic) - 1).good() ||
+      !WriteInt(ofs, kExtensionVersion) ||
+      !WriteInt(ofs, model.block_num())) {
+    ofs.close();
+    return EXPORT_ERROR;
+  }
+  const std::vector<const std::vector<TransformerBlock> *> gate_stacks = {
+      &model.encoder().blocks(), &model.decoder().blocks()};
+  for (const auto *stack : gate_stacks) {
+    for (const auto &block : *stack) {
+      if (!WriteDouble(ofs, block.depth_residual_scale()) ||
+          !WriteInt(ofs, block.depth_residual_trainable() ? 1 : 0)) {
+        ofs.close();
+        return EXPORT_ERROR;
+      }
     }
   }
 
@@ -187,6 +209,9 @@ MiniTransformerLMLoader::ExportModelToFile(const MiniTransformerLM &model,
 MiniTransformerLMLoader::RC
 MiniTransformerLMLoader::ImportModelFromFile(MiniTransformerLM &model,
                                              const std::string &filename) {
+  if (model.vocab_size() != 0) {
+    return INPORT_ERROR;
+  }
   std::ifstream ifs(filename, std::ios::binary);
   if (!ifs.is_open()) {
     return INPORT_ERROR;
@@ -198,15 +223,16 @@ MiniTransformerLMLoader::ImportModelFromFile(MiniTransformerLM &model,
     return INPORT_ERROR;
   }
 
-  model.set_random_seed(config.rand_seed_);
-  model.set_backbone_type(
+  MiniTransformerLM candidate;
+  candidate.set_random_seed(config.rand_seed_);
+  candidate.set_backbone_type(
       static_cast<MiniTransformerLM::BackboneType>(config.backbone_type_));
-  model.set_use_positional_encoding(config.use_positional_encoding_ != 0);
-  model.set_scale_embedding(config.scale_embedding_ != 0);
-  model.set_max_context_size(config.max_context_size_);
-  model.set_block_learning_rate_scale(config.block_learning_rate_scale_);
-  if (model.Init(config.vocab_size_, config.model_dim_, config.head_num_,
-                 config.feed_forward_dim_, config.block_num_) !=
+  candidate.set_use_positional_encoding(config.use_positional_encoding_ != 0);
+  candidate.set_scale_embedding(config.scale_embedding_ != 0);
+  candidate.set_max_context_size(config.max_context_size_);
+  candidate.set_block_learning_rate_scale(config.block_learning_rate_scale_);
+  if (candidate.Init(config.vocab_size_, config.model_dim_, config.head_num_,
+                     config.feed_forward_dim_, config.block_num_) !=
       MiniTransformerLM::SUCCESS) {
     ifs.close();
     return INPORT_ERROR;
@@ -217,25 +243,58 @@ MiniTransformerLMLoader::ImportModelFromFile(MiniTransformerLM &model,
   std::vector<double> output_bias;
   if (!ReadMatrix(ifs, embedding_table) || !ReadMatrix(ifs, output_weight) ||
       !ReadVector(ifs, output_bias) ||
-      model.token_embedding().set_embedding_table(embedding_table) !=
+      candidate.token_embedding().set_embedding_table(embedding_table) !=
           TokenEmbedding::SUCCESS ||
-      model.set_output_weight(output_weight) != MiniTransformerLM::SUCCESS ||
-      model.set_output_bias(output_bias) != MiniTransformerLM::SUCCESS) {
+      candidate.set_output_weight(output_weight) != MiniTransformerLM::SUCCESS ||
+      candidate.set_output_bias(output_bias) != MiniTransformerLM::SUCCESS) {
     ifs.close();
     return INPORT_ERROR;
   }
 
   for (int i = 0; i < config.block_num_; i++) {
     auto *block = config.backbone_type_ == MiniTransformerLM::BACKBONE_DECODER
-                      ? model.decoder().mutable_block(i)
-                      : model.encoder().mutable_block(i);
+                      ? candidate.decoder().mutable_block(i)
+                      : candidate.encoder().mutable_block(i);
     if (block == nullptr || !ReadBlock(ifs, *block)) {
       ifs.close();
       return INPORT_ERROR;
     }
   }
 
+  if (ifs.peek() != std::char_traits<char>::eof()) {
+    char magic[sizeof(kExtensionMagic) - 1] = {};
+    int version = 0;
+    int block_count = 0;
+    if (!ifs.read(magic, sizeof(magic)).good() ||
+        std::memcmp(magic, kExtensionMagic, sizeof(magic)) != 0 ||
+        !ReadInt(ifs, version) || version != kExtensionVersion ||
+        !ReadInt(ifs, block_count) || block_count != config.block_num_) {
+      ifs.close();
+      return INPORT_ERROR;
+    }
+    for (int stack = 0; stack < 2; stack++) {
+      for (int i = 0; i < block_count; i++) {
+        double scale = 1.0;
+        int trainable = 0;
+        auto *block = stack == 0 ? candidate.encoder().mutable_block(i)
+                                 : candidate.decoder().mutable_block(i);
+        if (block == nullptr || !ReadDouble(ifs, scale) ||
+            !ReadInt(ifs, trainable) || (trainable != 0 && trainable != 1) ||
+            block->set_depth_residual(scale, trainable != 0) !=
+                TransformerBlock::SUCCESS) {
+          ifs.close();
+          return INPORT_ERROR;
+        }
+      }
+    }
+    if (ifs.peek() != std::char_traits<char>::eof()) {
+      ifs.close();
+      return INPORT_ERROR;
+    }
+  }
+
   ifs.close();
+  model = std::move(candidate);
   return SUCCESS;
 }
 

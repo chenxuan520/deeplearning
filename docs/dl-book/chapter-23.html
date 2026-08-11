@@ -222,6 +222,8 @@ return correct * 1.0 / pred.size();                              <b class="cw-ta
         <p>
           训练很贵,当然要把学好的旋钮存下来。程序最后把所有参数导出到 <code>demo.v2.param</code>;
           <strong>下次再运行会自动检测到它、加载续训</strong>(并把学习率自动降到很小做微调)。想从零重来,删掉这个文件即可。
+          这里说的是<strong>结构不变</strong>的续训;如果把隐藏层的 <code>128 / 64</code> 改掉,参数形状也会变化,
+          需要<a class="xref" href="chapter-03.html#扩容一定要从零训练吗">第 3 章的显式扩容映射</a>,不能把旧参数原样塞进新形状。
         </p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/demo/mnist/main.cpp · 保存参数(精简)</figcaption>

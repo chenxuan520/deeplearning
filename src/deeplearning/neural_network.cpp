@@ -251,6 +251,110 @@ NeuralNetwork::RC NeuralNetwork::ImportNetworkParam(
   return SUCCESS;
 }
 
+NeuralNetwork::RC NeuralNetwork::WidenHiddenLayer(
+    int layer_index, int new_width, HiddenLayerWidenMode mode,
+    ParamInitType new_param_init) {
+  if (network_status_ != NETWORK_STATUS_INIT) {
+    err_msg_ = "[NeuralNetwork::WidenHiddenLayer] Network not init";
+    return NOT_INIT;
+  }
+  const int layer_num = static_cast<int>(layer_.size());
+  if (layer_index <= 0 || layer_index >= layer_num - 1 ||
+      new_width <= layer_[layer_index] ||
+      (mode != WIDEN_RANDOM && mode != WIDEN_ZERO_OUTGOING &&
+       mode != WIDEN_NET2WIDER) ||
+      (mode == WIDEN_NET2WIDER && layer_[layer_index] <= 0)) {
+    err_msg_ = "[NeuralNetwork::WidenHiddenLayer] Invalid expansion";
+    return INVALID_DATA;
+  }
+
+  const int old_width = layer_[layer_index];
+  std::vector<int> new_layer = layer_;
+  new_layer[layer_index] = new_width;
+  auto new_bias = neuron_bias_;
+  auto new_weight = neuron_weight_;
+  new_bias[layer_index].resize(new_width, 0.0);
+  new_weight[layer_index].resize(
+      new_width, std::vector<double>(layer_[layer_index - 1], 0.0));
+  for (auto &row : new_weight[layer_index + 1]) {
+    row.resize(new_width, 0.0);
+  }
+
+  if (mode == WIDEN_NET2WIDER) {
+    std::vector<int> source(new_width);
+    std::vector<int> copy_count(old_width, 1);
+    for (int i = 0; i < old_width; i++) {
+      source[i] = i;
+    }
+    for (int i = old_width; i < new_width; i++) {
+      source[i] = (i - old_width) % old_width;
+      copy_count[source[i]]++;
+      new_bias[layer_index][i] = neuron_bias_[layer_index][source[i]];
+      new_weight[layer_index][i] = neuron_weight_[layer_index][source[i]];
+    }
+    for (int out = 0; out < layer_[layer_index + 1]; out++) {
+      for (int i = 0; i < new_width; i++) {
+        new_weight[layer_index + 1][out][i] =
+            neuron_weight_[layer_index + 1][out][source[i]] /
+            copy_count[source[i]];
+      }
+    }
+  } else {
+    auto initializer = ParamInitFactory::Create(new_param_init);
+    if (initializer == nullptr) {
+      err_msg_ = "[NeuralNetwork::WidenHiddenLayer] Invalid param init type";
+      return INVALID_DATA;
+    }
+    if (rand_seed_ != 0) {
+      initializer->set_seed(rand_seed_);
+    }
+    std::vector<std::vector<double>> initialized_bias(layer_num);
+    std::vector<std::vector<std::vector<double>>> initialized_weight(layer_num);
+    for (int i = 0; i < layer_num; i++) {
+      initialized_bias[i].assign(new_layer[i], 0.0);
+      if (i != 0) {
+        initialized_weight[i].assign(
+            new_layer[i], std::vector<double>(new_layer[i - 1], 0.0));
+      }
+    }
+    initializer->InitParam(initialized_weight, initialized_bias);
+    for (int i = old_width; i < new_width; i++) {
+      new_bias[layer_index][i] = initialized_bias[layer_index][i];
+      new_weight[layer_index][i] = initialized_weight[layer_index][i];
+      for (int out = 0; out < layer_[layer_index + 1]; out++) {
+        new_weight[layer_index + 1][out][i] =
+            mode == WIDEN_ZERO_OUTGOING
+                ? 0.0
+                : initialized_weight[layer_index + 1][out][i];
+      }
+    }
+  }
+
+  if (!optimizer_function_->ResetState(new_layer)) {
+    err_msg_ =
+        "[NeuralNetwork::WidenHiddenLayer] Optimizer cannot reset topology";
+    return INVALID_DATA;
+  }
+  layer_ = std::move(new_layer);
+  neuron_bias_ = std::move(new_bias);
+  neuron_weight_ = std::move(new_weight);
+  neuron_output_.assign(layer_num, {});
+  neuron_preact_.assign(layer_num, {});
+  neuron_delta_.assign(layer_num, {});
+  grad_bias_.assign(layer_num, {});
+  grad_weight_.assign(layer_num, {});
+  for (int i = 0; i < layer_num; i++) {
+    grad_bias_[i].assign(layer_[i], 0.0);
+    if (i != 0) {
+      grad_weight_[i].assign(
+          layer_[i], std::vector<double>(layer_[i - 1], 0.0));
+    }
+  }
+  batch_buffer_size_ = 0;
+  dropout_mask_.clear();
+  return SUCCESS;
+}
+
 NeuralNetwork::RC NeuralNetwork::Clone(const NeuralNetwork &old) {
   if (network_status_ != NETWORK_STATUS_UNINIT) {
     err_msg_ = "[NeuralNetwork::Clone] Network has init";

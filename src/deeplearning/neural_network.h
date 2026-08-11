@@ -26,6 +26,11 @@ public:
     NETWORK_STATUS_UNINIT,
     NETWORK_STATUS_INIT,
   };
+  enum HiddenLayerWidenMode {
+    WIDEN_RANDOM,
+    WIDEN_ZERO_OUTGOING,
+    WIDEN_NET2WIDER,
+  };
   struct NetworkParam {
     std::vector<int> layer_;
     std::vector<std::vector<double>> neuron_bias_;
@@ -71,6 +76,12 @@ public:
 
   RC ImportNetworkParam(const NetworkParam &param,
                         const NetworkOption &option);
+
+  // Expands one hidden layer while retaining all existing parameters. The
+  // optimizer state is reset because its tensors depend on the old shape.
+  RC WidenHiddenLayer(int layer_index, int new_width,
+                      HiddenLayerWidenMode mode,
+                      ParamInitType new_param_init = PARAM_INIT_HE);
 
   RC Clone(const NeuralNetwork &old);
 

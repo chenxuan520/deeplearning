@@ -21,6 +21,11 @@ public:
   // 默认为 no-op; Adam / AdamW 在此推进 step 计数, 以便 bias correction.
   virtual void BeforeStep() {}
 
+  // Rebuild shape-dependent optimizer state after the network topology changes.
+  // The default rejects expansion so a stateful custom optimizer cannot silently
+  // keep buffers with the old shape.
+  virtual bool ResetState(const std::vector<int> &) { return false; }
+
   // 计算单个参数的更新量, 返回值会从参数中扣除 (param -= return_value).
   // - delta: 平均梯度 (已经按 batch_size 取过平均)
   // - learning_rate: 当前学习率

@@ -23,6 +23,8 @@ public:
 
   OptimizerType GetOptimizerType() override;
 
+  bool ResetState(const std::vector<int> &layer) override;
+
   void set_decay(double v) { decay_ = v; }
   void set_epsilon(double v) { epsilon_ = v; }
   double decay() const { return decay_; }

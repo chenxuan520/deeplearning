@@ -92,6 +92,37 @@ void AddVector(std::vector<double> &target,
   }
 }
 
+bool CopyBlockParameters(const TransformerBlock &source,
+                         TransformerBlock &target) {
+  return target.self_attention().set_query_weight(
+             source.self_attention().query_weight()) == SelfAttention::SUCCESS &&
+         target.self_attention().set_key_weight(
+             source.self_attention().key_weight()) == SelfAttention::SUCCESS &&
+         target.self_attention().set_value_weight(
+             source.self_attention().value_weight()) == SelfAttention::SUCCESS &&
+         target.self_attention().set_output_weight(
+             source.self_attention().output_weight()) == SelfAttention::SUCCESS &&
+         target.attention_norm().set_scale(source.attention_norm().scale()) ==
+             LayerNorm::SUCCESS &&
+         target.attention_norm().set_bias(source.attention_norm().bias()) ==
+             LayerNorm::SUCCESS &&
+         target.set_feed_forward_weight_1(source.feed_forward_weight_1()) ==
+             TransformerBlock::SUCCESS &&
+         target.set_feed_forward_bias_1(source.feed_forward_bias_1()) ==
+             TransformerBlock::SUCCESS &&
+         target.set_feed_forward_weight_2(source.feed_forward_weight_2()) ==
+             TransformerBlock::SUCCESS &&
+         target.set_feed_forward_bias_2(source.feed_forward_bias_2()) ==
+             TransformerBlock::SUCCESS &&
+         target.feed_forward_norm().set_scale(
+             source.feed_forward_norm().scale()) == LayerNorm::SUCCESS &&
+         target.feed_forward_norm().set_bias(
+             source.feed_forward_norm().bias()) == LayerNorm::SUCCESS &&
+         target.set_depth_residual(source.depth_residual_scale(),
+                                   source.depth_residual_trainable()) ==
+             TransformerBlock::SUCCESS;
+}
+
 } // namespace
 
 MiniTransformerLM::RC MiniTransformerLM::Init(const Config &config) {
@@ -173,6 +204,111 @@ MiniTransformerLM::RC MiniTransformerLM::Init(int vocab_size, int model_dim,
   config.scale_embedding_ = scale_embedding_;
   config.block_learning_rate_scale_ = block_learning_rate_scale_;
   return Init(config);
+}
+
+MiniTransformerLM::RC MiniTransformerLM::ExpandVocabulary(
+    int new_vocab_size, const std::vector<int> &old_to_new_token_id) {
+  if (!is_init_) {
+    err_msg_ = "[MiniTransformerLM::ExpandVocabulary] MiniTransformerLM not init";
+    return NOT_INIT;
+  }
+  if (new_vocab_size <= vocab_size_ ||
+      old_to_new_token_id.size() != static_cast<size_t>(vocab_size_)) {
+    err_msg_ = "[MiniTransformerLM::ExpandVocabulary] Invalid expansion";
+    return INVALID_DATA;
+  }
+  std::vector<bool> used(new_vocab_size, false);
+  for (int new_id : old_to_new_token_id) {
+    if (new_id < 0 || new_id >= new_vocab_size || used[new_id]) {
+      err_msg_ = "[MiniTransformerLM::ExpandVocabulary] Invalid token mapping";
+      return INVALID_DATA;
+    }
+    used[new_id] = true;
+  }
+
+  Config new_config = config();
+  new_config.vocab_size_ = new_vocab_size;
+  MiniTransformerLM expanded;
+  if (expanded.Init(new_config) != SUCCESS) {
+    err_msg_ = expanded.err_msg();
+    return INVALID_DATA;
+  }
+  expanded.encoder_ = encoder_;
+  expanded.decoder_ = decoder_;
+  expanded.train_rng_ = train_rng_;
+  expanded.sample_rng_ = sample_rng_;
+  auto &expanded_embedding =
+      expanded.token_embedding_.mutable_embedding_table();
+  const auto &old_embedding = token_embedding_.embedding_table();
+  for (int old_id = 0; old_id < vocab_size_; old_id++) {
+    const int new_id = old_to_new_token_id[old_id];
+    expanded_embedding[new_id] = old_embedding[old_id];
+    expanded.output_weight_[new_id] = output_weight_[old_id];
+    expanded.output_bias_[new_id] = output_bias_[old_id];
+  }
+  *this = std::move(expanded);
+  return SUCCESS;
+}
+
+MiniTransformerLM::RC MiniTransformerLM::AppendBlock(AppendBlockMode mode,
+                                                       int copy_index) {
+  if (!is_init_) {
+    err_msg_ = "[MiniTransformerLM::AppendBlock] MiniTransformerLM not init";
+    return NOT_INIT;
+  }
+  if (mode != APPEND_COPY_LAST && mode != APPEND_COPY_INDEX &&
+      mode != APPEND_ZERO_RESIDUAL) {
+    err_msg_ = "[MiniTransformerLM::AppendBlock] Invalid mode";
+    return INVALID_DATA;
+  }
+  int source_index = copy_index;
+  if (mode == APPEND_COPY_LAST) {
+    source_index = block_num_ - 1;
+  }
+  if ((mode == APPEND_COPY_LAST || mode == APPEND_COPY_INDEX) &&
+      (source_index < 0 || source_index >= block_num_)) {
+    err_msg_ = "[MiniTransformerLM::AppendBlock] Invalid source block";
+    return INVALID_DATA;
+  }
+
+  TransformerBlock encoder_block;
+  encoder_block.set_random_seed(rand_seed_ + kEncoderSeedOffset + block_num_);
+  if (encoder_block.Init(model_dim_, head_num_, feed_forward_dim_) !=
+      TransformerBlock::SUCCESS) {
+    err_msg_ = encoder_block.err_msg();
+    return INVALID_DATA;
+  }
+  TransformerBlock decoder_block;
+  decoder_block.set_random_seed(rand_seed_ + kDecoderSeedOffset + block_num_);
+  if (decoder_block.Init(model_dim_, head_num_, feed_forward_dim_) !=
+      TransformerBlock::SUCCESS) {
+    err_msg_ = decoder_block.err_msg();
+    return INVALID_DATA;
+  }
+
+  if (mode == APPEND_ZERO_RESIDUAL) {
+    if (encoder_block.set_depth_residual(0.0, true) !=
+            TransformerBlock::SUCCESS ||
+        decoder_block.set_depth_residual(0.0, true) !=
+            TransformerBlock::SUCCESS) {
+      err_msg_ = "[MiniTransformerLM::AppendBlock] Set residual gate failed";
+      return INVALID_DATA;
+    }
+  } else if (!CopyBlockParameters(encoder_.blocks()[source_index],
+                                  encoder_block) ||
+             !CopyBlockParameters(decoder_.blocks()[source_index],
+                                  decoder_block)) {
+    err_msg_ = "[MiniTransformerLM::AppendBlock] Copy block failed";
+    return INVALID_DATA;
+  }
+
+  encoder_.blocks_.push_back(std::move(encoder_block));
+  decoder_.blocks_.push_back(std::move(decoder_block));
+  block_num_++;
+  encoder_.block_num_ = block_num_;
+  decoder_.block_num_ = block_num_;
+  ClearAccumulatedGradients();
+  return SUCCESS;
 }
 
 MiniTransformerLM::RC

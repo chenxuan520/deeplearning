@@ -18,4 +18,9 @@ double SGDOptimizer::CalcChangeValue(double delta, double learning_rate,
 
 OptimizerType SGDOptimizer::GetOptimizerType() { return OPTIMIZER_SGD; }
 
+bool SGDOptimizer::ResetState(const std::vector<int> &layer) {
+  layer_ = layer;
+  return true;
+}
+
 } // namespace deeplearning

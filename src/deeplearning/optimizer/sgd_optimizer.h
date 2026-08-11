@@ -12,6 +12,7 @@ public:
                          int weight_pos = -1,
                          double param_value = 0.0) override;
   OptimizerType GetOptimizerType() override;
+  bool ResetState(const std::vector<int> &layer) override;
 };
 
 } // namespace deeplearning

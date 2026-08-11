@@ -8,6 +8,11 @@ AdamOptimizer::AdamOptimizer(const std::vector<int> &layer, double beta1,
                              double beta2, double epsilon)
     : OptimizerFunction(layer), beta1_(beta1), beta2_(beta2),
       epsilon_(epsilon) {
+  ResetState(layer);
+}
+
+bool AdamOptimizer::ResetState(const std::vector<int> &layer) {
+  layer_ = layer;
   int L = (int)layer.size();
   bias_m_.assign(L, {});
   bias_v_.assign(L, {});
@@ -22,6 +27,10 @@ AdamOptimizer::AdamOptimizer(const std::vector<int> &layer, double beta1,
       weight_v_[i].assign(layer[i], std::vector<double>(layer[i - 1], 0.0));
     }
   }
+  step_ = 0;
+  bias_correction1_ = 1.0;
+  bias_correction2_ = 1.0;
+  return true;
 }
 
 void AdamOptimizer::BeforeStep() {

@@ -58,6 +58,8 @@
           <li id="g-norm" data-aliases="L2范数,L2 norm,全局范数,按范数缩放,按范数,向量长度"><strong>范数 norm</strong> — 向量“有多长”的一种度量;梯度裁剪里用的是 <strong>L2 范数</strong>‖<var>g</var>‖ = √(各分量平方之和),就像平面上箭头从原点到尖端的直线距离。「<strong>按范数缩放</strong>」= 把每个分量都乘<strong>同一个</strong>小于 1 的数,只把总长度拉回阈值、<strong>方向不变</strong>(和“每个分量单独砍上限”不同)。<a href="chapter-09.html#4-防止训练踩空-梯度裁剪">→ 第 9 章 §4</a></li>
           <li id="g-clip"><strong>梯度裁剪</strong> — 给梯度设上限,防止爆炸导致训练崩;序列模型常用<strong>按全局 L2 范数</strong>整体等比缩短(见<a href="glossary.html#g-norm">范数</a>)。<a href="chapter-09.html">→ 第 9 章</a></li>
           <li id="g-overfit"><strong>过拟合 / 欠拟合</strong> — 训练好测试差(背题) / 都差(没学会)。<a href="chapter-10.html">→ 第 10 章</a></li>
+          <li id="g-model-capacity" data-aliases="模型容量,capacity,宽度,深度"><strong>模型容量 model capacity</strong> — 模型能表达多复杂规律的本事,由宽度、深度和结构共同决定;是否不足要先排除训练故障,再用受控扩容实验确认。<a href="chapter-03.html#先判断-真是容量不够还是没训好">→ 第 3 章 §6</a></li>
+          <li id="g-net2net" data-aliases="函数保持扩容,function-preserving transformation,Net2WiderNet,Net2DeeperNet,模型扩容"><strong>函数保持扩容 / Net2Net</strong> — 扩宽或加深时显式映射旧参数,让新模型从近似相同的函数起步,再继续训练。<a href="chapter-03.html#扩容一定要从零训练吗">→ 第 3 章 §6</a></li>
           <li id="g-reg"><strong>正则化 regularization</strong> — 给学习加约束/干扰,逼模型别背训练集。<a href="chapter-10.html">→ 第 10 章</a></li>
           <li id="g-wd"><strong>weight decay(L2)</strong> — 惩罚过大权重,让模型更平滑克制。<a href="chapter-10.html">→ 第 10 章</a></li>
           <li id="g-dropout"><strong>Dropout</strong> — 训练时随机关掉部分神经元,逼网络别依赖个别单元。<a href="chapter-10.html#5-dropout-让神经元随机罢工">→ 第 10 章</a></li>

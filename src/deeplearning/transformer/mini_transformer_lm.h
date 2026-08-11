@@ -21,6 +21,11 @@ public:
     BACKBONE_ENCODER,
     BACKBONE_DECODER,
   };
+  enum AppendBlockMode {
+    APPEND_COPY_LAST,
+    APPEND_COPY_INDEX,
+    APPEND_ZERO_RESIDUAL,
+  };
 
   struct SamplingOption {
     double temperature_ = 1.0;
@@ -56,6 +61,10 @@ public:
   RC Init(const Config &config);
   RC Init(int vocab_size, int model_dim, int head_num, int feed_forward_dim,
           int block_num);
+  // old_to_new_token_id must contain one unique destination for every old id.
+  RC ExpandVocabulary(int new_vocab_size,
+                      const std::vector<int> &old_to_new_token_id);
+  RC AppendBlock(AppendBlockMode mode, int copy_index = -1);
   // use_causal_mask only applies to the encoder backbone; the decoder backbone
   // is always causal and ignores this flag.
   RC Forward(const std::vector<int> &token_ids, Matrix &logits,

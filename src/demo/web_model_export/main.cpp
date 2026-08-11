@@ -396,6 +396,9 @@ void WriteBlockJson(ostream &ofs, const TransformerBlock &block, int indent) {
   WriteIndent(ofs, indent);
   ofs << "{\n";
   WriteIndent(ofs, indent + 2);
+  ofs << "\"depthResidualScale\": " << std::setprecision(17)
+      << block.depth_residual_scale() << ",\n";
+  WriteIndent(ofs, indent + 2);
   ofs << "\"attention\": {\n";
   WriteIndent(ofs, indent + 4);
   ofs << "\"queryWeight\": ";

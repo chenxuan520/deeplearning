@@ -406,7 +406,7 @@ for (int l = 1; l &lt; L; l++) {
               <tr><th>容量(层数×宽度)</th><th>会发生什么</th><th>在数据上的表现</th><th>怎么办</th></tr>
             </thead>
             <tbody>
-              <tr><td>太小</td><td>表达力不够,规律抓不住</td><td>训练集、验证集<strong>都差</strong>(欠拟合)</td><td>加宽 / 加层,或训练久一点</td></tr>
+              <tr><td>太小</td><td>表达力不够,规律抓不住</td><td>训练集、验证集<strong>都差</strong>(欠拟合)</td><td>先排除没训够和训练故障,再做扩容 A/B</td></tr>
               <tr><td>刚好</td><td>抓住了真规律,没背噪声</td><td>两者都不错、差距小</td><td>就停在这</td></tr>
               <tr><td>太大</td><td>把训练集噪声也背下来</td><td>训练<strong>很好</strong>、验证<strong>拉垮</strong>(过拟合),还更难训更贵</td><td>减容量,或加正则</td></tr>
             </tbody>
@@ -440,8 +440,97 @@ for (int l = 1; l &lt; L; l++) {
         <ol>
           <li><strong>先抄。</strong> 找同类任务里公认好用的结构直接拿来改,别从零硬猜——这是最省事也最靠谱的起点。</li>
           <li><strong>从小往大加。</strong> 先用一个小网络跑通,再逐步加层 / 加宽,<strong>盯着验证集</strong>看收益还在不在,涨不动了就停。用哪一版,由验证集说了算(<a class="xref" href="chapter-11.html#1-三个数据集-学调考">第 11 章</a>讲的正是「拿验证集选超参数」)。</li>
-          <li><strong>照着症状调。</strong> 训练集都学不好 → 加容量;训练好、验证差 → 减容量或加正则。对着上面那张表来回试。</li>
+          <li><strong>照着症状调。</strong> 训练集都学不好只是“可能容量不足”,还要先排除没训够、优化失败和正则过强;训练好、验证差才该优先减容量或加正则。</li>
         </ol>
+
+        <h3>先判断:真是容量不够,还是没训好?</h3>
+        <p>
+          “训练集和验证集都差”只是<strong>容量不足的线索,不是证明</strong>。学习率不合适、训练时间不够、梯度传不动、
+          Dropout / weight decay 太强,甚至数据与标签错位,都能画出一副很像欠拟合的曲线。没排除这些问题就扩模型,
+          往往只是把一辆没点着火的车换成更重的车。
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">黄金第一步:先让它背下 10 条样本</span>
+          <p>
+            拿 10 条左右样本反复训练,暂时关小正则,看损失能否压到很低。如果连这一小撮都背不下来,
+            先查数据、损失、激活、初始化、学习率和反向传播,不要急着扩容。完整排查顺序见
+            <a class="xref" href="chapter-11.html#6-训练不动一份排查清单">第 11 章的训练清单</a>。
+          </p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>看到的现象</th><th>更可能是什么</th><th>下一步</th></tr></thead>
+            <tbody>
+              <tr><td>10 条样本都背不下来</td><td>管道或优化有故障</td><td>先修训练,不扩</td></tr>
+              <tr><td>训练预算结束时损失仍明显下降</td><td>还没训够或调度不合适</td><td>延长训练 / 调学习率</td></tr>
+              <tr><td>减弱正则后训练集明显变好</td><td>约束太强</td><td>先调正则</td></tr>
+              <tr><td>训练好、验证差</td><td><a class="xref" href="chapter-10.html#2-过拟合-vs-欠拟合">过拟合</a></td><td>数据、正则、early stop,通常不扩</td></tr>
+              <tr><td>小样本正常、优化稳定,训练和验证仍一起卡住</td><td>容量不足的强候选</td><td>做一次受控扩容 A/B</td></tr>
+              <tr><td>大模型只改善训练,验证不动或更差</td><td>只增加了记忆能力</td><td>撤回扩容</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">最有力的证据不是“看起来像”,而是<strong>只改变模型容量</strong>后,训练和验证指标都稳定改善。</p>
+        </div>
+        <p>
+          真正做 A/B 时,固定训练/验证划分、数据处理、训练步数和主要超参数,一次只把某层放大约 1.5～2 倍或只加一层;
+          同时记录验证指标、参数量、延迟和内存,最好换几个随机种子再比较。收益抵不过部署成本,也不该扩。
+        </p>
+
+        <h3>确定要扩:先加宽,还是加深?</h3>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>选择</th><th>更适合什么时候</th><th>主要代价</th></tr></thead>
+            <tbody>
+              <tr><td><strong>加宽</strong></td><td>网络还不深、某层像瓶颈、希望小步扩容并容易复用旧权重</td><td>相邻两边的矩阵都变大,计算和内存增加</td></tr>
+              <tr><td><strong>加深</strong></td><td>任务需要逐级组合特征,继续加宽已收益递减,且已有残差/归一化保证可训练</td><td>梯度路径和串行计算变长,激活更占内存</td></tr>
+              <tr><td><strong>换结构</strong></td><td>真正瓶颈是归纳偏置:图像还在硬用 MLP、长序列没用注意力</td><td>迁移最复杂,但常比盲目放大收益更大</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          对普通 MLP,不确定时可先适度加宽。把宽度 <var>h</var> 增加 <var>Δh</var>,新增参数约为
+          <code>Δh × (上一层宽度 + 下一层宽度 + 1)</code>:新神经元要接收上一层、带一个偏置,还要连向下一层。
+          CNN 的“加宽”通常是加通道;Transformer 的 <code>model_dim</code> 牵动大量 <var>d×d</var> 矩阵,成本近似按 <var>d²</var> 涨,
+          而加 Block 的参数量大致随层数线性涨。固定 <code>model_dim</code> 只增加 head 数,往往只是把同一条向量切得更细,不等于总容量一定变大。
+        </p>
+
+        <h3>扩容一定要从零训练吗?</h3>
+        <p>
+          不一定。结构完全没变时,直接加载 checkpoint 续训即可;结构改变后,旧参数形状不能原样塞进去,
+          但可以做<strong>显式参数迁移</strong>。更进一步,有些迁移能让新模型在扩容瞬间算出几乎相同的结果,
+          这叫<span class="term">函数保持扩容(function-preserving transformation)</span>。
+        </p>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">加宽时复制一个神经元,别把它的声音放大两倍</span>
+          <p>
+            假设某隐藏神经元输出是 <var>a</var>,连向下一层的权重是 <var>v</var>。复制它的输入权重和偏置后,
+            两个神经元都会输出 <var>a</var>;再把原输出权重平分成 <var>v</var>/2 和 <var>v</var>/2:
+          </p>
+          <div class="mathblock">(<var>v</var>/2)·<var>a</var> + (<var>v</var>/2)·<var>a</var> = <var>v</var>·<var>a</var></div>
+          <p>模型的函数没变,却多了以后可以分化学习的参数。这类经典思路常称为 <strong>Net2WiderNet</strong>。</p>
+        </div>
+        <p>
+          另一种加宽办法是随机初始化新神经元,但把它们通向下一层的权重先设为 0。此时旧输出不受影响;
+          第一步先学会“用不用新神经元”,后续再调整它们的输入权重。加深时则可插入恒等层,或让新增残差块从
+          <code>x + 0 = x</code> 开始。注意 sigmoid/tanh、LayerNorm、注意力和位置编码都会让“恒等初始化”变复杂,
+          不能对任意网络机械地复制左上角参数。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">本仓库现在怎样做?</span>
+          <p>
+            MLP 的 <code>WidenHiddenLayer</code> 支持随机新增、零输出连接和 <code>WIDEN_NET2WIDER</code>;
+            <code>MiniTransformerLM::ExpandVocabulary</code> 可按 token id 映射保留 embedding 与输出头,
+            <code>AppendBlock(APPEND_ZERO_RESIDUAL)</code> 则追加一个初始不改变输出、再逐步学开的 Block。
+            扩词表能保持旧 token 对应的 <strong>logit</strong>,但 softmax 多了新候选项,旧概率不一定完全相同。
+          </p>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">扩容后的四条纪律</span>
+          <p>
+            先保留旧 checkpoint;更新参数前用固定 batch 比较新旧 logits;形状变化的优化器状态要正确迁移或明确重置;
+            再用较小学习率 / 短 warmup 续训。函数保持只保证<strong>扩容起点不突然退步</strong>,不保证更大的模型最后一定更好。
+          </p>
+        </div>
 
         <div class="callout callout--tip reveal">
           <span class="callout__title">比纠结层数更重要的一件事:选对结构</span>
@@ -460,7 +549,7 @@ for (int l = 1; l &lt; L; l++) {
             <li>拿具体数字走一遍就一清二楚:输入逐层做“加权求和 + tanh”,数字从左流到右,最后一层的输出就是预测。</li>
             <li>参数存成 <code>neuron_weight_[层][本层第几个][上层第几个]</code> 和 <code>neuron_bias_[层][第几个]</code>。</li>
             <li>前向时顺手保存了每层的净输入 <var>z</var>(<code>neuron_preact_</code>),为反向传播做准备。</li>
-            <li>层数×宽度决定网络的<strong>容量</strong>:太小欠拟合、太大过拟合,要对着验证集「刚好够用」;选对结构往往比盲目堆层更管用。</li>
+            <li>层数×宽度决定网络的<strong>容量</strong>:先排除训练故障,再用受控 A/B 判断是否真该扩;函数保持迁移能复用旧参数,但扩容后仍要重新验证收益。</li>
           </ul>
         </section>
 
@@ -494,6 +583,12 @@ for (int l = 1; l &lt; L; l++) {
             <summary class="quiz__q">问题 5:MNIST 用的 <code>784 → 128 → 64 → 10</code> 里,哪些数字是你能改的?128、64 换成 100、50 会怎样?</summary>
             <div class="quiz__a">
               <p>两头改不了:输入 <strong>784</strong> 是 28×28 像素定死的,输出 <strong>10</strong> 是 10 个类别定死的。你能调的只有中间两层的宽度 <strong>128、64</strong>(以及要不要加/减一层)。换成 100、50 通常差别很小——它们是“差不多这个量级”的经验值,不是唯一正确解;真要定用哪版,看<a class="xref" href="chapter-11.html#1-三个数据集-学调考">验证集</a>表现。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 6:训练集和验证集都很差,为什么不能马上断定“模型太小”并扩容?</summary>
+            <div class="quiz__a">
+              <p>因为没训够、学习率或初始化不合适、梯度故障、正则太强、数据/标签错误都会制造相似现象。先确认模型能过拟合一小撮样本,再排除训练尚未收敛和正则问题;最后固定其他条件做一次扩容 A/B,只有更大模型让训练与验证都稳定改善,容量不足的判断才更可信。</p>
             </div>
           </details>
         </div>

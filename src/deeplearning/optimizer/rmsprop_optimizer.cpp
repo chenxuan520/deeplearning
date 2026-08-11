@@ -7,6 +7,11 @@ namespace deeplearning {
 RMSPropOptimizer::RMSPropOptimizer(const std::vector<int> &layer, double decay,
                                    double epsilon)
     : OptimizerFunction(layer), decay_(decay), epsilon_(epsilon) {
+  ResetState(layer);
+}
+
+bool RMSPropOptimizer::ResetState(const std::vector<int> &layer) {
+  layer_ = layer;
   int L = (int)layer.size();
   bias_v_.assign(L, {});
   weight_v_.assign(L, {});
@@ -16,6 +21,7 @@ RMSPropOptimizer::RMSPropOptimizer(const std::vector<int> &layer, double decay,
       weight_v_[i].assign(layer[i], std::vector<double>(layer[i - 1], 0.0));
     }
   }
+  return true;
 }
 
 double RMSPropOptimizer::CalcChangeValue(double delta, double learning_rate,
