@@ -51,13 +51,13 @@ jobs:
           retry sudo apt-get install -y build-essential cmake wget
 
       - name: Restore MNIST demo model cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: src/demo/mnist/mnist/demo.v2.param
           key: ${{ runner.os }}-dl-book-mnist-demo-v2-param-v1
 
       - name: Restore TicTacToe demo asset cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: docs/dl-book/assets/demos/tictactoe/q_table.json
           key: ${{ runner.os }}-dl-book-tictactoe-q-table-v2
