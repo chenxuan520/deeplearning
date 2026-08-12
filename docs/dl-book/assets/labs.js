@@ -4,7 +4,7 @@
  * 本脚本会自动往里塞入完整结构并接好交互逻辑。
  * 支持的 data-lab: neuron | propagation | attention | multihead | real-attention
  *   | activation-curve | gradient-descent | optimizer-race | corpus-clean
- *   | mnist-demo | tictactoe-demo
+ *   | mnist-demo | tictactoe-demo | sanguo-mini-lm
  * 迁移自 docs/attention-guide/script.js, 改为容器作用域 (各组件互不干扰)。
  */
 (function () {
@@ -1619,6 +1619,21 @@
       });
   }
 
+  /* ===================== 三国演义迷你 LM(第 24 章) ===================== */
+
+  function initSanguoMiniLm(root) {
+    var url = "https://minilm.011203.xyz/";
+    root.innerHTML =
+      '<div class="lab lab--demo">' +
+      '  <div class="demo-toolbar">' +
+      '    <span class="sanguo-lm__hint">内嵌的是部署在 Cloudflare Workers 上的同款演示页面(推理在你的浏览器里进行;首次加载约 7MB 权重)。</span>' +
+      '    <a class="button" href="' + url + '" target="_blank" rel="noopener">新窗口打开 ↗</a>' +
+      "  </div>" +
+      '  <iframe class="sanguo-lm__frame" src="' + url + '"' +
+      '    title="三国演义迷你语言模型在线演示" loading="lazy"></iframe>' +
+      "</div>";
+  }
+
   /* ===================== 优化器赛跑(第 8 章) ===================== */
   var OPT_TPL =
     '<div class="lab">' +
@@ -1930,7 +1945,8 @@
     "optimizer-race": initOptimizerRace,
     "corpus-clean": initCorpusClean,
     "mnist-demo": initMnistDemo,
-    "tictactoe-demo": initTictactoeDemo
+    "tictactoe-demo": initTictactoeDemo,
+    "sanguo-mini-lm": initSanguoMiniLm
   };
 
   function mountAll() {
