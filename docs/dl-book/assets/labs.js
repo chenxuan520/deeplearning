@@ -1620,18 +1620,356 @@
   }
 
   /* ===================== 三国演义迷你 LM(第 24 章) ===================== */
+  /* 与 mnist-demo / tictactoe-demo 同款原生实验台。
+     推理优先走 Cloudflare 上的 OpenAI 兼容接口(流式 SSE);失败时降级为
+     浏览器本地推理(从同一部署拉 manifest.json + weights.bin ~7.3MB)。 */
+
+  var SANGUO_TPL =
+    '<div class="lab lab--demo">' +
+    '  <div class="lab__controls lab__controls--demo">' +
+    '    <div class="demo-toolbar">' +
+    '      <label>字数 <input type="number" min="1" max="240" value="60" data-sanguo="num" /></label>' +
+    '      <label>温度 <input type="number" min="0.1" max="2" step="0.1" value="0.8" data-sanguo="temperature" /></label>' +
+    '      <label>top-k <input type="number" min="0" max="50" value="10" data-sanguo="topk" /></label>' +
+    '      <label class="sanguo-lm__check"><input type="checkbox" data-sanguo="greedy" /> 贪心</label>' +
+    '      <button type="button" class="button button--primary" data-sanguo-act="go">生成</button>' +
+    '      <button type="button" class="button button--ghost" data-sanguo-act="stop" disabled>停止</button>' +
+    '      <a class="button button--ghost" href="https://minilm.011203.xyz" target="_blank" rel="noopener">独立页面 ↗</a>' +
+    '    </div>' +
+    '    <p class="explain" data-sanguo-status>输入开头点生成;在线推理失败时会改为本机加载权重计算。</p>' +
+    '  </div>' +
+    '  <div class="lab__viz lab__viz--demo-grid">' +
+    '    <div class="formula-card">' +
+    '      <h3>开头(prompt)</h3>' +
+    '      <textarea class="sanguo-lm__prompt" data-sanguo="prompt" rows="3">却说曹操</textarea>' +
+    '      <p class="explain">建议“话说天下大势”“孔明曰”这类三国味儿开头;词表只含汉字与逗号句号。</p>' +
+    '    </div>' +
+    '    <div class="formula-card">' +
+    '      <h3>模型续写</h3>' +
+    '      <div class="sanguo-lm__output" data-sanguo-output><span class="sanguo-lm__placeholder">(生成结果逐字显示在这里)</span></div>' +
+    '      <p class="explain" data-sanguo-meta></p>' +
+    '    </div>' +
+    '  </div>' +
+    '</div>';
 
   function initSanguoMiniLm(root) {
-    var url = "https://minilm.011203.xyz/";
-    root.innerHTML =
-      '<div class="lab lab--demo">' +
-      '  <div class="demo-toolbar">' +
-      '    <span class="sanguo-lm__hint">内嵌的是部署在 Cloudflare Workers 上的同款演示页面(推理在你的浏览器里进行;首次加载约 7MB 权重)。</span>' +
-      '    <a class="button" href="' + url + '" target="_blank" rel="noopener">新窗口打开 ↗</a>' +
-      "  </div>" +
-      '  <iframe class="sanguo-lm__frame" src="' + url + '"' +
-      '    title="三国演义迷你语言模型在线演示" loading="lazy"></iframe>' +
-      "</div>";
+    root.innerHTML = SANGUO_TPL;
+
+    var API = "https://minilm.011203.xyz";
+    var ui = {
+      prompt: root.querySelector('[data-sanguo="prompt"]'),
+      num: root.querySelector('[data-sanguo="num"]'),
+      temperature: root.querySelector('[data-sanguo="temperature"]'),
+      topk: root.querySelector('[data-sanguo="topk"]'),
+      greedy: root.querySelector('[data-sanguo="greedy"]'),
+      go: root.querySelector('[data-sanguo-act="go"]'),
+      stop: root.querySelector('[data-sanguo-act="stop"]'),
+      status: root.querySelector("[data-sanguo-status]"),
+      out: root.querySelector("[data-sanguo-output]"),
+      meta: root.querySelector("[data-sanguo-meta]")
+    };
+    var abort = null;       // AbortController(在线流)/旗标(本地)
+    var localModel = null;  // 降级路径的懒加载模型
+
+    function setBusy(busy) {
+      ui.go.disabled = busy;
+      ui.stop.disabled = !busy;
+    }
+    function appendText(text) {
+      var ph = ui.out.querySelector(".sanguo-lm__placeholder");
+      if (ph) ph.remove();
+      ui.out.appendChild(document.createTextNode(text));
+    }
+    function clampNum() {
+      var n = parseInt(ui.num.value, 10);
+      if (!(n >= 1)) n = 60;
+      return Math.min(Math.max(1, n), 240);
+    }
+
+    /* ---- 路径一:CF 接口流式推理 ---- */
+    function tryApiGenerate(done) {
+      var body = {
+        model: "sanguo-mini-lm",
+        messages: [{ role: "user", content: ui.prompt.value }],
+        max_tokens: clampNum(),
+        stream: true
+      };
+      if (!ui.greedy.checked) {
+        body.temperature = parseFloat(ui.temperature.value) || 0.8;
+        var tk = parseInt(ui.topk.value, 10);
+        if (tk > 0) body.topK = tk;
+      } else {
+        body.temperature = 0;
+      }
+      abort = new AbortController();
+      ui.status.textContent = "在线推理中(Cloudflare Workers)…";
+      fetch(API + "/v1/chat/completions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+        signal: abort.signal
+      }).then(function (resp) {
+        if (!resp.ok || !resp.body) throw new Error("HTTP " + resp.status);
+        var reader = resp.body.getReader();
+        var decoder = new TextDecoder();
+        var buf = "";
+        function pump() {
+          return reader.read().then(function (r) {
+            if (r.done) return true;
+            buf += decoder.decode(r.value, { stream: true });
+            var parts = buf.split("\n\n");
+            buf = parts.pop();
+            for (var i = 0; i < parts.length; i++) {
+              var line = parts[i].trim();
+              if (line.indexOf("data: ") !== 0) continue;
+              var payload = line.slice(6);
+              if (payload === "[DONE]") continue;
+              try {
+                var chunk = JSON.parse(payload);
+                var piece = chunk.choices && chunk.choices[0] &&
+                            chunk.choices[0].delta && chunk.choices[0].delta.content;
+                if (piece) appendText(piece);
+              } catch (e) { /* 半包等下轮拼齐再解析,忽略 */ }
+            }
+            return pump();
+          });
+        }
+        return pump();
+      }).then(function () {
+        ui.status.textContent = "完成(在线推理)。";
+        done(true);
+      }).catch(function (err) {
+        if (err && err.name === "AbortError") {
+          ui.status.textContent = "已手动停止。";
+          done(true);
+          return;
+        }
+        ui.status.textContent =
+          "在线推理失败(" + (err && err.message || err) + "),改为你浏览器本地推理:首次需下载 7.3MB 权重…";
+        localGenerate(done);
+      });
+    }
+
+    /* ---- 路径二:浏览器本地推理(懒加载权重) ---- */
+    function loadLocal(progress) {
+      if (localModel) return Promise.resolve(localModel);
+      return Promise.all([
+        fetch(API + "/manifest.json").then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.json();
+        }),
+        fetch(API + "/weights.bin").then(function (r) {
+          if (!r.ok || !r.body) throw new Error("HTTP " + r.status);
+          var total = +r.headers.get("content-length") || 0;
+          var reader = r.body.getReader();
+          var chunks = [], got = 0;
+          function pump() {
+            return reader.read().then(function (rd) {
+              if (rd.done) return;
+              chunks.push(rd.value);
+              got += rd.value.length;
+              if (total) progress(got / total);
+              return pump();
+            });
+          }
+          return pump().then(function () {
+            var buf = new Uint8Array(got);
+            var off = 0;
+            for (var i = 0; i < chunks.length; i++) { buf.set(chunks[i], off); off += chunks[i].length; }
+            return buf.buffer;
+          });
+        })
+      ]).then(function (rs) {
+        var manifest = rs[0];
+        var all = new Float32Array(rs[1]);
+        var tensors = {};
+        manifest.entries.forEach(function (e) {
+          tensors[e.name] = all.subarray(e.offset, e.offset + e.size);
+        });
+        var charToId = new Map();
+        manifest.vocabulary.forEach(function (ch, i) { charToId.set(ch, i); });
+        localModel = { cfg: manifest.config, vocab: manifest.vocabulary, charToId: charToId, t: tensors };
+        return localModel;
+      });
+    }
+
+    function lnRow(x, out, s, b, eps) {
+      var dim = x.length, mean = 0, i;
+      for (i = 0; i < dim; i++) mean += x[i];
+      mean /= dim;
+      var variance = 0;
+      for (i = 0; i < dim; i++) { var d = x[i] - mean; variance += d * d; }
+      variance /= dim;
+      var denom = Math.sqrt(variance + eps);
+      for (i = 0; i < dim; i++) out[i] = ((x[i] - mean) / denom) * s[i] + b[i];
+    }
+    function matvec(out, w, x, bias) {
+      var dim = x.length, rows = out.length;
+      for (var o = 0; o < rows; o++) {
+        var acc = bias[o], base = o * dim;
+        for (var i = 0; i < dim; i++) acc += w[base + i] * x[i];
+        out[o] = acc;
+      }
+    }
+    function forwardLocal(model, ids) {
+      var cfg = model.cfg, t = model.t;
+      var D = cfg.modelDim, H = cfg.headNum, HD = D / H, CTX = cfg.maxContextSize;
+      if (ids.length > CTX) ids = ids.slice(ids.length - CTX);
+      var n = ids.length, sqrtD = Math.sqrt(D), pos, i;
+      var x = new Float32Array(n * D);
+      for (pos = 0; pos < n; pos++) {
+        var eBase = ids[pos] * D;
+        for (i = 0; i < D; i++) {
+          var val = t.embedding[eBase + i] * sqrtD;
+          if (cfg.usePositionalEncoding) {
+            var angle = pos / Math.pow(10000, (i - (i % 2)) / D);
+            val += (i % 2 === 0) ? Math.sin(angle) : Math.cos(angle);
+          }
+          x[pos * D + i] = val;
+        }
+      }
+      var q = new Float32Array(n * D), k = new Float32Array(n * D),
+          v = new Float32Array(n * D), att = new Float32Array(n * D),
+          attnOut = new Float32Array(n * D), r1 = new Float32Array(n * D),
+          n1 = new Float32Array(n * D), ff1 = new Float32Array(cfg.feedForwardDim),
+          xo = new Float32Array(D), noBiasD = new Float32Array(D),
+          scores = new Float32Array(n);
+      for (var blk = 0; blk < cfg.blockNum; blk++) {
+        var Wq = t["b" + blk + ".q"], Wk = t["b" + blk + ".k"],
+            Wv = t["b" + blk + ".v"], Wo = t["b" + blk + ".o"];
+        for (var p = 0; p < n; p++) {
+          var row = x.subarray(p * D, (p + 1) * D);
+          matvec(q.subarray(p * D, (p + 1) * D), Wq, row, noBiasD);
+          matvec(k.subarray(p * D, (p + 1) * D), Wk, row, noBiasD);
+          matvec(v.subarray(p * D, (p + 1) * D), Wv, row, noBiasD);
+        }
+        att.fill(0);
+        var invSqrtHD = 1 / Math.sqrt(HD);
+        for (var h = 0; h < H; h++) {
+          var hs = h * HD;
+          for (var r = 0; r < n; r++) {
+            var maxScore = -Infinity, col;
+            for (col = 0; col <= r; col++) {
+              var dot = 0;
+              for (i = 0; i < HD; i++) dot += q[r * D + hs + i] * k[col * D + hs + i];
+              scores[col] = dot * invSqrtHD;
+              if (scores[col] > maxScore) maxScore = scores[col];
+            }
+            var sum = 0;
+            for (col = 0; col <= r; col++) { scores[col] = Math.exp(scores[col] - maxScore); sum += scores[col]; }
+            for (col = 0; col <= r; col++) {
+              var wgt = scores[col] / sum;
+              for (i = 0; i < HD; i++) att[r * D + hs + i] += wgt * v[col * D + hs + i];
+            }
+          }
+        }
+        for (p = 0; p < n; p++) {
+          matvec(attnOut.subarray(p * D, (p + 1) * D), Wo, att.subarray(p * D, (p + 1) * D), noBiasD);
+        }
+        for (i = 0; i < n * D; i++) r1[i] = x[i] + attnOut[i];
+        var n1s = t["b" + blk + ".n1s"], n1b = t["b" + blk + ".n1b"],
+            n2s = t["b" + blk + ".n2s"], n2b = t["b" + blk + ".n2b"],
+            W1 = t["b" + blk + ".w1"], B1 = t["b" + blk + ".b1"],
+            W2 = t["b" + blk + ".w2"], B2 = t["b" + blk + ".b2"];
+        for (p = 0; p < n; p++) {
+          var n1row = n1.subarray(p * D, (p + 1) * D);
+          lnRow(r1.subarray(p * D, (p + 1) * D), n1row, n1s, n1b, 1e-6);
+          matvec(ff1, W1, n1row, B1);
+          for (i = 0; i < ff1.length; i++) if (ff1[i] < 0) ff1[i] = 0;
+          matvec(xo, W2, ff1, B2);
+          var xRow = p * D;
+          for (i = 0; i < D; i++) x[xRow + i] = n1row[i] + xo[i];
+          lnRow(x.subarray(xRow, xRow + D), x.subarray(xRow, xRow + D), n2s, n2b, 1e-6);
+        }
+      }
+      var last = x.subarray((n - 1) * D, n * D);
+      var V = cfg.vocabSize;
+      var logits = new Float32Array(V);
+      for (var o = 0; o < V; o++) {
+        var acc2 = t.outputBias[o], base2 = o * D;
+        for (i = 0; i < D; i++) acc2 += t.outputWeight[base2 + i] * last[i];
+        logits[o] = acc2;
+      }
+      return logits;
+    }
+    function greedyLocal(logits) {
+      var best = 0;
+      for (var i = 1; i < logits.length; i++) if (logits[i] > logits[best]) best = i;
+      return best;
+    }
+    function sampleLocal(logits, temperature, topK) {
+      var V = logits.length;
+      var probs = new Float64Array(V), max = -Infinity, i;
+      for (i = 0; i < V; i++) { probs[i] = logits[i] / temperature; if (probs[i] > max) max = probs[i]; }
+      var sum = 0;
+      for (i = 0; i < V; i++) { probs[i] = Math.exp(probs[i] - max); sum += probs[i]; }
+      for (i = 0; i < V; i++) probs[i] /= sum;
+      var order = [];
+      for (i = 0; i < V; i++) order.push(i);
+      order.sort(function (a, b) { return probs[b] - probs[a]; });
+      var keep = (topK > 0 && topK < V) ? topK : V;
+      var fsum = 0;
+      for (i = 0; i < keep; i++) fsum += probs[order[i]];
+      var rng = Math.random() * fsum;
+      for (i = 0; i < keep; i++) { rng -= probs[order[i]]; if (rng <= 0) return order[i]; }
+      return order[0];
+    }
+    function encodeLocal(model, text) {
+      var ids = [];
+      for (var i = 0; i < text.length; i++) {
+        var id = model.charToId.get(text[i]);
+        if (id !== undefined) ids.push(id);
+      }
+      return ids;
+    }
+
+    function localGenerate(done) {
+      loadLocal(function (p) {
+        ui.status.textContent = "权重下载中 " + Math.round(p * 100) + "%…";
+      }).then(function (model) {
+        ui.status.textContent = "本地推理中(约 0.2-0.6 秒/字)…";
+        var cur = encodeLocal(model, ui.prompt.value);
+        if (cur.length === 0) {
+          ui.status.textContent = "开头里没有词表内的字(模型只识汉字与逗号句号)。";
+          done(true);
+          return;
+        }
+        var total = clampNum();
+        var greedy = ui.greedy.checked;
+        var temperature = parseFloat(ui.temperature.value) || 0.8;
+        var topk = parseInt(ui.topk.value, 10) || 0;
+        abort = { aborted: false };
+        var i = 0;
+        function step() {
+          if (abort.aborted) { ui.status.textContent = "已手动停止。"; done(true); return; }
+          if (i >= total) { ui.status.textContent = "完成(浏览器本地推理)。"; done(true); return; }
+          var logits = forwardLocal(model, cur);
+          var next = greedy ? greedyLocal(logits) : sampleLocal(logits, temperature, topk);
+          cur.push(next);
+          appendText(model.vocab[next]);
+          i++;
+          setTimeout(step, 0);
+        }
+        step();
+      }).catch(function (err) {
+        ui.status.textContent = "本地推理资源加载失败:" + (err && err.message || err) +
+          "。可打开独立页面重试。";
+        done(false);
+      });
+    }
+
+    ui.go.addEventListener("click", function () {
+      if (!ui.prompt.value.trim()) { ui.status.textContent = "先写个开头。"; return; }
+      ui.out.innerHTML = '<span class="sanguo-lm__placeholder"></span>';
+      ui.out.firstChild.remove();
+      ui.meta.textContent = "";
+      setBusy(true);
+      tryApiGenerate(function () { setBusy(false); abort = null; });
+    });
+    ui.stop.addEventListener("click", function () {
+      if (abort && abort.abort) abort.abort();         // fetch 流
+      else if (abort) abort.aborted = true;            // 本地循环
+    });
   }
 
   /* ===================== 优化器赛跑(第 8 章) ===================== */
