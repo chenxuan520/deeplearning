@@ -37,8 +37,8 @@
         <p>
           任务是语言模型最经典的那个:<strong>给一个开头,接着往下写</strong>(<a class="xref" href="chapter-19.html">第 19 章</a>)。
           只不过这次喂给模型的不是 <code>"abcabc..."</code> 玩具语料,而是《三國志演義》全本 57 万字。
-          老规矩,先玩再看代码——下面这个实验台直接接上训练成果:<strong>优先走在线接口推理</strong>(流式输出),
-          接口不灵时自动<strong>降级为你浏览器本地加载权重(约 7MB)推理</strong>。两条路径用的是同一个模型:
+          老规矩,先玩再看代码——下面这个实验台直接接上训练成果:页面一打开就在<strong>后台下载模型权重(约 7MB)</strong>,
+          下完之前先用在线接口顶着,下完就<strong>完全在你浏览器本地推理</strong>,不再依赖任何服务器:
         </p>
         <div class="figure reveal">
           <div data-lab="sanguo-mini-lm"></div>

@@ -1628,7 +1628,7 @@
     '<div class="lab lab--demo">' +
     '  <div class="lab__controls lab__controls--demo">' +
     '    <div class="demo-toolbar">' +
-    '      <label>字数 <input type="number" min="1" max="240" value="60" data-sanguo="num" /></label>' +
+    '      <label>字数 <input type="number" min="1" max="500" value="60" data-sanguo="num" /></label>' +
     '      <label>温度 <input type="number" min="0.1" max="2" step="0.1" value="0.8" data-sanguo="temperature" /></label>' +
     '      <label>top-k <input type="number" min="0" max="50" value="10" data-sanguo="topk" /></label>' +
     '      <label class="sanguo-lm__check"><input type="checkbox" data-sanguo="greedy" /> 贪心</label>' +
@@ -1636,7 +1636,7 @@
     '      <button type="button" class="button button--ghost" data-sanguo-act="stop" disabled>停止</button>' +
     '      <a class="button button--ghost" href="https://minilm.011203.xyz" target="_blank" rel="noopener">独立页面 ↗</a>' +
     '    </div>' +
-    '    <p class="explain" data-sanguo-status>输入开头点生成;在线推理失败时会改为本机加载权重计算。</p>' +
+    '    <p class="explain" data-sanguo-status>输入开头点生成;首次生成会下载约 7MB 权重,之后留在你浏览器里本地计算。</p>' +
     '  </div>' +
     '  <div class="lab__viz lab__viz--demo-grid">' +
     '    <div class="formula-card">' +
@@ -1669,7 +1669,8 @@
       meta: root.querySelector("[data-sanguo-meta]")
     };
     var abort = null;       // AbortController(在线流)/旗标(本地)
-    var localModel = null;  // 降级路径的懒加载模型
+    var localModel = null;  // 本地推理的懒加载模型
+    var loadingPromise = null;
 
     function setBusy(busy) {
       ui.go.disabled = busy;
@@ -1683,7 +1684,11 @@
     function clampNum() {
       var n = parseInt(ui.num.value, 10);
       if (!(n >= 1)) n = 60;
-      return Math.min(Math.max(1, n), 240);
+      if (n > 500) {
+        ui.meta.textContent = "字数上限 500,已按 500 字生成。";
+        return 500;
+      }
+      return Math.max(1, n);
     }
 
     /* ---- 路径一:CF 接口流式推理 ---- */
@@ -1753,7 +1758,8 @@
     /* ---- 路径二:浏览器本地推理(懒加载权重) ---- */
     function loadLocal(progress) {
       if (localModel) return Promise.resolve(localModel);
-      return Promise.all([
+      if (loadingPromise) return loadingPromise;
+      loadingPromise = Promise.all([
         fetch(API + "/manifest.json").then(function (r) {
           if (!r.ok) throw new Error("HTTP " + r.status);
           return r.json();
@@ -1791,6 +1797,7 @@
         localModel = { cfg: manifest.config, vocab: manifest.vocabulary, charToId: charToId, t: tensors };
         return localModel;
       });
+      return loadingPromise;
     }
 
     function lnRow(x, out, s, b, eps) {
@@ -1952,9 +1959,10 @@
         }
         step();
       }).catch(function (err) {
-        ui.status.textContent = "本地推理资源加载失败:" + (err && err.message || err) +
-          "。可打开独立页面重试。";
-        done(false);
+        // 本地推理兜底都失败:最后才尝试在线接口(免费层 CPU 会被长流掐断,随缘)
+        ui.status.textContent =
+          "权重下载失败(" + (err && err.message || err) + "),尝试在线接口…";
+        tryApiGenerate(done);
       });
     }
 
@@ -1964,12 +1972,27 @@
       ui.out.firstChild.remove();
       ui.meta.textContent = "";
       setBusy(true);
-      tryApiGenerate(function () { setBusy(false); abort = null; });
+      // 权重还没下完先用在线接口,下完之后固定走本地
+      if (localModel) {
+        localGenerate(function () { setBusy(false); abort = null; });
+      } else {
+        tryApiGenerate(function () { setBusy(false); abort = null; });
+      }
     });
     ui.stop.addEventListener("click", function () {
       if (abort && abort.abort) abort.abort();         // fetch 流
       else if (abort) abort.aborted = true;            // 本地循环
     });
+
+    // 后台预下载权重:页面一打开就开始,下完自动切本地
+    ui.status.textContent = "权重后台下载中(约 7MB);就绪前点生成会临时走在线接口。";
+    setTimeout(function () {
+      loadLocal(function () {}).then(function () {
+        if (!abort) ui.status.textContent = "权重已就绪,后续生成都在你本机进行。";
+      }).catch(function () {
+        if (!abort) ui.status.textContent = "权重暂时没下来,生成会走在线接口。";
+      });
+    }, 0);
   }
 
   /* ===================== 优化器赛跑(第 8 章) ===================== */
