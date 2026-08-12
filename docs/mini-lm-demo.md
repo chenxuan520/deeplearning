@@ -167,6 +167,7 @@ said
 | `--epochs <int>` | 训练轮数 | 800 |
 | `--batch-size <int>` | mini-batch 大小；`1` 表示沿用单样本更新 | 1 |
 | `--thread-num <int>` | mini-batch 梯度计算线程数；`1` 表示单线程 | 1 |
+| `--sample-stride <int>` | 训练样本滑窗步长；`1` 为逐字符滑窗（默认），设为 context-size 即非重叠切块（预训练常用，大语料可提速一个数量级） | 1 |
 | `--learning-rate <double>` | 基础学习率（内部套 `WarmupCosineLR`） | 0.01 |
 | `--log-every <int>` | 每 N 个 epoch 打印一次汇总日志 | 1 |
 | `--progress-every-sec <int>` | 单个 epoch 内每 N 秒打印进度（0=关闭） | 5 |
@@ -205,7 +206,7 @@ checkpoint 由三份 sidecar 组成：
 | 参数 | 含义 | 默认 |
 |------|------|------|
 | `--model <path>` | 要加载的模型 | `mini_lm.param` |
-| `--prompt <text>` | 起始文本 | `ab` |
+| `--prompt <text>` | 起始文本；**不传则进入交互模式**（每行一个 prompt，逐 token 流式输出生成结果，空行或 `:q` 退出） | — |
 | `--generate-num <int>` | 续写多少个 token（`char`=字节数，`utf8-char`=Unicode 字符数，`word`=词数） | 20 |
 | `--temperature <double>` | 采样温度（**给了就切采样模式**） | — |
 | `--top-k <int>` | top-k 采样 | — |

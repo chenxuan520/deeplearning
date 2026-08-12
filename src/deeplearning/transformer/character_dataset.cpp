@@ -33,7 +33,8 @@ CharacterDataset::RC CharacterDataset::BuildNextTokenSamples(
 
   input_samples.clear();
   target_tokens.clear();
-  for (int i = 0; i + context_size_ < static_cast<int>(token_ids_.size()); i++) {
+  for (int i = 0; i + context_size_ < static_cast<int>(token_ids_.size());
+       i += sample_stride_) {
     input_samples.push_back(std::vector<int>(token_ids_.begin() + i,
                                              token_ids_.begin() + i + context_size_));
     target_tokens.push_back(token_ids_[i + context_size_]);
@@ -49,7 +50,12 @@ int CharacterDataset::sample_size() {
   if (!is_init_ || token_ids_.size() <= static_cast<size_t>(context_size_)) {
     return 0;
   }
-  return token_ids_.size() - context_size_;
+  return (token_ids_.size() - context_size_ + sample_stride_ - 1) /
+         sample_stride_;
+}
+
+void CharacterDataset::set_sample_stride(int stride) {
+  sample_stride_ = stride < 1 ? 1 : stride;
 }
 
 } // namespace deeplearning

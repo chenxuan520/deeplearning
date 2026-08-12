@@ -59,6 +59,7 @@ struct Option {
   string corpus_file;
   string corpus_dir;
   string prompt = "ab";
+  bool prompt_specified = false;
   int generate_num = 20;
   int epoch_num = 800;
   int rand_seed = 0;
@@ -73,6 +74,7 @@ struct Option {
   int progress_every_sec = 5;
   int batch_size = 1;
   int thread_num = 1;
+  int sample_stride = 1;
   double learning_rate = 0.01;
   double early_stop_loss = 0.02;
   double temperature = 1.0;
@@ -145,6 +147,9 @@ void PrintCommandUsage(const char *prog, const string &verb) {
             "(default 1)\n"
          << "  --thread-num <int>          worker threads for minibatch "
             "gradient calculation (default 1)\n"
+         << "  --sample-stride <int>       sliding-window stride between "
+            "training samples (default 1; context-size means non-overlapping "
+            "chunks)\n"
          << "  --learning-rate <double>\n";
     cout << "  --log-every <int>           print epoch summary every N epochs "
             "(default 1)\n"
@@ -164,7 +169,7 @@ void PrintCommandUsage(const char *prog, const string &verb) {
   } else if (verb == "generate") {
     cout << "  --model <path>              model to load (default "
             "mini_lm.param)\n"
-         << "  --prompt <text>\n"
+         << "  --prompt <text>           omit to enter interactive mode\n"
          << "  --generate-num <int>\n"
          << "  --temperature <double>      enable sampling (default greedy)\n"
          << "  --top-k <int>               enable sampling\n"
@@ -199,6 +204,7 @@ bool ParseArgs(int argc, char **argv, int start, Option &option) {
       option.corpus_dir = need_value("--corpus-dir");
     } else if (arg == "--prompt") {
       option.prompt = need_value("--prompt");
+      option.prompt_specified = true;
     } else if (arg == "--generate-num") {
       option.generate_num = std::stoi(need_value("--generate-num"));
     } else if (arg == "--epochs") {
@@ -207,6 +213,8 @@ bool ParseArgs(int argc, char **argv, int start, Option &option) {
       option.batch_size = std::stoi(need_value("--batch-size"));
     } else if (arg == "--thread-num") {
       option.thread_num = std::stoi(need_value("--thread-num"));
+    } else if (arg == "--sample-stride") {
+      option.sample_stride = std::stoi(need_value("--sample-stride"));
     } else if (arg == "--learning-rate") {
       option.learning_rate = std::stod(need_value("--learning-rate"));
     } else if (arg == "--log-every") {
@@ -1258,8 +1266,10 @@ int RunTrain(const Option &option) {
     return -1;
   }
   if (option.epoch_num <= 0 || option.batch_size <= 0 ||
-      option.thread_num <= 0 || option.learning_rate <= 0.0) {
-    cout << "Invalid training option (epochs, batch-size, thread-num and "
+      option.thread_num <= 0 || option.sample_stride <= 0 ||
+      option.learning_rate <= 0.0) {
+    cout << "Invalid training option (epochs, batch-size, thread-num, "
+            "sample-stride and "
             "learning-rate must be > 0)"
          << endl;
     return -1;
@@ -1313,6 +1323,7 @@ int RunTrain(const Option &option) {
          << endl;
     return -1;
   }
+  dataset.set_sample_stride(option.sample_stride);
   vector<vector<int>> input_samples;
   vector<int> target_tokens;
   if (dataset.BuildNextTokenSamples(input_samples, target_tokens) !=
@@ -1540,6 +1551,35 @@ int RunTrain(const Option &option) {
   return 0;
 }
 
+// Generates token by token and prints each piece immediately (streaming).
+// Returns 0 on success and fills err otherwise.
+int StreamGenerate(MiniTransformerLM &model, TokenizerBundle &tokenizer,
+                   const vector<int> &prompt_token_ids, int generate_num,
+                   bool sampling_specified,
+                   const MiniTransformerLM::SamplingOption &sampling_option,
+                   string &err) {
+  vector<int> token_ids = prompt_token_ids;
+  for (int i = 0; i < generate_num; i++) {
+    int token_id = 0;
+    MiniTransformerLM::RC rc =
+        sampling_specified
+            ? model.SampleNextToken(token_ids, token_id, sampling_option)
+            : model.PredictNextToken(token_ids, token_id);
+    if (rc != MiniTransformerLM::SUCCESS) {
+      err = model.err_msg();
+      return -1;
+    }
+    string piece;
+    if (!DecodeGenerated(tokenizer, vector<int>{token_id}, piece, err)) {
+      return -1;
+    }
+    cout << piece << flush;
+    token_ids.push_back(token_id);
+  }
+  cout << endl;
+  return 0;
+}
+
 int RunGenerate(const Option &option) {
   MiniTransformerLM model;
   TokenizerBundle tokenizer;
@@ -1553,61 +1593,73 @@ int RunGenerate(const Option &option) {
     return -1;
   }
 
-  vector<int> prompt_token_ids;
-  int unknown_or_dropped = 0;
-  string prompt;
-  if (!EncodePrompt(tokenizer, option.prompt, prompt_token_ids,
-                    unknown_or_dropped, prompt, err)) {
-    cout << err << endl;
-    return -1;
-  }
-  if (unknown_or_dropped > 0) {
-    if (tokenizer.kind == TOKENIZER_WORD) {
-      if (tokenizer.word_tokenizer.unknown_policy() ==
-          WordTokenizer::UNKNOWN_DROP) {
-        cout << "Warning: dropped " << unknown_or_dropped
-             << " prompt words outside the model vocabulary" << endl;
+  MiniTransformerLM::SamplingOption sampling_option;
+  sampling_option.temperature_ = option.temperature;
+  sampling_option.top_k_ = option.top_k;
+  sampling_option.top_p_ = option.top_p;
+
+  auto generate_from_prompt = [&](const string &raw_prompt) -> int {
+    vector<int> prompt_token_ids;
+    int unknown_or_dropped = 0;
+    string prompt;
+    if (!EncodePrompt(tokenizer, raw_prompt, prompt_token_ids,
+                      unknown_or_dropped, prompt, err)) {
+      cout << err << endl;
+      return -1;
+    }
+    if (unknown_or_dropped > 0) {
+      if (tokenizer.kind == TOKENIZER_WORD) {
+        if (tokenizer.word_tokenizer.unknown_policy() ==
+            WordTokenizer::UNKNOWN_DROP) {
+          cout << "Warning: dropped " << unknown_or_dropped
+               << " prompt words outside the model vocabulary" << endl;
+        } else {
+          cout << "Warning: mapped " << unknown_or_dropped
+               << " prompt words outside the model vocabulary to <unk>" << endl;
+        }
       } else {
-        cout << "Warning: mapped " << unknown_or_dropped
-             << " prompt words outside the model vocabulary to <unk>" << endl;
+        cout << "Warning: dropped " << unknown_or_dropped
+             << " prompt characters outside the model vocabulary" << endl;
       }
-    } else {
-      cout << "Warning: dropped " << unknown_or_dropped
-           << " prompt characters outside the model vocabulary" << endl;
     }
-  }
-
-  vector<int> generated_token_ids;
-  if (option.sampling_specified) {
-    MiniTransformerLM::SamplingOption sampling_option;
-    sampling_option.temperature_ = option.temperature;
-    sampling_option.top_k_ = option.top_k;
-    sampling_option.top_p_ = option.top_p;
-    if (model.GenerateSample(prompt_token_ids, option.generate_num,
-                             generated_token_ids, sampling_option) !=
-        MiniTransformerLM::SUCCESS) {
-      cout << "GenerateSample failed: " << model.err_msg() << endl;
+    if (!prompt_token_ids.empty()) {
+      string prompt_echo;
+      if (DecodeGenerated(tokenizer, prompt_token_ids, prompt_echo, err)) {
+        cout << "Prompt: " << prompt_echo << endl;
+      }
+    }
+    cout << "Mode: "
+         << (option.sampling_specified ? "sampling" : "greedy") << endl;
+    cout << "Generated: " << flush;
+    string gen_err;
+    if (StreamGenerate(model, tokenizer, prompt_token_ids,
+                       option.generate_num, option.sampling_specified,
+                       sampling_option, gen_err) != 0) {
+      cout << "Generate failed: " << gen_err << endl;
       return -1;
     }
-  } else {
-    if (model.Generate(prompt_token_ids, option.generate_num,
-                       generated_token_ids) != MiniTransformerLM::SUCCESS) {
-      cout << "Generate failed: " << model.err_msg() << endl;
-      return -1;
+    cout << endl;
+    return 0;
+  };
+
+  if (!option.prompt_specified) {
+    cout << "Interactive mode: type a prompt and press Enter to generate "
+         << "(empty line or :q to quit)" << endl;
+    string line;
+    while (true) {
+      cout << ">>> " << flush;
+      if (!std::getline(cin, line)) {
+        break;
+      }
+      if (line.empty() || line == ":q") {
+        break;
+      }
+      generate_from_prompt(line);
     }
+    return 0;
   }
 
-  string generated_text;
-  if (!DecodeGenerated(tokenizer, generated_token_ids, generated_text, err)) {
-    cout << err << endl;
-    return -1;
-  }
-
-  cout << "Prompt: " << prompt << endl;
-  cout << "Mode: " << (option.sampling_specified ? "sampling" : "greedy")
-       << endl;
-  cout << "Generated: " << generated_text << endl;
-  return 0;
+  return generate_from_prompt(option.prompt);
 }
 
 int RunInfo(const Option &option) {
