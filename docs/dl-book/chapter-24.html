@@ -17,7 +17,7 @@
         <p class="lead">
           最后一站。这一章我们拿一个<strong>真能训练、真能一个字一个字往外写</strong>的完整项目开刀:
           用仓库里的 <code>src/demo/mini_lm/</code> 配上 <code>src/deeplearning/transformer/</code> 那一堆模块,
-          把公版全本《三國志演義》喂进去,从零训出一个<strong>会写三国腔</strong>的字符级语言模型,再把它部署上网。
+          把公版全本《三國志演義》喂进去,从零训出一个<strong>会写三国腔</strong>的字符级语言模型。
           第四部分的<strong>注意力、Transformer</strong>和第五部分的<strong>分词、embedding、生成、采样、困惑度</strong>,
           全都会变成跑过、调过参数、留下训练日志的具体代码。本章所有命令、日志、数字,<strong>没有一个是编的</strong>。
         </p>
@@ -25,7 +25,7 @@
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>一个语言模型项目的完整链路:<strong>语料 → 清洗 → 分词 → 数据集 → 建模 → 训练 → 评估 → 生成 → 存盘 → 部署</strong>;</li>
+            <li>一个语言模型项目的完整链路:<strong>语料 → 清洗 → 分词 → 数据集 → 建模 → 训练 → 评估 → 生成 → 存盘</strong>;</li>
             <li><code>MiniTransformerLM::Config</code> 里每个字段,对应第 17、18 章的哪个结构、对训练成本有什么影响;</li>
             <li>大语料下“逐字滑窗”为什么会被换掉,<strong>非重叠切块</strong>省在哪里;</li>
             <li>贪心与温度/top-k/top-p 采样在代码和命令行两个层面各长什么样;</li>
@@ -37,8 +37,8 @@
         <p>
           任务是语言模型最经典的那个:<strong>给一个开头,接着往下写</strong>(<a class="xref" href="chapter-19.html">第 19 章</a>)。
           只不过这次喂给模型的不是 <code>"abcabc..."</code> 玩具语料,而是《三國志演義》全本 57 万字。
-          老规矩,先玩再看代码——下面这个实验台直接接上训练成果:<strong>优先调用部署在 Cloudflare 的推理接口</strong>(流式输出),
-          网络或配额不灵时自动<strong>降级为你浏览器本地加载权重(约 7MB)推理</strong>。两条路径用的是同一个模型:
+          老规矩,先玩再看代码——下面这个实验台直接接上训练成果:<strong>优先走在线接口推理</strong>(流式输出),
+          接口不灵时自动<strong>降级为你浏览器本地加载权重(约 7MB)推理</strong>。两条路径用的是同一个模型:
         </p>
         <div class="figure reveal">
           <div data-lab="sanguo-mini-lm"></div>
@@ -110,6 +110,26 @@ Vocabulary: [第] [一] [回] [宴] [桃] [园] [豪] [杰] [...               <
             <li><code>utf8-char</code>:一个汉字一个 token。若用默认字节级,一个汉字会被拆成 3 个 UTF-8 字节,模型要先学会"拼字节"才能谈语言,白白浪费容量。另外还有词级 <code>--tokenizer word</code>,那是给英文语料准备的。</li>
             <li>这些就是下一节要逐一拆解的 Config 字段;<code>rand-seed</code> 让初始化可复现。</li>
             <li>注意词表编号顺序:框架的分词器是<strong>“首次出现即编号”</strong>——语料开头是《第一回宴桃园豪杰三结义》,所以「第」拿 0 号、「一」拿 1 号……这带来一个副作用:<strong>两个模型的词表不能互换</strong>,模型文件只能绑定自己那份词表。</li>
+          </ol>
+        </figure>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">character_tokenizer.cpp / token_embedding.cpp · init 这一行里面做了什么</figcaption>
+          <pre class="code-walk__code"><code>// ① 扫语料建词表:见过的跳过,新字符分配下一个 id(首次出现顺序)
+for (char ch : text) {
+  if (char_to_id.count(ch) != 0) continue;
+  char_to_id[ch] = vocabulary.size();
+  vocabulary.push_back(ch);
+}                                                                  <b class="cw-tag">1</b>
+
+// ② 建 embedding 表并按 Xavier-uniform 随机初始化
+const double limit = std::sqrt(6.0 / (vocab_size + model_dim));
+std::uniform_real_distribution&lt;double&gt; dist(-limit, limit);       <b class="cw-tag">2</b>
+
+// ③ 存盘:结构+权重写 .param(二进制),字符表写 .param.vocab(纯文本) <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>所以词表顺序就是"语料开头长什么样"的顺序(《三国演义》开头是「第一回宴桃园…」,故「第」拿 0 号);两个模型的词表不能互换,<code>LoadModel</code> 时会校验词表大小一致。</li>
+            <li>Xavier 均匀分布(<a class="xref" href="chapter-09.html">第 9 章</a>讲的初始化)按 <code>rand_seed</code> 可复现——同一个种子,两次 init 出来的模型一模一样。</li>
+            <li>一个模型是两个文件,拷贝/备份必须成对;词表文件里还能看到 tokenizer 类型(<code>utf8-char</code>)。完整格式约定见 <code>docs/mini-lm-demo.md</code>。</li>
           </ol>
         </figure>
         <div class="callout callout--warn reveal">
@@ -238,6 +258,40 @@ ApplyAccumulatedGradients(epoch_lr, block_lr, 1.0 / batch_n);  <b class="cw-tag"
             <li>一轮 Adam 更新 = <a class="xref" href="chapter-08.html">第 8 章</a>那一套(动量 + 二阶矩 + bias correction);学习率由 <a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">第 9 章的 WarmupCosineLR</a> 逐轮给出:0.001 起步、1 轮 warmup、余弦退火到约 1.2e-4 收工。</li>
           </ol>
         </figure>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">mini_transformer_lm.cpp · BackwardSample:一个样本内部的完整旅程(精简)</figcaption>
+          <pre class="code-walk__code"><code>// ① 前向:embedding 查表 ×√128 + 位置编码 → 4 层 decoder Block
+EncodeSequence(sample, encoded);                                    <b class="cw-tag">1</b>
+
+// ② 对窗口里每个位置:3981 维 logits → softmax → 交叉熵
+for (pos = 0..47) {
+  logits[tok] = Σ output_weight[tok][d] · encoded[pos][d] + bias;  <b class="cw-tag">2</b>
+  probs = Softmax(logits);  loss += -log(probs[target[pos]]);      <b class="cw-tag">3</b>
+  grad_logits = probs;  grad_logits[target] -= 1;                  <b class="cw-tag">4</b>
+  grad_logits *= 1.0 / seq_len;   // 让 batch 内长短样本同权
+}
+
+// ③ 反向:梯度从输出头回传,穿过 4 层 Block 回到每个位置
+decoder.BackwardAccumulate(grad_encoded, grad_hidden);             <b class="cw-tag">5</b>
+for (i, tok : sample) grad_embedding[tok][d] += grad_hidden[i][d]; <b class="cw-tag">6</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>查表 + 缩放 + 位置编码:embedding 行向量乘 √128,再按位置加正弦/余弦编码(第 17 章);然后依次过 4 层 Block(注意力→残差→LayerNorm→FFN→残差→LayerNorm,<a class="xref" href="chapter-18.html">第 18 章</a>)。</li>
+            <li>一个 48 字样本要算 48 次"全词表 softmax"——这就是为什么词表收窄到 3981 仍然是大头开销。</li>
+            <li>对每个位置取"正确的下一个字"的预测概率,−log 累加,就是<a class="xref" href="chapter-04.html#32-交叉熵-衡量两个概率的差距这才是损失">第 4 章的交叉熵</a>。</li>
+            <li>softmax + 交叉熵的梯度有个优雅的简化形式:<strong>预测概率减去 one-hot 答案</strong>(probs −1 于目标位),第 4 章推导过。</li>
+            <li>梯度按"输出头 → Block 堆 → 位置"一路传回(<a class="xref" href="chapter-06.html">第 6 章</a>反向传播);<code>Accumulate</code> 版本只攒梯度不更新,留给 batch 合并。</li>
+            <li>embedding 的梯度按 token id <strong>散射回对应行</strong>:同一个字在窗口里出现几次就累加几次,因此高频字的 embedding 被更新得最多。</li>
+          </ol>
+        </figure>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">mini_transformer_lm.cpp · batch 合并后只做一次 Adam</figcaption>
+          <pre class="code-walk__code"><code>ApplyAccumulatedGradients(epoch_lr, block_lr, 1.0 / batch_sample_num);
+//  三个优化器实例分管输出头/embedding/各层 Block,
+//  Adam 内部:动量 m、二阶矩 v、bias correction(第 8 章)           <b class="cw-tag">1</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>注意 <code>1.0 / batch_sample_num</code>:合并的是<strong>平均</strong>梯度,batch 大小不会改变期望更新方向,只改变方差和步数——这又把第 4 节的"步数预算"串起来了。</li>
+          </ol>
+        </figure>
         <div class="callout callout--tip reveal">
           <span class="callout__title">batch 大小 = 每个 epoch 的“步数预算”</span>
           <p>
@@ -352,51 +406,7 @@ for (i...) { cumulative += probs[order[i]];
           </ol>
         </figure>
 
-        <h2>7. 收尾 · 存盘、导出与部署上网</h2>
-        <p>
-          和 MNIST 一样,模型存成文件。本项目的产物约定:
-        </p>
-        <ul>
-          <li><code>sanguo.param</code>(二进制权重 + 结构)+ <code>sanguo.param.vocab</code>(字符表):<strong>成对拷贝、成对备份</strong>,丢了 .vocab 模型就没法把 id 翻译回汉字;</li>
-          <li><code>sanguo.param.ckpt</code> + <code>.ckpt.vocab</code> + <code>.ckpt.train</code>:checkpoint 三件套,其中 <code>.train</code> 是训练进度元数据(completed_epoch、last_loss 等);</li>
-          <li>所有训练产物默认不进 git(本demo的 <code>.gitignore</code> 早就写好;完整一手材料在 <a href="https://github.com/chenxuan520/deeplearning-model" target="_blank" rel="noopener">deeplearning-model</a> 仓库,权重走 Release)。</li>
-        </ul>
-        <p>
-          最后一步是把它变成人人可访问的网页和 API。浏览器和 Workers 都不认 C++ 的 <code>.param</code> 二进制,所以:
-        </p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">从 .param 到 Cloudflare Workers 的四步(精简)</figcaption>
-          <pre class="code-walk__code"><code># ① 仓库自带工具导出 JSON(文本,38MB——不适合直接给浏览器)
-./bin/web_model_export --type mini-lm --model sanguo.param --out sanguo.model.json <b class="cw-tag">1</b>
-# ② 一次性脚本压成 Float32 二进制 + manifest(7.3MB / 30KB)
-# ③ Worker:JS 里 1:1 移植前向数学(LayerNorm/注意力/FFN/采样)  <b class="cw-tag">2</b>
-# ④ 验证:Node 下与 C++ 同 prompt 贪心解码,逐字节一致后才部署  <b class="cw-tag">3</b>
-cd worker && npx wrangler deploy</code></pre>
-          <ol class="code-walk__notes">
-            <li>Float32 精度足够推理用;体积从 38MB 降到 7.3MB,浏览器只下载一次。</li>
-            <li>工程取舍:Cloudflare 免费计划单请求只有 ~10ms CPU——服务端长文本生成会撞墙,所以演示页干脆把推理放到<strong>访客自己的浏览器</strong>里(约 0.2-0.6 秒/字),服务器只负责发权重。这也是一种 Chapter 21 说的"部署经济学"。</li>
-            <li>移植正确性不是靠肉眼:同一权重、同一句"话说天下大势"、同样贪心策略,JS 版和 C++ 版逐字节输出一致,才敢上线。</li>
-          </ol>
-        </figure>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">部署成果:OpenAI 兼容接口(真实请求与流式响应)</figcaption>
-          <pre class="code-walk__code"><code>curl -N https://minilm.011203.xyz/v1/chat/completions \
-  -H 'content-type: application/json' \
-  -d '{"messages":[{"role":"user","content":"话说天下大势"}],
-       "max_tokens":20,"temperature":0,"stream":true}'
-
-data: {"id":"chatcmpl-...","object":"chat.completion.chunk",
-       "choices":[{"index":0,"delta":{"role":"assistant"},...}]}
-data: {"id":"chatcmpl-...",...,"delta":{"content":"，"}}
-data: {"id":"chatcmpl-...",...,"delta":{"content":"不"}}
-...
-data: [DONE]                                                       <b class="cw-tag">1</b></code></pre>
-          <ol class="code-walk__notes">
-            <li>逐字 SSE,与 OpenAI 协议同构:<code>/v1/models</code> 列模型、<code>/v1/chat/completions</code> 生成,openai SDK 换个 base_url 就能直连。但请记得这是纯续写模型:messages 的内容只是被<strong>拼接起来当续写前缀</strong>,它不会"回答你的问题"。</li>
-          </ol>
-        </figure>
-
-        <h2>8. 从这个迷你模型,到真正的大模型</h2>
+        <h2>7. 从这个迷你模型,到真正的大模型</h2>
         <p>
           你手里这个 182 万参数、一夜训完的小模型,和 GPT 的<strong>骨架完全相同</strong>。差距不在“原理”,而在第 20–22 章讲的那些事:
         </p>
@@ -411,20 +421,19 @@ data: [DONE]                                                       <b class="cw-
           <p>
             在 <code>src/</code> 目录下:<code>./build.sh false Release</code> 构建后,一条命令就能复现本章玩具版:<br />
             <code>./bin/transformer_char --prompt "ab" --generate-num 20</code><br />
-            想完整复现三国版:语料、两轮训练命令、转换与部署脚本,全在 <a href="https://github.com/chenxuan520/deeplearning-model" target="_blank" rel="noopener">deeplearning-model</a> 仓库的模型手册里,纯 CPU 一夜跑完。
+            想完整复现三国版:语料、两轮训练命令与生成验证,全在 <a href="https://github.com/chenxuan520/deeplearning-model" target="_blank" rel="noopener">deeplearning-model</a> 仓库的模型手册里,纯 CPU 一夜跑完。
           </p>
         </div>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>语言模型项目 = 语料(清洗!)→ 分词 → 数据集 → 建模 → 训练 → 评估 → 生成 → 存盘 → 部署,每一步都可能成为真正的活儿。</li>
+            <li>语言模型项目 = 语料(清洗!)→ 分词 → 数据集 → 建模 → 训练 → 评估 → 生成 → 存盘,每一步都可能成为真正的活儿。</li>
             <li>字符级模型里,<strong>词表就是结构</strong>:init 扫语料冻结、.vocab sidecar 与权重成对、OOV 只能跳过。</li>
             <li><code>Config</code> 几个数字描述整座 Transformer,每个都和训练成本直接挂钩(model_dim 平方级最敏感)。</li>
             <li>大语料记得非重叠切块(<code>--sample-stride</code>);batch 决定每轮梯度步数,别和小语料一个改法。</li>
             <li>checkpoint + resume 让一夜的长训练可中断;loss 8.29 → 3.62 走的是 warmup+余弦退火。</li>
             <li>生成 = 自回归循环(贪心确定 / 温度+top-k+top-p 采样);流式输出就是"算一字打一字"。</li>
-            <li>部署要看账单:免费层 10ms CPU,于是把 7.3MB 推理挪进访客浏览器——和 Chapter 21 的工程课同源。</li>
             <li>放大这个骨架 + 后训练 + 工程 + 会用,就是第 20–22 章讲的“大模型”。</li>
           </ul>
         </section>
@@ -470,7 +479,7 @@ data: [DONE]                                                       <b class="cw-
         </div>
 
         <p class="muted">
-          你已经把第四、五部分的语言模型从语料一路跟到了线上部署。下一章如法炮制,去读
+          你已经把第四、五部分的语言模型从语料一路跟到了生成。下一章如法炮制,去读
           <a class="xref" href="chapter-25.html">第 25 章</a>的井字棋 Q-learning 程序——把<a class="xref" href="chapter-12.html">第 12 章</a>的 Q 表、ε-greedy 与 TD 更新也落到代码上。
         </p>
       </div>
