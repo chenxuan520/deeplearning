@@ -2302,7 +2302,8 @@
     '    <div class="demo-toolbar">' +
     '      <button type="button" class="button button--primary" data-azg-act="reset">重新开局</button>' +
     '      <label>你执 <select data-azg="human"><option value="-1">白棋(后手)</option><option value="1">黑棋(先手)</option></select></label>' +
-    '      <label>MCTS <select data-azg="sims"><option value="12">12(快)</option><option value="24" selected>24(平衡)</option><option value="48">48(强)</option></select></label>' +
+    '      <label>MCTS <select data-azg="sims"><option value="12">12(快)</option><option value="24" selected>24(平衡)</option><option value="48">48(强)</option><option value="120">120(较强)</option><option value="custom">自定义</option></select></label>' +
+    '      <label data-azg-custom-wrap hidden>次数 <input type="number" min="1" max="800" step="1" value="60" data-azg="sims-custom" /></label>' +
     '      <a class="button button--ghost" href="https://github.com/chenxuan520/deeplearning-model/tree/master/models/alphazero-gomoku" target="_blank" rel="noopener">模型档案 ↗</a>' +
     '    </div>' +
     '    <p class="explain" data-azg-status role="status" aria-live="polite">正在加载 770KB 策略价值网络…</p>' +
@@ -2358,6 +2359,8 @@
       stats: root.querySelector("[data-azg-stats]"),
       human: root.querySelector('[data-azg="human"]'),
       sims: root.querySelector('[data-azg="sims"]'),
+      simsCustom: root.querySelector('[data-azg="sims-custom"]'),
+      simsCustomWrap: root.querySelector('[data-azg-custom-wrap]'),
       reset: root.querySelector('[data-azg-act="reset"]')
     };
     var AZ = null;
@@ -2390,6 +2393,15 @@
     }
 
     function humanPlayer() { return parseInt(ui.human.value, 10); }
+
+    function simulationCount() {
+      if (ui.sims.value !== "custom") return parseInt(ui.sims.value, 10);
+      var value = parseInt(ui.simsCustom.value, 10);
+      if (!Number.isFinite(value)) value = 60;
+      value = Math.min(800, Math.max(1, value));
+      ui.simsCustom.value = String(value);
+      return value;
+    }
 
     function ensureFocusAction() {
       if (state && state.board[focusAction] === 0) return;
@@ -2560,7 +2572,7 @@
       busy = true;
       var version = gameVersion;
       render();
-      var simulations = parseInt(ui.sims.value, 10);
+      var simulations = simulationCount();
       var begin = performance.now();
       // Empty-board candidate generation has exactly one action (center).
       // Avoid spending N identical simulations before the human has moved.
@@ -2621,6 +2633,10 @@
 
     ui.reset.addEventListener("click", reset);
     ui.human.addEventListener("change", reset);
+    ui.sims.addEventListener("change", function () {
+      ui.simsCustomWrap.hidden = ui.sims.value !== "custom";
+      if (!ui.simsCustomWrap.hidden) ui.simsCustom.focus();
+    });
 
     loadAzGomokuEngine().then(function (engine) {
       AZ = engine;
