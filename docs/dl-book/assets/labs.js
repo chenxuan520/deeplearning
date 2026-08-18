@@ -2437,9 +2437,13 @@
 
     function drawCanvas(hoverAction) {
       ctx.clearRect(0, 0, 600, 600);
-      ctx.fillStyle = "#dcb35c";
+      var boardGradient = ctx.createLinearGradient(0, 0, 600, 600);
+      boardGradient.addColorStop(0, "#24344d");
+      boardGradient.addColorStop(0.52, "#1d2b42");
+      boardGradient.addColorStop(1, "#172337");
+      ctx.fillStyle = boardGradient;
       ctx.fillRect(0, 0, 600, 600);
-      ctx.strokeStyle = "#17120b";
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.58)";
       ctx.lineWidth = 1;
       for (var i = 0; i < 15; i++) {
         var p = boardOffset + i * cellSize;
@@ -2450,7 +2454,7 @@
         [3, 7, 11].forEach(function (column) {
           ctx.beginPath();
           ctx.arc(boardOffset + column * cellSize, boardOffset + row * cellSize, 3, 0, Math.PI * 2);
-          ctx.fillStyle = "#17120b";
+          ctx.fillStyle = "#b8c7dc";
           ctx.fill();
         });
       });
