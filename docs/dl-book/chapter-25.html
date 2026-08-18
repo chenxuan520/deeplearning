@@ -34,7 +34,7 @@
             <li>4 个棋盘平面如何编码“当前行棋方视角”,策略头和价值头分别学什么;</li>
             <li>PUCT 如何把网络先验 <var>P</var>、搜索价值 <var>Q</var> 和访问次数 <var>N</var>合在一起;</li>
             <li>MCTS 怎样生成比网络原始策略更强的 π,终局胜负怎样变成 <var>z</var>;</li>
-            <li>Replay Buffer、8 对称增广、hard mining、残局做种为什么仍是纯自对弈;</li>
+            <li>Replay Buffer、8 对称增广、hard mining、残局做种如何保持 π/z 来自自对弈,同时引入领域课程先验;</li>
             <li>48 个 worker、缓存、checkpoint、门禁对打如何组成一条可长期运行的训练线;</li>
             <li>真实训练从 policy loss 5.42 降到 2.7 左右时经历过哪些致命 bug 和性能取舍;</li>
             <li>浏览器如何直接解析 C++ 二进制权重,本地完成 ResNet 前向与 PUCT MCTS。</li>
@@ -45,7 +45,7 @@
         <p>
           先别看公式。下面不是手写规则、不是远程服务器返回一步棋,而是发布产物里的<strong>真实 19.2 万参数冠军网络</strong>:
           页面下载约 770KB 的 C++ <code>.net</code> 文件,JavaScript 直接解析 Conv/BN/残差块参数,
-          在你的浏览器里完成策略价值前向和 PUCT MCTS。默认你执白棋、24 次模拟;可选 12/48/120,
+          在你的浏览器里完成策略价值前向和 PUCT MCTS。默认你执白棋、24 次模拟;可选 12/48/96/120,
           也可以在“自定义”里输入 1–800。模拟数越高通常越强,每步等待也近似线性增加。AlphaZero 先落天元。
         </p>
         <div class="figure reveal">
@@ -119,6 +119,32 @@ else
           <p>方形棋盘有 4 次旋转 × 可选镜像 = 8 个等价局面。训练抽样时同时变换输入平面和策略 π,不制造假标签,却把数据利用率放大 8 倍。</p>
         </div>
 
+        <h3>为什么必须统一成“待行方视角”</h3>
+        <p>
+          如果固定用“黑棋是我、白棋是对手”编码,同一个网络要同时学习两套语义:黑走时 <var>v</var>&gt;0 表示黑优,
+          白走时又得把符号反过来。当前实现把<strong>待行方棋子永远放 plane 0</strong>,对方永远放 plane 1,
+          于是价值头只需学习一句话:<strong>从现在该走棋的人看,这个局面最后能赢吗?</strong>
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>棋局结果</th><th>记录样本时轮到谁</th><th>目标 z</th><th>含义</th></tr></thead>
+            <tbody>
+              <tr><td>黑胜</td><td>黑走</td><td>+1</td><td>待行方最终获胜</td></tr>
+              <tr><td>黑胜</td><td>白走</td><td>−1</td><td>待行方最终失败</td></tr>
+              <tr><td>白胜</td><td>白走</td><td>+1</td><td>同一价值语义</td></tr>
+              <tr><td>和棋/200 手截断</td><td>任意</td><td>0</td><td>不偏向任何一方</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">上一手不是“装饰平面”</span>
+          <p>
+            网络输入包含 last-move plane,所以相同棋盘、不同上一手是<strong>两个不同输入</strong>。
+            一次浏览器移植审查发现旧 EvalCache key 只含行棋方与棋盘,会错误复用另一个上一手的输出;
+            实测两种输入的某些 logits 可差到 0.781。现在 key 已改成“行棋方 + 上一手 + 棋盘”,并新增碰撞单测。
+          </p>
+        </div>
+
         <h2>3. 策略价值 ResNet:一个身体,两个脑袋</h2>
         <p>
           网络完全使用项目从手写 C++ 框架复制出的 Float32 组件:<code>BatchedConv2D</code>、<code>BatchNorm2D</code>、
@@ -170,6 +196,44 @@ v = tanh(value_output(hidden));                 <b class="cw-tag">3</b></code></
           </table>
         </div>
 
+        <h3>191,853 个参数是怎么算出来的</h3>
+        <p>
+          “19 万参数”不是看文件大小猜的。每个卷积权重按 <code>[Cout,Cin,Kh,Kw]</code>,
+          每个全连接按 <code>[out,in]</code>;BN 的可训练量是每通道一组 γ/β。逐块展开:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>部分</th><th>计算</th><th>序列化参数</th></tr></thead>
+            <tbody>
+              <tr><td>Stem</td><td>32×4×3×3 + bias32 + BN(32×2)</td><td>1,248</td></tr>
+              <tr><td>单个残差块</td><td>2×[32×32×3×3 + bias32 + BN64]</td><td>18,624</td></tr>
+              <tr><td>4 个残差块</td><td>18,624×4</td><td>74,496</td></tr>
+              <tr><td>Policy head</td><td>1×1 Conv/BN 70 + FC(450×225+225)</td><td>101,545</td></tr>
+              <tr><td>Value head</td><td>1×1 Conv/BN 35 + FC(225×64+64) + FC(64×1+1)</td><td>14,564</td></tr>
+              <tr><td><strong>合计</strong></td><td>1,248+74,496+101,545+14,564</td><td><strong>191,853</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted">
+          所有卷积实际都设 <code>use_bias=false</code>,但 v1 序列化格式仍保存了 291 个全零 bias 槽位;
+          真正参与训练的参数是 191,562。模型还额外保存 582 个 BN running mean/variance,
+          所以文件总共 192,435 个 float32 + 72 个向量长度前缀 + 64 字节头 = 770,380 bytes。
+        </p>
+
+        <h3>推理时 BN 为什么可以“折进卷积”</h3>
+        <p>
+          训练时 BN 要按 batch 统计均值/方差;推理时 running mean/variance 已固定,可把每通道 BN 改写成一次仿射:
+        </p>
+        <div class="mathblock reveal">
+          <var>y</var><sub>c</sub> = γ<sub>c</sub>(<var>x</var><sub>c</sub>−μ<sub>c</sub>)/√(σ²<sub>c</sub>+ε)+β<sub>c</sub>
+          = <var>a</var><sub>c</sub><var>x</var><sub>c</sub>+<var>b</var><sub>c</sub>
+          <span class="label">a=γ/√(σ²+ε), b=β−μa;C++ 的 ForwardAffine 和浏览器 JS 都走这条推理路径</span>
+        </div>
+        <p>
+          这也是为什么复制网络时只复制“可训练参数”不够:BN running statistics 不是梯度参数,却直接决定推理输出。
+          漏复制它们时,worker 会拿 mean=0/variance=1 做归一化,整批自对弈标签都可能漂掉。
+        </p>
+
         <h2>4. MCTS:PUCT 如何把“直觉”变成“算过”</h2>
         <p>
           每个树节点是一个局面,每条边是一个候选落子。搜索反复执行<strong>选择 → 扩展/评估 → 回传</strong>。
@@ -203,6 +267,48 @@ for (path from leaf to root) {
           <span class="callout__title">训练和比赛的搜索不一样</span>
           <p>训练在根节点混入 Dirichlet 噪声并在前 6 手按访问分布采样。内部 latest-vs-best 门禁关闭噪声,但仍沿用前 6 手采样、之后贪心;网页试玩则从第一手起始终选访问次数最多的落子。</p>
         </div>
+
+        <h3>一条 simulation 到底走了什么</h3>
+        <p>
+          一次 MCTS simulation 不是“网络前向一次就完了”。它从根局面复制出临时棋盘,沿 PUCT 最大边一层层落子,
+          直到碰到终局或尚未展开的叶子。若是叶子,网络只评估<strong>一次</strong>,然后把 <var>v</var> 沿整条路径回传:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>阶段</th><th>读什么</th><th>写什么</th><th>主要成本</th></tr></thead>
+            <tbody>
+              <tr><td>选择</td><td>每条边 P/Q/N</td><td>路径 edge 列表</td><td>遍历候选边</td></tr>
+              <tr><td>落子</td><td>临时棋盘</td><td>下一局面</td><td>规则/胜负判断</td></tr>
+              <tr><td>扩展</td><td>4×15×15 输入</td><td>候选边和先验 P</td><td><strong>一次网络前向</strong></td></tr>
+              <tr><td>回传</td><td>叶子价值 v</td><td>N+=1,W+=±v,Q=W/N</td><td>路径长度</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          搜 600 次不等于“往前看 600 手”,而是生成 600 条由当前 PUCT 策略选择的路径。树会把预算集中在少数有希望的分支;
+          根某条边的 <var>N</var> 越大,说明它在反复搜索验证后仍值得投入。
+        </p>
+
+        <h3>为什么 217 个合法点会让 100 sims 隐性报废</h3>
+        <p>
+          空盘附近如果直接展开全部空格,中前盘可能有 200 多条边。100 次模拟意味着至少一半边永远 <var>N</var>=0,
+          根访问分布 π 不是“深思熟虑后的策略”,而只是“哪些边碰巧被访问过”。更糟的是,一手必杀也可能根本没展开。
+        </p>
+        <div class="mathblock reveal">
+          平均每边访问数 ≈ simulations / candidate actions
+          <span class="label">100 / 217 ≈ 0.46 次;剪到 25–40 个候选后约 2.5–4 次,搜索才真正有比较能力</span>
+        </div>
+        <p>
+          半径 2 剪枝只问“这个空点附近有没有棋子”,不问它是活三、冲四还是好棋;因此没有把手写棋力灌进网络。
+          但它确实编码了一个五子棋工程先验:离所有棋子很远的点短期不会形成连线。动作生成是这类 CPU 版 AlphaZero 的命脉。
+        </p>
+
+        <h3>根访问次数为什么能当训练目标</h3>
+        <p>
+          网络原始策略 <var>P</var> 只经历一次前向;访问分布 π 则融合了多次落子、叶子价值和终局反杀。
+          训练网络逼近 π,相当于把一次昂贵搜索“蒸馏”进下一代网络。下一轮搜索从更好的 P 出发,又能得到更好的 π——
+          这就是“网络教搜索,搜索再教网络”的具体落点。
+        </p>
 
         <h2>5. 自对弈怎样自动产生 (s,π,z)</h2>
         <p>
@@ -242,6 +348,20 @@ for (sample : trajectory)
           </div>
         </div>
 
+        <h3>一盘棋结束后,怎样把结果回填给几十个旧状态</h3>
+        <p>
+          自对弈过程中先暂存每一步的输入、π 和“当时待行方”。终局才知道 winner,于是倒回整条轨迹:
+          若样本当时轮到最终胜方,<var>z</var>=+1;轮到败方,<var>z</var>=−1;和棋或 200 手截断,<var>z</var>=0。
+          同一盘黑胜棋里,黑走状态和白走状态的 z 会正负交替——这正是当前行棋方视角的意义。
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">200 手截断不是规则和棋</span>
+          <p>
+            五子棋棋盘有 225 格,理论上可以继续;项目为控制弱网早期的超长乱战,在 200 手截断并标 z=0。
+            这是工程近似,不是棋规。模型变强后平均局长降到几十手,截断占比自然下降。
+          </p>
+        </div>
+
         <h2>6. Replay Buffer、增广与策略价值损失</h2>
         <p>
           Buffer 是固定容量环形队列,样本为 4×225 输入 + 225 维 π + 一个 <var>z</var>。
@@ -263,6 +383,48 @@ for (sample : trajectory)
           <span class="callout__title">标签是 Zero,课程采样带领域先验</span>
           <p>所有状态、π 与 z 都来自模型自己的历史自对弈;没有人类棋谱、没有旧站 AI 落子、没有手写棋形分数。但 hard set 用手写“三/四连检测器”挑哪些错题多复习,属于领域特定 curriculum,不是对 AlphaGo Zero“只给规则”配方的逐字复刻。</p>
         </div>
+
+        <h3>一条 Sample 占多少内存</h3>
+        <p>
+          <code>Sample</code> 是定长结构:4×225 个输入 float、225 个 π float、1 个 z float,合计 1126 个 float32:
+        </p>
+        <div class="mathblock reveal">
+          1126 × 4 bytes = 4504 bytes / state;
+          4504 × 200,000 = 900,800,000 bytes ≈ 859 MiB
+          <span class="label">这就是 buffer.bin 接近 860MB 的原因;它存的是局面,不是 20 万盘棋</span>
+        </div>
+        <p>
+          一盘自对弈平均会留下几十个状态,因此累计到万局级时,20 万容量很快装满。
+          装满后 <code>write_pos</code> 环形覆盖最老样本,内存和文件大小保持不再增长;训练规模继续增加时,
+          变化的是池中经验的新旧分布,不是文件无限膨胀。
+        </p>
+
+        <h3>60% 新经验 + 40% 全历史</h3>
+        <p>
+          策略每轮都变,十几小时前冷网产生的数据可能已经过时;若只均匀抽样,大量旧错误会稀释新信号。
+          <code>SampleIndicesRecency</code> 以 60% 概率按指数年龄抽近期样本(平均 age≈8000),其余 40% 均匀抽全池:
+          前者让网络跟上当前策略,后者保留旧棋形覆盖,避免只记得最近打法。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file"><a href="https://github.com/chenxuan520/deeplearning-model/blob/master/models/alphazero-gomoku/source/src/train/trainer.cpp" target="_blank" rel="noopener">source/src/train/trainer.cpp</a> · 一个 batch 怎样组出来(精简)</figcaption>
+          <pre class="code-walk__code"><code>buffer.SampleIndicesRecency(batch, rng,
+                            /*recent=*/0.6,
+                            /*mean_age=*/8000, indices);   <b class="cw-tag">1</b>
+
+for (30% batch slots)
+  indices[tail] = random(hard_indices);         <b class="cw-tag">2</b>
+
+for (sample : batch) {
+  symmetry = random(0..7);
+  TransformPlanes(state, symmetry);
+  TransformPolicy(pi, symmetry);                <b class="cw-tag">3</b>
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>先混合近期/全历史。</li>
+            <li>再把 batch 尾部约 30% 替换成必防长尾。</li>
+            <li>最后对输入和 π 做同一个旋转/镜像,保证标签不变形。</li>
+          </ol>
+        </figure>
 
         <h2>7. 并行训练、缓存、checkpoint 与门禁</h2>
         <p>
@@ -292,7 +454,57 @@ for (sample : trajectory)
           <p>自对弈分布一直变,loss 下降不保证对所有风格都更强。项目保存每 5 轮快照,并用旧站 1–7 档做全谱考官;代际相性曾出现“这代打穿 L7 却输 L5”的剧烈振荡。</p>
         </div>
 
-        <h2>8. 真实训练曲线:从 5.42 到 2.7</h2>
+        <h3>一个 iteration 的真实顺序</h3>
+        <p>
+          训练器不是“边下边改网络”。同一轮 80 局自对弈必须使用<strong>同一份固定权重</strong>,否则同一个 cache 条目和树价值会在半局中失效。
+          一轮完整顺序如下:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>顺序</th><th>动作</th><th>权重是否变化</th><th>日志 phase</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>扫描 20 万 Buffer 生成 hard set</td><td>否</td><td><code>hard_set</code></td></tr>
+              <tr><td>2</td><td>48 worker 合计完成 80 局</td><td>否</td><td><code>selfplay_done</code></td></tr>
+              <tr><td>3</td><td>抽 batch 做 200 次 AdamW</td><td><strong>是</strong></td><td><code>train_done</code></td></tr>
+              <tr><td>4</td><td>保存 latest.net/opt/state</td><td>固定快照</td><td>文件</td></tr>
+              <tr><td>5</td><td>每 5 轮 vs random + latest-vs-best</td><td>门禁后可能覆盖 best</td><td><code>gate</code></td></tr>
+              <tr><td>6</td><td>每 10 轮落盘 buffer.bin</td><td>否</td><td>文件</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>48 个 worker 为什么每人一份网络</h3>
+        <p>
+          项目底层算子带训练缓存,全局线程池也不适合多个外层游戏并发重入。因此每个 worker 都初始化一份
+          <code>PolicyValueResNet</code>,再从 master 复制权重和 BN running statistics,内部 <code>thread_num=1</code>。
+          外层 48 局并行比“一张网络内部开 48 线程、游戏串行”吞吐更高,也隔离了前向临时状态。
+        </p>
+        <p>
+          同轮还共享一个 64 分片 <code>EvalCache</code>。不同对局开局常走到相同局面,命中时连网络前向都省掉。
+          但 cache 只能在权重固定期间使用;一轮训练更新后必须整体丢弃。后来审查还发现 key 必须包含
+          <strong>行棋方 + last_action + 225 格棋盘</strong>,少任何输入平面都会产生“假命中”。
+        </p>
+
+        <h3>checkpoint 能恢复什么,不能恢复什么</h3>
+        <ul>
+          <li><code>latest.net</code>:网络结构、所有权重、BN running mean/variance。</li>
+          <li><code>latest.opt</code>:AdamW 的 step、第一矩、第二矩。</li>
+          <li><code>latest.state</code>:iteration 与 global step。</li>
+          <li><code>buffer.bin</code>:ring buffer 的 size、write_pos 和样本;每 10 轮保存一次。</li>
+        </ul>
+        <p>
+          所以宕机后不会丢模型和优化器,但最多损失 9 轮尚未落盘的 replay 新样本;RNG 状态也未保存,
+          恢复后不会逐 bit 复现原轨迹。这叫恢复到“最近耐久状态”,不是时间倒流。
+        </p>
+
+        <h3>为什么还要保存每 5 轮快照</h3>
+        <p>
+          best 门禁只回答“challenger 能否打赢当前 best”,并不保证它面对所有外部风格都更好。
+          训练中真的出现过某代 L7 双杀、下一代却被 L5 零封的情况。因此 <code>iter5.net / iter10.net / ...</code>
+          都被保留,最终用 L1–L7 全谱扫分挑综合冠军,而不是盲信 latest 或单链 best。
+        </p>
+
+        <h2>8. 真实训练曲线:一次完整训练怎样走上正轨</h2>
         <p>
           下图是结构化日志里的完整 policy loss 原始点,黄/粉线是 5/15 轮滑动均值,绿色竖线是 best 晋级。
           这条曲线不是修饰过的示意图:每一点对应一次完整 iteration。早期配方是 40 局 + 80 个优化 step,后期稳定配方才是 80 局 + 200 step;随机初始化理论基线 ln(225)≈5.42,第一条完训日志是 5.2797。
@@ -305,15 +517,82 @@ for (sample : trajectory)
           <table class="calc-table calc-table--wrap">
             <thead><tr><th>阶段</th><th>关键变化</th><th>结果</th></tr></thead>
             <tbody>
-              <tr><td>iter 1–12</td><td>全盘动作/符号/FPU bug</td><td>棋力不涨,policy≈5.2</td></tr>
-              <tr><td>iter 13+</td><td>候选点半径2</td><td>π 目标恢复有效,loss 快降</td></tr>
-              <tr><td>iter 39–70</td><td>sims 200→500,temp 12→6,c_puct 0.8</td><td>搜索看见反杀,开始会防守</td></tr>
-              <tr><td>iter 71+</td><td>hard mining / recency / 残局做种</td><td>填补必防长尾</td></tr>
-              <tr><td>iter 243</td><td>正式全谱验收</td><td>7 档全部过线</td></tr>
-              <tr><td>iter 276+</td><td>600 sims 瓶颈推进</td><td>loss 继续下降、仍有晋级</td></tr>
+              <tr><td>冷启动阶段</td><td>全盘动作/符号/FPU bug</td><td>棋力不涨,policy loss 在高位爬行</td></tr>
+              <tr><td>搜索修复阶段</td><td>候选点半径2</td><td>π 目标恢复有效,loss 阶梯式下降</td></tr>
+              <tr><td>搜索加深阶段</td><td>sims 200→500,temp 12→6,c_puct 0.8</td><td>搜索看见反杀,开始会防守</td></tr>
+              <tr><td>长尾强化阶段</td><td>hard mining / recency / 残局做种</td><td>逐步填补必防局面</td></tr>
+              <tr><td>正式验收阶段</td><td>固定快照 + 全谱大样本对战</td><td>7 档全部达到验收标准</td></tr>
             </tbody>
           </table>
         </div>
+
+        <h3>为什么训练规模必须是“万局级”</h3>
+        <p>
+          正式验收冠军并不是几百盘速成:验收阶段前已经积累约 1.7 万盘有效自对弈。
+          每盘会留下几十个状态,所以 20 万容量的 Replay Buffer 会装满并持续环形覆盖。
+          关键不是死记一个总盘数,而是理解为什么要不断刷新数据分布:网络变强后会走进旧网络从未见过的新局面,
+          新局面又必须重新搜索、重新产生 π 和 z。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>训练阶段</th><th>机制变化</th><th>可观察结果</th></tr></thead>
+            <tbody>
+              <tr><td>机制排错</td><td>候选剪枝、终局符号、FPU</td><td>必杀单测恢复,loss 开始有效下降</td></tr>
+              <tr><td>基础棋力形成</td><td>提高 sims、缩短温度窗口</td><td>平均局长缩短,开始稳定战胜随机</td></tr>
+              <tr><td>防守长尾</td><td>hard mining / recency</td><td>对手三四连状态价值逐渐转负</td></tr>
+              <tr><td>课程强化</td><td>从历史必防残局继续自对弈</td><td>开始击穿基础/进攻型考官</td></tr>
+              <tr><td>全谱选模</td><td>保存快照并对 7 种风格统一测评</td><td>识别代际相性,选出综合冠军</td></tr>
+              <tr><td>正式验收</td><td>高搜索预算、大样本对战</td><td>所有档位达到预设标准</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>大网络为什么反而不划算</h3>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>方案</th><th>参数量</th><th>48 路聚合前向</th><th>一次冷启动 iteration</th><th>结论</th></tr></thead>
+            <tbody>
+              <tr><td>32ch × 4 blocks</td><td>19.2 万</td><td>约 884 eval/s</td><td>约 10–50 分钟(配方随阶段变化)</td><td>采用</td></tr>
+              <tr><td>64ch × 6 blocks</td><td>56.3 万</td><td>约 189 eval/s</td><td>共享机器下约 75–90 分钟</td><td>放弃</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          参数只增到 2.9 倍,吞吐却降到约 1/4.7;而 AlphaZero 还要把前向放进数百次 MCTS 模拟中。
+          CPU 预算固定时,小网络高频迭代、更多自对弈和更深搜索，比“大网络但一天只进化几代”更划算。
+        </p>
+
+        <h3>搜索预算存在明显棋力阈值</h3>
+        <p>
+          固定发布冠军、只测 L7、模型执白 20 局,仅改变 MCTS simulations,得到一个非常尖锐的结果:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>sims</th><th>L7 白棋战绩</th><th>胜率</th><th>解释</th></tr></thead>
+            <tbody>
+              <tr><td>24</td><td>0胜 / 20负</td><td>0%</td><td>试玩速度快,战术深度不足</td></tr>
+              <tr><td>48</td><td>0胜 / 20负</td><td>0%</td><td>仍未跨过关键搜索深度</td></tr>
+              <tr><td>96</td><td>20胜 / 0负</td><td>100%</td><td>跨过该对手的战术阈值</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          这不是说“96 永远比 48 强一倍”,而是某些杀法必须搜到足够深才能显现。网页 12/24/48 是交互档,
+          96/120 是高预算档;正式验收仍用 600–800 sims。模型权重没变,搜索预算就能让结果从全败跳到全胜。
+        </p>
+
+        <h3>长期训练怎样避免“凭感觉停机”</h3>
+        <p>为了防止“感觉差不多了”就停,长期训练把停机条件写死,三条必须同时成立:</p>
+        <ol>
+          <li>连续至少 30 个完整 iteration 没有 best 晋级;</li>
+          <li>最近 15 轮 policy loss 的 rolling-5 不再实质下降,整体斜率接近 0;</li>
+          <li>同一冻结候选连续 3 个全谱窗口,L1–L7 每档黑棋 10/10、白棋至少 8/10。</li>
+        </ol>
+        <p>
+          这三条把“模型似乎已经不错”拆成可检查条件:代际不再进步、拟合曲线不再下降、外部对手也稳定过线。
+          至于当前训练跑到哪一轮、最新 loss 和晋级记录,属于会持续变化的运行日志,统一放在模型仓
+          <code>training/TRAINING_NOTES.md</code>,不写进书的稳定正文。
+        </p>
 
         <h2>9. 七个真坑:为什么“能运行”离“能学会”很远</h2>
         <ol>
@@ -327,6 +606,29 @@ for (sample : trajectory)
         </ol>
         <p>项目当前有 4100 项自动检查,覆盖规则、满盘和棋、编码、上一手 cache key、8 对称、MCTS 必杀与访问分布。真正耗时的不是写类,而是证明每个约定都没暗中反号或退化。</p>
 
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>坑</th><th>表面症状</th><th>容易误判成</th><th>最终证据</th></tr></thead>
+            <tbody>
+              <tr><td>候选过宽</td><td>loss 在 5.2 附近爬行、必杀偶尔漏掉</td><td>网络太小</td><td>候选剪枝后同网 loss 立刻阶梯下降</td></tr>
+              <tr><td>终局符号</td><td>活四局面 value 读成 −0.83</td><td>价值头没学会</td><td>统一待行方视角后必杀单测 4/4</td></tr>
+              <tr><td>FPU 锁死</td><td>第一条边长期吃满访问</td><td>策略先验过尖</td><td>FPU=0 后访问分布恢复展开</td></tr>
+              <tr><td>假随机</td><td>模型莫名其妙 vs random 0:20</td><td>训练完全失败</td><td>真实随机评估立即变 19:1/20:0</td></tr>
+              <tr><td>BN 漏复制</td><td>worker 输出与 master 漂移</td><td>并发浮点误差</td><td>复制 running stats 后逐值一致</td></tr>
+              <tr><td>cache 漏 last move</td><td>相同棋盘偶发错误复用</td><td>缓存只是加速,不影响结果</td><td>两种 last plane logits 最大差 0.781</td></tr>
+              <tr><td>latest 相性</td><td>这一代赢 L7、下一代输 L5</td><td>评估样本太少</td><td>多快照大 N 全谱确认风格振荡</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">调 RL 先证明评估器是真的</span>
+          <p>
+            强化学习最危险的不是报错,而是<strong>程序照跑、指标也有数、但含义已经退化</strong>。
+            假随机、OOD 静态 probe、CPU 拥塞超时都曾伪装成“模型很弱”。先用规则单测、必杀局面、真实随机、逐值 parity
+            证明测量工具可信,再根据指标改算法。
+          </p>
+        </div>
+
         <h2>10. 从 AlphaZero 到 AlphaGo Zero</h2>
         <p>
           本项目和 AlphaGo Zero 的核心闭环一致:统一策略价值网络 + MCTS + 纯自对弈 + 新旧门禁。
@@ -336,6 +638,28 @@ for (sample : trajectory)
           <span class="callout__title">关键不是“把模型做大”</span>
           <p>64ch×6block 的 56 万参数实验每轮慢 4 倍、总体进化反而更慢。CPU 预算下,小网络高频迭代 + 更深 MCTS + 正确数据闭环比盲目堆参数更强。</p>
         </div>
+
+        <h3>相同的是算法闭环,不同的是工程规模</h3>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>维度</th><th>本项目</th><th>AlphaGo Zero / AlphaZero 级系统</th></tr></thead>
+            <tbody>
+              <tr><td>棋盘/规则</td><td>15×15 自由五子棋</td><td>19×19 围棋 / 象棋 / 将棋</td></tr>
+              <tr><td>网络</td><td>32ch×4block,19.2 万参数</td><td>更宽更深的残差网络</td></tr>
+              <tr><td>设备</td><td>单机多核 CPU</td><td>TPU/GPU 集群</td></tr>
+              <tr><td>自对弈</td><td>48 线程、80 局/轮</td><td>大量异步 actor 持续产棋</td></tr>
+              <tr><td>推理</td><td>每 worker 单样本前向</td><td>集中批推理服务,合并叶子请求</td></tr>
+              <tr><td>搜索树</td><td>每步新建树</td><td>常复用子树、批量扩展</td></tr>
+              <tr><td>训练/自对弈</td><td>一轮一轮同步交替</td><td>actor-learner 异步流水线</td></tr>
+              <tr><td>课程</td><td>手写三/四连检测重采样</td><td>原论文更接近仅规则自对弈</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          因此本项目不是在硬件规模上“复刻 AlphaGo”,而是把最关键的可验证闭环压进普通 CPU:
+          搜索改进策略、终局监督价值、网络反哺搜索、门禁控制代际。网页端更进一步,直接读取同一份 C++ 权重,
+          证明它不是后端接口包装出来的假 demo。
+        </p>
 
         <section class="summary reveal">
           <h2>小结</h2>
@@ -357,7 +681,7 @@ for (sample : trajectory)
           <details class="quiz__item"><summary class="quiz__q">问题 3:候选点半径2是不是手写棋力?</summary><div class="quiz__a"><p>不是。它不判断哪步更好,只排除离所有棋子很远、当前几乎不可能影响局面的点;候选内的先验与价值全部来自网络/MCTS。</p></div></details>
           <details class="quiz__item"><summary class="quiz__q">问题 4:为什么训练要 Dirichlet 噪声,比赛却关闭?</summary><div class="quiz__a"><p>训练要主动发现没走过的分支,否则数据分布会自我固化;比赛要发挥当前已学最强策略,随机噪声只会送出烂棋。</p></div></details>
           <details class="quiz__item"><summary class="quiz__q">问题 5:为什么 loss 下降不能代替门禁对打?</summary><div class="quiz__a"><p>loss 衡量对当前 replay 分布的拟合,而自对弈分布随策略变化;某代可能 loss 更低却忘了特定对手棋形。实战胜负才是最终指标。</p></div></details>
-          <details class="quiz__item"><summary class="quiz__q">问题 6:hard mining 为什么仍是纯 Zero?</summary><div class="quiz__a"><p>它只从自己历史败局里多抽危险状态,答案 π/z 仍由新 MCTS 与终局自动产生;没有人类或旧 AI 告诉它正确挡点。</p></div></details>
+          <details class="quiz__item"><summary class="quiz__q">问题 6:hard mining 为什么不算教师标签,又为什么不能说成“只给规则”?</summary><div class="quiz__a"><p>它只从自己历史败局里多抽危险状态,答案 π/z 仍由新 MCTS 与终局自动产生,没有人类或旧 AI 告诉它正确挡点;但手写三/四连检测器决定了哪些状态多复习,所以课程采样确实加入了领域先验。</p></div></details>
           <details class="quiz__item"><summary class="quiz__q">问题 7:浏览器版为什么能直接读 C++ .net?</summary><div class="quiz__a"><p>序列化格式固定:64字节头 + 每个向量的 uint64 长度 + little-endian Float32。JS DataView 按同序读取,再按 C++ 张量布局前向。</p></div></details>
           <details class="quiz__item"><summary class="quiz__q">问题 8:若算力翻倍,先加参数还是加 MCTS sims?</summary><div class="quiz__a"><p>要测瓶颈。当前 56 万参数实验吞吐降约4倍,不划算;小网仍能继续降 loss,优先提高搜索质量/数据迭代频率更有效。只有小网稳定封顶才扩容。</p></div></details>
         </div>
