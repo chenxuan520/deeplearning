@@ -189,7 +189,7 @@
           <p>
             仓库 <code>TicTacToeEnv</code> 就是第 3 节这个循环:<code>StepAgent</code> 让 X 落子,<code>StepOpponent*</code> 让 O 回应,
             返回的 <code>StepResult</code> 里带着 <code>reward</code>、<code>done</code> 和下一状态的 <code>agent_state_key</code>。
-            第 12 节会把五件套和源码逐项对齐。
+            第 13 节会把五件套和源码逐项对齐。
           </p>
         </div>
 
@@ -568,7 +568,7 @@ QRow(state_key)[action] = old_q + config_.alpha * (target - old_q);    <b class=
           </p>
           <p style="margin-bottom:0">
             所以“加 KL 惩罚”翻译成大白话就是:<strong>你可以改,但别一夜之间变成另一个人。</strong>
-            后面 RLHF(第 11 节)也会用同样的手段,只是那里拴的对象不是“上一步的自己”,而是<strong>一个冻结不动的原模型</strong>。
+            后面 RLHF(第 12 节)也会用同样的手段,只是那里拴的对象不是“上一步的自己”,而是<strong>一个冻结不动的原模型</strong>。
           </p>
         </div>
         <p>
@@ -576,48 +576,113 @@ QRow(state_key)[action] = old_q + config_.alpha * (target - old_q);    <b class=
           语言场景里,动作是离散 token,策略网络就是<strong>语言模型本身</strong>,输出层 softmax 即 π(·|s)。
         </p>
 
-        <h3>从 AlphaGo 到 AlphaZero:让搜索教网络,网络再教搜索</h3>
+        <h2>10. 从 AlphaGo 到 AlphaZero:让搜索教网络,网络再教搜索</h2>
         <p>
           围棋/五子棋的动作虽然只有棋盘格,状态组合却大得根本存不下 Q 表。只靠 DQN 直接挑最大 Q 也不够:
           棋类一步的好坏常要看几十手以后。DeepMind 的关键组合是把<strong>策略网络、价值网络和蒙特卡洛树搜索(MCTS)</strong>接起来:
           网络负责"哪里值得搜"和"这个局面大概谁占优",搜索负责沿真正的落子后果往前看。
         </p>
+
+        <h3>AlphaGo:先站在人类棋谱的肩膀上</h3>
+        <p>
+          2016 年击败李世石的 AlphaGo 并不是“只给规则、自己从零悟道”。它先拿专业棋手棋谱做监督学习,
+          训练一个<strong>监督策略网络</strong>模仿高手落子;再让策略网络和自己的历史版本自对弈,用策略梯度继续强化。
+          此外还有独立的<strong>价值网络</strong>估计局面胜率,以及快速 rollout 策略模拟后续棋局。比赛时,MCTS 把这些组件合起来:
+          策略网络减少搜索宽度,价值网络和 rollout 减少搜到底的需要。
+        </p>
         <div class="figure reveal">
           <div class="diagram">
             <div class="pipe">
-              <div class="pipe__box">棋盘状态 s</div>
+              <div class="pipe__box">人类棋谱<small>监督策略网</small></div>
               <div class="pipe__arrow">→</div>
-              <div class="pipe__box">策略价值网络<small>P(s,·) + V(s)</small></div>
+              <div class="pipe__box">自对弈<small>强化策略网</small></div>
               <div class="pipe__arrow">→</div>
-              <div class="pipe__box">PUCT MCTS<small>先验引路,价值评叶</small></div>
+              <div class="pipe__box">价值网 + rollout<small>评估叶子</small></div>
               <div class="pipe__arrow">→</div>
-              <div class="pipe__box">访问分布 π<small>比原始 P 更强</small></div>
+              <div class="pipe__box">MCTS<small>组合决策</small></div>
             </div>
           </div>
-          <p class="figure__cap">不是"网络替代搜索",而是网络让搜索更聪明、搜索再产生更好的训练目标 π。</p>
+          <p class="figure__cap">AlphaGo 的成功已经证明“深度网络 + 搜索 + 强化学习”能击穿顶尖棋类,但训练链仍较复杂且依赖人类棋谱。</p>
         </div>
+
+        <h3>AlphaGo Zero:扔掉棋谱,合并策略与价值</h3>
+        <p>
+          AlphaGo Zero 迈了更狠的一步:不读任何人类棋谱,只知道围棋规则;策略和价值也不再分成多张网络,
+          而是一个共享骨干的<strong>策略价值网络</strong>同时输出 <var>p</var>(落子先验)和 <var>v</var>(局面胜负)。
+          rollout 也被拿掉:搜索到叶子时直接用价值头评估。组件更少,闭环反而更清楚:
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">当前网络<small>pθ,vθ</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">PUCT MCTS<small>搜索更强落子</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">自对弈<small>产生(s,π,z)</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">训练新网络<small>拟合π与z</small></div>
+              <div class="pipe__arrow">↺</div>
+            </div>
+          </div>
+          <p class="figure__cap">网络指导搜索,搜索产生比网络原始输出更强的 π,π 再训练下一代网络——老师和学生是同一个系统的不同阶段。</p>
+        </div>
+
+        <h3>AlphaZero:同一算法推广到多种棋类</h3>
+        <p>
+          AlphaZero 保留“统一策略价值网络 + MCTS + 纯自对弈”这条主线,把围棋专属部件拿掉,
+          用同一套算法学习围棋、国际象棋和将棋。换游戏时主要替换规则、状态/动作编码和终局判断,
+          搜索与学习闭环不变。这说明真正通用的不是某个棋谱技巧,而是<strong>让搜索和函数逼近互相增强</strong>的方法。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>系统</th><th>起步数据</th><th>网络</th><th>搜索/训练特点</th></tr></thead>
+            <tbody>
+              <tr><td><strong>AlphaGo</strong></td><td>先学人类棋谱</td><td>监督策略网 + 强化策略网 + 价值网</td><td>MCTS + rollout + 后续自对弈</td></tr>
+              <tr><td><strong>AlphaGo Zero</strong></td><td>只给围棋规则</td><td>统一策略价值网</td><td>无棋谱、无 rollout,纯自对弈</td></tr>
+              <tr><td><strong>AlphaZero</strong></td><td>只给游戏规则</td><td>通用策略价值网</td><td>同一算法适配多种棋类</td></tr>
+              <tr><td><strong>本书实战</strong></td><td>五子棋规则 + 自对弈;另用棋形检测做课程重采样</td><td>C++ Policy-Value ResNet</td><td>15×15 五子棋 + PUCT + 门禁晋级</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>PUCT:在“已经证明好”与“网络觉得好”之间取舍</h3>
+        <p>
+          搜索树里一条边若已经多次带来好结果,它的平均价值 <var>Q</var> 高,应该继续利用;
+          但若只盯 Q,搜索会卡在最早碰巧成功的路线。PUCT 给网络先验 <var>P</var> 高、访问次数少的动作额外探索奖励:
+        </p>
         <div class="mathblock reveal">
           PUCT(<var>s</var>,<var>a</var>) = <var>Q</var>(<var>s</var>,<var>a</var>) + <var>c</var><sub>puct</sub> · <var>P</var>(<var>s</var>,<var>a</var>) · √<var>N</var>(<var>s</var>) / [1 + <var>N</var>(<var>s</var>,<var>a</var>)]
-          <span class="label">Q 偏向已验证的好手;P 给未充分搜索但网络看好的手机会;访问越多,探索奖励逐渐变小</span>
+          <span class="label">Q 偏向已验证的好手;P 给网络看好的新手机会;N(s,a) 越大,探索奖励越小</span>
         </div>
+        <ol>
+          <li><strong>选择</strong>:从根开始反复选 PUCT 分数最高的边。</li>
+          <li><strong>扩展与评估</strong>:走到未展开叶子,用策略价值网络得到新先验 <var>p</var> 与叶子价值 <var>v</var>。</li>
+          <li><strong>回传</strong>:把 <var>v</var> 沿路径传回根;每向上一层换一次行棋方,价值符号翻转。</li>
+          <li><strong>改进策略</strong>:搜索结束后把根边访问次数归一化成 π。π 融合了网络直觉和真实搜索后果。</li>
+        </ol>
+
+        <h3>自对弈:没有逐步答案,也能自动造出监督目标</h3>
         <p>
-          <span class="term">自对弈(self-play)</span>把这套系统变成不需要棋谱的老师:当前网络指导 MCTS,搜索访问次数归一化成改进策略 π,
-          一局结束后胜负给价值目标 <var>z</var>。每个训练样本就是 (<var>s</var>,π,<var>z</var>),网络同时拟合策略和价值:
+          <span class="term">自对弈(self-play)</span>让当前网络同时扮演双方。每一步保存搜索前状态 <var>s</var> 与根访问分布 π;
+          一局结束后,从“当时待行方”视角给每个状态写入结果 <var>z</var>(胜 +1、负 −1、和 0)。
+          所以样本是 (<var>s</var>,π,<var>z</var>),没有人告诉它某一步唯一的标准答案。
         </p>
         <div class="mathblock reveal">
           <var>L</var> = − πᵀ log <var>p</var> + (<var>z</var> − <var>v</var>)² + λ||θ||²
-          <span class="label">第一项学 MCTS 改进后的落子分布;第二项学最终胜负;第三项正则化</span>
+          <span class="label">策略头把昂贵搜索 π 蒸馏回一次前向;价值头学习终局 z;正则项限制过拟合</span>
         </div>
-        <div class="table-wrap reveal">
-          <table class="calc-table calc-table--wrap">
-            <thead><tr><th>系统</th><th>人类棋谱</th><th>网络</th><th>搜索/训练特点</th></tr></thead>
-            <tbody>
-              <tr><td><strong>AlphaGo</strong></td><td>先学人类棋谱</td><td>策略网 + 价值网</td><td>MCTS + 后续自对弈强化</td></tr>
-              <tr><td><strong>AlphaGo Zero</strong></td><td>不用</td><td>统一策略价值网</td><td>只靠规则与自对弈从零学习围棋</td></tr>
-              <tr><td><strong>AlphaZero</strong></td><td>不用</td><td>通用策略价值网</td><td>同一算法适配围棋/象棋/将棋</td></tr>
-              <tr><td><strong>本书实战</strong></td><td>不用</td><td>C++ Policy-Value ResNet</td><td>15×15 五子棋 + PUCT + 门禁晋级</td></tr>
-            </tbody>
-          </table>
+        <p>
+          训练时会给根先验加入 Dirichlet 噪声,开局按 π 采样,避免所有对局永远重复同一主线;
+          正式比赛关闭噪声并偏向访问次数最多的动作。新网络训练完还不能直接覆盖旧冠军,
+          必须在固定规则下与历史 best 对打并通过门槛——这就是<strong>门禁(gating)</strong>。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">它和 DQN / Actor-Critic 有什么关系?</span>
+          <p>
+            像 Actor-Critic:策略头负责出招,价值头负责评价;像 DQN:都可能用 Replay Buffer 打散经验。
+            但 AlphaZero 的策略监督不是 Q 的 argmax,也不是裸回报乘 logπ,而是<strong>MCTS 访问分布 π</strong>——
+            先花搜索计算改进策略,再把搜索结果蒸馏回网络。
+          </p>
         </div>
         <div class="callout callout--tip reveal">
           <span class="callout__title">这就是第 25 章的主角</span>
@@ -627,7 +692,7 @@ QRow(state_key)[action] = old_q + config_.alpha * (target - old_q);    <b class=
           </p>
         </div>
 
-        <h2>10. 一条典型的 RL 训练循环</h2>
+        <h2>11. 一条典型的 RL 训练循环</h2>
         <p>把前面散落的步骤收成一张“流水线”,大多数 Q-learning / DQN / PPO 代码都是这个壳子:</p>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">强化学习训练循环 · 示意伪代码</figcaption>
@@ -683,7 +748,7 @@ while (!env.IsTerminal()) {
           </ol>
         </figure>
 
-        <h2>11. 回到大模型:RLHF 就是一次强化学习</h2>
+        <h2>12. 回到大模型:RLHF 就是一次强化学习</h2>
         <p>
           绕了一圈,回到本书主线。你在<a class="xref" href="chapter-20.html">第 20 章</a>会读到,大模型训练的最后一步 <strong>RLHF(基于人类反馈的强化学习)</strong>,
           用的正是本章这套语言——只要把五个概念对号入座,它立刻就不神秘了:
@@ -717,7 +782,7 @@ while (!env.IsTerminal()) {
           用“答对给正奖励、答错给负奖励”的强化学习,让模型自己摸索出好的推理套路(<a class="xref" href="chapter-20.html">第 20 章</a>)。可见强化学习这套“靠奖励试错”的思想,正越来越深地嵌进大模型。
         </p>
 
-        <h2>12. 对照真实代码:井字棋环境怎么拼起来</h2>
+        <h2>13. 对照真实代码:井字棋环境怎么拼起来</h2>
         <p>
           第 2 节的老鼠走廊是纸上例子;配套项目用<strong>井字棋</strong>把同一套 MDP 五件套落到代码里。
            下面保留与源码的简要对照,帮助读懂最小 Q-learning;
@@ -776,7 +841,7 @@ agent.Init(config);                              // α, γ, ε 等超参     <b 
 TicTacToeEnv env;
 
 for (int episode = 0; episode &lt; option.episodes; episode++) {
-  agent.RunEpisode(env, train_opponent, stats);  // 第 10 节内循环       <b class="cw-tag">2</b>
+  agent.RunEpisode(env, train_opponent, stats);  // 第 11 节内循环       <b class="cw-tag">2</b>
   agent.DecayEpsilon();
 }
 auto eval = agent.Evaluate(env, OpponentType::RANDOM, eval_games); <b class="cw-tag">3</b></code></pre>

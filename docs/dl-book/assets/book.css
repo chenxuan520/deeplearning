@@ -1435,40 +1435,45 @@ details[open] .quiz__q::after {
   padding-bottom: 0.3rem;
 }
 
-.azg-demo__board {
-  display: grid;
-  grid-template-columns: repeat(15, 1fr);
-  width: min(100%, 660px);
+.azg-demo__board-shell {
+  position: relative;
+  width: 600px;
+  height: 600px;
   margin: 0 auto;
-  padding: 0.55rem;
-  gap: 2px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background:
-    linear-gradient(135deg, rgba(224, 170, 92, 0.22), rgba(110, 67, 24, 0.2)),
-    var(--surface);
+  border-radius: 8px;
+  background: #dcb35c;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.azg-demo__canvas {
+  display: block;
+  width: 600px;
+  height: 600px;
+  background: #dcb35c;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+}
+
+.azg-demo__board {
+  position: absolute;
+  inset: 0;
+  width: 600px;
+  height: 600px;
 }
 
 .azg-demo__cell {
-  aspect-ratio: 1;
-  min-width: 0;
+  position: absolute;
+  width: 40px;
+  height: 40px;
   padding: 0;
-  border: 1px solid rgba(148, 163, 184, 0.23);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.025);
-  color: var(--text);
-  display: grid;
-  place-items: center;
-  font-size: clamp(0.68rem, 1.9vw, 1.28rem);
-  line-height: 1;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
 }
 
 .azg-demo__cell:hover:not(:disabled) {
-  transform: scale(1.06);
-  border-color: var(--accent);
-  background: rgba(106, 195, 255, 0.13);
+  background: transparent;
 }
 
 .azg-demo__cell:disabled {
@@ -1476,19 +1481,14 @@ details[open] .quiz__q::after {
   opacity: 1;
 }
 
-.azg-demo__cell.is-black {
-  color: #05070a;
-  text-shadow: 0 0 1px rgba(255, 255, 255, 0.8);
+.azg-demo__cell:focus-visible {
+  outline: none;
 }
 
-.azg-demo__cell.is-white {
-  color: #f8fafc;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
-}
-
-.azg-demo__cell.is-last {
-  border-color: #fb7185;
-  box-shadow: inset 0 0 0 1px #fb7185;
+.azg-demo.is-keyboard .azg-demo__cell:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: -4px;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .azg-demo__stats {
@@ -1511,11 +1511,10 @@ details[open] .quiz__q::after {
 }
 
 @media (max-width: 720px) {
+  .azg-demo__board-shell,
+  .azg-demo__canvas,
   .azg-demo__board {
-    width: 660px;
-    min-width: 660px;
-    padding: 0.3rem;
-    gap: 1px;
+    width: 600px;
   }
   .azg-demo__stat {
     grid-template-columns: 1fr 1fr;

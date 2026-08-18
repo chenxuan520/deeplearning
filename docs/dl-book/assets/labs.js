@@ -2311,7 +2311,10 @@
     '    <div class="formula-card azg-demo__board-card">' +
     '      <h3>15×15 棋盘</h3>' +
     '      <div class="azg-demo__board-scroll" tabindex="0" aria-label="可横向滚动的五子棋棋盘">' +
-    '        <div class="azg-demo__board" data-azg-board aria-label="AlphaZero 五子棋棋盘"></div>' +
+    '        <div class="azg-demo__board-shell">' +
+    '          <canvas class="azg-demo__canvas" data-azg-canvas width="600" height="600" aria-hidden="true"></canvas>' +
+    '          <div class="azg-demo__board" data-azg-board aria-label="AlphaZero 五子棋棋盘"></div>' +
+    '        </div>' +
     '      </div>' +
     '      <p class="explain" data-azg-meta>黑棋先行,五连或长连获胜,无禁手。</p>' +
     '    </div>' +
@@ -2347,6 +2350,7 @@
     root.innerHTML = AZ_GOMOKU_TPL;
     var ui = {
       board: root.querySelector("[data-azg-board]"),
+      canvas: root.querySelector("[data-azg-canvas]"),
       boardScroll: root.querySelector(".azg-demo__board-scroll"),
       status: root.querySelector("[data-azg-status]"),
       meta: root.querySelector("[data-azg-meta]"),
@@ -2362,7 +2366,11 @@
     var busy = false;
     var gameVersion = 0;
     var focusAction = 112;
+    var keyboardMode = false;
     var cells = [];
+    var ctx = ui.canvas.getContext("2d");
+    var boardOffset = 20;
+    var cellSize = 40;
 
     for (var action = 0; action < 225; action++) {
       var button = document.createElement("button");
@@ -2371,8 +2379,12 @@
       button.setAttribute("data-action", String(action));
       button.setAttribute("aria-label", "第 " + (Math.floor(action / 15) + 1) + " 行第 " + (action % 15 + 1) + " 列");
       button.tabIndex = -1;
+      button.style.left = (boardOffset + (action % 15) * cellSize - cellSize / 2) + "px";
+      button.style.top = (boardOffset + Math.floor(action / 15) * cellSize - cellSize / 2) + "px";
       button.addEventListener("click", onHumanMove);
       button.addEventListener("keydown", onBoardKey);
+      button.addEventListener("mouseenter", onCellHover);
+      button.addEventListener("mouseleave", function () { drawCanvas(-1); });
       ui.board.appendChild(button);
       cells.push(button);
     }
@@ -2406,13 +2418,12 @@
     function render() {
       if (!state) return;
       ensureFocusAction();
+      drawCanvas(-1);
       for (var i = 0; i < 225; i++) {
         var value = state.board[i];
         var button = cells[i];
-        button.className = "azg-demo__cell" +
-          (value === 1 ? " is-black" : value === -1 ? " is-white" : "") +
-          (state.lastAction === i ? " is-last" : "");
-        button.textContent = value === 1 ? "●" : value === -1 ? "○" : "";
+        button.className = "azg-demo__cell" + (state.lastAction === i ? " is-last" : "");
+        button.textContent = "";
         button.disabled = busy || state.result !== 0 || state.currentPlayer !== humanPlayer() || value !== 0;
         button.tabIndex = !button.disabled && i === focusAction ? 0 : -1;
         button.setAttribute("aria-label", "第 " + (Math.floor(i / 15) + 1) + " 行第 " + (i % 15 + 1) + " 列," +
@@ -2422,6 +2433,74 @@
       else if (!busy) ui.status.textContent = state.currentPlayer === humanPlayer() ? "轮到你落子。" : "AlphaZero 思考中…";
       ui.meta.textContent = "已下 " + state.moveCount + " 手; " +
         (state.currentPlayer === 1 ? "黑棋" : "白棋") + (state.result === 0 ? "待行" : "终局");
+    }
+
+    function drawCanvas(hoverAction) {
+      ctx.clearRect(0, 0, 600, 600);
+      ctx.fillStyle = "#dcb35c";
+      ctx.fillRect(0, 0, 600, 600);
+      ctx.strokeStyle = "#17120b";
+      ctx.lineWidth = 1;
+      for (var i = 0; i < 15; i++) {
+        var p = boardOffset + i * cellSize;
+        ctx.beginPath(); ctx.moveTo(p, boardOffset); ctx.lineTo(p, boardOffset + 14 * cellSize); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(boardOffset, p); ctx.lineTo(boardOffset + 14 * cellSize, p); ctx.stroke();
+      }
+      [3, 7, 11].forEach(function (row) {
+        [3, 7, 11].forEach(function (column) {
+          ctx.beginPath();
+          ctx.arc(boardOffset + column * cellSize, boardOffset + row * cellSize, 3, 0, Math.PI * 2);
+          ctx.fillStyle = "#17120b";
+          ctx.fill();
+        });
+      });
+      if (!state) return;
+      for (var action = 0; action < 225; action++) {
+        if (state.board[action] !== 0) drawStone(action, state.board[action]);
+      }
+      if (state.lastAction >= 0) {
+        var lx = boardOffset + (state.lastAction % 15) * cellSize;
+        var ly = boardOffset + Math.floor(state.lastAction / 15) * cellSize;
+        ctx.strokeStyle = "#fb7185";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(lx - 9, ly - 9, 18, 18);
+      }
+      if (hoverAction >= 0 && state.board[hoverAction] === 0 && !busy &&
+          state.result === 0 && state.currentPlayer === humanPlayer()) {
+        var hx = boardOffset + (hoverAction % 15) * cellSize;
+        var hy = boardOffset + Math.floor(hoverAction / 15) * cellSize;
+        ctx.beginPath(); ctx.arc(hx, hy, cellSize / 3, 0, Math.PI * 2);
+        ctx.fillStyle = humanPlayer() === 1 ? "rgba(0,0,0,.3)" : "rgba(255,255,255,.5)";
+        ctx.fill();
+      }
+    }
+
+    function drawStone(action, color) {
+      var centerX = boardOffset + (action % 15) * cellSize;
+      var centerY = boardOffset + Math.floor(action / 15) * cellSize;
+      var radius = cellSize / 2 - 2;
+      ctx.beginPath(); ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      var gradient;
+      if (color === 1) {
+        gradient = ctx.createRadialGradient(centerX - radius / 3, centerY - radius / 3, 1, centerX, centerY, radius);
+        gradient.addColorStop(0, "#555"); gradient.addColorStop(1, "#000");
+      } else {
+        gradient = ctx.createRadialGradient(centerX - radius / 4, centerY - radius / 4, 1, centerX, centerY, radius);
+        gradient.addColorStop(0, "#fff"); gradient.addColorStop(1, "#aaa");
+      }
+      ctx.fillStyle = gradient; ctx.fill();
+      ctx.strokeStyle = "#000"; ctx.lineWidth = 1; ctx.stroke();
+      if (color === -1) {
+        ctx.beginPath();
+        ctx.arc(centerX - radius / 4, centerY - radius / 4, radius / 3, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255,255,255,.7)";
+        ctx.fill();
+      }
+    }
+
+    function onCellHover(event) {
+      if (!state) return;
+      drawCanvas(parseInt(event.currentTarget.getAttribute("data-action"), 10));
     }
 
     function topVisits(visits) {
@@ -2434,6 +2513,11 @@
 
     function onHumanMove(event) {
       if (!AZ || !model || !state || busy || state.result !== 0 || state.currentPlayer !== humanPlayer()) return;
+      if (event.detail > 0) {
+        keyboardMode = false;
+        root.classList.remove("is-keyboard");
+        event.currentTarget.blur();
+      }
       var action = parseInt(event.currentTarget.getAttribute("data-action"), 10);
       if (!AZ.applyMove(state, action)) return;
       focusAction = action;
@@ -2448,6 +2532,8 @@
         event.key === "ArrowUp" ? [-1, 0] :
         event.key === "ArrowDown" ? [1, 0] : null;
       if (!delta || !state || busy || state.currentPlayer !== humanPlayer()) return;
+      keyboardMode = true;
+      root.classList.add("is-keyboard");
       event.preventDefault();
       event.stopPropagation();
       var start = parseInt(event.currentTarget.getAttribute("data-action"), 10);
@@ -2503,13 +2589,13 @@
         ui.status.textContent = (state.result !== 0 ? resultText() : "轮到你落子") +
           " · " + simulations + " sims · " + (elapsed / 1000).toFixed(2) + "s";
         centerAction(state.lastAction, true);
-        if (state.result === 0 && cells[focusAction]) cells[focusAction].focus({ preventScroll: true });
+        if (keyboardMode && state.result === 0 && cells[focusAction]) cells[focusAction].focus({ preventScroll: true });
       }).catch(function (error) {
         if (version !== gameVersion) return;
         busy = false;
         render();
         ui.status.textContent = "搜索失败:" + error.message + "。请重试或重新开局。";
-        if (cells[focusAction]) cells[focusAction].focus({ preventScroll: true });
+        if (keyboardMode && cells[focusAction]) cells[focusAction].focus({ preventScroll: true });
       });
     }
 
@@ -2524,7 +2610,7 @@
       render();
       setTimeout(function () {
         centerAction(112, false);
-        if (humanPlayer() === 1 && cells[focusAction]) cells[focusAction].focus({ preventScroll: true });
+        if (keyboardMode && humanPlayer() === 1 && cells[focusAction]) cells[focusAction].focus({ preventScroll: true });
       }, 0);
       if (humanPlayer() === -1) setTimeout(aiMove, 0);
     }

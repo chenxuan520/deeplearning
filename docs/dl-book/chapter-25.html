@@ -17,8 +17,14 @@
         <p class="lead">
           <a class="xref" href="chapter-23.html">第 23 章</a>把监督学习跑通了,<a class="xref" href="chapter-24.html">第 24 章</a>把生成模型跑通了;
           最后一章代码实战,把<a class="xref" href="chapter-12.html">第 12 章</a>的强化学习升级成一套完整的 <strong>AlphaZero 式</strong>系统:
-          15×15 五子棋、策略价值残差网络、PUCT MCTS、纯自对弈、Replay Buffer、并行训练和新旧冠军门禁。
+          15×15 五子棋、策略价值残差网络、PUCT MCTS、自对弈、Replay Buffer、并行训练和新旧冠军门禁。
           全程不用人类棋谱、不用旧 AI 教落子;网络从规则和输赢里自己学会进攻、防守与搜索。
+        </p>
+        <p class="muted">
+          <strong>源码位置说明:</strong>本章项目不在 <code>deeplearning</code> 主仓的 <code>src/</code> 下;
+          完整可构建源码位于
+          <a href="https://github.com/chenxuan520/deeplearning-model/tree/master/models/alphazero-gomoku/source" target="_blank" rel="noopener"><code>deeplearning-model/models/alphazero-gomoku/source/</code></a>。
+          下文的 <code>src/game/...</code>、<code>src/mcts/...</code> 都是相对这个 <code>source/</code> 根目录而言。
         </p>
 
         <section class="objectives reveal">
@@ -49,6 +55,8 @@
           <span class="callout__title">完整源码可独立复现</span>
           <p>
             本章精读的不是框架仓里不存在的伪代码。完整 C++ 快照在模型仓 <code>models/alphazero-gomoku/source/</code>:
+            <code>git clone https://github.com/chenxuan520/deeplearning-model</code> →
+            <code>cd deeplearning-model/models/alphazero-gomoku</code> →
             <code>cmake -S source -B source/build -DCMAKE_BUILD_TYPE=Release</code> →
             <code>cmake --build source/build -j</code> → <code>source/bin/test_az</code>。
             规则、ResNet、MCTS、自对弈、训练器、门禁、4100 项测试和 JS/C++ parity probe 都在。
@@ -71,11 +79,11 @@
 
         <h2>2. 环境:15×15 棋盘、胜负与 4 平面编码</h2>
         <p>
-          环境是 <code>src/game/gomoku.*</code>。动作 <var>a</var> 是 0–224 的行优先格子编号;
+          环境是 <a href="https://github.com/chenxuan520/deeplearning-model/blob/master/models/alphazero-gomoku/source/src/game/gomoku.cpp" target="_blank" rel="noopener"><code>source/src/game/gomoku.*</code></a>。动作 <var>a</var> 是 0–224 的行优先格子编号;
           黑棋记 +1、白棋记 −1、空位 0。自由规则下横/竖/两条斜线任一方向五连或长连即胜,没有禁手。
         </p>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/game/gomoku.cpp · 落子与终局(精简)</figcaption>
+          <figcaption class="code-walk__file"><a href="https://github.com/chenxuan520/deeplearning-model/blob/master/models/alphazero-gomoku/source/src/game/gomoku.cpp" target="_blank" rel="noopener">source/src/game/gomoku.cpp</a> · 落子与终局(精简)</figcaption>
           <pre class="code-walk__code"><code>board_[action] = current_player_;
 ++move_count_;
 last_action_ = action;
@@ -131,7 +139,7 @@ else
           </div>
         </div>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">PolicyValueResNet::Forward · 双头分流(精简)</figcaption>
+          <figcaption class="code-walk__file"><a href="https://github.com/chenxuan520/deeplearning-model/blob/master/models/alphazero-gomoku/source/lib/cnn/policy_value_resnet.cpp" target="_blank" rel="noopener">source/lib/cnn/policy_value_resnet.cpp</a> · PolicyValueResNet::Forward(精简)</figcaption>
           <pre class="code-walk__code"><code>trunk = ReLU(BN(stem_conv(input)));
 for (block : blocks)
   trunk = block.Forward(trunk);                <b class="cw-tag">1</b>
@@ -171,7 +179,7 @@ v = tanh(value_output(hidden));                 <b class="cw-tag">3</b></code></
           <span class="label">Q 是搜索经验;P 是网络直觉;N 越小探索奖励越大</span>
         </div>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/mcts/mcts.cpp · 选择与价值回传(精简)</figcaption>
+          <figcaption class="code-walk__file"><a href="https://github.com/chenxuan520/deeplearning-model/blob/master/models/alphazero-gomoku/source/src/mcts/mcts.cpp" target="_blank" rel="noopener">source/src/mcts/mcts.cpp</a> · 选择与价值回传(精简)</figcaption>
           <pre class="code-walk__code"><code>q = edge.n &gt; 0 ? edge.w / edge.n : parent_q - fpu;
 u = c_puct * edge.prior * sqrt(parent.n) / (1 + edge.n);
 edge = argmax(q + u);                         <b class="cw-tag">1</b>
@@ -201,7 +209,7 @@ for (path from leaf to root) {
           棋局结束后,把最终胜负从当时待行方视角写回每个状态成为 <var>z</var>。
         </p>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">self_play.cpp · 一局数据如何产生(伪代码对应真实实现)</figcaption>
+          <figcaption class="code-walk__file"><a href="https://github.com/chenxuan520/deeplearning-model/blob/master/models/alphazero-gomoku/source/src/train/self_play.cpp" target="_blank" rel="noopener">source/src/train/self_play.cpp</a> · 一局数据如何产生(伪代码对应真实实现)</figcaption>
           <pre class="code-walk__code"><code>while (!game.terminal()) {
   encode(game, sample.state);                  <b class="cw-tag">1</b>
   mcts.Search(game, network, visits);
