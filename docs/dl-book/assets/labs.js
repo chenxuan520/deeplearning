@@ -2641,7 +2641,11 @@
     loadAzGomokuEngine().then(function (engine) {
       AZ = engine;
       ui.status.textContent = "解析 C++ 权重并初始化网络…";
-      return AZ.load("https://azgomoku.011203.xyz/model.json");
+      // Manifest is intentionally mutable: it selects the currently deployed
+      // champion.  Bust its short HTTP cache so a newly published model is
+      // picked up immediately; the referenced weight itself is content-
+      // addressed and remains safely immutable.
+      return AZ.load("https://azgomoku.011203.xyz/model.json?cb=" + Date.now());
     }).then(function (loaded) {
       model = loaded;
       ui.status.textContent = "模型就绪。";
