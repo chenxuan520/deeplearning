@@ -2302,7 +2302,7 @@
     '    <div class="demo-toolbar">' +
     '      <button type="button" class="button button--primary" data-azg-act="reset">重新开局</button>' +
     '      <label>你执 <select data-azg="human"><option value="-1">白棋(后手)</option><option value="1">黑棋(先手)</option></select></label>' +
-    '      <label>MCTS <select data-azg="sims"><option value="12">12(快)</option><option value="24" selected>24(平衡)</option><option value="48">48(强)</option><option value="120">120(较强)</option><option value="custom">自定义</option></select></label>' +
+    '      <label>MCTS <select data-azg="sims"><option value="12">12(极速)</option><option value="24" selected>24(试玩)</option><option value="48">48(较深)</option><option value="120">120(更深)</option><option value="custom">自定义</option></select></label>' +
     '      <label data-azg-custom-wrap hidden>次数 <input type="number" min="1" max="800" step="1" value="60" data-azg="sims-custom" /></label>' +
     '      <a class="button button--ghost" href="https://github.com/chenxuan520/deeplearning-model/tree/master/models/alphazero-gomoku" target="_blank" rel="noopener">模型档案 ↗</a>' +
     '    </div>' +
