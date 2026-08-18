@@ -50,7 +50,7 @@ build_binaries() {
   (
     cd "${SRC_DIR}/build"
     cmake -DENABLE_DRAW=false -DCMAKE_BUILD_TYPE=Release ..
-    cmake --build . --target mnist rl_tictactoe web_model_export -j2
+    cmake --build . --target mnist web_model_export -j2
   )
 }
 
@@ -75,22 +75,43 @@ build_mnist_asset() {
     --out ../docs/dl-book/assets/demos/mnist/model.json)
 }
 
-build_tictactoe_asset() {
-  mkdir -p "${OUT_DIR}/tictactoe"
-  if [ -s "${OUT_DIR}/tictactoe/q_table.json" ]; then
-    echo "Using cached TicTacToe demo asset: ${OUT_DIR}/tictactoe/q_table.json"
-    return
-  fi
-  (cd "${SRC_DIR}" && ./bin/rl_tictactoe \
-    --episodes 300000 \
-    --eval-games 1000 \
-    --rand-seed 0 \
-    --export-json ../docs/dl-book/assets/demos/tictactoe/q_table.json)
+validate_alphazero_assets() {
+  python3 - <<'PY'
+import hashlib
+import json
+import urllib.request
+
+base = "https://azgomoku.011203.xyz"
+def open_url(url, timeout):
+    request = urllib.request.Request(url, headers={"User-Agent": "dl-book-assets-check/1.0"})
+    return urllib.request.urlopen(request, timeout=timeout)
+
+with open_url(base + "/model.json", 30) as response:
+    manifest = json.load(response)
+assert manifest["format"] == "XQPVRN01"
+assert manifest["parameter_count"] == 191853
+for key in ("file", "engine", "training_curve"):
+    assert manifest[key].startswith(base + "/"), (key, manifest[key])
+
+with open_url(manifest["file"], 60) as response:
+    weights = response.read()
+assert len(weights) == manifest["size_bytes"]
+assert hashlib.sha256(weights).hexdigest() == manifest["sha256"]
+
+with open_url(manifest["engine"], 30) as response:
+    engine = response.read()
+assert b"XQPVRN01" in engine and b"AlphaZeroGomoku" in engine
+
+with open_url(manifest["training_curve"], 30) as response:
+    curve = response.read(8)
+assert curve == b"\x89PNG\r\n\x1a\n"
+print("Validated AlphaZero browser assets:", manifest["file"])
+PY
 }
 
 build_binaries
 build_mnist_asset
-build_tictactoe_asset
+validate_alphazero_assets
 
 echo "Generated demo assets:"
 find "${OUT_DIR}" -maxdepth 3 -type f -print

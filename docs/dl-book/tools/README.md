@@ -13,7 +13,7 @@ cd docs/dl-book
 | `check_anchors.py` | 跨章/跨节 `#锚点` 是否指向存在的 h2/h3 | ✅ [dl-book-check.yml](../../../.github/workflows/dl-book-check.yml) |
 | `check_structure.py` | HTML 标签配平 + 每章 h2 主编号是否连续 | ✅ 同上 |
 | `count_chars.py` | 统计全书汉字与篇幅（本地自查用） | — |
-| `build_demo_assets.sh` | 发布前生成 MNIST / 井字棋演示 JSON，随 Pages artifact 发布但不进 git | ✅ [dl-book-pages.yml](../../../.github/workflows/dl-book-pages.yml) |
+| `build_demo_assets.sh` | 发布前生成 MNIST 演示 JSON，随 Pages artifact 发布但不进 git | ✅ [dl-book-pages.yml](../../../.github/workflows/dl-book-pages.yml) |
 | `export_pdf.py` | 用 Playwright 导出浅色整书 PDF（不包含交互实验） | ✅ [release.yml](../../../.github/workflows/release.yml) |
 
 ---
@@ -73,10 +73,12 @@ tools/build_demo_assets.sh
 
 ```text
 docs/dl-book/assets/demos/mnist/model.json
-docs/dl-book/assets/demos/tictactoe/q_table.json
 ```
 
-`assets/demos/` 已在仓库根 `.gitignore` 中忽略。这些 JSON 不提交进 git，只在 GitHub Actions 的 `dl-book-pages.yml` 中生成，然后随 `docs/dl-book` 作为 Pages artifact 上传。MNIST 模型文件会通过 Actions cache 复用，cache miss 时脚本会下载/回退模型快照再导出 JSON。井字棋的 `q_table.json` 也会通过 Actions cache 复用，cache miss 时才重新训练并导出。
+`assets/demos/` 已在仓库根 `.gitignore` 中忽略。MNIST JSON 不提交进 git，只在 GitHub Actions 的 `dl-book-pages.yml` 中生成，然后随 `docs/dl-book` 作为 Pages artifact 上传。MNIST 模型文件会通过 Actions cache 复用，cache miss 时脚本会下载/回退模型快照再导出 JSON。
+
+第 25 章 AlphaZero 五子棋模型独立存放在 `deeplearning-model/models/alphazero-gomoku`，由 Cloudflare 静态资产托管；书页 JavaScript 下载约 770KB 的 C++ `.net` 权重，在浏览器内完成 Policy-Value ResNet 前向和 PUCT MCTS，不需要 CI 重新训练或生成模型资产。
+发布脚本仍会检查外部 `model.json`、权重长度/SHA-256、浏览器引擎和训练曲线 PNG；任一资源不可用时 Pages 部署直接失败，避免发布一个打不开的主实验台。
 
 ---
 

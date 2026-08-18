@@ -35,7 +35,7 @@
     { num: "22", title: "用好大模型:Context、Harness 与 Agent", file: "chapter-22.html", part: "第五部分 · 通往大模型" },
     { num: "23", title: "MNIST 实战:把第一、二部分跑起来", file: "chapter-23.html", part: "第六部分 · 代码实战" },
     { num: "24", title: "mini-LM 实战:把第四、五部分跑起来", file: "chapter-24.html", part: "第六部分 · 代码实战" },
-    { num: "25", title: "井字棋 Q-learning 实战:把强化学习跑起来", file: "chapter-25.html", part: "第六部分 · 代码实战" },
+    { num: "25", title: "AlphaZero 实战:让五子棋 AI 从零自学", file: "chapter-25.html", part: "第六部分 · 代码实战" },
     { num: "26", title: "机器学习全景图", file: "chapter-26.html", part: "第七部分 · 番外" },
     { num: "27", title: "无监督与自监督学习", file: "chapter-27.html", part: "第七部分 · 番外" },
     { num: "28", title: "经典机器学习:决策树与随机森林", file: "chapter-28.html", part: "第七部分 · 番外" },
@@ -512,7 +512,7 @@
 
   function isVimBlockedTarget(target) {
     if (!target) return false;
-    if (/^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) return true;
+    if (/^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(target.tagName)) return true;
     if (target.isContentEditable) return true;
     return false;
   }
@@ -1186,13 +1186,13 @@
       var tag = p.tagName.toUpperCase();
       if (tag === "SCRIPT" || tag === "STYLE" || tag === "SVG" || tag === "TEXTAREA" ||
           tag === "INPUT" || tag === "CODE" || tag === "KBD" || tag === "SAMP" ||
-          tag === "PRE" || tag === "MARK") return true;
+          tag === "PRE" || tag === "MARK" || tag === "A" || tag === "SUMMARY") return true;
       if (/^H[1-6]$/.test(tag)) return true;
       if (p.classList) {
         if (p.classList.contains("chapter__eyebrow") || p.classList.contains("glossary-popover") ||
             p.classList.contains("glossary") || p.classList.contains("code-walk__code") ||
             p.classList.contains("code-walk") || p.classList.contains("diagram") ||
-            p.classList.contains("mathblock") ||
+            p.classList.contains("mathblock") || p.classList.contains("lab--no-glossary") ||
             p.classList.contains("term--glossary")) return true;
       }
       if (p.classList && p.classList.contains("chapter__inner")) return false;

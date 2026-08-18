@@ -283,7 +283,7 @@
           <li><strong>第三部分 · 经典网络结构(第 13–15 章)</strong>:处理图像的 <em>CNN</em>、处理序列的 <em>RNN/LSTM</em>,以及让词有语义的<em>词嵌入</em>。</li>
           <li><strong>第四部分 · 序列与 Transformer(第 16–18 章)</strong>:处理“一句话”这种序列数据,引出<em>注意力机制</em>,拼出完整的 <em>Transformer</em>。</li>
           <li><strong>第五部分 · 通往大模型(第 19–22 章)</strong>:把它做成语言模型,再讲透大模型的原理、训练(含后训练与对齐)、工程基础设施与实际使用。</li>
-          <li><strong>第六部分 · 代码实战(第 23–25 章)</strong>:对照仓库里三份真实的 C++ 程序(MNIST、字符级语言模型、井字棋 Q-learning),把监督学习、生成式模型与强化学习在代码里对一遍号。</li>
+          <li><strong>第六部分 · 代码实战(第 23–25 章)</strong>:对照三份真实项目(MNIST、字符级语言模型、AlphaZero 五子棋),把监督学习、生成式模型与强化学习在代码里对一遍号。</li>
         </ul>
         <p>如果你带着明确目标来,也可以按下面的路线选读;看完一条再回头补其他支线就好:</p>
         <div class="table-wrap reveal">
@@ -291,7 +291,7 @@
             <thead><tr><th>路线</th><th>建议读法</th></tr></thead>
             <tbody>
               <tr><td><strong>零基础最短路线</strong></td><td><a class="xref" href="chapter-01.html">数学预备</a>(公式卡住时回看) → <a class="xref" href="chapter-02.html">神经元</a> → <a class="xref" href="chapter-03.html">前向传播</a> → <a class="xref" href="chapter-04.html">损失</a>、<a class="xref" href="chapter-05.html">梯度下降</a>、<a class="xref" href="chapter-06.html">反向传播</a> → <a class="xref" href="chapter-16.html">为什么需要注意力</a> → <a class="xref" href="chapter-17.html">注意力</a> → <a class="xref" href="chapter-18.html">Transformer</a> → <a class="xref" href="chapter-19.html">语言模型</a> → <a class="xref" href="chapter-20.html">大模型</a></td></tr>
-              <tr><td><strong>C++ 实现路线</strong></td><td><a class="xref" href="chapter-02.html">基础网络</a>与<a class="xref" href="chapter-04.html">训练</a> → <a class="xref" href="chapter-23.html">MNIST 实战</a> → <a class="xref" href="chapter-16.html">注意力</a>、<a class="xref" href="chapter-18.html">Transformer</a>、<a class="xref" href="chapter-19.html">语言模型</a> → <a class="xref" href="chapter-24.html">mini-LM 实战</a></td></tr>
+              <tr><td><strong>C++ 实现路线</strong></td><td><a class="xref" href="chapter-02.html">基础网络</a>与<a class="xref" href="chapter-04.html">训练</a> → <a class="xref" href="chapter-23.html">MNIST 实战</a> → <a class="xref" href="chapter-16.html">注意力</a>、<a class="xref" href="chapter-18.html">Transformer</a>、<a class="xref" href="chapter-19.html">语言模型</a> → <a class="xref" href="chapter-24.html">mini-LM 实战</a> → <a class="xref" href="chapter-25.html">AlphaZero 实战</a></td></tr>
               <tr><td><strong>已有基础的大模型工程路线</strong></td><td><a class="xref" href="chapter-16.html">为什么需要注意力</a> → <a class="xref" href="chapter-17.html">注意力机制</a> → <a class="xref" href="chapter-18.html">Transformer</a> → <a class="xref" href="chapter-20.html">大模型训练</a> → <a class="xref" href="chapter-21.html">工程与基础设施</a> → <a class="xref" href="chapter-22.html">Context、Harness 与 Agent</a></td></tr>
             </tbody>
           </table>
@@ -306,7 +306,7 @@
         <ul>
           <li><strong>零框架、从头手写</strong>:前向、反向、Adam、注意力……全是几百行朴素 C++(见 <code>src/deeplearning/</code>),没有任何黑盒;看不懂的公式,总能回到代码里看它一步步怎么算。</li>
           <li><strong>边读边玩的交互实验</strong>:书里嵌了可拖动的<em>神经元实验台</em>、<em>前向/反向传播动画</em>、<em>注意力可视化</em>——参数一拖,结果实时变,比读三段文字管用。</li>
-          <li><strong>拿真实训练结果说话</strong>:<em>字符级语言模型</em>会导出<strong>真实的注意力权重</strong>供你在页面上逐步回放;MNIST、井字棋等 demo 都能亲手跑出书里说的效果(下面就教你跑)。</li>
+          <li><strong>拿真实训练结果说话</strong>:<em>字符级语言模型</em>会导出<strong>真实的注意力权重</strong>供你在页面上逐步回放;MNIST 和 AlphaZero 五子棋直接加载训练后的真实参数在浏览器推理。</li>
         </ul>
         <p>仓库的结构是这样的:</p>
         <p class="muted">
@@ -335,15 +335,15 @@
 │  │  ├─ cnn_mnist/             卷积版 MNIST
 │  │  ├─ rnn_char/              字符级 RNN
 │  │  ├─ word2vec/              词向量训练
-│  │  ├─ transformer_char/      字符级语言模型 (<a class="xref" href="chapter-24.html">第 24 章</a>精读)
-│  │  ├─ mini_lm/               基座式语言模型 CLI (init/train/generate)
-│  │  ├─ rl_tictactoe/          井字棋 Q-learning (<a class="xref" href="chapter-25.html">第 25 章</a>精读)
+│  │  ├─ transformer_char/      字符级语言模型
+│  │  ├─ mini_lm/               基座式语言模型 CLI (<a class="xref" href="chapter-24.html">第 24 章</a>精读)
+│  │  ├─ rl_tictactoe/          井字棋 Q-learning (<a class="xref" href="chapter-12.html">第 12 章</a>入门)
 │  │  └─ optimizer_bench/       优化器对比
 │  └─ test/                     单元测试
 └─ docs/dl-book/             <b class="cw-tag">3</b>  你正在读的这本书</code></pre>
           <ol class="code-walk__notes">
             <li><code>src/deeplearning/</code> 是<strong>库</strong>:所有原理的实现都在这里,一个概念对应一个子目录或文件。</li>
-            <li><code>src/demo/</code> 是<strong>把库用起来</strong>的完整程序。本书第 23、24、25 章就是逐行精读这里的 <code>mnist</code>、<code>transformer_char</code> 和 <code>rl_tictactoe</code>。</li>
+            <li><code>src/demo/</code> 是<strong>把库用起来</strong>的完整程序。第 23、24 章精读其中的 <code>mnist</code> 与 <code>mini_lm</code>;第 25 章再精读用同一套 C++ 组件搭出的独立 AlphaZero 五子棋项目。</li>
             <li><code>docs/dl-book/</code> 就是这本电子书本身(纯静态 HTML,零依赖)。</li>
           </ol>
         </figure>
@@ -394,7 +394,7 @@ cd deeplearning/src &amp;&amp; ./build.sh   <b class="cw-tag">1</b>  编译(用 
             1)<strong>先抓直觉,再抠细节</strong>:看不懂公式很正常,先把“这一步在干嘛”读懂,公式回头再看。<br />
             2)<strong>一定要动手玩实验</strong>:书里每个可拖动的小实验,玩 30 秒胜过读三段文字。<br />
             3)<strong>代码看不懂可以先跳过</strong>:每段代码都配了逐行讲解,但它是“加深理解”,不是“看懂前提”。<br />
-            4)<strong>三章实战放最后</strong>:监督学习(MNIST)、生成式(字符级语言模型)、强化学习(井字棋)各一章,读到再跑不迟。
+            4)<strong>三章实战放最后</strong>:监督学习(MNIST)、生成式(mini-LM)、强化学习(AlphaZero 五子棋)各一章,读到再跑不迟。
           </p>
         </div>
 

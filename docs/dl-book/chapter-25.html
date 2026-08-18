@@ -3,359 +3,366 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>第 25 章 · 井字棋 Q-learning 实战:把强化学习跑起来 | 从神经元到大模型</title>
+    <title>第 25 章 · AlphaZero 实战:让五子棋 AI 从零自学 | 从神经元到大模型</title>
     <link rel="icon" href="assets/favicon.svg" />
-    <link rel="stylesheet" href="assets/book.css?v=demo-layout-20260714b" />
+    <link rel="stylesheet" href="assets/book.css?v=demo-layout-20260818a" />
     <link rel="stylesheet" href="assets/diagrams.css" />
   </head>
   <body data-chapter="25">
     <main class="chapter">
       <div class="chapter__inner">
         <p class="chapter__eyebrow">第 25 章 · 代码实战</p>
-        <h1>井字棋 Q-learning 实战:把强化学习跑起来</h1>
+        <h1>AlphaZero 实战:让五子棋 AI 从零自学</h1>
 
         <p class="lead">
-          <a class="xref" href="chapter-23.html">第 23 章</a>把监督学习跑通了,<a class="xref" href="chapter-24.html">第 24 章</a>把语言模型跑通了;
-          这一章补上<a class="xref" href="chapter-12.html">第 12 章</a>的<strong>强化学习</strong>——没有标签,只有赢/输/和的奖励,靠试错学策略。
-          程序是仓库里的 <code>src/demo/rl_tictactoe/main.cpp</code>,配上 <code>src/deeplearning/rl/</code> 下的环境与 Q-learning 模块。
-          智能体执 <strong>X</strong>,用一张 <strong>Q 表</strong>(不是神经网络) 学会下棋;默认训 3 万局后,对随机对手 greedy 胜率约 <strong>99%</strong>。
+          <a class="xref" href="chapter-23.html">第 23 章</a>把监督学习跑通了,<a class="xref" href="chapter-24.html">第 24 章</a>把生成模型跑通了;
+          最后一章代码实战,把<a class="xref" href="chapter-12.html">第 12 章</a>的强化学习升级成一套完整的 <strong>AlphaZero 式</strong>系统:
+          15×15 五子棋、策略价值残差网络、PUCT MCTS、纯自对弈、Replay Buffer、并行训练和新旧冠军门禁。
+          全程不用人类棋谱、不用旧 AI 教落子;网络从规则和输赢里自己学会进攻、防守与搜索。
         </p>
 
         <section class="objectives reveal">
           <h2>读完这一章,你会明白</h2>
           <ul>
-            <li>一个 RL 程序的完整链路:<strong>环境 → Q 表 → 多回合训练 → 评估 → (可选)人机对战</strong>;</li>
-            <li><code>TicTacToeEnv</code> 如何把<a class="xref" href="chapter-12.html">第 12 章</a>的 状态 / 动作 / 奖励 落成代码;</li>
-            <li><code>TabularQLearning</code> 如何实现 ε-greedy、TD 更新与 <code>RunEpisode</code> 训练循环;</li>
-            <li>为什么井字棋适合<strong>表格式 Q-learning</strong>,而 MNIST / 语言模型走的是监督学习;</li>
-            <li>怎么编译运行,并亲手看到胜率随训练爬升。</li>
+            <li>为什么 15×15 五子棋不可能再用 Q 表,必须上<strong>神经网络 + 搜索</strong>;</li>
+            <li>4 个棋盘平面如何编码“当前行棋方视角”,策略头和价值头分别学什么;</li>
+            <li>PUCT 如何把网络先验 <var>P</var>、搜索价值 <var>Q</var> 和访问次数 <var>N</var>合在一起;</li>
+            <li>MCTS 怎样生成比网络原始策略更强的 π,终局胜负怎样变成 <var>z</var>;</li>
+            <li>Replay Buffer、8 对称增广、hard mining、残局做种为什么仍是纯自对弈;</li>
+            <li>48 个 worker、缓存、checkpoint、门禁对打如何组成一条可长期运行的训练线;</li>
+            <li>真实训练从 policy loss 5.42 降到 2.7 左右时经历过哪些致命 bug 和性能取舍;</li>
+            <li>浏览器如何直接解析 C++ 二进制权重,本地完成 ResNet 前向与 PUCT MCTS。</li>
           </ul>
         </section>
 
-        <h2>1. 任务与全景:没有标签,只有奖惩</h2>
+        <h2>1. 先下一盘:真实冠军模型,浏览器本地推理</h2>
         <p>
-          监督学习(<a class="xref" href="chapter-23.html">第 23 章</a>)每道题旁贴着标准答案;强化学习(<a class="xref" href="chapter-12.html">第 12 章</a>)只有环境在终局告诉你“赢了吗”。
-          井字棋里:<strong>状态</strong> = 当前棋盘,<strong>动作</strong> = 在 0–8 某一格落子,<strong>奖励</strong> = 赢 +1 / 输 −1 / 和 0(中间步全是 0,典型<strong>稀疏奖励</strong>)。
+          先别看公式。下面不是手写规则、不是远程服务器返回一步棋,而是发布产物里的<strong>真实 19.2 万参数冠军网络</strong>:
+          页面下载约 770KB 的 C++ <code>.net</code> 文件,JavaScript 直接解析 Conv/BN/残差块参数,
+          在你的浏览器里完成策略价值前向和 PUCT MCTS。默认你执白棋,AlphaZero 先落天元。
         </p>
         <div class="figure reveal">
-          <div class="diagram">
-            <div class="pipe">
-              <div class="pipe__box">空棋盘<small>回合开始 reset</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">X 落子<small>ε-greedy 选动作</small></div>
-              <div class="pipe__arrow">→</div>
-              <div class="pipe__box">O 回应<small>随机或最优对手</small></div>
-              <div class="pipe__arrow">↺</div>
-              <div class="pipe__box">TD 更新 Q<small>r + γ·max Q(s′,·)</small></div>
-            </div>
-          </div>
-          <p class="figure__cap">对应<a class="xref" href="chapter-12.html#3-智能体与环境-一个不停转的循环">第 12 章 agent–env 循环</a> + <a class="xref" href="chapter-12.html#7-q-learning-用一张表把价值从终点倒灌回起点">Q-learning 更新</a>。外层再重复很多<strong>回合</strong>。</p>
+          <div data-lab="alphazero-gomoku"></div>
+          <p class="figure__cap">模型、网络结构、完整训练档案与 loss 原始点见 <a href="https://github.com/chenxuan520/deeplearning-model/tree/master/models/alphazero-gomoku" target="_blank" rel="noopener">deeplearning-model / alphazero-gomoku</a>。网页前向已和 C++ 在 4 个局面逐值对齐,最大 logit 误差 2.67e-5。</p>
         </div>
-        <div class="callout callout--note reveal">
-          <span class="callout__title">和 MNIST / mini-LM 的本质区别</span>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">完整源码可独立复现</span>
           <p>
-            MNIST 的“标签”是人工给的数字;语言模型的“标签”是语料里自带的下一个字。
-            井字棋<strong>没有任何一步的标准落法</strong>,只有走完才知道输赢——训练信号来自 <code>ApplyMove</code> 里的 <code>reward</code>,
-            学习目标是一张 <code>Q(s,a)</code> 表,而不是<a class="xref" href="chapter-06.html">反向传播</a>里的梯度(本章<strong>没有</strong>神经网络)。
+            本章精读的不是框架仓里不存在的伪代码。完整 C++ 快照在模型仓 <code>models/alphazero-gomoku/source/</code>:
+            <code>cmake -S source -B source/build -DCMAKE_BUILD_TYPE=Release</code> →
+            <code>cmake --build source/build -j</code> → <code>source/bin/test_az</code>。
+            规则、ResNet、MCTS、自对弈、训练器、门禁、4100 项测试和 JS/C++ parity probe 都在。
           </p>
         </div>
-
         <div class="figure reveal">
-          <div data-lab="tictactoe-demo"></div>
-          <p class="figure__cap">这里直接读取发布产物里的真实 Q 表。你执 O,页面里的智能体执 X;每一步都会把合法动作的 Q 值展开给你看。</p>
-        </div>
-
-        <h2>2. 第一步 · 环境:棋盘、状态编码与奖励</h2>
-        <p>
-          <code>TicTacToeEnv</code> 就是<a class="xref" href="chapter-12.html">第 12 章</a>的“环境”。它维护 9 格棋盘、判断输赢、在轮到智能体时返回 <code>state_key</code>。
-          状态用<strong>三进制整数</strong>编码:每格 空/X/O → 0/1/2,压成一个 <code>int</code> 当作 Q 表的键。
-        </p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/rl/tic_tac_toe_env.cpp · 状态编码(精简)</figcaption>
-          <pre class="code-walk__code"><code>int TicTacToeEnv::EncodeBoardKey(const std::array&lt;Cell, 9&gt; &amp;board) {
-  int key = 0, base = 1;
-  for (int i = 0; i &lt; 9; i++) {
-    key += static_cast&lt;int&gt;(board[i]) * base;   // 空=0, X=1, O=2   <b class="cw-tag">1</b>
-    base *= 3;
-  }
-  return key;
-}</code></pre>
-          <ol class="code-walk__notes">
-            <li>只在<strong>轮到 X(智能体)</strong>时调用 <code>AgentStateKey()</code>——Q 表存的是“轮到我下时,这盘棋值多少”。</li>
-          </ol>
-        </figure>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/rl/tic_tac_toe_env.cpp · 落子与奖励(精简)</figcaption>
-          <pre class="code-walk__code"><code>board_[action] = player;
-result_ = CheckResult();
-out.done = IsTerminal();
-
-if (result_ == GameResult::X_WIN)      out.reward = 1.0;              <b class="cw-tag">1</b>
-else if (result_ == GameResult::O_WIN)   out.reward = -1.0;
-else if (result_ == GameResult::DRAW)    out.reward = 0.0;
-
-if (!out.done) {
-  agent_turn_ = !agent_turn_;
-  out.agent_state_key = agent_turn_ ? AgentStateKey() : -1;           <b class="cw-tag">2</b>
-}</code></pre>
-          <ol class="code-walk__notes">
-            <li>奖励只在<strong>终局</strong>给出,对应<a class="xref" href="chapter-12.html#稀疏奖励-为什么-rl-常常很难训">第 12 章稀疏奖励</a>;中间步 <code>reward=0</code>,靠 TD 目标里的 <code>max Q(s′,·)</code> 把价值从终局往回传。</li>
-            <li>若未结束,交换行棋方,并准备好<strong>下一轮智能体行动时</strong>的状态键,供 <code>Update</code> 使用。</li>
-          </ol>
-        </figure>
-        <p>对手有两种:<code>StepOpponentRandom</code>(训练常用)和 <code>StepOpponentOptimal</code>(minimax 最优,用于评估“会不会输”)。</p>
-
-        <h2>3. 第二步 · Q 表与超参:α、γ、ε</h2>
-        <p>
-          <code>TabularQLearning</code> 维护 <code>unordered_map&lt;state_key, vector&lt;double&gt;&gt;</code>——每个状态 9 个动作的 Q 值,初始全 0。
-          超参与<a class="xref" href="chapter-12.html#7-q-learning-用一张表把价值从终点倒灌回起点">第 12 章手算</a>一致:
-        </p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/demo/rl_tictactoe/main.cpp · 初始化智能体(精简)</figcaption>
-          <pre class="code-walk__code"><code>TabularQLearning::Config config;
-config.alpha = 0.5;           // 学习率 α                         <b class="cw-tag">1</b>
-config.gamma = 0.99;          // 折扣 γ
-config.epsilon = 1.0;         // 探索率, 训练初期几乎全随机          <b class="cw-tag">2</b>
-config.epsilon_min = 0.05;
-config.epsilon_decay = 0.9995;
-config.rand_seed = option.rand_seed;
-agent.Init(config);</code></pre>
-          <ol class="code-walk__notes">
-            <li>α 控制每次 TD 更新挪多大幅度;γ 让智能体更看长远(接近 1 时更重视终局赢棋)。</li>
-            <li>ε 从 1.0 指数衰减到 0.05——<a class="xref" href="chapter-12.html#6-探索与利用-走老路还是试新路">第 12 章 ε-greedy</a>:先广探索,后多利用已学到的 Q。</li>
-          </ol>
-        </figure>
-
-        <h2>4. 第三步 · 选动作:ε-greedy 与 TD 更新</h2>
-        <p>每一步训练都要做两件事:按当前 Q 表<strong>选落子</strong>,再用环境反馈<strong>改 Q 表</strong>。</p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/rl/tabular_q_learning.cpp · SelectAction(精简)</figcaption>
-          <pre class="code-walk__code"><code>if (explore &amp;&amp; config_.epsilon &gt; 0.0) {
-  double sample = random.CreateRandom() / 1000000.0;
-  if (sample &lt; config_.epsilon)
-    return TicTacToeEnv::ChooseRandomAction(legal_actions, ...);   <b class="cw-tag">1</b>
-}
-return ArgmaxQ(state_key, legal_actions);                          <b class="cw-tag">2</b></code></pre>
-          <ol class="code-walk__notes">
-            <li>探索:在<strong>合法空位</strong>里随机挑一格。</li>
-            <li>利用:挑 Q 最大的合法落子;<code>Evaluate</code> 时 <code>explore=false</code>,纯 greedy 下棋。</li>
-          </ol>
-        </figure>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/rl/tabular_q_learning.cpp · Update(精简)</figcaption>
-          <pre class="code-walk__code"><code>double old_q = QRow(state_key)[action];
-double target = reward;
-if (!terminal)
-  target += config_.gamma * MaxQ(next_state_key, legal_actions_next);  <b class="cw-tag">1</b>
-QRow(state_key)[action] = old_q + config_.alpha * (target - old_q);    <b class="cw-tag">2</b></code></pre>
-          <ol class="code-walk__notes">
-            <li>贝尔曼目标 <code>r + γ·max Q(s′,·)</code>(<a class="xref" href="chapter-12.html#贝尔曼方程-把长远拆成眼前一步--下一步">第 12 章</a>);终局时不再加未来项。</li>
-            <li>TD 误差 <code>target − old_q</code>,乘以 α 写回——和<a class="xref" href="chapter-06.html">第 6 章</a>“误差驱动更新”同构,但没有反向传播。</li>
-          </ol>
-        </figure>
-
-        <h2>5. 第四步 · 训练:RunEpisode 与外层循环</h2>
-        <p>
-          一个<strong>回合</strong> = 从空盘下到终局。<code>RunEpisode</code> 封装了<a class="xref" href="chapter-12.html#10-一条典型的-rl-训练循环">第 12 章内层循环</a>:
-          X 走 → O 走 → 更新 Q,直到 <code>done</code>。<code>main.cpp</code> 外层只是重复很多回合并衰减 ε。
-        </p>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/deeplearning/rl/tabular_q_learning.cpp · RunEpisode(精简)</figcaption>
-          <pre class="code-walk__code"><code>env.Reset();
-while (!env.IsTerminal()) {
-  int state_key = env.AgentStateKey();
-  int action = SelectAction(state_key, env.LegalActions(), true);     <b class="cw-tag">1</b>
-  env.StepAgent(action, agent_step);
-  if (agent_step.done) {
-    Update(state_key, action, agent_step.reward, -1, {}, true);
-    break;
-  }
-  env.StepOpponentRandom(opponent_action, opponent_step);            <b class="cw-tag">2</b>
-  if (opponent_step.done) {
-    Update(state_key, action, opponent_step.reward, -1, {}, true);
-    break;
-  }
-  Update(state_key, action, 0.0, opponent_step.agent_state_key,
-         env.LegalActions(), false);                                  <b class="cw-tag">3</b>
-}</code></pre>
-          <ol class="code-walk__notes">
-            <li>每步用 ε-greedy 选合法落子;非法位置会被环境拒绝(测试里专门测过)。</li>
-            <li>训练对手默认随机;也可 <code>--opponent optimal</code> 对抗 minimax(更难学、收敛慢)。</li>
-            <li>非终局步 reward=0,用对手走完后的新局面作 <var>s</var>′ 做 bootstrap——价值就这样从赢棋局面<strong>倒灌</strong>回开局。</li>
-          </ol>
-        </figure>
-        <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/demo/rl_tictactoe/main.cpp · 外层训练循环(精简)</figcaption>
-          <pre class="code-walk__code"><code>for (int episode = 0; episode &lt; option.episodes; episode++) {
-  agent.RunEpisode(env, train_opponent, stats);
-  agent.DecayEpsilon();                                              <b class="cw-tag">1</b>
-  // 每 5000 局打印: 累计胜/和/负、Q 表状态数、当前 ε
-}</code></pre>
-          <ol class="code-walk__notes">
-            <li>与<a class="xref" href="chapter-23.html">第 23 章</a> <code>Train</code> 的外层 epoch 类似,但数据不是固定数据集,而是<strong>自己下棋现生成</strong>的轨迹。</li>
-          </ol>
-        </figure>
-        <div class="figure figure--reading reveal">
           <div class="diagram">
             <div class="pipe">
-              <div class="pipe__box">reset<small>新回合</small></div>
+              <div class="pipe__box">棋盘状态 s<small>4×15×15 平面</small></div>
               <div class="pipe__arrow">→</div>
-              <div class="pipe__box">ε-greedy 落子<small>第 12 章 §6</small></div>
+              <div class="pipe__box">Policy-Value ResNet<small>p + v</small></div>
               <div class="pipe__arrow">→</div>
-              <div class="pipe__box">环境 step<small>r, done, s′</small></div>
+              <div class="pipe__box">PUCT MCTS<small>选择/扩展/回传</small></div>
               <div class="pipe__arrow">→</div>
-              <div class="pipe__box">Update Q<small>TD 目标</small></div>
+              <div class="pipe__box">落子<small>访问次数最多</small></div>
             </div>
           </div>
-          <p class="figure__cap">监督学习的 <code>Train</code> 是“前向→损失→反向”;这里是“行动→奖励→改 Q 表”,<strong>没有标签、没有梯度</strong>。</p>
+          <p class="figure__cap">网络不会直接“拍脑袋落子”:它先给搜索方向和局面价值,树搜索再验证后果。</p>
         </div>
 
-        <h3>跑起来会看到什么:训练日志速览</h3>
+        <h2>2. 环境:15×15 棋盘、胜负与 4 平面编码</h2>
         <p>
-          光看代码不够,跑一遍才踏实。下面是默认配置(<code>--episodes 30000 --opponent random</code>,seed 0)每 5000 局打印的真实日志,
-          三样东西同时在变——<strong>ε 在降、胜局在涨、Q 表在长</strong>:
+          环境是 <code>src/game/gomoku.*</code>。动作 <var>a</var> 是 0–224 的行优先格子编号;
+          黑棋记 +1、白棋记 −1、空位 0。自由规则下横/竖/两条斜线任一方向五连或长连即胜,没有禁手。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/game/gomoku.cpp · 落子与终局(精简)</figcaption>
+          <pre class="code-walk__code"><code>board_[action] = current_player_;
+++move_count_;
+last_action_ = action;
+
+if (CheckWin(row, column))
+  result_ = current_player_;                 <b class="cw-tag">1</b>
+else if (move_count_ == 225)
+  result_ = DRAW;
+else
+  current_player_ = -current_player_;        <b class="cw-tag">2</b></code></pre>
+          <ol class="code-walk__notes">
+            <li><code>CheckWin</code> 从刚落下的棋子向两边数 4 个方向,累计 ≥5 即胜。</li>
+            <li>未终局才交换行棋方;这点决定 MCTS 终局价值的符号约定。</li>
+          </ol>
+        </figure>
+        <p>
+          网络始终站在<strong>当前该走棋的一方</strong>看棋盘,因此同一个绝对棋盘轮到黑/白时输入不同:
         </p>
         <div class="table-wrap reveal">
           <table class="calc-table calc-table--wrap">
-            <thead>
-              <tr><th>局数</th><th>累计 胜/和/负</th><th>这 5000 局胜率*</th><th>q_states</th><th>ε</th></tr>
-            </thead>
+            <thead><tr><th>平面</th><th>形状</th><th>含义</th><th>为什么需要</th></tr></thead>
             <tbody>
-              <tr><td>5000</td><td>3764 / 383 / 853</td><td>75.3%</td><td>2010</td><td>0.082</td></tr>
-              <tr><td>10000</td><td>8498 / 529 / 973</td><td>94.7%</td><td>2062</td><td>0.05</td></tr>
-              <tr><td>15000</td><td>13273 / 666 / 1061</td><td>95.5%</td><td>2087</td><td>0.05</td></tr>
-              <tr><td>20000</td><td>18065 / 784 / 1151</td><td>95.8%</td><td>2107</td><td>0.05</td></tr>
-              <tr><td>25000</td><td>22834 / 939 / 1227</td><td>95.4%</td><td>2125</td><td>0.05</td></tr>
-              <tr><td>30000</td><td>27610 / 1087 / 1303</td><td>95.5%</td><td>2143</td><td>0.05</td></tr>
+              <tr><td>0</td><td>15×15</td><td>当前行棋方的棋子</td><td>统一黑白视角,同一网络两色共用</td></tr>
+              <tr><td>1</td><td>15×15</td><td>对方棋子</td><td>识别威胁与包围关系</td></tr>
+              <tr><td>2</td><td>15×15</td><td>上一手 one-hot</td><td>标记刚发生的局部变化</td></tr>
+              <tr><td>3</td><td>15×15</td><td>黑走全 1,白走全 0</td><td>保留先后手信息</td></tr>
             </tbody>
           </table>
-          <p class="calc-table__cap">*“这 5000 局胜率”是用相邻两行的累计胜局差 ÷ 5000 现算的,反映<strong>那一段</strong>的水平(累计胜率会被早期乱下的局拖低)。可以看到:ε 从 1.0 一路衰减到下限 0.05 后,胜率就稳定在 95% 上下;<code>q_states</code>(见过的不同局面数)很快收敛到两千出头——井字棋的局面就这么多,这也是<strong>查表能行</strong>的根本原因。</p>
         </div>
         <div class="callout callout--note reveal">
-          <span class="callout__title">训练时抖、评估时稳:别被训练胜率吓到</span>
-          <p>
-            训练日志里还夹着 1300 局“负”,是因为训练时<strong>故意留着 ε=0.05 的随机探索</strong>,时不时自己走一步烂棋。
-            等 <a class="xref" href="chapter-25.html#6-第五步--评估与人机对战">第 6 节</a>评估时关掉探索、纯 greedy 下,胜率会更高更稳——这正是<a class="xref" href="chapter-25.html#动手与思考">下面第 3 题</a>要问的“训练和评估为什么不一样”。
-          </p>
+          <span class="callout__title">8 种对称,一盘棋变八盘</span>
+          <p>方形棋盘有 4 次旋转 × 可选镜像 = 8 个等价局面。训练抽样时同时变换输入平面和策略 π,不制造假标签,却把数据利用率放大 8 倍。</p>
         </div>
 
-        <h2>6. 第五步 · 评估与人机对战</h2>
+        <h2>3. 策略价值 ResNet:一个身体,两个脑袋</h2>
         <p>
-          训练完用 <code>Evaluate</code> 关掉探索,纯 greedy 连下很多局,统计胜/和/负。程序会分别对<strong>随机</strong>和<strong>最优</strong>两种对手各评估一遍。
-          默认(对随机训练)的真实结果是:对<strong>随机对手</strong> 984 胜 / 13 和 / 3 负(<strong>不败率 99.7%</strong>);对<strong>最优对手</strong>则几乎全输。
+          网络完全使用项目从手写 C++ 框架复制出的 Float32 组件:<code>BatchedConv2D</code>、<code>BatchNorm2D</code>、
+          <code>ResidualBlock2D</code>、<code>FloatLinear</code>。没有 PyTorch/TensorFlow/ONNX。
         </p>
-        <div class="callout callout--warn reveal">
-          <span class="callout__title">一个诚实的坑:你跟谁练,就只擅长打谁</span>
-          <p>
-            默认拿<strong>随机对手</strong>陪练,智能体学到的是“怎么惩罚乱下的人”,专打随机对手很强,可它<strong>从没见过高手的严密下法</strong>,遇到 minimax 最优对手就成片地输。
-            反过来,加 <code>--opponent optimal</code> 拿最优对手陪练,它就能对最优对手<strong>稳守和棋(0 胜 0 负、全和,不败率 100%)</strong>——井字棋双方都不犯错本就必然是和棋;
-            但这么练出来的它,反而<strong>对随机对手只有约 59% 胜率</strong>(因为它学的是“稳不输”,而不是“逮住对方失误往死里赢”)。
-          </p>
-          <div class="table-wrap">
-            <table class="calc-table calc-table--wrap">
-              <thead><tr><th>训练对手</th><th>评估 vs 随机</th><th>评估 vs 最优</th><th>它学到的“打法”</th></tr></thead>
-              <tbody>
-                <tr><td><strong>random</strong>(默认)</td><td>胜 98.4% · 不败 <strong>99.7%</strong></td><td>几乎全输</td><td>逮失误猛攻,不会防守</td></tr>
-                <tr><td><strong>optimal</strong></td><td>胜 ~59% · 不败 72%</td><td>全和 · 不败 <strong>100%</strong></td><td>只求不输,不贪赢</td></tr>
-              </tbody>
-            </table>
-            <p class="calc-table__cap">同一套代码、同一套超参,只换了陪练对手,学出来的策略性格就完全不同。这不是 bug,而是强化学习的<strong>本质</strong>:智能体只能从它<strong>实际经历过的对局</strong>里学,<strong>训练分布决定能力边界</strong>——这也是<a class="xref" href="chapter-20.html">第 20 章 RLHF</a> 里“奖励从哪来、跟谁对齐”如此关键的原因。</p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">4×15×15</div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">3×3 Conv + BN + ReLU<small>32 通道</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">4 × Residual Block<small>两层 3×3 Conv</small></div>
+              <div class="pipe__arrow">↗</div>
+              <div class="pipe__box">Policy Head<small>225 logits</small></div>
+              <div class="pipe__arrow">↘</div>
+              <div class="pipe__box">Value Head<small>tanh → [−1,1]</small></div>
+            </div>
           </div>
         </div>
         <figure class="code-walk reveal">
-          <figcaption class="code-walk__file">src/demo/rl_tictactoe/main.cpp · 评估与可选对战(精简)</figcaption>
-          <pre class="code-walk__code"><code>auto random_eval = agent.Evaluate(env, OpponentType::RANDOM, eval_games);
-auto optimal_eval = agent.Evaluate(env, OpponentType::OPTIMAL, eval_games);
-PrintEval("Eval vs random (greedy)", random_eval, eval_games);       <b class="cw-tag">1</b>
+          <figcaption class="code-walk__file">PolicyValueResNet::Forward · 双头分流(精简)</figcaption>
+          <pre class="code-walk__code"><code>trunk = ReLU(BN(stem_conv(input)));
+for (block : blocks)
+  trunk = block.Forward(trunk);                <b class="cw-tag">1</b>
 
-if (option.play)
-  PlayInteractive(env, agent);   // stdin 输入 0–8, 你是 O            <b class="cw-tag">2</b></code></pre>
+policy = ReLU(BN(policy_conv(trunk)));
+policy_logits = policy_fc(Flatten(policy));     <b class="cw-tag">2</b>
+
+value = ReLU(BN(value_conv(trunk)));
+hidden = ReLU(value_hidden(Flatten(value)));
+v = tanh(value_output(hidden));                 <b class="cw-tag">3</b></code></pre>
           <ol class="code-walk__notes">
-            <li><code>Evaluate</code> 内部 <code>SelectAction(..., false)</code>,不再随机探索,测的是“学成之后有多强”。</li>
-            <li><code>--play</code> 让你亲自和训练好的 X 下一盘;棋盘位置编号 0|1|2 / 3|4|5 / 6|7|8。</li>
+            <li>4 个残差块共享棋形特征;残差连接让深层网络更好训练(<a class="xref" href="chapter-13.html">第 13 章</a>)。</li>
+            <li>策略头输出 225 个 raw logits,经合法手 mask + softmax 后得到先验 <var>P</var>(s,a)。</li>
+            <li>价值头输出当前待行方的预期胜负:赢接近 +1,输接近 −1,和棋接近 0。</li>
           </ol>
         </figure>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>部分</th><th>真实配置</th><th>作用</th></tr></thead>
+            <tbody>
+              <tr><td>Stem</td><td>4→32,3×3</td><td>把棋盘平面提成局部棋形特征</td></tr>
+              <tr><td>Trunk</td><td>4 blocks,32ch</td><td>反复组合进攻/防守棋形</td></tr>
+              <tr><td>Policy</td><td>2ch→450→225</td><td>给每个落点先验</td></tr>
+              <tr><td>Value</td><td>1ch→225→64→1</td><td>评估局面最终胜负</td></tr>
+              <tr><td>总参数</td><td>191,853</td><td>冠军权重约 770KB</td></tr>
+            </tbody>
+          </table>
+        </div>
 
-        <h2>7. 从这张 Q 表,到 DQN 与 RLHF</h2>
+        <h2>4. MCTS:PUCT 如何把“直觉”变成“算过”</h2>
         <p>
-          井字棋合法局面有限,Q 表只有一两千行,<strong>查表 + TD 更新</strong>就够。
-          若状态变成游戏画面或围棋盘面,表存不下,就要上<a class="xref" href="chapter-12.html#8-状态太多怎么办-用神经网络近似dqn">DQN</a>用网络近似 Q;
-          若动作变成词表里几万个 token,就要上<a class="xref" href="chapter-12.html#9-动作太多怎么办-直接学策略策略梯度--actor-critic--ppo">策略梯度 / PPO</a>——
-          <a class="xref" href="chapter-20.html">第 20 章 RLHF</a> 正是后者:大模型当策略,奖励模型当裁判。
+          每个树节点是一个局面,每条边是一个候选落子。搜索反复执行<strong>选择 → 扩展/评估 → 回传</strong>。
+          选择时不只看当前平均胜率 <var>Q</var>,还给网络先验高但尚未充分搜索的动作一个探索奖励:
+        </p>
+        <div class="mathblock reveal">
+          score = <var>Q</var>(s,a) + <var>c</var><sub>puct</sub> · <var>P</var>(s,a) · √<var>N</var>(s) / [1 + <var>N</var>(s,a)]
+          <span class="label">Q 是搜索经验;P 是网络直觉;N 越小探索奖励越大</span>
+        </div>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/mcts/mcts.cpp · 选择与价值回传(精简)</figcaption>
+          <pre class="code-walk__code"><code>q = edge.n &gt; 0 ? edge.w / edge.n : parent_q - fpu;
+u = c_puct * edge.prior * sqrt(parent.n) / (1 + edge.n);
+edge = argmax(q + u);                         <b class="cw-tag">1</b>
+
+value = leaf_value;
+for (path from leaf to root) {
+  value = -value;                             <b class="cw-tag">2</b>
+  edge.n += 1; edge.w += value;
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>未访问边用 parent Q 作 FPU;实际训练最终设 <code>fpu=0</code>,避免早期价值平坦时锁死探索。</li>
+            <li>每向上一层就换行棋方,价值符号必须翻转。这曾是项目里最致命的 bug 之一。</li>
+          </ol>
+        </figure>
+        <p>
+          搜索并不把 225 个空点全展开。除空盘只搜天元外,只保留距离已有棋子 Chebyshev 半径 2 内的空点,通常约 25–40 个。
+          这是纯动作空间剪枝,没有人工棋形评分。它解决了早期“217 个动作分 100 次模拟,一半边从未访问”的 π 噪声灾难。
         </p>
         <div class="callout callout--tip reveal">
-          <span class="callout__title">自己跑一遍(强烈建议)</span>
-          <p>
-            在仓库 <code>src/</code> 目录下:<br />
-            <code>./build.sh</code> &nbsp;→&nbsp; 编译<br />
-            <code>./bin/rl_tictactoe --episodes 30000 --eval-games 500 --show-sample</code><br />
-            观察每 5000 局的胜/和/负与 <code>q_states</code> 增长;再试 <code>--play</code> 和你训的 X 下一盘。
-            更全参数见仓库 <code>docs/rl-tictactoe-demo.md</code>。
-          </p>
+          <span class="callout__title">训练和比赛的搜索不一样</span>
+          <p>训练在根节点混入 Dirichlet 噪声并在前 6 手按访问分布采样。内部 latest-vs-best 门禁关闭噪声,但仍沿用前 6 手采样、之后贪心;网页试玩则从第一手起始终选访问次数最多的落子。</p>
+        </div>
+
+        <h2>5. 自对弈怎样自动产生 (s,π,z)</h2>
+        <p>
+          监督学习需要人给“正确走法”;AlphaZero 让 MCTS 自己产标签。每一步先搜索,把根节点访问次数归一化成 π;
+          棋局结束后,把最终胜负从当时待行方视角写回每个状态成为 <var>z</var>。
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">self_play.cpp · 一局数据如何产生(伪代码对应真实实现)</figcaption>
+          <pre class="code-walk__code"><code>while (!game.terminal()) {
+  encode(game, sample.state);                  <b class="cw-tag">1</b>
+  mcts.Search(game, network, visits);
+  sample.pi = normalize(visits);               <b class="cw-tag">2</b>
+  action = opening ? sample(sample.pi) : argmax(sample.pi);
+  remember(player_to_move, sample);
+  game.Apply(action);
+}
+for (sample : trajectory)
+  sample.z = result_from(sample.player);        <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>输入状态在落子前编码,永远是当前待行方视角。</li>
+            <li>π 不是网络原始 softmax,而是搜索后的访问分布——搜索在教网络。</li>
+            <li><var>z</var> 来自对局结果:真实终局胜 +1、负 −1、和 0;若达到 200 手上限仍未终局,工程上截断并按和棋 z=0 记录。没有人工胜负标签。</li>
+          </ol>
+        </figure>
+        <div class="figure reveal">
+          <div class="diagram">
+            <div class="pipe">
+              <div class="pipe__box">当前网络</div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">MCTS 自对弈<small>生成 s,π,z</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">Replay Buffer<small>最多 20 万状态</small></div>
+              <div class="pipe__arrow">→</div>
+              <div class="pipe__box">梯度更新</div>
+              <div class="pipe__arrow">↺</div>
+            </div>
+          </div>
+        </div>
+
+        <h2>6. Replay Buffer、增广与策略价值损失</h2>
+        <p>
+          Buffer 是固定容量环形队列,样本为 4×225 输入 + 225 维 π + 一个 <var>z</var>。
+          最终配置保留 20 万状态:60% 按近期指数偏置采样,40% 全局均匀,既跟上新策略又不忘旧局面。
+        </p>
+        <div class="mathblock reveal">
+          <var>L</var> = −Σ<sub>a</sub> π(a|s) log <var>p</var><sub>θ</sub>(a|s) + 2[<var>z</var>−<var>v</var><sub>θ</sub>(s)]²
+          <span class="label">策略头模仿 MCTS 访问分布;价值头拟合终局;本次 value loss 权重设为 2</span>
+        </div>
+        <p>
+          五子棋的难点不是常见开局,而是“对手已经形成三/四连,只剩唯一挡点”的长尾。项目没有去问旧 AI 正确答案,而是重组自己的历史经验:
+        </p>
+        <ul>
+          <li><strong>Hard-negative mining</strong>:对手已有四连,或败局中对手已有三连的状态进入 hard set;每个 batch 约 30% 从中采样。</li>
+          <li><strong>残局做种</strong>:约 30% 自对弈从 replay 的必防状态继续,但 π 和 z 仍由新一轮 MCTS/终局自己产生。</li>
+          <li><strong>8 对称</strong>:每次随机旋转/镜像,同步变换棋盘与 π。</li>
+        </ul>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">标签是 Zero,课程采样带领域先验</span>
+          <p>所有状态、π 与 z 都来自模型自己的历史自对弈;没有人类棋谱、没有旧站 AI 落子、没有手写棋形分数。但 hard set 用手写“三/四连检测器”挑哪些错题多复习,属于领域特定 curriculum,不是对 AlphaGo Zero“只给规则”配方的逐字复刻。</p>
+        </div>
+
+        <h2>7. 并行训练、缓存、checkpoint 与门禁</h2>
+        <p>
+          最终训练使用 48 个自对弈 worker,每个持有独立网络副本;同一轮权重固定。
+          64 分片局面缓存用“行棋方 + 上一手 + 棋盘”作完整 key,命中后直接复用 policy/value,用内存换 CPU。
+          一次移植审查还发现旧 key 漏了“上一手”平面,导致同盘不同 last-move 错误碰撞;修复后旧日志里的 50%–56% 命中率不再当作有效性能成绩。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>阶段</th><th>最终配置</th><th>产物/作用</th></tr></thead>
+            <tbody>
+              <tr><td>自对弈</td><td>80 局 / 48 worker / 每步 600 sims</td><td>新增轨迹与 (s,π,z)</td></tr>
+              <tr><td>训练</td><td>200 steps × batch 128</td><td>AdamW 更新 latest</td></tr>
+              <tr><td>快速探针</td><td>vs 真随机 20 局</td><td>防止训练完全退化</td></tr>
+              <tr><td>代际门禁</td><td>每 5 轮 latest vs best 20 局</td><td>通过才覆盖 best</td></tr>
+              <tr><td>保存</td><td>每轮 net/opt/state,每 10 轮 buffer</td><td>进程挂掉可断点续训</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          checkpoint 不只有权重:<code>latest.net</code> + <code>latest.opt</code> + <code>latest.state</code> + <code>buffer.bin</code>。
+          网络/Adam/轮数每轮保存,Replay Buffer 每 10 轮保存,可恢复到<strong>最近一次耐久状态</strong>;
+          随机数发生器没有序列化,因此不是逐 bit 复现。训练器之外还有 watchdog 保活与 plateau monitor 判定真正瓶颈。
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">门禁比“loss 下降”更重要</span>
+          <p>自对弈分布一直变,loss 下降不保证对所有风格都更强。项目保存每 5 轮快照,并用旧站 1–7 档做全谱考官;代际相性曾出现“这代打穿 L7 却输 L5”的剧烈振荡。</p>
+        </div>
+
+        <h2>8. 真实训练曲线:从 5.42 到 2.7</h2>
+        <p>
+          下图是结构化日志里的完整 policy loss 原始点,黄/粉线是 5/15 轮滑动均值,绿色竖线是 best 晋级。
+          这条曲线不是修饰过的示意图:每一点对应一次完整 iteration。早期配方是 40 局 + 80 个优化 step,后期稳定配方才是 80 局 + 200 step;随机初始化理论基线 ln(225)≈5.42,第一条完训日志是 5.2797。
+        </p>
+        <div class="figure reveal">
+          <img src="https://azgomoku.011203.xyz/policy_loss_analysis-iter330-25dc9de5.png" alt="AlphaZero 五子棋完整 policy loss 曲线与拟合" loading="lazy" style="width:100%;border:1px solid var(--line);border-radius:12px" />
+          <p class="figure__cap">前期机制修复带来阶梯式下降;后期缓慢逼近平台。模型档案保留 CSV 原始点与拟合 JSON,可自行重画。</p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>阶段</th><th>关键变化</th><th>结果</th></tr></thead>
+            <tbody>
+              <tr><td>iter 1–12</td><td>全盘动作/符号/FPU bug</td><td>棋力不涨,policy≈5.2</td></tr>
+              <tr><td>iter 13+</td><td>候选点半径2</td><td>π 目标恢复有效,loss 快降</td></tr>
+              <tr><td>iter 39–70</td><td>sims 200→500,temp 12→6,c_puct 0.8</td><td>搜索看见反杀,开始会防守</td></tr>
+              <tr><td>iter 71+</td><td>hard mining / recency / 残局做种</td><td>填补必防长尾</td></tr>
+              <tr><td>iter 243</td><td>正式全谱验收</td><td>7 档全部过线</td></tr>
+              <tr><td>iter 276+</td><td>600 sims 瓶颈推进</td><td>loss 继续下降、仍有晋级</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>9. 七个真坑:为什么“能运行”离“能学会”很远</h2>
+        <ol>
+          <li><strong>动作空间 ≫ sims</strong>:217 个合法点分 100 次模拟,多数边 0 次访问,π 变噪声。候选点剪枝是训练能成立的前提。</li>
+          <li><strong>终局符号错一层</strong>:价值按待行方视角,回传逐层翻转;少翻/多翻一次会把必胜教成必败。</li>
+          <li><strong>FPU 过度悲观</strong>:早期 Q 接近平坦,访问过的第一条边永久领先,搜索锁死。</li>
+          <li><strong>假随机考官</strong>:均匀 evaluator 再走 MCTS 时并不随机,并列 argmax 会固定挑左上;必须直接随机合法手。</li>
+          <li><strong>BN running stats 漏复制</strong>:worker 只有可训练参数,推理均值/方差仍是初始值,所有评估都会漂。</li>
+          <li><strong>缓存 key 漏上一手</strong>:输入明明包含 last-move 平面,缓存只看棋盘会把不同输入当成同一状态;浏览器移植的逐值对齐审查才把它揪出来。</li>
+          <li><strong>只看 latest</strong>:不同代际对手相性剧烈摆动;最终必须冻结快照做 L1–L7 全谱扫分。</li>
+        </ol>
+        <p>项目当前有 4100 项自动检查,覆盖规则、满盘和棋、编码、上一手 cache key、8 对称、MCTS 必杀与访问分布。真正耗时的不是写类,而是证明每个约定都没暗中反号或退化。</p>
+
+        <h2>10. 从 AlphaZero 到 AlphaGo Zero</h2>
+        <p>
+          本项目和 AlphaGo Zero 的核心闭环一致:统一策略价值网络 + MCTS + 纯自对弈 + 新旧门禁。
+          差距主要是工程规模:19 万参数/CPU/15×15 对比数百万到数亿参数/TPU/19×19,以及搜索批处理、异步 actor-learner、树复用、推理服务等基础设施。
+        </p>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">关键不是“把模型做大”</span>
+          <p>64ch×6block 的 56 万参数实验每轮慢 4 倍、总体进化反而更慢。CPU 预算下,小网络高频迭代 + 更深 MCTS + 正确数据闭环比盲目堆参数更强。</p>
         </div>
 
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
-            <li>RL 程序 = <strong>环境 → Q 表 → 多回合 RunEpisode → 评估</strong>;没有固定数据集,轨迹是智能体自己下的棋。</li>
-            <li><code>TicTacToeEnv</code>:三进制 <code>state_key</code>、终局奖励、合法动作过滤,对应<a class="xref" href="chapter-12.html">第 12 章</a> MDP 五件套。</li>
-            <li><code>TabularQLearning</code>:ε-greedy 选子、TD 更新 Q、<code>DecayEpsilon</code> 减探索。</li>
-            <li><code>RunEpisode</code> = agent 走 → opponent 走 → <code>Update</code>;价值从赢棋终局倒灌回开局空盘。</li>
-            <li><strong>跟谁练就擅长打谁</strong>:对随机训练→对随机不败率 99.7% 但打不过最优;对最优训练→守和最优(不败 100%)但对随机只剩约 59% 胜。训练分布决定能力边界。</li>
-            <li>状态/动作再变大 → DQN / PPO / RLHF(<a class="xref" href="chapter-12.html">第 12 章</a>、<a class="xref" href="chapter-20.html">第 20 章</a>)。</li>
+            <li>AlphaZero 不需要逐步标签:MCTS 给 π,终局给 z,网络再反过来指导下一轮搜索。</li>
+            <li>策略价值网络共享 ResNet trunk,两个头分别输出 225 落子 logits 与待行方价值。</li>
+            <li>PUCT 用 Q 利用已验证路线、用 P 探索网络看好的新路线;价值回传每层翻转视角。</li>
+            <li>Replay Buffer + 8 对称 + recency + hard mining 提高样本效率;残局做种仍不引入教师答案。</li>
+            <li>代际门禁、全谱验收、checkpoint、保活和结构化日志让长训练可控。</li>
+            <li>浏览器直接读取 C++ 权重并本地前向/MCTS;静态服务器只发文件。</li>
+            <li>这次真实训练证明:算法约定、评估口径和数据闭环,常比参数量更决定成败。</li>
           </ul>
         </section>
 
         <h2>动手与思考</h2>
         <div class="quiz reveal">
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 1:井字棋 demo 为什么没有用到反向传播?</summary>
-            <div class="quiz__a">
-              <p>状态空间小,用 Q <strong>表</strong>存得下;学习信号是 TD 目标 <code>r+γ·max Q(s′,·)</code>,直接改表里的数,不需要神经网络,也就不需要<a class="xref" href="chapter-06.html">第 6 章</a>的梯度。DQN 才会把 Q 换成网络并反传。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 2:<code>RunEpisode</code> 里为什么中间步 reward 是 0 仍要 Update?</summary>
-            <div class="quiz__a">
-              <p>因为 TD 更新不只看眼前 r,还看 <code>γ·max Q(s′,·)</code>。对手走完后的新盘面若更接近赢棋,会把更高的 Q 传回上一步——这就是<a class="xref" href="chapter-12.html">第 12 章</a>说的价值倒灌,即使中间步没给分。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 3:训练和评估时 SelectAction 的 explore 参数为什么不同?</summary>
-            <div class="quiz__a">
-              <p>训练要 ε-greedy 探索新走法;评估要测“学成之后有多强”,应关掉随机探索、纯 greedy 下——否则胜率会被探索的烂棋拉低,测不准真实水平。</p>
-            </div>
-          </details>
-          <details class="quiz__item">
-            <summary class="quiz__q">问题 4:同一份代码,为什么对随机对手训练出来的智能体打不过最优对手,反过来对最优训练的又赢不了几个随机对手?</summary>
-            <div class="quiz__a">
-              <p>因为智能体只能从<strong>它实际经历过的对局</strong>里学。拿随机对手练,它见惯了“对方乱下”,学会的是逮失误猛攻,没见过高手的严密下法,遇到最优对手就成片输;拿最优对手练,它学会的是“怎么都不输”(井字棋双方无失误必和),却没练过“逮住对方失误往死里赢”,所以对爱犯错的随机对手反而赢得少。这就是强化学习的<strong>训练分布决定能力边界</strong>,也是 <a class="xref" href="chapter-20.html">第 20 章 RLHF</a> 里“奖励/对手跟谁对齐”特别关键的原因。</p>
-            </div>
-          </details>
+          <details class="quiz__item"><summary class="quiz__q">问题 1:为什么策略目标用 MCTS 访问分布 π,而不是最终实际落子 one-hot?</summary><div class="quiz__a"><p>π 包含搜索对多个候选的相对判断,信息比单个动作丰富;训练网络拟合 π,等于把昂贵搜索结果蒸馏回一次前向。</p></div></details>
+          <details class="quiz__item"><summary class="quiz__q">问题 2:价值 z 为什么必须按“当时待行方”视角记录?</summary><div class="quiz__a"><p>同一终局对黑白意义相反。状态编码也以待行方为己方;z 若不跟视角统一,同一种输入语义会同时收到正负冲突标签。</p></div></details>
+          <details class="quiz__item"><summary class="quiz__q">问题 3:候选点半径2是不是手写棋力?</summary><div class="quiz__a"><p>不是。它不判断哪步更好,只排除离所有棋子很远、当前几乎不可能影响局面的点;候选内的先验与价值全部来自网络/MCTS。</p></div></details>
+          <details class="quiz__item"><summary class="quiz__q">问题 4:为什么训练要 Dirichlet 噪声,比赛却关闭?</summary><div class="quiz__a"><p>训练要主动发现没走过的分支,否则数据分布会自我固化;比赛要发挥当前已学最强策略,随机噪声只会送出烂棋。</p></div></details>
+          <details class="quiz__item"><summary class="quiz__q">问题 5:为什么 loss 下降不能代替门禁对打?</summary><div class="quiz__a"><p>loss 衡量对当前 replay 分布的拟合,而自对弈分布随策略变化;某代可能 loss 更低却忘了特定对手棋形。实战胜负才是最终指标。</p></div></details>
+          <details class="quiz__item"><summary class="quiz__q">问题 6:hard mining 为什么仍是纯 Zero?</summary><div class="quiz__a"><p>它只从自己历史败局里多抽危险状态,答案 π/z 仍由新 MCTS 与终局自动产生;没有人类或旧 AI 告诉它正确挡点。</p></div></details>
+          <details class="quiz__item"><summary class="quiz__q">问题 7:浏览器版为什么能直接读 C++ .net?</summary><div class="quiz__a"><p>序列化格式固定:64字节头 + 每个向量的 uint64 长度 + little-endian Float32。JS DataView 按同序读取,再按 C++ 张量布局前向。</p></div></details>
+          <details class="quiz__item"><summary class="quiz__q">问题 8:若算力翻倍,先加参数还是加 MCTS sims?</summary><div class="quiz__a"><p>要测瓶颈。当前 56 万参数实验吞吐降约4倍,不划算;小网仍能继续降 loss,优先提高搜索质量/数据迭代频率更有效。只有小网稳定封顶才扩容。</p></div></details>
         </div>
 
         <div class="summary reveal" style="text-align:center">
           <h2>主线实战收束 · 你已经跑通了</h2>
-          <p>
-            你从<strong>一个神经元</strong>出发,搭起网络、学会反向传播、认识强化学习、拼出 Transformer、
-            做成语言模型,又看懂大模型的原理与用法——最后,在<strong>三份真实的 C++ 代码</strong>里
-            (MNIST、字符级 LM、井字棋 Q-learning) 逐行对上了号。到这里,正文主线和代码实战已经完整闭环。
-          </p>
-          <p class="muted">
-            接下来最好的学习,是<strong>动手改</strong>:换优化器、改 Config、调 ε 和 γ、换对手强度,看曲线怎么变。
-            好奇心带你入门,动手让你真正拥有它。
-          </p>
-          <p class="muted">
-            第七部分不再继续写新 demo,而是补四块番外地图:先用<a class="xref" href="chapter-26.html">机器学习全景图</a>摊开 AI/ML/DL 的关系,
-            再分别补上<a class="xref" href="chapter-27.html">无监督与自监督</a>、<a class="xref" href="chapter-28.html">决策树与随机森林</a>,
-            以及<a class="xref" href="chapter-29.html">从沙子到 CPU/GPU</a>这条硬件链路。
-          </p>
+          <p>你从<strong>一个神经元</strong>出发,在三份真实实战中完成了监督学习(MNIST)、生成模型(mini-LM)和强化学习(AlphaZero)。最后这一步不只是“调用 AI”,而是让一个网络从规则出发,通过搜索和自对弈把自己一代代变强。</p>
+          <p class="muted">接下来最有价值的学习不是再抄一遍代码,而是改 sims、c_puct、网络宽度、候选点和门禁口径,用真实曲线和对局证明你的判断。</p>
           <p style="margin-top:1.4rem"><a class="button button--primary" href="chapter-26.html">继续 · 机器学习全景图</a></p>
         </div>
       </div>
     </main>
 
     <script src="assets/book.js"></script>
-    <script src="assets/labs.js?v=demo-labs-20260714c"></script>
+    <script src="assets/labs.js?v=demo-labs-20260818a"></script>
   </body>
 </html>

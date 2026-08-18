@@ -4,7 +4,7 @@
  * 本脚本会自动往里塞入完整结构并接好交互逻辑。
  * 支持的 data-lab: neuron | propagation | attention | multihead | real-attention
  *   | activation-curve | gradient-descent | optimizer-race | corpus-clean
- *   | mnist-demo | tictactoe-demo | sanguo-mini-lm
+ *   | mnist-demo | tictactoe-demo | sanguo-mini-lm | alphazero-gomoku
  * 迁移自 docs/attention-guide/script.js, 改为容器作用域 (各组件互不干扰)。
  */
 (function () {
@@ -2294,6 +2294,257 @@
     reset();
   }
 
+  /* ===================== AlphaZero 五子棋(第 25 章) ===================== */
+
+  var AZ_GOMOKU_TPL =
+    '<div class="lab lab--demo lab--no-glossary azg-demo">' +
+    '  <div class="lab__controls lab__controls--demo">' +
+    '    <div class="demo-toolbar">' +
+    '      <button type="button" class="button button--primary" data-azg-act="reset">重新开局</button>' +
+    '      <label>你执 <select data-azg="human"><option value="-1">白棋(后手)</option><option value="1">黑棋(先手)</option></select></label>' +
+    '      <label>MCTS <select data-azg="sims"><option value="12">12(快)</option><option value="24" selected>24(平衡)</option><option value="48">48(强)</option></select></label>' +
+    '      <a class="button button--ghost" href="https://github.com/chenxuan520/deeplearning-model/tree/master/models/alphazero-gomoku" target="_blank" rel="noopener">模型档案 ↗</a>' +
+    '    </div>' +
+    '    <p class="explain" data-azg-status role="status" aria-live="polite">正在加载 770KB 策略价值网络…</p>' +
+    '  </div>' +
+    '  <div class="lab__viz lab__viz--demo-grid">' +
+    '    <div class="formula-card azg-demo__board-card">' +
+    '      <h3>15×15 棋盘</h3>' +
+    '      <div class="azg-demo__board-scroll" tabindex="0" aria-label="可横向滚动的五子棋棋盘">' +
+    '        <div class="azg-demo__board" data-azg-board aria-label="AlphaZero 五子棋棋盘"></div>' +
+    '      </div>' +
+    '      <p class="explain" data-azg-meta>黑棋先行,五连或长连获胜,无禁手。</p>' +
+    '    </div>' +
+    '    <div class="formula-card">' +
+    '      <h3>搜索现场</h3>' +
+    '      <p class="formula" data-azg-value>V(s) = —</p>' +
+    '      <div class="azg-demo__stats" data-azg-stats>模型加载后显示 MCTS 根节点访问数。</div>' +
+    '      <p class="explain">参数从 Cloudflare 静态下载;Conv/BN/残差前向和 PUCT MCTS 全在你的浏览器执行。</p>' +
+    '    </div>' +
+    '  </div>' +
+    '</div>';
+
+  var azGomokuEnginePromise = null;
+  function loadAzGomokuEngine() {
+    if (window.AlphaZeroGomoku) return Promise.resolve(window.AlphaZeroGomoku);
+    if (azGomokuEnginePromise) return azGomokuEnginePromise;
+    azGomokuEnginePromise = new Promise(function (resolve, reject) {
+      var script = document.createElement("script");
+      script.src = "https://azgomoku.011203.xyz/alphazero-gomoku-b5cd1abe.js";
+      script.crossOrigin = "anonymous";
+      script.integrity = "sha256-tc0avuBMyShQGKHow7cboBkaGLDg5WXc1AqJA/T7kUM=";
+      script.onload = function () {
+        if (window.AlphaZeroGomoku) resolve(window.AlphaZeroGomoku);
+        else reject(new Error("AlphaZero engine missing after load"));
+      };
+      script.onerror = function () { reject(new Error("AlphaZero engine download failed")); };
+      document.head.appendChild(script);
+    });
+    return azGomokuEnginePromise;
+  }
+
+  function initAlphaZeroGomoku(root) {
+    root.innerHTML = AZ_GOMOKU_TPL;
+    var ui = {
+      board: root.querySelector("[data-azg-board]"),
+      boardScroll: root.querySelector(".azg-demo__board-scroll"),
+      status: root.querySelector("[data-azg-status]"),
+      meta: root.querySelector("[data-azg-meta]"),
+      value: root.querySelector("[data-azg-value]"),
+      stats: root.querySelector("[data-azg-stats]"),
+      human: root.querySelector('[data-azg="human"]'),
+      sims: root.querySelector('[data-azg="sims"]'),
+      reset: root.querySelector('[data-azg-act="reset"]')
+    };
+    var AZ = null;
+    var model = null;
+    var state = null;
+    var busy = false;
+    var gameVersion = 0;
+    var focusAction = 112;
+    var cells = [];
+
+    for (var action = 0; action < 225; action++) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "azg-demo__cell";
+      button.setAttribute("data-action", String(action));
+      button.setAttribute("aria-label", "第 " + (Math.floor(action / 15) + 1) + " 行第 " + (action % 15 + 1) + " 列");
+      button.tabIndex = -1;
+      button.addEventListener("click", onHumanMove);
+      button.addEventListener("keydown", onBoardKey);
+      ui.board.appendChild(button);
+      cells.push(button);
+    }
+
+    function humanPlayer() { return parseInt(ui.human.value, 10); }
+
+    function ensureFocusAction() {
+      if (state && state.board[focusAction] === 0) return;
+      var best = -1, bestDistance = Infinity;
+      for (var i = 0; i < 225; i++) {
+        if (state.board[i] !== 0) continue;
+        var distance = Math.abs(Math.floor(i / 15) - 7) + Math.abs(i % 15 - 7);
+        if (distance < bestDistance) { bestDistance = distance; best = i; }
+      }
+      focusAction = best;
+    }
+
+    function centerAction(action, smooth) {
+      var cell = cells[action];
+      if (!cell || !ui.boardScroll) return;
+      var left = cell.offsetLeft + cell.offsetWidth / 2 - ui.boardScroll.clientWidth / 2;
+      ui.boardScroll.scrollTo({ left: Math.max(0, left), behavior: smooth ? "smooth" : "auto" });
+    }
+
+    function resultText() {
+      if (!state || state.result === 0) return "";
+      if (state.result === 2) return "和棋";
+      return state.result === humanPlayer() ? "你赢了" : "AlphaZero 赢了";
+    }
+
+    function render() {
+      if (!state) return;
+      ensureFocusAction();
+      for (var i = 0; i < 225; i++) {
+        var value = state.board[i];
+        var button = cells[i];
+        button.className = "azg-demo__cell" +
+          (value === 1 ? " is-black" : value === -1 ? " is-white" : "") +
+          (state.lastAction === i ? " is-last" : "");
+        button.textContent = value === 1 ? "●" : value === -1 ? "○" : "";
+        button.disabled = busy || state.result !== 0 || state.currentPlayer !== humanPlayer() || value !== 0;
+        button.tabIndex = !button.disabled && i === focusAction ? 0 : -1;
+        button.setAttribute("aria-label", "第 " + (Math.floor(i / 15) + 1) + " 行第 " + (i % 15 + 1) + " 列," +
+          (value === 1 ? "黑棋" : value === -1 ? "白棋" : "空位") + (state.lastAction === i ? ",上一手" : ""));
+      }
+      if (state.result !== 0) ui.status.textContent = resultText() + "。点“重新开局”再来。";
+      else if (!busy) ui.status.textContent = state.currentPlayer === humanPlayer() ? "轮到你落子。" : "AlphaZero 思考中…";
+      ui.meta.textContent = "已下 " + state.moveCount + " 手; " +
+        (state.currentPlayer === 1 ? "黑棋" : "白棋") + (state.result === 0 ? "待行" : "终局");
+    }
+
+    function topVisits(visits) {
+      return visits.slice().sort(function (a, b) { return b.n - a.n; }).slice(0, 8).map(function (edge) {
+        var row = Math.floor(edge.action / 15) + 1;
+        var column = edge.action % 15 + 1;
+        return '<div class="azg-demo__stat"><code>(' + row + ',' + column + ')</code><span>N=' + edge.n + '</span><span>Q=' + edge.q.toFixed(2) + '</span><span>P=' + (edge.p * 100).toFixed(1) + '%</span></div>';
+      }).join("");
+    }
+
+    function onHumanMove(event) {
+      if (!AZ || !model || !state || busy || state.result !== 0 || state.currentPlayer !== humanPlayer()) return;
+      var action = parseInt(event.currentTarget.getAttribute("data-action"), 10);
+      if (!AZ.applyMove(state, action)) return;
+      focusAction = action;
+      ui.stats.textContent = "你落在 (" + (Math.floor(action / 15) + 1) + "," + (action % 15 + 1) + ")。";
+      render();
+      if (state.result === 0) setTimeout(aiMove, 0);
+    }
+
+    function onBoardKey(event) {
+      var delta = event.key === "ArrowLeft" ? [0, -1] :
+        event.key === "ArrowRight" ? [0, 1] :
+        event.key === "ArrowUp" ? [-1, 0] :
+        event.key === "ArrowDown" ? [1, 0] : null;
+      if (!delta || !state || busy || state.currentPlayer !== humanPlayer()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      var start = parseInt(event.currentTarget.getAttribute("data-action"), 10);
+      var row = Math.floor(start / 15), column = start % 15;
+      while (true) {
+        row += delta[0]; column += delta[1];
+        if (row < 0 || row >= 15 || column < 0 || column >= 15) return;
+        var next = row * 15 + column;
+        if (state.board[next] === 0) {
+          focusAction = next;
+          render();
+          cells[next].focus();
+          return;
+        }
+      }
+    }
+
+    function aiMove() {
+      if (!AZ || !model || !state || state.result !== 0 || state.currentPlayer === humanPlayer()) return;
+      busy = true;
+      var version = gameVersion;
+      render();
+      var simulations = parseInt(ui.sims.value, 10);
+      var begin = performance.now();
+      // Empty-board candidate generation has exactly one action (center).
+      // Avoid spending N identical simulations before the human has moved.
+      if (state.moveCount === 0) {
+        AZ.applyMove(state, 112);
+        var openingEvaluation = AZ.forward(model, state.board, state.currentPlayer, state.lastAction);
+        ui.value.textContent = "V(s) = " + openingEvaluation.value.toFixed(3);
+        ui.stats.innerHTML = '<div class="azg-demo__stat"><code>(8,8)</code><span>唯一候选</span><span>天元</span><span>P=100%</span></div>';
+        busy = false;
+        render();
+        ui.status.textContent = "天元开局 · 轮到你落子";
+        centerAction(112, true);
+        cells[focusAction].focus({ preventScroll: true });
+        return;
+      }
+      AZ.search(model, state, {
+        simulations: simulations,
+        cPuct: 1.5,
+        yieldEvery: 1,
+        shouldStop: function () { return version !== gameVersion; }
+      }).then(function (result) {
+        if (version !== gameVersion || result.cancelled) return;
+        var elapsed = performance.now() - begin;
+        AZ.applyMove(state, result.action);
+        var evaluation = AZ.forward(model, state.board, state.currentPlayer, state.lastAction);
+        ui.value.textContent = "V(s) = " + evaluation.value.toFixed(3);
+        ui.stats.innerHTML = topVisits(result.visits);
+        busy = false;
+        render();
+        ui.status.textContent = (state.result !== 0 ? resultText() : "轮到你落子") +
+          " · " + simulations + " sims · " + (elapsed / 1000).toFixed(2) + "s";
+        centerAction(state.lastAction, true);
+        if (state.result === 0 && cells[focusAction]) cells[focusAction].focus({ preventScroll: true });
+      }).catch(function (error) {
+        if (version !== gameVersion) return;
+        busy = false;
+        render();
+        ui.status.textContent = "搜索失败:" + error.message + "。请重试或重新开局。";
+        if (cells[focusAction]) cells[focusAction].focus({ preventScroll: true });
+      });
+    }
+
+    function reset() {
+      if (!AZ || !model) return;
+      state = AZ.createState();
+      gameVersion++;
+      focusAction = 112;
+      busy = false;
+      ui.value.textContent = "V(s) = —";
+      ui.stats.textContent = "模型已加载;等待第一步搜索。";
+      render();
+      setTimeout(function () {
+        centerAction(112, false);
+        if (humanPlayer() === 1 && cells[focusAction]) cells[focusAction].focus({ preventScroll: true });
+      }, 0);
+      if (humanPlayer() === -1) setTimeout(aiMove, 0);
+    }
+
+    ui.reset.addEventListener("click", reset);
+    ui.human.addEventListener("change", reset);
+
+    loadAzGomokuEngine().then(function (engine) {
+      AZ = engine;
+      ui.status.textContent = "解析 C++ 权重并初始化网络…";
+      return AZ.load("https://azgomoku.011203.xyz/model.json");
+    }).then(function (loaded) {
+      model = loaded;
+      ui.status.textContent = "模型就绪。";
+      reset();
+    }).catch(function (error) {
+      ui.status.textContent = "模型资源未就绪:" + error.message;
+    });
+  }
+
   /* ===================== 自动挂载 ===================== */
   var INITS = {
     neuron: initNeuron,
@@ -2307,7 +2558,8 @@
     "corpus-clean": initCorpusClean,
     "mnist-demo": initMnistDemo,
     "tictactoe-demo": initTictactoeDemo,
-    "sanguo-mini-lm": initSanguoMiniLm
+    "sanguo-mini-lm": initSanguoMiniLm,
+    "alphazero-gomoku": initAlphaZeroGomoku
   };
 
   function mountAll() {
