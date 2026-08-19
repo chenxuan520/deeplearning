@@ -2334,9 +2334,9 @@
     if (azGomokuEnginePromise) return azGomokuEnginePromise;
     azGomokuEnginePromise = new Promise(function (resolve, reject) {
       var script = document.createElement("script");
-      script.src = "https://azgomoku.011203.xyz/alphazero-gomoku-b5cd1abe.js";
+      script.src = "https://azgomoku.011203.xyz/alphazero-gomoku-f0ba7005.js";
       script.crossOrigin = "anonymous";
-      script.integrity = "sha256-tc0avuBMyShQGKHow7cboBkaGLDg5WXc1AqJA/T7kUM=";
+      script.integrity = "sha256-8LpwBTgV3bNoraTVGqemxR2h3PlReCds9hOuPQh3cBk=";
       script.onload = function () {
         if (window.AlphaZeroGomoku) resolve(window.AlphaZeroGomoku);
         else reject(new Error("AlphaZero engine missing after load"));
@@ -2367,6 +2367,7 @@
     var model = null;
     var state = null;
     var busy = false;
+    var searchSession = null;
     var gameVersion = 0;
     var focusAction = 112;
     var keyboardMode = false;
@@ -2536,6 +2537,7 @@
       }
       var action = parseInt(event.currentTarget.getAttribute("data-action"), 10);
       if (!AZ.applyMove(state, action)) return;
+      if (searchSession) searchSession.advance(action);
       focusAction = action;
       ui.stats.textContent = "你落在 (" + (Math.floor(action / 15) + 1) + "," + (action % 15 + 1) + ")。";
       render();
@@ -2592,11 +2594,13 @@
         simulations: simulations,
         cPuct: 1.5,
         yieldEvery: 1,
+        session: searchSession,
         shouldStop: function () { return version !== gameVersion; }
       }).then(function (result) {
         if (version !== gameVersion || result.cancelled) return;
         var elapsed = performance.now() - begin;
         AZ.applyMove(state, result.action);
+        if (searchSession) searchSession.advance(result.action);
         var evaluation = AZ.forward(model, state.board, state.currentPlayer, state.lastAction);
         ui.value.textContent = "V(s) = " + evaluation.value.toFixed(3);
         ui.stats.innerHTML = topVisits(result.visits);
@@ -2618,6 +2622,7 @@
     function reset() {
       if (!AZ || !model) return;
       state = AZ.createState();
+      searchSession = new AZ.SearchSession();
       gameVersion++;
       focusAction = 112;
       busy = false;
