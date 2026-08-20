@@ -544,7 +544,7 @@ for (sample : batch) {
           后期稳定配方才是 80 局 + 200 次更新;随机初始化时 225 个动作近似均匀,理论交叉熵 ln(225)≈5.42,第一条完训日志是 5.2797。
         </p>
         <div class="figure reveal">
-          <img src="https://azgomoku.011203.xyz/policy_loss_analysis-iter330-25dc9de5.png" alt="AlphaZero 五子棋完整 policy loss 曲线与拟合" loading="lazy" style="width:100%;border:1px solid var(--line);border-radius:12px" />
+          <img src="https://azgomoku.011203.xyz/policy_loss_analysis-iter440-288738d2.png" alt="AlphaZero 五子棋截至 iter440 的 policy/value loss 曲线与拟合" loading="lazy" style="width:100%;border:1px solid var(--line);border-radius:12px" />
           <p class="figure__cap">前期机制修复带来阶梯式下降;后期缓慢逼近平台。模型档案保留 CSV 原始点与拟合 JSON,可自行重画。</p>
         </div>
         <div class="table-wrap reveal">
@@ -562,7 +562,7 @@ for (sample : batch) {
 
         <h3>为什么训练规模必须是“万局级”</h3>
         <p>
-          正式验收冠军并不是几百盘速成:验收阶段前已经积累约 1.7 万盘有效自对弈。
+          主线不是几百盘速成:iter440 收口时累计33,920盘去重自对弈（含重启实际35,000盘）。
           每盘会留下几十个状态,所以 20 万容量的 Replay Buffer 会装满并持续环形覆盖。
           关键不是死记一个总盘数,而是理解为什么要不断刷新数据分布:网络变强后会走进旧网络从未见过的新局面,
           新局面又必须重新搜索、重新产生 π 和 z。
@@ -617,7 +617,7 @@ for (sample : batch) {
         </p>
 
         <h3>长期训练怎样避免“凭感觉停机”</h3>
-        <p>为了防止“感觉差不多了”就停,长期训练把停机条件写死,三条必须同时成立:</p>
+        <p>自动平台方案把停机条件写成三条硬规则:</p>
         <ol>
           <li>连续至少 30 个完整训练轮没有当前冠军晋级;</li>
           <li>最近 15 轮策略损失的 5 轮滑动均值不再实质下降,整体斜率接近 0;</li>
@@ -625,8 +625,10 @@ for (sample : batch) {
         </ol>
         <p>
           这三条把“模型似乎已经不错”拆成可检查条件:代际不再进步、拟合曲线不再下降、外部对手也稳定过线。
-          至于当前训练跑到哪一轮、最新损失和晋级记录,属于会持续变化的运行日志,统一放在模型仓
-          <code>training/TRAINING_NOTES.md</code>,不写进书的稳定正文。
+          实际主线由用户在 iter440 基于实测收益人工收口:iter415 对 iter360 在48 sims
+          下23:27、600 sims下25:25;iter440 gate 10:10，policy/value loss 为
+          2.6492/1.1161，后期下降没有转化成稳定棋力提升。完整理由与逐轮记录见模型仓
+          <code>training/TRAINING_NOTES.md</code>。
         </p>
 
         <h2>9. 七个真坑:为什么“能运行”离“能学会”很远</h2>
@@ -639,7 +641,7 @@ for (sample : batch) {
           <li><strong>缓存键漏上一手</strong>:输入明明包含上一手平面,缓存只看棋盘会把不同输入当成同一状态;浏览器移植的逐值对齐审查才把它揪出来。</li>
           <li><strong>只看刚训练出的候选模型</strong>:不同代际对手相性剧烈摆动;最终必须冻结快照对七种风格做全谱扫分。</li>
         </ol>
-        <p>项目当前有 4100 项自动检查,覆盖规则、满盘和棋、编码、上一手 cache key、8 对称、MCTS 必杀与访问分布。真正耗时的不是写类,而是证明每个约定都没暗中反号或退化。</p>
+        <p>项目当前有 4411 项自动检查,覆盖规则、满盘和棋、编码、上一手 cache key、8 对称、MCTS 必杀与访问分布、严格树预算和崩溃安全 checkpoint。真正耗时的不是写类,而是证明每个约定都没暗中反号或退化。</p>
 
         <div class="table-wrap reveal">
           <table class="calc-table calc-table--wrap">
@@ -684,7 +686,7 @@ for (sample : batch) {
               <tr><td>设备</td><td>单机多核 CPU</td><td>TPU/GPU 集群</td></tr>
               <tr><td>自对弈</td><td>48 线程、80 局/轮</td><td>大量异步对局进程持续产棋</td></tr>
               <tr><td>推理</td><td>每线程单样本前向</td><td>集中批推理服务,合并叶子请求</td></tr>
-              <tr><td>搜索树</td><td>每步新建树</td><td>常复用子树、批量扩展</td></tr>
+              <tr><td>搜索树</td><td>严格有界子树复用,触顶 fresh 重建</td><td>跨请求复用、批量扩展与集中推理</td></tr>
               <tr><td>训练/自对弈</td><td>一轮一轮同步交替</td><td>对局生产者与训练器异步流水线</td></tr>
               <tr><td>课程</td><td>手写三/四连检测重采样</td><td>原论文更接近仅规则自对弈</td></tr>
             </tbody>
@@ -703,8 +705,8 @@ for (sample : batch) {
             <li>策略价值网络共享 ResNet trunk,两个头分别输出 225 落子 logits 与待行方价值。</li>
             <li>PUCT 用 Q 利用已验证路线、用 P 探索网络看好的新路线;价值回传每层翻转视角。</li>
             <li>Replay Buffer + 8 对称 + recency + hard mining 提高样本效率;残局做种仍不引入教师答案。</li>
-            <li>代际门禁、全谱验收、checkpoint、保活和结构化日志让长训练可控。</li>
-            <li>浏览器直接读取 C++ 权重并本地前向/MCTS;静态服务器只发文件。</li>
+            <li>代际门禁、版本化 checkpoint 三元组、保活和结构化日志让长训练可控。</li>
+            <li>浏览器直接读取 C++ 权重并本地前向/MCTS;有界子树复用减少连续落子的重复搜索。</li>
             <li>这次真实训练证明:算法约定、评估口径和数据闭环,常比参数量更决定成败。</li>
           </ul>
         </section>
