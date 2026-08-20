@@ -2334,9 +2334,9 @@
     if (azGomokuEnginePromise) return azGomokuEnginePromise;
     azGomokuEnginePromise = new Promise(function (resolve, reject) {
       var script = document.createElement("script");
-      script.src = "https://azgomoku.011203.xyz/alphazero-gomoku-b5cd1abe.js";
+      script.src = "https://azgomoku.011203.xyz/alphazero-gomoku-3412a43b.js";
       script.crossOrigin = "anonymous";
-      script.integrity = "sha256-tc0avuBMyShQGKHow7cboBkaGLDg5WXc1AqJA/T7kUM=";
+      script.integrity = "sha256-NBKkOwGw0Dp9+pEkULwVtZtrndCIF8ygbg8Hqhl5MjY=";
       script.onload = function () {
         if (window.AlphaZeroGomoku) resolve(window.AlphaZeroGomoku);
         else reject(new Error("AlphaZero engine missing after load"));
@@ -2366,6 +2366,7 @@
     var AZ = null;
     var model = null;
     var state = null;
+    var searchSession = null;
     var busy = false;
     var gameVersion = 0;
     var focusAction = 112;
@@ -2536,6 +2537,7 @@
       }
       var action = parseInt(event.currentTarget.getAttribute("data-action"), 10);
       if (!AZ.applyMove(state, action)) return;
+      if (searchSession) searchSession.advance(action);
       focusAction = action;
       ui.stats.textContent = "你落在 (" + (Math.floor(action / 15) + 1) + "," + (action % 15 + 1) + ")。";
       render();
@@ -2578,6 +2580,7 @@
       // Avoid spending N identical simulations before the human has moved.
       if (state.moveCount === 0) {
         AZ.applyMove(state, 112);
+        if (searchSession) searchSession.reset();
         var openingEvaluation = AZ.forward(model, state.board, state.currentPlayer, state.lastAction);
         ui.value.textContent = "V(s) = " + openingEvaluation.value.toFixed(3);
         ui.stats.innerHTML = '<div class="azg-demo__stat"><code>(8,8)</code><span>唯一候选</span><span>天元</span><span>P=100%</span></div>';
@@ -2592,18 +2595,23 @@
         simulations: simulations,
         cPuct: 1.5,
         yieldEvery: 1,
+        session: searchSession,
         shouldStop: function () { return version !== gameVersion; }
       }).then(function (result) {
         if (version !== gameVersion || result.cancelled) return;
         var elapsed = performance.now() - begin;
         AZ.applyMove(state, result.action);
+        if (searchSession) searchSession.advance(result.action);
         var evaluation = AZ.forward(model, state.board, state.currentPlayer, state.lastAction);
         ui.value.textContent = "V(s) = " + evaluation.value.toFixed(3);
         ui.stats.innerHTML = topVisits(result.visits);
         busy = false;
         render();
         ui.status.textContent = (state.result !== 0 ? resultText() : "轮到你落子") +
-          " · " + simulations + " sims · " + (elapsed / 1000).toFixed(2) + "s";
+          " · " + simulations + " sims · " + (elapsed / 1000).toFixed(2) + "s" +
+          (result.reused && result.inheritedVisits > 0
+            ? " · 复用 " + result.inheritedVisits + " visits"
+            : " · fresh");
         centerAction(state.lastAction, true);
         if (keyboardMode && state.result === 0 && cells[focusAction]) cells[focusAction].focus({ preventScroll: true });
       }).catch(function (error) {
@@ -2619,6 +2627,7 @@
       if (!AZ || !model) return;
       state = AZ.createState();
       gameVersion++;
+      if (searchSession) searchSession.reset();
       focusAction = 112;
       busy = false;
       ui.value.textContent = "V(s) = —";
@@ -2648,6 +2657,7 @@
       return AZ.load("https://azgomoku.011203.xyz/model.json?cb=" + Date.now());
     }).then(function (loaded) {
       model = loaded;
+      searchSession = new AZ.SearchSession({ maxNodes: 12000, maxEdges: 250000 });
       ui.status.textContent = "模型就绪。";
       reset();
     }).catch(function (error) {

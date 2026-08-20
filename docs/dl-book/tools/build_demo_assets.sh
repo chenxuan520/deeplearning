@@ -100,7 +100,8 @@ assert hashlib.sha256(weights).hexdigest() == manifest["sha256"]
 
 with open_url(manifest["engine"], 30) as response:
     engine = response.read()
-assert b"XQPVRN01" in engine and b"AlphaZeroGomoku" in engine
+assert (b"XQPVRN01" in engine and b"AlphaZeroGomoku" in engine
+        and b"SearchSession" in engine)
 
 with open_url(manifest["training_curve"], 30) as response:
     curve = response.read(8)
