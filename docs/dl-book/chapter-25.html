@@ -70,13 +70,12 @@
           <p class="figure__cap">模型、网络结构、完整训练档案与损失曲线原始点见 <a href="https://github.com/chenxuan520/deeplearning-model/tree/master/models/alphazero-gomoku" target="_blank" rel="noopener">deeplearning-model / alphazero-gomoku</a>。网页前向已和 C++ 在 4 个局面逐值对齐,最大原始打分(logit)误差 2.67e-5。</p>
         </div>
         <div class="callout callout--note reveal">
-          <span class="callout__title">当前试玩为 v1.1.0 低预算增强版</span>
+          <span class="callout__title">试玩永远读取 stable 通道</span>
           <p>
-            它冻结 iter440 的 trunk、价值头和 BN 运行统计,只让600-sim教师蒸馏策略头。
-            48 sims + 子树复用时对老师档总胜率72%,96 sims为86%,宗师档两档均100%;
-            回到600 sims又分别40:0击败iter440和强晋升快照iter360。也就是说,
-            提升的是小预算搜索方向,没有拿深搜棋力换网页速度。v1.0.0、iter330、iter440
-            权重仍保留作回归基线。
+            页面不绑定任何版本文件名,只读固定的 <code>channels/stable.json</code>;
+            模型仓根据完整同预算循环、双颜色外部对手谱和高预算回归门禁晋升生产模型。
+            <code>fast</code> 与 <code>deep</code> 通道另行保留专项模型,历史权重均可回滚。
+            因此以后换模型不需要再修改本章或 game-old。
           </p>
         </div>
         <div class="callout callout--tip reveal">
