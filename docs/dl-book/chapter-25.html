@@ -69,6 +69,16 @@
           <div data-lab="alphazero-gomoku"></div>
           <p class="figure__cap">模型、网络结构、完整训练档案与损失曲线原始点见 <a href="https://github.com/chenxuan520/deeplearning-model/tree/master/models/alphazero-gomoku" target="_blank" rel="noopener">deeplearning-model / alphazero-gomoku</a>。网页前向已和 C++ 在 4 个局面逐值对齐,最大原始打分(logit)误差 2.67e-5。</p>
         </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">当前试玩为 v1.1.0 低预算增强版</span>
+          <p>
+            它冻结 iter440 的 trunk、价值头和 BN 运行统计,只让600-sim教师蒸馏策略头。
+            48 sims + 子树复用时对老师档总胜率72%,96 sims为86%,宗师档两档均100%;
+            回到600 sims又分别40:0击败iter440和强晋升快照iter360。也就是说,
+            提升的是小预算搜索方向,没有拿深搜棋力换网页速度。v1.0.0、iter330、iter440
+            权重仍保留作回归基线。
+          </p>
+        </div>
         <div class="callout callout--tip reveal">
           <span class="callout__title">完整源码可独立复现</span>
           <p>
@@ -78,7 +88,7 @@
             <code>cd alphazero-gomoku</code> →
             <code>cmake -S . -B build -DCMAKE_BUILD_TYPE=Release</code> →
             <code>cmake --build build -j</code> → <code>./bin/test_az</code>。
-            规则、ResNet、MCTS、自对弈、训练器、门禁、4411 项测试和 JS/C++ parity probe 都在。
+            规则、ResNet、MCTS、自对弈、训练器、门禁、4509 项测试和 JS/C++ parity probe 都在。
           </p>
         </div>
         <div class="figure reveal">
@@ -642,7 +652,7 @@ for (sample : batch) {
           <li><strong>缓存键漏上一手</strong>:输入明明包含上一手平面,缓存只看棋盘会把不同输入当成同一状态;浏览器移植的逐值对齐审查才把它揪出来。</li>
           <li><strong>只看刚训练出的候选模型</strong>:不同代际对手相性剧烈摆动;最终必须冻结快照对七种风格做全谱扫分。</li>
         </ol>
-        <p>项目当前有 4411 项自动检查,覆盖规则、满盘和棋、编码、上一手 cache key、8 对称、MCTS 必杀与访问分布、严格树预算和崩溃安全 checkpoint。真正耗时的不是写类,而是证明每个约定都没暗中反号或退化。</p>
+        <p>项目当前有 4509 项自动检查,覆盖规则、满盘和棋、编码、上一手 cache key、8 对称、MCTS 必杀与访问分布、严格树预算、崩溃安全 checkpoint、教师策略不控制行为、policy-only 冻结与优化器恢复。真正耗时的不是写类,而是证明每个约定都没暗中反号或退化。</p>
 
         <div class="table-wrap reveal">
           <table class="calc-table calc-table--wrap">
