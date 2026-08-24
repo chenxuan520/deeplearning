@@ -2328,23 +2328,87 @@
     '  </div>' +
     '</div>';
 
+  var AZ_GOMOKU_ENGINES = [
+    {
+      src: "https://azgomoku.011203.xyz/alphazero-gomoku-v2-8ec18530.js",
+      integrity: "sha256-jsGFMNbdfMBKRCQY/pdz2wCqF/CKyDLLZnyjaSkI1A4="
+    },
+    {
+      src: "https://azgomoku.011203.xyz/alphazero-gomoku-3412a43b.js",
+      integrity: "sha256-NBKkOwGw0Dp9+pEkULwVtZtrndCIF8ygbg8Hqhl5MjY="
+    }
+  ];
   var azGomokuEnginePromise = null;
+  var azGomokuEngineUrl = null;
   function loadAzGomokuEngine() {
     if (window.AlphaZeroGomoku) return Promise.resolve(window.AlphaZeroGomoku);
     if (azGomokuEnginePromise) return azGomokuEnginePromise;
     azGomokuEnginePromise = new Promise(function (resolve, reject) {
-      var script = document.createElement("script");
-      script.src = "https://azgomoku.011203.xyz/alphazero-gomoku-3412a43b.js";
-      script.crossOrigin = "anonymous";
-      script.integrity = "sha256-NBKkOwGw0Dp9+pEkULwVtZtrndCIF8ygbg8Hqhl5MjY=";
-      script.onload = function () {
-        if (window.AlphaZeroGomoku) resolve(window.AlphaZeroGomoku);
-        else reject(new Error("AlphaZero engine missing after load"));
-      };
-      script.onerror = function () { reject(new Error("AlphaZero engine download failed")); };
-      document.head.appendChild(script);
+      var index = 0;
+      function tryNext() {
+        if (window.AlphaZeroGomoku) {
+          resolve(window.AlphaZeroGomoku);
+          return;
+        }
+        if (index >= AZ_GOMOKU_ENGINES.length) {
+          reject(new Error("AlphaZero engine download failed"));
+          return;
+        }
+        var entry = AZ_GOMOKU_ENGINES[index++];
+        var script = document.createElement("script");
+        script.src = entry.src;
+        script.crossOrigin = "anonymous";
+        script.integrity = entry.integrity;
+        script.onload = function () {
+          if (window.AlphaZeroGomoku) {
+            azGomokuEngineUrl = entry.src;
+            resolve(window.AlphaZeroGomoku);
+          } else tryNext();
+        };
+        script.onerror = function () { tryNext(); };
+        document.head.appendChild(script);
+      }
+      tryNext();
     });
     return azGomokuEnginePromise;
+  }
+
+  // v2 engines can evaluate MCTS leaves on dedicated workers (virtual-loss
+  // batching). Build the pool in the background; search falls back to the
+  // main-thread path until the pool reports ready.
+  var azGomokuPool = null;
+  function buildSearchPool(AZ, model, onReady) {
+    if (!AZ.createSearchPool || !azGomokuEngineUrl) return;
+    if (typeof Worker === "undefined" || typeof Blob === "undefined" ||
+        !window.URL || !URL.createObjectURL) return;
+    var cores = navigator.hardwareConcurrency || 4;
+    var count = Math.min(7, Math.max(1, cores - 1));
+    if (count < 2) return;
+    fetch(model.manifest.file)
+      .then(function (r) { return r.arrayBuffer(); })
+      .then(function (bytes) {
+        var blobUrl = URL.createObjectURL(new Blob(
+          ["importScripts(" + JSON.stringify(azGomokuEngineUrl) + ");"],
+          { type: "application/javascript" }));
+        var pool = AZ.createSearchPool(bytes, count, function () {
+          var w = new Worker(blobUrl);
+          return {
+            post: function (m) { w.postMessage(m); },
+            onMessage: function (f) { w.onmessage = function (e) { f(e.data); }; },
+            terminate: function () { w.terminate(); }
+          };
+        });
+        var ready = false;
+        var timeout = new Promise(function (_, rej) {
+          setTimeout(function () { rej(new Error("pool init timeout")); }, 20000);
+        });
+        return Promise.race([pool.ready(), timeout]).then(function () {
+          ready = true;
+          azGomokuPool = pool;
+          if (onReady) onReady(count);
+        }).catch(function () { pool.terminate(); });
+      })
+      .catch(function () { /* network hiccup: keep serial search */ });
   }
 
   function initAlphaZeroGomoku(root) {
@@ -2591,13 +2655,17 @@
         cells[focusAction].focus({ preventScroll: true });
         return;
       }
-      AZ.search(model, state, {
+      var searchOptions = {
         simulations: simulations,
         cPuct: 1.5,
         yieldEvery: 1,
         session: searchSession,
         shouldStop: function () { return version !== gameVersion; }
-      }).then(function (result) {
+      };
+      var searchRun = azGomokuPool
+        ? AZ.searchPooled(azGomokuPool, state, searchOptions)
+        : AZ.search(model, state, searchOptions);
+      searchRun.then(function (result) {
         if (version !== gameVersion || result.cancelled) return;
         var elapsed = performance.now() - begin;
         AZ.applyMove(state, result.action);
@@ -2659,6 +2727,9 @@
       model = loaded;
       searchSession = new AZ.SearchSession({ maxNodes: 12000, maxEdges: 250000 });
       ui.status.textContent = "模型就绪。";
+      buildSearchPool(AZ, model, function (workers) {
+        ui.meta.textContent = "黑棋先行,五连或长连获胜,无禁手。多核并行搜索 × " + workers + " workers。";
+      });
       reset();
     }).catch(function (error) {
       ui.status.textContent = "模型资源未就绪:" + error.message;
