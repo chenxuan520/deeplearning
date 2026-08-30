@@ -1491,6 +1491,22 @@ details[open] .quiz__q::after {
   background: rgba(255, 255, 255, 0.16);
 }
 
+.azg-demo__model-card .azg-demo__modelinfo {
+  margin-top: 0.4rem;
+  padding: 0.2rem 0;
+  border: none;
+  background: transparent;
+}
+
+.azg-demo__model-card .azg-demo__modelinfo-row {
+  padding: 0.3rem 0;
+  border-bottom: 1px dashed var(--line, #333);
+}
+
+.azg-demo__model-card .azg-demo__modelinfo-row:last-child {
+  border-bottom: none;
+}
+
 .azg-demo__modelinfo {
   margin-top: 0.9rem;
   padding: 0.6rem 0.75rem;

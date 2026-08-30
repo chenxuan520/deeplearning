@@ -2324,7 +2324,11 @@
     '      <p class="formula" data-azg-value>V(s) = —</p>' +
     '      <div class="azg-demo__stats" data-azg-stats>模型加载后显示 MCTS 根节点访问数。</div>' +
     '      <p class="explain">参数从 Cloudflare 静态下载;Conv/BN/残差前向和 PUCT MCTS 全在你的浏览器执行。</p>' +
+    '    </div>' +
+    '    <div class="formula-card azg-demo__model-card">' +
+    '      <h3>模型信息</h3>' +
     '      <div class="azg-demo__modelinfo" data-azg-model hidden></div>' +
+    '      <p class="explain">当前通道 / 权重指纹 / 引擎模式,全部来自线上 manifest,随晋升自动更新。</p>' +
     '    </div>' +
     '  </div>' +
     '</div>';
