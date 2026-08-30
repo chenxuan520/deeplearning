@@ -2324,6 +2324,7 @@
     '      <p class="formula" data-azg-value>V(s) = —</p>' +
     '      <div class="azg-demo__stats" data-azg-stats>模型加载后显示 MCTS 根节点访问数。</div>' +
     '      <p class="explain">参数从 Cloudflare 静态下载;Conv/BN/残差前向和 PUCT MCTS 全在你的浏览器执行。</p>' +
+    '      <div class="azg-demo__modelinfo" data-azg-model hidden></div>' +
     '    </div>' +
     '  </div>' +
     '</div>';
@@ -2419,6 +2420,7 @@
       boardScroll: root.querySelector(".azg-demo__board-scroll"),
       status: root.querySelector("[data-azg-status]"),
       meta: root.querySelector("[data-azg-meta]"),
+      model: root.querySelector("[data-azg-model]"),
       value: root.querySelector("[data-azg-value]"),
       stats: root.querySelector("[data-azg-stats]"),
       human: root.querySelector('[data-azg="human"]'),
@@ -2433,6 +2435,19 @@
     var searchSession = null;
     var busy = false;
     var gameVersion = 0;
+    function renderAzModelInfo() {
+      if (!ui.model || !model || !model.manifest) return;
+      var m = model.manifest;
+      var engineTag = ui.model.dataset.engine || "v2 并行引擎(搜索池就绪中)";
+      var file = (m.file || "").split("/").pop();
+      ui.model.hidden = false;
+      ui.model.innerHTML =
+        '<div class="azg-demo__modelinfo-row"><span>通道</span><b>' + (m.channel || "stable") + " · " + (m.release || "") + "</b></div>" +
+        '<div class="azg-demo__modelinfo-row"><span>模型</span><b title="' + file + '">' + file + "</b></div>" +
+        '<div class="azg-demo__modelinfo-row"><span>规模</span><b>' + (m.parameter_count || 191853).toLocaleString() + " 参数 · " + (m.size_bytes ? (m.size_bytes / 1024).toFixed(0) + " KB" : "") + "</b></div>" +
+        '<div class="azg-demo__modelinfo-row"><span>SHA-256</span><b><code>' + (m.sha256 ? m.sha256.slice(0, 12) + "…" : "—") + "</code></b></div>" +
+        '<div class="azg-demo__modelinfo-row"><span>引擎</span><b>' + engineTag + "</b></div>";
+    }
     var focusAction = 112;
     var keyboardMode = false;
     var cells = [];
@@ -2726,9 +2741,14 @@
     }).then(function (loaded) {
       model = loaded;
       searchSession = new AZ.SearchSession({ maxNodes: 12000, maxEdges: 250000 });
+      renderAzModelInfo();
       ui.status.textContent = "模型就绪。";
       buildSearchPool(AZ, model, function (workers) {
         ui.meta.textContent = "黑棋先行,五连或长连获胜,无禁手。多核并行搜索 × " + workers + " workers。";
+        if (ui.model) {
+          ui.model.dataset.engine = "v2 × " + workers + " workers";
+          renderAzModelInfo();
+        }
       });
       reset();
     }).catch(function (error) {

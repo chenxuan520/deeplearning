@@ -1491,6 +1491,39 @@ details[open] .quiz__q::after {
   background: rgba(255, 255, 255, 0.16);
 }
 
+.azg-demo__modelinfo {
+  margin-top: 0.9rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line, #333);
+  border-radius: 8px;
+  background: var(--bg-soft, transparent);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.azg-demo__modelinfo-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.azg-demo__modelinfo-row + .azg-demo__modelinfo-row {
+  margin-top: 0.25rem;
+}
+
+.azg-demo__modelinfo-row span {
+  opacity: 0.66;
+  white-space: nowrap;
+}
+
+.azg-demo__modelinfo-row b {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
 .azg-demo__stats {
   display: grid;
   gap: 0.45rem;
