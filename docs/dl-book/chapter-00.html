@@ -64,6 +64,7 @@
             <li>“让机器学习”和“我们平时写程序”到底有什么本质区别;</li>
             <li>一个“模型”说白了是什么东西,“参数”又是什么;</li>
             <li>“训练”这件事,其实就是一个不断试错、不断微调的循环;</li>
+            <li>这本书的主线是<strong>监督学习</strong>(有标准答案),另外还有无监督和强化学习两条路;</li>
             <li>神经网络的想法其实很老,为什么直到<strong>最近十几年</strong>才真正爆发(数据、算力、GPU);</li>
             <li>这本书会用什么顺序,带你从一个神经元走到大模型;</li>
             <li>配套的 C++ 代码仓库长什么样,书里每个概念在代码里的“真身”在哪。</li>
@@ -93,6 +94,12 @@
             (“这封是垃圾、这封正常、这封垃圾……”),
             让它自己去<strong>总结规律</strong>。这就是“机器学习”最核心的思想转变:
             <em>从“人写规则”变成“机器从例子里找规则”。</em>
+          </p>
+          <p>
+            这些已经标好的邮件,以后会反复见到三个名字:
+            每一封是一条<span class="term">样本(sample)</span>;
+            用来描述它的那些信号(标题里有没有“免费”、发件人在不在通讯录……)叫<span class="term">特征(feature)</span>;
+            “垃圾 / 正常”这个标准答案叫<span class="term">标签(label)</span>。
           </p>
         </div>
 
@@ -182,26 +189,16 @@
           </p>
         </div>
 
-        <h2>4. 几个词,先混个脸熟</h2>
-        <p>下面这些词你现在不用背,扫一眼有个印象即可,后面每一个都会专门展开:</p>
-        <ul>
-          <li><span class="term">样本 / 数据(sample / data)</span>:一条用来学习的例子,比如“一封邮件”。</li>
-          <li><span class="term">特征(feature)</span>:描述样本的那些数字,比如邮件里各个词出现的次数。</li>
-          <li><span class="term">标签 / 目标(label / target)</span>:这条样本的正确答案,比如“是垃圾邮件”。</li>
-          <li><span class="term">前向传播(forward)</span>:把输入从头到尾算一遍,得到预测。</li>
-          <li><span class="term">反向传播(backward)</span>:把“错误”从输出反着传回去,算出每个旋钮该怎么调。</li>
-          <li><span class="term">学习率(learning rate)</span>:每次拧旋钮的“步子大小”。</li>
-          <li><span class="term">训练轮次(epoch)</span>:把整个训练集扫完一遍叫一个 epoch。</li>
-          <li><span class="term">训练步(step)</span>:用一小批样本更新一次参数叫一步;后文会和 epoch 严格区分。</li>
-        </ul>
+        <h2>4. 这本书主要走哪条路</h2>
         <p>
-          有“标准答案(标签)”可学的这种设定,叫<span class="term">监督学习(supervised learning)</span>,
-          也是本书的主线。它就像有老师在旁边,每道题都告诉你对错。但它并不是唯一的学法。
+          垃圾邮件这个例子里,每封信都带着标签。有老师在旁边、每道题都告诉你对错——
+          这种学法叫<span class="term">监督学习(supervised learning)</span>,也是本书的主线。
+          它不是唯一的学法。
         </p>
 
         <h3>机器学习的三大“学习范式”</h3>
         <p>
-          按“<strong>拿什么信号来学</strong>”,机器学习通常分成三大范式。现在只需扫一眼建立个地图,后面遇到就不会懵:
+          按“<strong>拿什么信号来学</strong>”,机器学习通常分成三条路。现在扫一眼地图即可,后面碰到就不会懵:
         </p>
         <div class="table-wrap reveal">
           <table class="calc-table calc-table--wrap">
@@ -212,7 +209,7 @@
               <tr><td><strong>强化学习</strong><br />reinforcement</td><td>没有标准答案,靠<strong>奖励/惩罚</strong>试错</td><td>下棋赢了给分,自己摸索策略</td><td><a class="xref" href="chapter-12.html">第 12 章</a></td></tr>
             </tbody>
           </table>
-          <p class="calc-table__cap">监督学习是本书主线;强化学习在<a class="xref" href="chapter-12.html">第 12 章</a>另开一条支线。“无监督”(自己发现结构)完整分支地图和时间线放在<a class="xref" href="chapter-26.html">番外第 26 章</a>,那支“没有标签也能学”的范式放在<a class="xref" href="chapter-27.html">第 27 章</a>专门展开。你也会在<a class="xref" href="chapter-15.html">词嵌入</a>、大模型<a class="xref" href="chapter-20.html#7-大模型是怎么炼成的-预训练--后训练">预训练</a>里见到它的影子。</p>
+          <p class="calc-table__cap">现在只需知道有这三条路。本书正文走监督学习;强化学习在<a class="xref" href="chapter-12.html">第 12 章</a>另开支线;无监督的地图在<a class="xref" href="chapter-26.html">番外第 26 章</a>,专门展开在<a class="xref" href="chapter-27.html">第 27 章</a>。</p>
         </div>
         <div class="callout callout--note reveal">
           <span class="callout__title">插一句:自监督——大模型为什么能吃下整个互联网</span>
@@ -405,6 +402,7 @@ cd deeplearning/src &amp;&amp; ./build.sh   <b class="cw-tag">1</b>  编译(用 
             <li>模型 = 一个带很多旋钮(参数:权重 + 偏置)的函数。</li>
             <li>训练 = 不断“预测 → 对答案 → 算损失 → 微调旋钮”的循环。</li>
             <li>损失是“错得多离谱”的一个数字;让损失变小,是后面所有数学的共同目标。</li>
+            <li>本书主线是监督学习(每条样本都有标签);另外还有无监督、强化学习两条路,后面会碰到。</li>
             <li>“深度”= 很多层叠在一起,从而能自动学出有用的特征。</li>
             <li>本书对照一份从零手写的 C++ 仓库,每个概念都有代码“真身”,第 23–25 章会带你逐行精读(监督学习 / 生成式 / 强化学习各一章)。</li>
           </ul>

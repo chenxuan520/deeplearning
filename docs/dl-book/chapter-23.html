@@ -69,7 +69,7 @@
 
         <h2>2. 第一步 · 数据:把图片变成网络能吃的数字</h2>
         <p>
-          回忆<a class="xref" href="chapter-00.html#4-几个词先混个脸熟">第 0 章的词</a>:一张图片是一个<span class="term">样本</span>,描述它的数字是<span class="term">特征</span>,
+          回忆<a class="xref" href="chapter-00.html#1-先看一个老办法-我们平时是怎么写程序的">第 0 章的垃圾邮件例子</a>:一张图片是一个<span class="term">样本</span>,描述它的数字是<span class="term">特征</span>,
           正确数字是<span class="term">标签</span>。网络只认数字,所以要先把图片摊平:
           28×28 的像素拉成一条 <strong>784 维</strong>的向量,每个像素的灰度<strong>归一化到 [0,1]</strong>
           (0=纯黑,1=纯白)。这 784 个数,就是喂给<a class="xref" href="chapter-03.html#2-前向传播-数据一层层往前流">第 3 章那个输入层</a>的特征。
