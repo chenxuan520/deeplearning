@@ -139,7 +139,7 @@
 - `src/deeplearning/rl/` 下提供最小表格式强化学习模块：
   - `TicTacToeEnv`：井字棋环境（状态编码、合法动作、随机/最优对手、渲染）
   - `TabularQLearning`：Q-learning（ε-greedy、TD 更新、训练回合、评估胜率）
-- `rl_tictactoe` demo 默认训练 30000 局 vs 随机对手，greedy 评估约 **99%+ 胜率**（对随机）且对最优对手可稳守和棋。
+- `rl_tictactoe` demo 默认训练 30000 局 vs 随机对手，greedy 评估对随机约 **98% 胜率 / 99.7% 不败**（984 胜 / 13 和 / 3 负），但对 minimax 最优对手全输；训练到 30 万局后对随机 100% 不败且对最优全部守和（电子书第 12 章实验台加载的 `q_table.json` 即为 30 万局配置 `--export-json` 产物）。
 
 **可选绘图**
 - `src/drawtool/matplot_draw.h` 中的 `drawtool::MatplotDraw` 在使用 `_MATPLOTLIB_CPP_LOAD_` 编译时绘制损失曲线。
