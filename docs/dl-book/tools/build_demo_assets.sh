@@ -28,6 +28,9 @@ cleanup_failed_download() {
 RELEASE_BASE="https://github.com/chenxuan520/deeplearning/releases/download/v0.0.7"
 # v2 MNIST 模型快照(784->128->64->10 ReLU+He+Adam, 对应第 23 章正文)单独发布在 v0.0.8
 RELEASE_MODEL_V2="https://github.com/chenxuan520/deeplearning/releases/download/v0.0.8"
+# 井字棋 Q 表快照(30 万局训练导出, 对应第 12 章实验台)单独发布在 v0.0.9,
+# 避免每次部署都重训; 需要更新时按 release notes 里的命令重训后重新上传
+RELEASE_TICTACTOE_V1="https://github.com/chenxuan520/deeplearning/releases/download/v0.0.9"
 # 旧版纯 gitee 渠道(仅兜底;GitHub Release 已有全部文件)
 GITEE_RELEASE_BASE="https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta"
 
@@ -80,6 +83,15 @@ build_mnist_asset() {
     --out ../docs/dl-book/assets/demos/mnist/model.json)
 }
 
+download_tictactoe_qtable() {
+  mkdir -p "${OUT_DIR}/tictactoe"
+  retry wget "${RELEASE_TICTACTOE_V1}/q_table.json" -O "${OUT_DIR}/tictactoe/q_table.json" || cleanup_failed_download "${OUT_DIR}/tictactoe/q_table.json"
+  if [ ! -s "${OUT_DIR}/tictactoe/q_table.json" ]; then
+    echo "tictactoe q_table.json not found" >&2
+    exit 1
+  fi
+}
+
 validate_alphazero_assets() {
   python3 - <<'PY'
 import hashlib
@@ -116,6 +128,7 @@ PY
 }
 
 build_binaries
+download_tictactoe_qtable
 build_mnist_asset
 validate_alphazero_assets
 

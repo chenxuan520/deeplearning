@@ -856,11 +856,18 @@ auto eval = agent.Evaluate(env, OpponentType::RANDOM, eval_games); <b class="cw-
           <p>
             配套项目 demo 在 <code>src/demo/rl_tictactoe</code>。在 <code>src/</code> 目录编译后运行:
             <code>./bin/rl_tictactoe --episodes 30000 --eval-games 1000 --show-sample</code>。
-            默认 3 万局对<strong>随机对手</strong>训练后,greedy 评估约 <strong>99%</strong> 胜率;对 minimax 最优对手可<strong>稳守和棋</strong>。
+            默认 3 万局对<strong>随机对手</strong>训练后,greedy 评估对随机对手<strong>胜率约 98%</strong>(984 胜 / 13 和 / 3 负),但对 minimax 最优对手会全输——它没见过高手的严密下法。
+            把局数加到 30 万(本页实验台加载的这份),<strong>对随机 100% 不败、对最优也全部守和</strong>;也可以加 <code>--opponent optimal</code> 直接对最优对手训练(收敛更慢)。
+            <strong>训练数据分布和训练量,共同决定能力边界。</strong>
             加 <code>--play</code> 可在 stdin 里下一盘(你是 O,输入 0–8)。
              更全的参数说明见仓库 <code>docs/rl-tictactoe-demo.md</code>;更完整的搜索+神经网络自对弈见 <a class="xref" href="chapter-25.html">第 25 章 AlphaZero 实战</a>。
-          </p>
+           </p>
+         </div>
+        <div class="figure reveal">
+          <div data-lab="tictactoe-demo"></div>
+          <p class="figure__cap">直接加载 demo 用 <code>--export-json</code> 导出的真实 Q 表(30 万局、对随机对手训练):你执 O 后手,X 按 Q 表出招;每个空格旁的数值就是该局面下这个动作的 Q 值——第 7 节手算的“价值倒灌”,这里是真身。这份 Q 表对最优下法已能全部守和,试试你能不能至少逼和,或者从 Q 值排序里找出它还残留的破绽。</p>
         </div>
+
 
         <section class="summary reveal">
           <h2>小结</h2>
@@ -946,5 +953,6 @@ auto eval = agent.Evaluate(env, OpponentType::RANDOM, eval_games); <b class="cw-
     </main>
 
     <script src="assets/book.js"></script>
+    <script src="assets/labs.js"></script>
   </body>
 </html>
