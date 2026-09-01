@@ -285,7 +285,7 @@ output_embeddings_.assign(vocab_size_, vector&lt;double&gt;(embed_dim, 0));
 
               <!-- 输出打分(右侧,来自第 8 节) -->
               <text x="636" y="114" fill="#8ef0d1" font-size="12" font-weight="700">score 0.26 ✓</text>
-              <text x="636" y="128" fill="#8499bd" font-size="10">softmax→P≈0.30</text>
+              <text x="636" y="128" fill="#8499bd" font-size="10">softmax→P≈0.28</text>
               <text x="636" y="191" text-anchor="start" fill="#8499bd" font-size="12">0.07</text>
               <text x="636" y="259" text-anchor="start" fill="#8499bd" font-size="12">0.16</text>
               <text x="636" y="327" text-anchor="start" fill="#8499bd" font-size="12">0.09</text>
@@ -437,7 +437,7 @@ output_embeddings_.assign(vocab_size_, vector&lt;double&gt;(embed_dim, 0));
                 <div class="step-track__body">
                   <span class="step-track__phase">前向 · 概率</span>
                   <span class="step-track__title">softmax 变成概率分布</span>
-                  <span class="step-track__detail">P(cat) ≈ <strong>0.30</strong>, 其余更低 — 模型还不够自信</span>
+                  <span class="step-track__detail">P(cat) ≈ <strong>0.28</strong>, 其余更低 — 模型还不够自信</span>
                 </div>
               </li>
               <li class="step-track__item step-track__item--loss">
@@ -445,7 +445,7 @@ output_embeddings_.assign(vocab_size_, vector&lt;double&gt;(embed_dim, 0));
                 <div class="step-track__body">
                   <span class="step-track__phase">算损失</span>
                   <span class="step-track__title">交叉熵衡量猜得有多差</span>
-                  <span class="step-track__detail step-track__formula">loss = −log P(cat) ≈ 1.20</span>
+                  <span class="step-track__detail step-track__formula">loss = −log P(cat) ≈ 1.27</span>
                 </div>
               </li>
               <li class="step-track__item step-track__item--backward">
@@ -466,7 +466,7 @@ output_embeddings_.assign(vocab_size_, vector&lt;double&gt;(embed_dim, 0));
               </li>
             </ol>
           </div>
-          <p class="figure__cap">③ 手算 cat 的分数:0.2×0.1 + 0.8×0.3 = <strong>0.26</strong>(最高,但 softmax 后仍只有 30%)。⑥ 梯度会把 cat 的概率往 1 推。</p>
+          <p class="figure__cap">③ 手算 cat 的分数:0.2×0.1 + 0.8×0.3 = <strong>0.26</strong>(最高,但 softmax 后仍只有 28%)。⑥ 梯度会把 cat 的概率往 1 推。</p>
         </div>
         <figure class="code-walk reveal">
           <figcaption class="code-walk__file">src/deeplearning/embedding/word2vec.cpp · TrainSkipGramPair + UpdatePositivePair(精简)</figcaption>
@@ -492,7 +492,7 @@ output_vec[dim] += grad_scale * lr * input_vec[dim]; <b class="cw-tag">2</b></co
               u、v;而第二行用到的 <code>input_vec</code> 已经被第一行改过了,等于拿“更新后的 u”去算 v 的梯度。
               这正是<a class="xref" href="chapter-06.html">第 6 章</a>强调的“所有梯度都基于同一次前向快照”被打破的样子。
               规范写法是<strong>先把旧值存进临时变量</strong>再原地改。好在这里引入的偏差只有 (η·grad_scale)²·v 这个二阶小量
-              (学习率 0.025 时约 0.06%),方向没变、也不影响收敛,所以词向量照样能训出语义——
+              (量级约 η²:word2vec 论文的经典默认 lr=0.025 对应约 0.06%,本仓库默认 lr=0.05 对应约 0.25%),方向没变、也不影响收敛,所以词向量照样能训出语义——
               和<a class="xref" href="chapter-04.html">第 4 章</a>那个 <code>MseLoss::DerivLoss</code> 多出常数 2 是同类情况:<strong>不致命,但自己写的时候别学</strong>。
             </li>
           </ol>
@@ -509,7 +509,7 @@ output_vec[dim] += grad_scale * lr * input_vec[dim]; <b class="cw-tag">2</b></co
               <tr><td>mat</td><td>0.3×0.1 + 0.2×0.3</td><td>0.09</td></tr>
             </tbody>
           </table>
-          <p class="calc-table__cap">softmax 归一化后 P(cat)≈0.30。训练目标:让正确答案的概率 → 1,loss → 0。</p>
+          <p class="calc-table__cap">softmax 归一化后 P(cat)≈0.28。训练目标:让正确答案的概率 → 1,loss → 0。</p>
         </div>
         <div class="mathblock reveal">
           P(目标词 = w | 输入) = softmax(<var>v</var><sub>w</sub><sup>T</sup> · <var>h</var>)

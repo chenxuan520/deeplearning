@@ -18,7 +18,7 @@
           第一、二部分你已经把<strong>神经元 → 网络 → 损失 → 梯度下降 → 反向传播 → 优化器 → 训练技巧</strong>拆了个遍。
           这一章不引入任何新概念,而是带你逐段读一个<strong>真能跑、还真能到 ~98% 准确率</strong>的完整程序:
           让网络学会认<strong>手写数字 0–9</strong>。整个程序就是仓库里的
-          <code>src/demo/mnist/main.cpp</code>,不到 200 行、不依赖任何大框架。读完你会发现:
+          <code>src/demo/mnist/main.cpp</code>,不到 300 行、不依赖任何大框架。读完你会发现:
           前面那些概念,在这里都对应着实实在在的几行代码。
         </p>
 
@@ -184,7 +184,7 @@ demo_network.Train(train_data, train_target,
               <div class="pipe__arrow">→</div>
               <div class="pipe__box">反向<small><a class="xref" href="chapter-06.html">第 6 章</a>:算每个旋钮的梯度</small></div>
               <div class="pipe__arrow">→</div>
-              <div class="pipe__box">更新<small>第 4/6 章:Adam 按学习率拧旋钮</small></div>
+              <div class="pipe__box">更新<small><a class="xref" href="chapter-08.html">第 8 章</a>:Adam 按学习率拧旋钮</small></div>
             </div>
           </div>
           <p class="figure__cap"><code>Train</code> 内部每一 step 都跑<a class="xref" href="chapter-09.html#6-一个-minibatch-里发生什么">第 9 章那一圈</a>(含可选的<a class="xref" href="chapter-09.html#4-防止训练踩空-梯度裁剪">梯度裁剪</a>),循环几千步,损失就降下来了。</p>
@@ -256,7 +256,7 @@ NeuralNetworkLoader::ExportParamToFile(param, option, "demo.v2.param");</code></
             <li>一个完整训练程序 = <strong>数据 → 建网 → 训练 → 评估 → 保存</strong>五步,每步都对应前面某一章。</li>
             <li>数据:图片摊平成 784 维并归一化(特征),标签变 one-hot(第 0、4 章)。</li>
             <li>建网:<code>Init</code> 定层(<a class="xref" href="chapter-03.html">第 3 章</a>)+ 激活(<a class="xref" href="chapter-02.html">第 2 章</a>)+ softmax/交叉熵(<a class="xref" href="chapter-04.html">第 4 章</a>)+ 初始化(<a class="xref" href="chapter-09.html">第 9 章</a>)/Adam(<a class="xref" href="chapter-08.html">第 8 章</a>),一行一个概念。</li>
-            <li>训练:一句 <code>Train</code> 背后是“前向(2)→反向(5)→Adam 更新(4/6)”的循环,配学习率热身+余弦衰减(6)。</li>
+            <li>训练:一句 <code>Train</code> 背后是“前向(第 3 章)→反向(第 6 章)→Adam 更新(第 5、8 章)”的循环,配学习率热身+余弦衰减(第 9 章)。</li>
             <li>评估:<code>PredictBatch</code> 前向 + <code>argmax</code> 比对,得到 ~98% 准确率;最后把参数存盘可续训。</li>
           </ul>
         </section>
