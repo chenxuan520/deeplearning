@@ -670,9 +670,9 @@
       var queryVector = tokenVectors[queryToken];
       var scores = attentionTokens.map(function (token, keyIndex) {
         if (state.causal && keyIndex > state.queryIndex) return -1e9;
-        return dot(queryVector, tokenVectors[token]) / state.temperature;
+        return dot(queryVector, tokenVectors[token]) / Math.sqrt(queryVector.length);
       });
-      var weights = softmax(scores);
+      var weights = softmax(scores.map(function (s) { return s / state.temperature; }));
       var resultVector = [0, 0, 0];
       attentionTokens.forEach(function (token, index) {
         var scoreCell = document.createElement("div");
@@ -687,7 +687,7 @@
       });
       attResult.textContent = "[" + resultVector.map(function (v) { return v.toFixed(3); }).join(", ") + "]";
       attResult.dataset.attLink = "result";
-      attExplain.textContent = "当前 query 是 “" + queryToken + "”。它先和所有 key 做点积得到 score,再经过 softmax 变成权重;权重大说明这个 token 对当前 query 更重要。最后对所有 value 做加权求和,得到新的上下文表示。";
+      attExplain.textContent = "当前 query 是 “" + queryToken + "”。它先和所有 key 做点积并除以 √d 得到 score,再经过 softmax 变成权重;权重大说明这个 token 对当前 query 更重要。最后对所有 value 做加权求和,得到新的上下文表示。";
       fMain.innerHTML = linkA("Q", ["token-" + state.queryIndex]) + " · " + linkA("K", attentionTokens.map(function (_, i) { return "token-" + i; })) + " / √d → " + linkA("score", attentionTokens.map(function (_, i) { return "score-" + i; }));
       fSub.innerHTML = linkA("weight = softmax(score)", attentionTokens.map(function (_, i) { return "weight-" + i; })) + ", " + linkA("output = Σ(weight × V)", attentionTokens.map(function (_, i) { return "weight-" + i; }).concat(attentionTokens.map(function (_, i) { return "token-" + i; })).concat(["result"]));
       bindLinks();
