@@ -171,7 +171,7 @@ max_context_size_ = 48    // 上下文窗口:一次最多看 48 个字         <
               <thead><tr><th>部件</th><th>计算式</th><th>参数量</th><th>占比</th></tr></thead>
               <tbody>
                 <tr><td>Token Embedding</td><td>3981 × 128</td><td>509,568</td><td>28%</td></tr>
-                <tr><td>4 × Transformer Block</td><td>4 ×(注意力 4×128² + FFN 2×128×512 + 2×LayerNorm)</td><td>793,088</td><td>43%</td></tr>
+                <tr><td>4 × Transformer Block</td><td>4 ×(注意力 4×128² + FFN 2×128×512+偏置640 + 2×LayerNorm)</td><td>791,040</td><td>44%</td></tr>
                 <tr><td>LM 输出头</td><td>3981 × 128 + 3981</td><td>513,549</td><td>28%</td></tr>
                 <tr><td><strong>合计</strong></td><td></td><td><strong>1,814,157</strong></td><td></td></tr>
               </tbody>

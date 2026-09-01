@@ -846,7 +846,7 @@ for (int episode = 0; episode &lt; option.episodes; episode++) {
 }
 auto eval = agent.Evaluate(env, OpponentType::RANDOM, eval_games); <b class="cw-tag">3</b></code></pre>
           <ol class="code-walk__notes">
-            <li>超参与第 7 节手算一致:<code>alpha=0.5</code>、<code>gamma=0.99</code>、ε 从 1.0 指数衰减到 0.05。</li>
+            <li>超参与第 7 节手算对齐:<code>alpha=0.5</code> 一致;<code>gamma</code> 取 demo 默认的 <code>0.99</code>(第 7 节手算为数字整洁用了 0.9)、ε 从 1.0 指数衰减到 0.05。</li>
             <li>外层只是重复很多<strong>回合</strong>;每回合内的 reset / step / update 全在 <code>RunEpisode</code> 里。</li>
             <li><code>Evaluate</code> 把 <code>explore=false</code>,纯 greedy 下棋,统计对随机 / 最优对手的胜率和。</li>
           </ol>
