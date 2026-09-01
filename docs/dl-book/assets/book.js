@@ -77,12 +77,13 @@
   }
 
   function slugify(text, index) {
+    // 与 tools/check_anchors.py 的 slugify() 保持一致:保留所有 Unicode 字母/数字(含 ①-⑦、δ、η)
     var base = String(text || "")
       .trim()
       .toLowerCase()
       .replace(/[：:]/g, " ")
       .replace(/\s+/g, "-")
-      .replace(/[^\w\u4e00-\u9fff-]/g, "");
+      .replace(/[^\p{L}\p{N}-]/gu, "");
     return base || "section-" + index;
   }
 
