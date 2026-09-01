@@ -75,7 +75,10 @@ def collect_anchor_ids(html):
 
 def main():
     os.chdir(BASE_DIR)
-    files = sorted(glob.glob("chapter-*.html")) + ["glossary.html", "about.html", "index.html"]
+    files = sorted(glob.glob("chapter-*.html")) + [
+        "glossary.html", "about.html", "index.html",
+        "sand-to-mythos.html", "machine-learning-history.html",
+    ]
     file_anchors = {f: collect_anchor_ids(open(f, encoding="utf-8").read())
                     for f in files if os.path.exists(f)}
 
