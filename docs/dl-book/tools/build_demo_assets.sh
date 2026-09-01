@@ -26,6 +26,8 @@ cleanup_failed_download() {
 }
 
 RELEASE_BASE="https://github.com/chenxuan520/deeplearning/releases/download/v0.0.7"
+# v2 MNIST 模型快照(784->128->64->10 ReLU+He+Adam, 对应第 23 章正文)单独发布在 v0.0.8
+RELEASE_MODEL_V2="https://github.com/chenxuan520/deeplearning/releases/download/v0.0.8"
 # 旧版纯 gitee 渠道(仅兜底;GitHub Release 已有全部文件)
 GITEE_RELEASE_BASE="https://gitee.com/chenxuan520/deeplearning/releases/download/v0.0.1-beta"
 
@@ -39,8 +41,11 @@ download_mnist_data() {
 
 download_mnist_model() {
   mkdir -p "${SRC_DIR}/demo/mnist/mnist"
-  retry wget "${RELEASE_BASE}/demo.param" -O "${SRC_DIR}/demo/mnist/mnist/demo.param" || cleanup_failed_download "${SRC_DIR}/demo/mnist/mnist/demo.param"
-  if [ ! -s "${SRC_DIR}/demo/mnist/mnist/demo.param" ]; then
+  retry wget "${RELEASE_MODEL_V2}/demo.v2.param" -O "${SRC_DIR}/demo/mnist/mnist/demo.v2.param" || cleanup_failed_download "${SRC_DIR}/demo/mnist/mnist/demo.v2.param"
+  if [ ! -s "${SRC_DIR}/demo/mnist/mnist/demo.v2.param" ]; then
+    retry wget "${RELEASE_BASE}/demo.param" -O "${SRC_DIR}/demo/mnist/mnist/demo.param" || cleanup_failed_download "${SRC_DIR}/demo/mnist/mnist/demo.param"
+  fi
+  if [ ! -s "${SRC_DIR}/demo/mnist/mnist/demo.v2.param" ] && [ ! -s "${SRC_DIR}/demo/mnist/mnist/demo.param" ]; then
     retry wget "${GITEE_RELEASE_BASE}/demo.param" -O "${SRC_DIR}/demo/mnist/mnist/demo.param" || cleanup_failed_download "${SRC_DIR}/demo/mnist/mnist/demo.param"
   fi
 }
