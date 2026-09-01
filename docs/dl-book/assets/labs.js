@@ -239,7 +239,7 @@
     '        </div>' +
     '      </div>' +
     '      <div class="propagation-flow">' +
-    '        <div class="flow-box"><h4>数值流动</h4><p class="flow-box__line" data-prop-values>x = [1.00, 0.50] → h = [0.42, 0.73, 0.18] → y = [0.81]</p></div>' +
+    '        <div class="flow-box"><h4>数值流动</h4><p class="flow-box__line" data-prop-values>x = [1.00, 0.50] → h = [0.69, 0.73, 0.18] → y = [0.81]</p></div>' +
     '        <div class="flow-box"><h4>梯度流动</h4><p class="flow-box__line" data-prop-grads>dL/dy = [-0.19] → dL/dh = [-0.08, 0.03, 0.11] → dL/dx = [0.04, -0.02]</p></div>' +
     '      </div>' +
     '    </div>' +
@@ -264,10 +264,12 @@
     var $$ = function (s) { return root.querySelectorAll(s); };
     var SVG_NS = "http://www.w3.org/2000/svg";
     var NETWORK_EDGES = [
-      { id: "w100", from: "input-0", to: "hidden-0", label: "w100" },
-      { id: "w101", from: "input-0", to: "hidden-1", label: "w101" },
-      { id: "w111", from: "input-1", to: "hidden-1", label: "w111" },
-      { id: "w112", from: "input-1", to: "hidden-2", label: "w112" },
+      { id: "w100", from: "input-0", to: "hidden-0", label: "w100", t: 0.35, side: 1 },
+      { id: "w101", from: "input-1", to: "hidden-0", label: "w101", t: 0.55, side: -1 },
+      { id: "w110", from: "input-0", to: "hidden-1", label: "w110", t: 0.50, side: -1 },
+      { id: "w111", from: "input-1", to: "hidden-1", label: "w111", t: 0.70, side: 1 },
+      { id: "w120", from: "input-0", to: "hidden-2", label: "w120", t: 0.62, side: -1 },
+      { id: "w121", from: "input-1", to: "hidden-2", label: "w121", t: 0.60, side: 1 },
       { id: "w200", from: "hidden-0", to: "output-0", label: "w200" },
       { id: "w210", from: "hidden-1", to: "output-0", label: "w210" },
       { id: "w220", from: "hidden-2", to: "output-0", label: "w220" }
@@ -332,8 +334,10 @@
         var y1 = from.y + uy * from.r;
         var x2 = to.x - ux * to.r;
         var y2 = to.y - uy * to.r;
-        var mx = (x1 + x2) / 2 + uy * 14;
-        var my = (y1 + y2) / 2 - ux * 14;
+        var t = def.t || 0.5;
+        var side = def.side || 1;
+        var mx = x1 + (x2 - x1) * t + uy * 14 * side;
+        var my = y1 + (y2 - y1) * t - ux * 14 * side;
         var line = group.querySelector(".network__edge-line");
         var label = group.querySelector(".network__edge-label");
         if (line) {
@@ -381,7 +385,7 @@
       forward: [
         {
           node: ["input-0", "input-1"], secondaryNode: ["hidden-0", "hidden-1", "hidden-2"],
-          edge: ["w100", "w101", "w111", "w112"], title: "前向传播:输入层接收原始特征",
+          edge: ["w100", "w101", "w110", "w111", "w120", "w121"], title: "前向传播:输入层接收原始特征",
           explain: "这一步传的不是误差,而是原始输入值。图片像素、表格特征或 token embedding 都先进入输入层。",
           pulse: { x: 12, y: 55 },
           formulaMain: link("x", ["input-0", "input-1"]) + " = [x1, x2]",
@@ -395,16 +399,16 @@
         },
         {
           node: ["hidden-0", "hidden-1", "hidden-2"], secondaryNode: ["input-0", "input-1", "output-0"],
-          edge: ["w100", "w101", "w111", "w112", "w200", "w210", "w220"], title: "前向传播:隐藏层做加权求和和激活",
+          edge: ["w100", "w101", "w110", "w111", "w120", "w121", "w200", "w210", "w220"], title: "前向传播:隐藏层做加权求和和激活",
           explain: "隐藏层把上一层输出乘权重、加偏置,再过激活函数,逐步形成更抽象的特征表示。",
           pulse: { x: 48, y: 48 },
-          formulaMain: link("z", ["hidden-0", "hidden-1", "hidden-2"]) + " = " + link("W", ["w100", "w101", "w111", "w112"]) + " " + link("x", ["input-0", "input-1"]) + " + " + link("b", ["hidden-0", "hidden-1", "hidden-2"]),
+          formulaMain: link("z", ["hidden-0", "hidden-1", "hidden-2"]) + " = " + link("W", ["w100", "w101", "w110", "w111", "w120", "w121"]) + " " + link("x", ["input-0", "input-1"]) + " + " + link("b", ["hidden-0", "hidden-1", "hidden-2"]),
           formulaSub: link("a", ["hidden-0", "hidden-1", "hidden-2"]) + " = σ(" + link("z", ["hidden-0", "hidden-1", "hidden-2"]) + ")",
           formulaExplain: "最经典的一层神经元公式:先线性变换,再经过激活函数,得到新的中间表示。",
-          chainMain: "z_j = Σ_i " + link("w_ji", ["w100", "w101", "w111", "w112"]) + " " + link("x_i", ["input-0", "input-1"]) + " + " + link("b_j", ["hidden-0", "hidden-1", "hidden-2"]),
+          chainMain: "z_j = Σ_i " + link("w_ji", ["w100", "w101", "w110", "w111", "w120", "w121"]) + " " + link("x_i", ["input-0", "input-1"]) + " + " + link("b_j", ["hidden-0", "hidden-1", "hidden-2"]),
           chainSub: link("a_j", ["hidden-0", "hidden-1", "hidden-2"]) + " = σ(" + link("z_j", ["hidden-0", "hidden-1", "hidden-2"]) + ")",
           chainExplain: "这一层每个节点都在重复同一个模式:收输入、乘权重、加偏置、过激活。",
-          values: "x = [1.00, 0.50] → h = [0.42, 0.73, 0.18] → y = [?]",
+          values: "x = [1.00, 0.50] → h = [0.69, 0.73, 0.18] → y = [?]",
           grads: "这里仍然是数值流,不是误差信号。隐藏层的输出会作为下一层输入。",
           params: function () { return [["z(hidden,0)", "1.00×0.80 + 0.50×-0.20 + 0.10 → 0.80"], ["a(hidden,0)", "sigmoid(0.80) → 0.69"]]; }
         },
@@ -418,7 +422,7 @@
           formulaExplain: "输出层先得到预测,再和真实目标比较,才能知道模型错了多少。",
           chainMain: "L = ½ (target − " + link("y", ["output-0"]) + ")²", chainSub: "先有预测,再谈误差",
           chainExplain: "你只有先得到输出,才能把预测和目标作比较,形成 loss。",
-          values: "x = [1.00, 0.50] → h = [0.42, 0.73, 0.18] → y = [0.81]",
+          values: "x = [1.00, 0.50] → h = [0.69, 0.73, 0.18] → y = [0.81]",
           grads: "前向阶段结束,模型得到一个输出。接下来用 loss 判断它偏了多少。",
           params: function () { return [["y_pred", "[0.81]"], ["loss 前状态", "预测已得到,等待与目标比较"]]; }
         }
@@ -440,7 +444,7 @@
         },
         {
           node: ["hidden-0", "hidden-1", "hidden-2"], secondaryNode: ["input-0", "input-1", "output-0"],
-          edge: ["w100", "w101", "w111", "w112", "w200", "w210", "w220"], title: "反向传播:隐藏层接收梯度信号",
+          edge: ["w100", "w101", "w110", "w111", "w120", "w121", "w200", "w210", "w220"], title: "反向传播:隐藏层接收梯度信号",
           explain: "每个隐藏节点会收到来自后面层的梯度,知道自己对最终错误贡献了多少,再继续往前传。",
           pulse: { x: 48, y: 48 },
           formulaMain: link("δ_l", ["hidden-0", "hidden-1", "hidden-2"]) + " = (" + link("Wᵀ", ["w200", "w210", "w220"]) + " " + link("δ_(l+1)", ["output-0"]) + ") ⊙ σ'(" + link("z_l", ["hidden-0", "hidden-1", "hidden-2"]) + ")",
@@ -449,16 +453,16 @@
           chainMain: link("dL/dw100", ["w100"]) + " = " + link("dL/dout", ["output-0"]) + " · " + link("dout/dnet10", ["hidden-0"]) + " · " + link("dnet10/dw100", ["w100", "input-0"]),
           chainSub: "= " + link("δ_10", ["hidden-0"]) + " · " + link("x0", ["input-0"]),
           chainExplain: "对隐藏层权重,梯度不再只看输出误差,而要先把输出误差一路传回当前隐藏节点。",
-          values: "隐藏表示 h = [0.42, 0.73, 0.18] 不变,但它们现在各自收到了梯度。",
+          values: "隐藏表示 h = [0.69, 0.73, 0.18] 不变,但它们现在各自收到了梯度。",
           grads: "dL/dh = [-0.08, 0.03, 0.11] → 不同隐藏节点对最终误差的责任大小不一样。",
           params: function (lr) { return [[paramDefs.hidden0.label, formatUpdate(paramDefs.hidden0.old, paramDefs.hidden0.grad, lr)], [paramDefs.hidden1.label, formatUpdate(paramDefs.hidden1.old, paramDefs.hidden1.grad, lr)]]; }
         },
         {
           node: ["input-0", "input-1"], secondaryNode: ["hidden-0", "hidden-1", "hidden-2"],
-          edge: ["w100", "w101", "w111", "w112"], title: "反向传播:更早层据此调整参数",
+          edge: ["w100", "w101", "w110", "w111", "w120", "w121"], title: "反向传播:更早层据此调整参数",
           explain: "真正更新的是层间权重和偏置。越靠前的层,需要等梯度一路传回来,才能知道自己该怎么改。",
           pulse: { x: 12, y: 55 },
-          formulaMain: link("W_new", ["w100", "w101", "w111", "w112", "w200", "w210", "w220"]) + " = " + link("W_old", ["w100", "w101", "w111", "w112", "w200", "w210", "w220"]) + " − " + link("η", []) + " · " + link("dL/dW", ["w100", "w101", "w111", "w112", "w200", "w210", "w220"]),
+          formulaMain: link("W_new", ["w100", "w101", "w110", "w111", "w120", "w121", "w200", "w210", "w220"]) + " = " + link("W_old", ["w100", "w101", "w110", "w111", "w120", "w121", "w200", "w210", "w220"]) + " − " + link("η", []) + " · " + link("dL/dW", ["w100", "w101", "w110", "w111", "w120", "w121", "w200", "w210", "w220"]),
           formulaSub: link("b_new", ["hidden-0", "hidden-1", "hidden-2", "output-0"]) + " = " + link("b_old", ["hidden-0", "hidden-1", "hidden-2", "output-0"]) + " − " + link("η", []) + " · " + link("dL/db", ["hidden-0", "hidden-1", "hidden-2", "output-0"]),
           formulaExplain: "最后落到参数更新规则:η 就是 learning rate,它直接决定一次更新走多远。",
           chainMain: "η 越大,W_new 变化越大", chainSub: "η 越小,训练更稳但更慢",
@@ -553,7 +557,7 @@
       refs.cMain.innerHTML = "dL/dW = dL/dy · dy/dz · dz/dW";
       refs.cSub.innerHTML = "还没进入反向传播时,这里显示“当前没有梯度拆解”。";
       refs.cExp.textContent = "链式法则把“总误差对某个参数的影响”拆成一段段局部影响再连乘起来。";
-      refs.values.textContent = "x = [1.00, 0.50] → h = [0.42, 0.73, 0.18] → y = [0.81]";
+      refs.values.textContent = "x = [1.00, 0.50] → h = [0.69, 0.73, 0.18] → y = [0.81]";
       refs.grads.textContent = "dL/dy = [-0.19] → dL/dh = [-0.08, 0.03, 0.11] → dL/dx = [0.04, -0.02]";
       refs.params.innerHTML =
         '<div class="change-item"><strong>w(hidden,0)</strong><span>0.80 → 0.76</span></div>' +
