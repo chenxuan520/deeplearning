@@ -27,7 +27,8 @@
             <li><strong>卷积</strong>到底在算什么:局部感受野 + 一个小滤波器在图上滑动;</li>
             <li><strong>权重共享</strong>为什么能让参数暴减,还自带<strong>平移不变</strong>;</li>
             <li><strong>池化</strong>、<strong>通道</strong>、以及“浅层看边缘、深层看物体”的层级特征;</li>
-            <li>LeNet / AlexNet / ResNet 这些名字大概是怎么回事。</li>
+            <li>LeNet / AlexNet / ResNet 这些名字大概是怎么回事;</li>
+            <li>亲手跑通最小 CNN,亲眼看它在<strong>小数据</strong>和<strong>平移测试</strong>里赢过 MLP。</li>
           </ul>
         </section>
 
@@ -748,6 +749,182 @@ for (int cls = 0; cls &lt; class_num_; cls++) {
           </p>
         </div>
 
+        <h2>8. 亲手跑一遍:同一批数字,MLP 和 CNN 各认出多少?</h2>
+        <p>
+          上一节的“自己跑一个”给了命令,这一节把结果摆上桌。三场小实验,规则只有一条:<strong>两边吃完全相同的训练图</strong>,谁也不多占。
+          口径先交代清楚——MLP 用<a class="xref" href="chapter-23.html">第 23 章</a>实战的原配方(784→128→64→10,Adam + 热身余弦学习率);
+          CNN 用本章 demo 的默认(8 个 5×5 核,单样本 SGD,lr=0.01)。两者的训练器并不相同,所以请把它读作
+          <strong>“两座各自最顺手的积木对打”</strong>,而不是“优化器大赛”。下面每条数字,都可以用同一条命令亲手复现:
+        </p>
+        <pre class="reveal">cd src/
+# CNN 一方(参数即默认值,显式写出来方便对照)
+./bin/cnn_mnist --epochs 3 \
+  --train-limit 2000 --test-limit 10000 \
+  --conv-channels 8 --kernel-size 5
+# MLP 一方(第 23 章 demo,相同的数据预算)
+./bin/mnist --train-limit 2000 --epochs 3</pre>
+
+        <h3>⑥ 第一局:同样 2000 张,谁学得好?</h3>
+        <p>训练集只取前 <strong>2000</strong> 张、只训 <strong>3 轮</strong>,再用完整的 10000 张测试图打分:</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>选手</th><th>结构</th><th>可训练参数</th><th>测试准确率</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>MLP(第 23 章配方)</strong></td>
+                <td>784→128→64→10 全连接</td>
+                <td>109 386</td>
+                <td>87.1%</td>
+              </tr>
+              <tr>
+                <td><strong>最小 CNN(本章 demo)</strong></td>
+                <td>conv→ReLU→pool→linear</td>
+                <td>15 898</td>
+                <td><strong>93.2%</strong></td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">同一份数据预算,CNN 高出约 6 个点,参数却只有对方的 1/7。2000 张连 60000 张的零头都不到——MLP 的天赋是“什么都能学”,代价是“什么都得从头学”,小数据恰恰喂不饱它。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">这种先验有个专门名字:归纳偏置</span>
+          <p>
+            “结构自带的先验假设”在行话里叫<span class="term">归纳偏置(inductive bias)</span>。CNN 的偏置是“图像由局部花纹组成、花纹出现在哪个位置都算数”——恰好押对了图像这道题。
+            MLP 几乎没有这类偏置,表格数据反而更适合它。<strong>数据越少,先验越值钱</strong>;第一局那 6 个点,买的就是它。
+          </p>
+        </div>
+
+        <h3>⑦ 第二局:把数字挪个位置,差距拉开</h3>
+        <p>
+          第 3 节说权重共享“自带平移不变”,是骡子是马现在就遛:训练图原样不动,<strong>测试时把每张图整体挪 2~3 像素</strong>(空出的边缘补黑),
+          再让两个模型各认一遍。仍然各训 2000 张 / 3 轮,前 1000 张测试图逐张配对打分:
+        </p>
+        <div class="figure reveal">
+          <div class="diagram">
+            <svg viewBox="0 0 720 340" role="img" aria-label="平移鲁棒性对比条形图:测试图整体平移 2 到 3 像素后,MLP 准确率掉到四到六成,CNN 仍保持六到七成半">
+              <text x="36" y="30" fill="#8ef0d1" font-size="15" font-weight="700">测试图整体挪一挪,两个模型各掉多少分?</text>
+              <text x="36" y="50" fill="#b6c5e1" font-size="11">同前 2000 张训练 / 3 轮;前 1000 张测试图配对打分;空出的边缘补黑</text>
+
+              <rect x="448" y="22" width="14" height="10" rx="2" fill="rgba(139,123,255,0.3)" stroke="#8b7bff" stroke-width="1.5" />
+              <text x="468" y="31" fill="#b6c5e1" font-size="11">MLP(第 23 章)</text>
+              <rect x="576" y="22" width="14" height="10" rx="2" fill="rgba(142,240,209,0.25)" stroke="#8ef0d1" stroke-width="1.5" />
+              <text x="596" y="31" fill="#b6c5e1" font-size="11">CNN(本章)</text>
+
+              <g stroke="rgba(70,88,122,0.55)" stroke-width="1" stroke-dasharray="3 5">
+                <line x1="120" y1="64" x2="120" y2="318" />
+                <line x1="260" y1="64" x2="260" y2="318" />
+                <line x1="400" y1="64" x2="400" y2="318" />
+                <line x1="540" y1="64" x2="540" y2="318" />
+                <line x1="680" y1="64" x2="680" y2="318" />
+              </g>
+              <g fill="#8499bd" font-size="10" text-anchor="middle">
+                <text x="120" y="330">0%</text>
+                <text x="260" y="330">25%</text>
+                <text x="400" y="330">50%</text>
+                <text x="540" y="330">75%</text>
+                <text x="680" y="330">100%</text>
+              </g>
+
+              <text x="112" y="89" text-anchor="end" fill="#b6c5e1" font-size="12">原始(不挪)</text>
+              <rect x="120" y="76" width="475" height="13" rx="3" fill="rgba(139,123,255,0.3)" stroke="#8b7bff" stroke-width="1.5" />
+              <text x="603" y="87" fill="#b6c5e1" font-size="10">84.9</text>
+              <rect x="120" y="92" width="517" height="13" rx="3" fill="rgba(142,240,209,0.25)" stroke="#8ef0d1" stroke-width="1.5" />
+              <text x="645" y="103" fill="#8ef0d1" font-size="10">92.4</text>
+
+              <text x="112" y="131" text-anchor="end" fill="#b6c5e1" font-size="12">右移 2 像素</text>
+              <rect x="120" y="118" width="346" height="13" rx="3" fill="rgba(139,123,255,0.3)" stroke="#8b7bff" stroke-width="1.5" />
+              <text x="474" y="129" fill="#b6c5e1" font-size="10">61.8</text>
+              <rect x="120" y="134" width="418" height="13" rx="3" fill="rgba(142,240,209,0.25)" stroke="#8ef0d1" stroke-width="1.5" />
+              <text x="546" y="145" fill="#8ef0d1" font-size="10">74.7</text>
+
+              <text x="112" y="173" text-anchor="end" fill="#b6c5e1" font-size="12">左移 2 像素</text>
+              <rect x="120" y="160" width="300" height="13" rx="3" fill="rgba(139,123,255,0.3)" stroke="#8b7bff" stroke-width="1.5" />
+              <text x="428" y="171" fill="#b6c5e1" font-size="10">53.6</text>
+              <rect x="120" y="176" width="385" height="13" rx="3" fill="rgba(142,240,209,0.25)" stroke="#8ef0d1" stroke-width="1.5" />
+              <text x="513" y="187" fill="#8ef0d1" font-size="10">68.7</text>
+
+              <text x="112" y="215" text-anchor="end" fill="#b6c5e1" font-size="12">下移 2 像素</text>
+              <rect x="120" y="202" width="285" height="13" rx="3" fill="rgba(139,123,255,0.3)" stroke="#8b7bff" stroke-width="1.5" />
+              <text x="413" y="213" fill="#b6c5e1" font-size="10">50.9</text>
+              <rect x="120" y="218" width="370" height="13" rx="3" fill="rgba(142,240,209,0.25)" stroke="#8ef0d1" stroke-width="1.5" />
+              <text x="498" y="229" fill="#8ef0d1" font-size="10">66.1</text>
+
+              <text x="112" y="257" text-anchor="end" fill="#b6c5e1" font-size="12">上移 2 像素</text>
+              <rect x="120" y="244" width="241" height="13" rx="3" fill="rgba(139,123,255,0.3)" stroke="#8b7bff" stroke-width="1.5" />
+              <text x="369" y="255" fill="#b6c5e1" font-size="10">43.0</text>
+              <rect x="120" y="260" width="318" height="13" rx="3" fill="rgba(142,240,209,0.25)" stroke="#8ef0d1" stroke-width="1.5" />
+              <text x="446" y="271" fill="#8ef0d1" font-size="10">56.8</text>
+
+              <text x="112" y="299" text-anchor="end" fill="#b6c5e1" font-size="12">右移 3 像素</text>
+              <rect x="120" y="286" width="246" height="13" rx="3" fill="rgba(139,123,255,0.3)" stroke="#8b7bff" stroke-width="1.5" />
+              <text x="374" y="297" fill="#b6c5e1" font-size="10">44.0</text>
+              <rect x="120" y="302" width="322" height="13" rx="3" fill="rgba(142,240,209,0.25)" stroke="#8ef0d1" stroke-width="1.5" />
+              <text x="450" y="313" fill="#8ef0d1" font-size="10">57.6</text>
+            </svg>
+          </div>
+          <p class="figure__cap">每一根条都是同 1000 张测试图的准确率:MLP 对平移几乎不设防,四个方向全崩;CNN 全面领先,但注意它自己也在掉。</p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>测试图</th><th>MLP</th><th>CNN</th><th>CNN 领先</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>原始(不挪)</td><td>84.9%</td><td>92.4%</td><td>+7.5</td></tr>
+              <tr><td>整体右移 2 像素</td><td>61.8%</td><td>74.7%</td><td>+12.9</td></tr>
+              <tr><td>整体左移 2 像素</td><td>53.6%</td><td>68.7%</td><td>+15.1</td></tr>
+              <tr><td>整体下移 2 像素</td><td>50.9%</td><td>66.1%</td><td>+15.2</td></tr>
+              <tr><td>整体上移 2 像素</td><td>43.0%</td><td>56.8%</td><td>+13.8</td></tr>
+              <tr><td>整体右移 3 像素</td><td>44.0%</td><td>57.6%</td><td>+13.6</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">四个方向、两种幅度,CNN 全都领先十几分。这就是第 1 节第三条硬伤——“猫在左上角和右下角,MLP 得各学一遍”——在数字上长出的样子。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">先别吹过头:CNN 自己也掉了 20 多分</span>
+          <p>
+            第 3 节说过,卷积给的是<strong>平移等变</strong>,真正消掉位置靠池化;这张网只有一层 2×2 池化,只吞得掉 1~2 像素的小位移,挪 3 像素之后 Flatten 出来的位置依旧错位。
+            所以“自带平移不变”的准确版本是:<strong>对小位移容忍,不是对任意平移免疫</strong>。想扛更大的位移,要么把池化叠深,要么训练时就随机挪一挪——后者正是<a class="xref" href="chapter-10.html#7-数据增强以及更多数据这剂猛药">第 10 章的数据增强</a>。
+          </p>
+        </div>
+
+        <h3>⑧ 第三局:换配置、加数据,两点收尾</h3>
+        <p>最后两张小表,回答“那还能怎么调”(同一个 demo,一次只动一个开关):</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>变体(其余不动)</th><th>测试准确率</th><th>一句话读法</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>默认:8 个 5×5 核,训 3 轮</td><td>92.4%</td><td>基准</td></tr>
+              <tr><td>减到 4 个核</td><td>92.8%</td><td>2000 张时,4 种花纹检测器已够用</td></tr>
+              <tr><td>加到 16 个核</td><td>92.7%</td><td>容量此刻不是瓶颈</td></tr>
+              <tr><td>核换成 3×3</td><td>90.3%</td><td>感受野小了,小亏一点</td></tr>
+              <tr><td>默认结构,改训 10 轮</td><td>93.6%(训练集 99.7%)</td><td>还能再挤一点,但训练 / 测试裂口已经张开——正是<a class="xref" href="chapter-10.html">第 10 章</a>的过拟合</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">2000 张的小局里,加核、加轮数都只能挤出 1 分上下;真正的变量在数据。</p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>训练集规模(8 个 5×5 核 / 训 3 轮)</th><th>测试准确率(完整 10000 张)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>2 000 张</td><td>93.2%</td></tr>
+              <tr><td>10 000 张</td><td>96.8%</td></tr>
+              <tr><td>60 000 张(全量)</td><td><strong>98.0%</strong></td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">全量时,CNN 用 15 898 个参数追平并小幅反超第 23 章 MLP 的约 97.8%(109 386 个参数):数据喂饱之后,结构优势变成了白赚的<strong>参数效率</strong>。</p>
+        </div>
+        <p>
+          一句话收掉这三局:<strong>MLP 是题海选手,CNN 是押中了题的专才</strong>。专才的偏置押对了(图像题),就是小数据更快、大数据更省参数;
+          偏置押错了题,就换另一种积木——序列题的偏置长什么样,正是后面 RNN 与注意力要回答的。
+        </p>
+
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
@@ -757,8 +934,44 @@ for (int cls = 0; cls &lt; class_num_; cls++) {
             <li><strong>池化</strong>缩小特征图、增强鲁棒;<strong>多核 = 多通道</strong>,堆叠出“边缘→部件→物体”的层级特征。</li>
             <li>经典结构 LeNet/AlexNet/ResNet 都是“卷积池化做特征 + 全连接分类”,ResNet 用残差堆到很深。</li>
             <li>配套项目里的最小 CNN 骨架就是 <strong>conv → ReLU → max-pool → linear</strong>:前半段提特征,最后一层做分类。</li>
+            <li>同预算实测(各 2000 张 / 3 轮):CNN <strong>93.2%</strong> 对 MLP 87.1%,参数只有 1/7;全量 6 万张时 CNN 到 <strong>98.0%</strong>,反而小幅反超。</li>
+            <li>把测试图整体平移 2~3 像素:CNN 各方向仍领先十余点——“平移不变”对<strong>小位移</strong>成立,不是免疫。</li>
           </ul>
         </section>
+
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:同样只学 2000 张,CNN 凭什么甩开 MLP 约 6 个点?</summary>
+            <div class="quiz__a">
+              <p>靠结构先验(归纳偏置)。卷积核局部看、全图复用,同一组权重在每张图的<strong>每个位置</strong>都被检验一遍,相当于 2000 张图被“用出”几十万次局部监督;而 MLP 的每个权重只盯死一个绝对位置,数据少了就学不饱。回想<a class="xref" href="chapter-13.html#3-权重共享-参数暴减还自带平移不变">第 3 节</a>的权重共享。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:平移实验里 CNN 明明“自带平移不变”,为什么准确率也掉了 20 多分?</summary>
+            <div class="quiz__a">
+              <p>因为卷积只保证<strong>平移等变</strong>(响应跟着挪),消位置全靠池化;这张网只有一层 2×2 池化,只吞得掉 1~2 像素,挪 3 像素后 Flatten 的位置依旧错位。所以准确说法是“<strong>小位移容忍</strong>”,不是任意平移免疫。见<a class="xref" href="chapter-13.html#3-权重共享-参数暴减还自带平移不变">第 3 节</a>的辨析卡片。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:这张 CNN 有 98.7% 的参数挤在最后那层全连接。想继续砍参数,下一刀该砍哪?</summary>
+            <div class="quiz__a">
+              <p>砍 Flatten→分类头这条边:再叠一层 2×2 池化把 8×14×14 缩到 8×7×7(Flatten 从 1568 掉到 392),或用全局平均池化把每张特征图直接压成一个数(1568→8),分类头立刻从 15690 掉到百级——参数表见<a class="xref" href="chapter-13.html#④-数一数-这张网到底有多少个可训练参数">第 5 节</a>。真实 CNN 正是这么干的。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:不改深网络,想让模型扛住更大幅度的平移,最便宜的一招是什么?</summary>
+            <div class="quiz__a">
+              <p><strong>数据增强</strong>:训练时就随机平移、旋转、抖动,让“挪过位置的数字”直接进训练集,把想让模型不在乎的变化亲手喂给它。这是<a class="xref" href="chapter-10.html#7-数据增强以及更多数据这剂猛药">第 10 章</a>那剂“更多数据”猛药的具体吃法。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 5:把核从 5×5 换成 9×9,参数会涨到多少?猜准确率会大涨吗?</summary>
+            <div class="quiz__a">
+              <p>卷积参数 = 8×(1×9×9+1) = <strong>656</strong>,仍不到全网的零头;但从消融表看,小数据下加核(4→16)只动 0.几分,kernel 3→5 也只值 2 分——瓶颈在数据,不在核。预期持平或微动;把你猜的数和 <code>./bin/cnn_mnist --kernel-size 9</code> 的真结果对一对。</p>
+            </div>
+          </details>
+        </div>
 
         <p class="muted">
           CNN 专治图像。可另一类数据——<strong>一句话、一段时间序列</strong>——需要“记住前文”。
