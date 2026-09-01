@@ -28,7 +28,8 @@
             <li><strong>权重共享</strong>为什么能让参数暴减,还自带<strong>平移不变</strong>;</li>
             <li><strong>池化</strong>、<strong>通道</strong>、以及“浅层看边缘、深层看物体”的层级特征;</li>
             <li>LeNet / AlexNet / ResNet 这些名字大概是怎么回事;</li>
-            <li>亲手跑通最小 CNN,亲眼看它在<strong>小数据</strong>和<strong>平移测试</strong>里赢过 MLP。</li>
+            <li>亲手跑通最小 CNN,亲眼看它在<strong>小数据</strong>和<strong>平移测试</strong>里赢过 MLP;</li>
+            <li>在 ViT 当道的年代,CNN 还握着哪些地盘、握住的凭什么。</li>
           </ul>
         </section>
 
@@ -925,6 +926,53 @@ for (int cls = 0; cls &lt; class_num_; cls++) {
           偏置押错了题,就换另一种积木——序列题的偏置长什么样,正是后面 RNN 与注意力要回答的。
         </p>
 
+        <h2>9. 大模型时代,CNN 还剩哪些地盘?</h2>
+        <p>
+          AlexNet 在 2012 年点燃这轮浪潮之后,C 位也换过:2020 年起,<a class="xref" href="chapter-17.html">注意力</a>和 Transformer 跨进视觉,ViT 一脉拿走了大规模图像榜单;
+          今天的多模态大模型,“眼睛”也大多长着 ViT 的样子。但“被抢走头条”不等于“被抢走饭碗”——把战场拆开看,结论很清楚:
+        </p>
+        <p><strong>已经让位的:</strong></p>
+        <ul>
+          <li><strong>大规模图像分类 / 检测的前沿榜单</strong>:ViT、Swin、DINOv 一脉轮流坐庄——它们吃得起海量数据,正好养活注意力“什么偏置都不带”的大胃口;</li>
+          <li><strong>多模态大模型的视觉编码器</strong>:CLIP-ViT 一支几乎成了默认的“眼睛”;</li>
+          <li><strong>图像生成的新主干</strong>:DiT 把扩散模型从 U-Net 往 Transformer 搬——不过留意,U-Net 里至今也杵着大量卷积。</li>
+        </ul>
+        <p><strong>还得是 CNN 的:</strong></p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead>
+              <tr><th>地盘</th><th>为什么还是它</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>小数据与私有数据</strong>(工业质检、医疗影像……)</td>
+                <td>归纳偏置第二次登场:数据越少,先验越值钱——就是<a class="xref" href="chapter-13.html#8-亲手跑一遍-同一批数字mlp-和-cnn-各认出多少">第 8 节</a>那 6 个点的放大版</td>
+              </tr>
+              <tr>
+                <td><strong>端侧实时视觉</strong>(手机夜景多帧、安防摄像头、车载感知)</td>
+                <td>卷积的计算量随分辨率<strong>线性</strong>增长、延迟稳定,NPU / DSP 对卷积的支持也最成熟</td>
+              </tr>
+              <tr>
+                <td><strong>高分辨率逐像素预测</strong>(医学分割、实时检测分割)</td>
+                <td>注意力的开销随像素数<strong>平方级</strong>膨胀,全分辨率吃不消;而这些任务恰恰丢不起空间精度</td>
+              </tr>
+              <tr>
+                <td><strong>音频频谱图</strong>(语音前端、声码器)</td>
+                <td>时频图也是“图”,“局部花纹检测器”这条路原样适用</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">一句话:带宽贵、数据少、像素多的场合,卷积那套“小核滑全图”的账,到今天也算得过来。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">战况更像“通婚”,不是“改朝换代”</span>
+          <p>
+            ConvNeXt 拿着 Transformer 时代的训练配方,把纯卷积拉回到能打平 ViT;ViT 自己也借卷积做输入 stem 稳住训练。
+            所以判断框架的还是<a class="xref" href="chapter-13.html#8-亲手跑一遍-同一批数字mlp-和-cnn-各认出多少">第 8 节</a>那句:<strong>谁的偏置押中你的题</strong>。
+            图像这道题上,“局部 + 平移”这个偏置到今天依然值钱。
+          </p>
+        </div>
+
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
@@ -936,6 +984,7 @@ for (int cls = 0; cls &lt; class_num_; cls++) {
             <li>配套项目里的最小 CNN 骨架就是 <strong>conv → ReLU → max-pool → linear</strong>:前半段提特征,最后一层做分类。</li>
             <li>同预算实测(各 2000 张 / 3 轮):CNN <strong>93.2%</strong> 对 MLP 87.1%,参数只有 1/7;全量 6 万张时 CNN 到 <strong>98.0%</strong>,反而小幅反超。</li>
             <li>把测试图整体平移 2~3 像素:CNN 各方向仍领先十余点——“平移不变”对<strong>小位移</strong>成立,不是免疫。</li>
+            <li>大模型时代的地盘划分:ViT 拿走大数据前沿,CNN 守住<strong>小数据、端侧实时、高分辨率逐像素</strong>——判定标准不变:谁的偏置押中你的题。</li>
           </ul>
         </section>
 
@@ -969,6 +1018,12 @@ for (int cls = 0; cls &lt; class_num_; cls++) {
             <summary class="quiz__q">问题 5:把核从 5×5 换成 9×9,参数会涨到多少?猜准确率会大涨吗?</summary>
             <div class="quiz__a">
               <p>卷积参数 = 8×(1×9×9+1) = <strong>656</strong>,仍不到全网的零头;但从消融表看,小数据下加核(4→16)只动 0.几分,kernel 3→5 也只值 2 分——瓶颈在数据,不在核。预期持平或微动;把你猜的数和 <code>./bin/cnn_mnist --kernel-size 9</code> 的真结果对一对。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 6:为什么多模态大模型的“眼睛”大多用 ViT,而不是 CNN?</summary>
+            <div class="quiz__a">
+              <p>两个原因都绕回归纳偏置:其一,训视觉编码器时数据以亿计,<strong>偏置的“省钱价值”被数据量摊薄</strong>——把第 8 节“数据越少先验越值钱”反过来读就行;其二,同一块 Transformer 积木能同时吃文本和图像,工程上最能复用。不是 CNN 不行,是“预训练规模”这道题的赢家换人了。二者的地盘划分见<a class="xref" href="chapter-13.html#9-大模型时代cnn-还剩哪些地盘">第 9 节</a>。</p>
             </div>
           </details>
         </div>
