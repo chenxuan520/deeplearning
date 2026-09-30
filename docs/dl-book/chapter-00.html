@@ -281,6 +281,7 @@
           <li><strong>第四部分 · 序列与 Transformer(第 16–18 章)</strong>:处理“一句话”这种序列数据,引出<em>注意力机制</em>,拼出完整的 <em>Transformer</em>。</li>
           <li><strong>第五部分 · 通往大模型(第 19–22 章)</strong>:把它做成语言模型,再讲透大模型的原理、训练(含后训练与对齐)、工程基础设施与实际使用。</li>
           <li><strong>第六部分 · 代码实战(第 23–25 章)</strong>:对照三份真实项目(MNIST、字符级语言模型、AlphaZero 五子棋),把监督学习、生成式模型与强化学习在代码里对一遍号。</li>
+          <li><strong>第七部分 · 番外(第 26–29 章)</strong>:主线之外的四篇加餐——<em>机器学习全景图</em>、<em>无监督与自监督学习</em>、<em>决策树与随机森林</em>,以及<em>从沙子到 CPU/GPU</em> 的硬件链路;不依赖主线顺序,随时可读。</li>
         </ul>
         <p>如果你带着明确目标来,也可以按下面的路线选读;看完一条再回头补其他支线就好:</p>
         <div class="table-wrap reveal">
@@ -288,7 +289,7 @@
             <thead><tr><th>路线</th><th>建议读法</th></tr></thead>
             <tbody>
               <tr><td><strong>零基础最短路线</strong></td><td><a class="xref" href="chapter-01.html">数学预备</a>(公式卡住时回看) → <a class="xref" href="chapter-02.html">神经元</a> → <a class="xref" href="chapter-03.html">前向传播</a> → <a class="xref" href="chapter-04.html">损失</a>、<a class="xref" href="chapter-05.html">梯度下降</a>、<a class="xref" href="chapter-06.html">反向传播</a> → <a class="xref" href="chapter-16.html">为什么需要注意力</a> → <a class="xref" href="chapter-17.html">注意力</a> → <a class="xref" href="chapter-18.html">Transformer</a> → <a class="xref" href="chapter-19.html">语言模型</a> → <a class="xref" href="chapter-20.html">大模型</a></td></tr>
-              <tr><td><strong>C++ 实现路线</strong></td><td><a class="xref" href="chapter-02.html">基础网络</a>与<a class="xref" href="chapter-04.html">训练</a> → <a class="xref" href="chapter-23.html">MNIST 实战</a> → <a class="xref" href="chapter-16.html">注意力</a>、<a class="xref" href="chapter-18.html">Transformer</a>、<a class="xref" href="chapter-19.html">语言模型</a> → <a class="xref" href="chapter-24.html">mini-LM 实战</a> → <a class="xref" href="chapter-25.html">AlphaZero 实战</a></td></tr>
+              <tr><td><strong>C++ 实现路线</strong></td><td><a class="xref" href="chapter-02.html">基础网络</a>与<a class="xref" href="chapter-04.html">训练</a> → <a class="xref" href="chapter-23.html">MNIST 实战</a> → <a class="xref" href="chapter-17.html">注意力</a>、<a class="xref" href="chapter-18.html">Transformer</a>、<a class="xref" href="chapter-19.html">语言模型</a> → <a class="xref" href="chapter-24.html">mini-LM 实战</a> → <a class="xref" href="chapter-25.html">AlphaZero 实战</a></td></tr>
               <tr><td><strong>已有基础的大模型工程路线</strong></td><td><a class="xref" href="chapter-16.html">为什么需要注意力</a> → <a class="xref" href="chapter-17.html">注意力机制</a> → <a class="xref" href="chapter-18.html">Transformer</a> → <a class="xref" href="chapter-20.html">大模型训练</a> → <a class="xref" href="chapter-21.html">工程与基础设施</a> → <a class="xref" href="chapter-22.html">Context、Harness 与 Agent</a></td></tr>
             </tbody>
           </table>
@@ -321,6 +322,7 @@
 │  │  ├─ activate/              激活函数 ReLU/Sigmoid/GELU…
 │  │  ├─ loss/  softmax/        损失函数 与 softmax
 │  │  ├─ optimizer/             SGD / Momentum / Adam / AdamW
+│  │  ├─ param_init/            <a class="xref" href="chapter-09.html#1-起点很重要-参数初始化">参数初始化</a> Xavier / He…
 │  │  ├─ lr_scheduler/          <a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">学习率调度</a>
 │  │  ├─ cnn/                   卷积 / 池化 (<a class="xref" href="chapter-13.html">第 13 章</a>)
 │  │  ├─ rnn/                   循环网络 / BPTT (<a class="xref" href="chapter-14.html">第 14 章</a>)
