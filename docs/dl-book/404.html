@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>页面不存在 | 从神经元到大模型</title>
+    <meta name="robots" content="noindex" />
+    <script>
+      // 404 可能出现在任意层级路径下; GitHub Pages 备用站挂在 /deeplearning/, 主域名挂在根路径
+      (function () {
+        var base = document.createElement("base");
+        base.href = /\.github\.io$/.test(location.hostname) ? "/deeplearning/" : "/";
+        document.head.appendChild(base);
+      })();
+    </script>
+    <link rel="icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="assets/book.css" />
+    <link rel="stylesheet" href="assets/diagrams.css" />
+  </head>
+  <body>
+    <main class="chapter">
+      <div class="chapter__inner">
+        <p class="chapter__eyebrow">404</p>
+        <h1>这一页走丢了</h1>
+
+        <p class="lead">
+          你要找的页面不存在:可能是链接拼错了,也可能是章节调整后换了地址。
+        </p>
+        <ul>
+          <li><a class="xref" href="index.html">回到书本封面</a>,从全书目录重新找;</li>
+          <li>点页面顶部的搜索,按关键词搜全书;</li>
+          <li>只是想查一个名词?直接翻<a class="xref" href="glossary.html">术语表</a>。</li>
+        </ul>
+        <p class="muted">
+          如果你是从书里的某个链接点过来的,说明那条链接坏了,欢迎到
+          <a class="xref" href="https://github.com/chenxuan520/deeplearning/issues" target="_blank" rel="noopener">GitHub Issues</a>
+          告诉作者是哪一页、哪条链接。
+        </p>
+      </div>
+    </main>
+
+    <script src="assets/book.js"></script>
+  </body>
+</html>
