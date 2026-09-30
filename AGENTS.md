@@ -434,5 +434,5 @@ python3 tools/count_chars.py -v    # (可选) 统计篇幅变化
 - **改编号/标题前先查跨章引用**:别的章可能用 `chapter-XX.html#8-xxx` 这类**数字锚点**指过来,顺延编号会打断它们。动手前先 `grep -rn 'chapter-XX.html#' docs/dl-book/` 确认没有指向将被改动编号的引用。
 - **slug 会保留圈号和汉字**:`①②③④` 属于 `\w`,不会被 `slugify()` 去掉,写锚点时别漏(例如 `#④-知识蒸馏-让小模型拜大模型为师`)。拿不准就用脚本现算:见 `tools/README.md`。
 - **callout 变体只有四种**:`callout--analogy` / `callout--note` / `callout--tip` / `callout--warn`(定义在 `assets/book.css`)。别用不存在的类名(如 `callout--key`),否则不会有样式。
-- **新讲的重要术语要同步进 `glossary.html`**:按现有 `<li id="g-xxx" data-aliases="别名,别名">…<a href="chapter-XX.html#锚点">→ 第 X 章</a></li>` 格式补,放进对应分组(网络基础 / 训练三件套 / 大模型 等),否则会出现“书里讲了、术语表查不到”的空缺。
+- **新讲的重要术语要同步进 `glossary.html`**:按现有 `<li id="g-xxx" data-aliases="别名,别名">…<a href="chapter-XX.html#锚点">→ 第 X 章</a></li>` 格式补,放进对应分组(网络基础 / 训练三件套 / 强化学习 / 大模型 等),否则会出现“书里讲了、术语表查不到”的空缺。`book.js` 会把正文里出现的**每个别名**都自动变成可点的术语,所以全书高频词(如 MNIST、one-hot、Transformer)不要写进 `data-aliases`,靠词条标题匹配 `<span class="term">` 即可;短于 4 个字母的纯英文、短于 3 个字的纯中文别名会被忽略。
 - **并发编辑时可用脚本改**:若有多个 agent 同时改 dl-book 文件,内置 `Edit` 可能反复报“File has not been read”;此时可写一次性 Python 脚本做带 `assert 命中数==预期` 的字符串替换绕开状态跟踪,跑完即删。

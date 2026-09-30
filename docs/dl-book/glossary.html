@@ -22,9 +22,12 @@
 
         <h2>网络基础</h2>
         <ul class="glossary">
+          <li id="g-supervised" data-aliases="supervised learning"><strong>监督学习 supervised learning</strong> — 每条样本都带标准答案(标签),模型学“输入 → 答案”的映射;本书正文主线。<a href="chapter-00.html#4-这本书主要走哪条路">→ 第 0 章</a></li>
           <li id="g-neuron"><strong>神经元 neuron</strong> — 最小积木:加权求和 + 偏置 + 激活函数。<a href="chapter-02.html">→ 第 2 章</a></li>
           <li id="g-mlp"><strong>MLP 多层感知机</strong> — 层层全连接的最朴素网络,适合固定长度输入。<a href="chapter-03.html">→ 第 3 章</a></li>
           <li id="g-forward"><strong>前向传播 forward propagation</strong> — 数据从输入一层层向前流动,算出预测。<a href="chapter-03.html">→ 第 3 章</a></li>
+          <li id="g-onehot"><strong>one-hot 独热编码</strong> — 长度等于类别数(或词表大小)的向量,只有自己那一位是 1、其余全 0;分类标签和最朴素的词表示都用它,缺点是又长又看不出谁和谁相近。<a href="chapter-04.html#32-交叉熵-衡量两个概率的差距这才是损失">→ 第 4 章</a> · <a href="chapter-15.html#1-计算机只认数字-先看最笨的-one-hot">词表示 → 第 15 章</a></li>
+          <li id="g-mnist"><strong>MNIST 手写数字数据集</strong> — 7 万张 28×28 灰度手写数字图(6 万训练、1 万测试),分 10 类;深度学习的“Hello World”,本书 MLP / CNN 的练手数据。<a href="chapter-23.html">→ 第 23 章</a></li>
         </ul>
 
         <h2>训练三件套</h2>
@@ -47,7 +50,10 @@
           <li id="g-swiglu" data-aliases="SwiGLU,GLU,门控激活,门控FFN"><strong>SwiGLU</strong> — 现代 LLM FFN 常用的门控结构,一路做内容、一路做开关,再逐元素相乘。<a href="chapter-07.html#silu-和-swiglu-现代大模型里的门控激活">→ 第 7 章 §3</a></li>
           <li id="g-situ-glu" data-aliases="SiTU-GLU,Sigmoid Tanh Unit GLU,softcap,激活异常值,activation outlier"><strong>SiTU-GLU</strong> — Kimi K3 在 SwiGLU 两个分支上加入 tanh 平滑限幅的门控 FFN;正常区间近似 SwiGLU,极端区间有明确上界,用于控制低精度训练中的激活异常值。<a href="chapter-07.html#situ-glu-给极端激活加一道软上限">→ 第 7 章 §3</a></li>
           <li id="g-vanish"><strong>梯度消失</strong> — 梯度反传时越乘越小、趋近 0,深层学不动(Sigmoid 易犯)。<a href="chapter-07.html">→ 第 7 章</a></li>
+          <li id="g-explode"><strong>梯度爆炸</strong> — 梯度反传时越乘越大,一步就把参数推飞、损失变 NaN;常用梯度裁剪、warmup、调小学习率来治。<a href="chapter-09.html#3-梯度消失与梯度爆炸">→ 第 9 章 §3</a></li>
           <li id="g-optimizer"><strong>优化器 optimizer</strong> — 决定“拿到梯度后参数怎么挪”的策略。<a href="chapter-08.html">→ 第 8 章</a></li>
+          <li id="g-momentum" data-aliases="Momentum"><strong>Momentum 动量</strong> — 更新时带上前几步的“惯性”(梯度的滑动平均):方向一致时越走越快,来回震荡的方向互相抵消。<a href="chapter-08.html#3-momentum-给下山加惯性">→ 第 8 章 §3</a></li>
+          <li id="g-rmsprop" data-aliases="RMSProp"><strong>RMSProp</strong> — 给每个参数记一份“梯度平方”的滑动平均,用它的平方根去除步长:一向梯度大的参数自动小步走,梯度小的放大步走。<a href="chapter-08.html#4-rmsprop-每个参数配一个自适应步长">→ 第 8 章 §4</a></li>
           <li id="g-adam"><strong>Adam / AdamW</strong> — Momentum + 自适应步长 + 偏差校正;训大模型的默认选择。<a href="chapter-08.html">→ 第 8 章</a></li>
         </ul>
 
@@ -57,17 +63,35 @@
           <li id="g-lrsched"><strong>学习率调度</strong> — 训练过程中动态调学习率(如 warmup + 余弦退火)。<a href="chapter-09.html">→ 第 9 章</a></li>
           <li id="g-norm" data-aliases="L2范数,L2 norm,全局范数,按范数缩放,按范数,向量长度"><strong>范数 norm</strong> — 向量“有多长”的一种度量;梯度裁剪里用的是 <strong>L2 范数</strong>‖<var>g</var>‖ = √(各分量平方之和),就像平面上箭头从原点到尖端的直线距离。「<strong>按范数缩放</strong>」= 把每个分量都乘<strong>同一个</strong>小于 1 的数,只把总长度拉回阈值、<strong>方向不变</strong>(和“每个分量单独砍上限”不同)。<a href="chapter-09.html#4-防止训练踩空-梯度裁剪">→ 第 9 章 §4</a></li>
           <li id="g-clip"><strong>梯度裁剪</strong> — 给梯度设上限,防止爆炸导致训练崩;序列模型常用<strong>按全局 L2 范数</strong>整体等比缩短(见<a href="glossary.html#g-norm">范数</a>)。<a href="chapter-09.html">→ 第 9 章</a></li>
+          <li id="g-batchnorm" data-aliases="BatchNorm,批归一化,Batch Normalization"><strong>BatchNorm 批归一化</strong> — 用当前 minibatch 在每个神经元(卷积里是每个通道)上的均值、方差把输入拉回均值 0、方差 1,再用可学的 γ/β 缩放平移;训练时顺手记 running 统计量,推理时改用它。深层 CNN 的标配,序列模型改用 LayerNorm。<a href="chapter-09.html#7-批归一化-batchnorm-用这一批的统计量稳住每层输入">→ 第 9 章 §7</a></li>
           <li id="g-overfit"><strong>过拟合 / 欠拟合</strong> — 训练好测试差(背题) / 都差(没学会)。<a href="chapter-10.html">→ 第 10 章</a></li>
           <li id="g-model-capacity" data-aliases="模型容量,capacity,宽度,深度"><strong>模型容量 model capacity</strong> — 模型能表达多复杂规律的本事,由宽度、深度和结构共同决定;是否不足要先排除训练故障,再用受控扩容实验确认。<a href="chapter-03.html#先判断-真是容量不够还是没训好">→ 第 3 章 §6</a></li>
           <li id="g-net2net" data-aliases="函数保持扩容,function-preserving transformation,Net2WiderNet,Net2DeeperNet,模型扩容"><strong>函数保持扩容 / Net2Net</strong> — 扩宽或加深时显式映射旧参数,让新模型从近似相同的函数起步,再继续训练。<a href="chapter-03.html#扩容一定要从零训练吗">→ 第 3 章 §6</a></li>
           <li id="g-reg"><strong>正则化 regularization</strong> — 给学习加约束/干扰,逼模型别背训练集。<a href="chapter-10.html">→ 第 10 章</a></li>
           <li id="g-wd"><strong>weight decay(L2)</strong> — 惩罚过大权重,让模型更平滑克制。<a href="chapter-10.html">→ 第 10 章</a></li>
           <li id="g-dropout"><strong>Dropout</strong> — 训练时随机关掉部分神经元,逼网络别依赖个别单元。<a href="chapter-10.html#5-dropout-让神经元随机罢工">→ 第 10 章</a></li>
+          <li id="g-early-stop" data-aliases="early stopping,early stop"><strong>early stopping 早停</strong> — 训练时盯着验证集损失,连续几轮不再改善就停下,并回退到验证表现最好的那个存档,正好卡在开始过拟合之前。<a href="chapter-10.html#6-early-stopping-见好就收">→ 第 10 章 §6</a></li>
           <li id="g-generalize"><strong>泛化 generalization</strong> — 在没见过的数据上也表现好,这才是真本事。<a href="chapter-10.html">→ 第 10 章</a></li>
           <li id="g-split"><strong>训练/验证/测试集</strong> — 学 / 调 / 考三份互不重叠的数据。<a href="chapter-11.html">→ 第 11 章</a></li>
+          <li id="g-cv" data-aliases="交叉验证,cross validation,cross-validation"><strong>K 折交叉验证</strong> — 数据少时把数据平分成 K 份,轮流拿 1 份当验证、其余 K−1 份训练,K 次结果取平均,每条数据都用足;类别不平衡时用分层 K 折保持每折比例。<a href="chapter-11.html#2-数据太少交叉验证">→ 第 11 章 §2</a></li>
+          <li id="g-confusion" data-aliases="accuracy"><strong>混淆矩阵 confusion matrix</strong> — 按“真实类别 × 预测类别”数出 TP / FP / FN / TN 的表;准确率(accuracy)、精确率、召回都从它算。类别不平衡时只看准确率会骗人。<a href="chapter-11.html#4-混淆矩阵精确率召回f1">→ 第 11 章 §4</a> · <a href="chapter-11.html#3-只看准确率会骗人">准确率陷阱 → 第 11 章 §3</a></li>
           <li id="g-prf"><strong>精确率 / 召回 / F1</strong> — 查得准 / 查得全 / 两者的调和平均。<a href="chapter-11.html">→ 第 11 章</a></li>
           <li id="g-leakage" data-aliases="数据泄漏,data leakage,信息泄漏,泄漏"><strong>数据泄漏 data leakage</strong> — 测试集信息偷偷进了训练(用全量数据算统计量、重复样本跨越 train/test),导致分数虚高、上线翻车。<a href="chapter-11.html#1-三个数据集-学调考">→ 第 11 章 §1</a></li>
           <li id="g-clean" data-aliases="数据清洗,脏数据,缺失值,异常值,离群点,标签噪声,data cleaning,近似去重,MinHash,Jaccard,质量过滤,困惑度过滤,正文抽取"><strong>数据清洗 / 脏数据</strong> — 喂模型前先处理缺失值、异常值、重复样本、标签错;去重要在切分前做,统计量只从训练集算。方法上:精确重复用<strong>哈希</strong>、近似重复用 <strong>MinHash/Jaccard 相似度</strong>、低质用<strong>规则+分类器/困惑度</strong>过滤。<a href="chapter-11.html#不止缩放-先处理缺失异常重复与标签错">→ 第 11 章</a></li>
+        </ul>
+
+        <h2>强化学习</h2>
+        <ul class="glossary">
+          <li id="g-rl"><strong>强化学习 RL</strong> — 靠奖励试错学策略;MDP / Q-learning / PPO / AlphaZero。<a href="chapter-12.html">→ 第 12 章</a> · <a href="chapter-25.html">AlphaZero 实战 → 第 25 章</a></li>
+          <li id="g-mdp" data-aliases="马尔可夫决策过程,Markov decision process"><strong>MDP 马尔可夫决策过程</strong> — 强化学习的标准框架,拆开是五个概念:状态、动作、奖励、转移(做了动作下一步去哪)和折扣 γ(未来的奖励打几折)。<a href="chapter-12.html#3-智能体与环境-一个不停转的循环">→ 第 12 章 §3</a></li>
+          <li id="g-bellman" data-aliases="贝尔曼方程,Bellman equation"><strong>贝尔曼方程 Bellman equation</strong> — 把“长远价值”拆成“眼前这一步的奖励 + 打过折的下一步价值”;Q-learning 等方法就靠它一步步递推价值。<a href="chapter-12.html#贝尔曼方程-把长远拆成眼前一步--下一步">→ 第 12 章</a></li>
+          <li id="g-qlearning" data-aliases="Q-learning,时序差分"><strong>Q-learning</strong> — 用一张 Q 表记“在某状态做某动作,长期能拿多少回报”;每走一步就朝“即时奖励 + 下一状态最大 Q”修正一点(时序差分),并用 ε-greedy 在探索和利用之间取舍。<a href="chapter-12.html#7-q-learning-用一张表把价值从终点倒灌回起点">→ 第 12 章 §7</a></li>
+          <li id="g-dqn" data-aliases="Deep Q-Network"><strong>DQN 深度 Q 网络</strong> — 状态太多、Q 表装不下时,用神经网络输入状态、输出各动作的 Q 值;靠经验回放和目标网络稳住训练。<a href="chapter-12.html#8-状态太多怎么办-用神经网络近似dqn">→ 第 12 章 §8</a></li>
+          <li id="g-ppo" data-aliases="近端策略优化,Proximal Policy Optimization"><strong>PPO 近端策略优化</strong> — 策略梯度的稳健版:新旧策略的概率比偏离 1 太远就裁剪掉,单次更新幅度受限,不会一步把学好的策略毁掉;RLHF 的经典算法。<a href="chapter-12.html#ppo-别一次更新迈太大">→ 第 12 章</a></li>
+          <li id="g-alphazero" data-aliases="AlphaGo,AlphaGo Zero,AlphaZero,阿尔法狗"><strong>AlphaGo / AlphaZero</strong> — 用策略价值网络给搜索方向与局面分,再用 MCTS 访问分布反过来训练网络;AlphaZero 不用人类棋谱,只靠规则和自对弈。<a href="chapter-12.html#10-从-alphago-到-alphazero-让搜索教网络网络再教搜索">原理 → 第 12 章</a> · <a href="chapter-25.html">代码 → 第 25 章</a></li>
+          <li id="g-mcts" data-aliases="MCTS,PUCT,蒙特卡洛树搜索"><strong>MCTS / PUCT</strong> — 反复选择、扩展、评估、回传的树搜索;PUCT 用网络先验 P 帮未充分搜索的好动作获得探索机会。<a href="chapter-25.html#4-mcts-puct-如何把直觉变成算过">→ 第 25 章 §4</a></li>
+          <li id="g-selfplay" data-aliases="self-play,自对弈"><strong>自对弈 self-play</strong> — 智能体和自己的当前/历史版本比赛,自动产生轨迹和最终胜负信号;AlphaZero 用 MCTS 根访问分布 π 和终局 z 训练策略价值网络。<a href="chapter-25.html">→ 第 25 章</a></li>
+          <li id="g-policy-value-net" data-aliases="策略网络,价值网络,policy network,value network,策略价值网络"><strong>策略网络 / 价值网络</strong> — 前者输出动作概率或 logits,后者估计局面长期回报;AlphaZero 用共享 trunk 的双头网络一次同时给出 p 与 v。<a href="chapter-25.html#3-策略价值-resnet-一个身体两个脑袋">→ 第 25 章 §3</a></li>
         </ul>
 
         <h2>网络结构</h2>
@@ -75,12 +99,15 @@
           <li id="g-cnn"><strong>CNN 卷积神经网络</strong> — 用小卷积核在图上滑动,专治图像。<a href="chapter-13.html">→ 第 13 章</a></li>
           <li id="g-conv"><strong>卷积核 / 感受野 / 权重共享</strong> — 小滤波器只看局部、全图通用,省参数又平移不变。<a href="chapter-13.html">→ 第 13 章</a></li>
           <li id="g-pool"><strong>池化 pooling</strong> — 把特征图缩小、增强鲁棒(最大/平均)。<a href="chapter-13.html">→ 第 13 章</a></li>
+          <li id="g-stride-padding" data-aliases="stride(步幅),padding"><strong>stride 步幅 / padding 填充</strong> — 卷积核每次滑几格 / 边缘先补几圈 0;两者一起决定输出特征图的大小,stride 越大输出越小,padding 能保住边缘信息和尺寸。<a href="chapter-13.html#③-stride-和-padding-在控制什么">→ 第 13 章</a></li>
           <li id="g-inductive-bias" data-aliases="先验,inductive bias"><strong>归纳偏置 inductive bias</strong> — 模型结构自带的先验假设;CNN 的“局部+平移共享”让它在小数据上反超 MLP。<a href="chapter-13.html#8-亲手跑一遍-同一批数字mlp-和-cnn-各认出多少">→ 第 13 章</a></li>
           <li id="g-rnn"><strong>RNN 循环神经网络</strong> — 用隐藏状态边读边记,处理序列;但串行、易失忆。<a href="chapter-14.html">→ 第 14 章</a></li>
           <li id="g-bptt"><strong>BPTT 按时间反向传播</strong> — RNN 展开后沿时间步反传;共享权重在各步的梯度相加。<a href="chapter-14.html#3-这个-rnn-语言模型怎么训练怎么推理">→ 第 14 章</a></li>
           <li id="g-lstm"><strong>LSTM</strong> — 给 RNN 加“门”和记忆传送带,缓解长依赖失忆。<a href="chapter-14.html">→ 第 14 章</a></li>
+          <li id="g-teacher-forcing" data-aliases="teacher forcing,教师强制"><strong>teacher forcing 教师强制</strong> — 训练序列模型时,每一步都喂<strong>真实</strong>的上一个词、而不是模型自己刚猜的词,错误不会一路累积;Transformer 还借此把整句所有位置并行算完。生成时才改成接自己的输出。<a href="chapter-14.html#②-训练时的任务-每一步猜下一个词">→ 第 14 章</a> · <a href="chapter-17.html#③-训练时-一次并行靠-mask-让每个位置各看各的前文">并行训练 → 第 17 章</a></li>
           <li id="g-embedding"><strong>词嵌入 embedding</strong> — 把词表示成稠密向量(语义坐标),意思近则向量近。<a href="chapter-15.html">→ 第 15 章</a></li>
           <li id="g-word2vec"><strong>word2vec</strong> — 靠“看上下文”自监督学词向量(CBOW / skip-gram)。<a href="chapter-15.html">→ 第 15 章</a></li>
+          <li id="g-negsampling" data-aliases="negative sampling"><strong>负采样 negative sampling</strong> — 训练词向量时不对整个词表算 softmax,只拿真实上下文词当正例、随机抽几个词当负例做二分类,每步计算量从“词表大小”降到“几个词”。<a href="chapter-15.html#9-词表太大-负采样把输出层瘦身">→ 第 15 章 §9</a></li>
         </ul>
 
         <h2>注意力与 Transformer</h2>
@@ -130,15 +157,10 @@
           <li id="g-training-data" data-aliases="训练数据,有效数据,有效token,effective data,数据清洗,data cleaning,data curation,training data,pretraining data"><strong>训练数据 / 有效数据 / 数据清洗</strong> — 原始网页、代码、数学、授权内容等要经过正文抽取、去重、过滤、分类、配比、验证和分词打包,才会变成正确、独特、信息密度高且能补能力缺口的有效训练信号。<a href="chapter-20.html#数据从哪来又怎么洗干净">数据工程 → 第 20 章</a> · <a href="chapter-20.html#真正的竞争底座-有效数据--有效算力--转化效率">数据、算力与算法 → 第 20 章</a></li>
           <li id="g-param-count" data-aliases="参数量,parameter count,num parameters"><strong>参数量</strong> — 可学习权重元素总数;GPT 系约 12<var>L</var><var>d</var>²+<var>V</var><var>d</var>。<a href="chapter-20.html#2-参数地图-1750-亿个旋钮装在哪儿gpt-举例">→ 第 20 章 §2</a></li>
           <li id="g-emergent"><strong>涌现能力 emergent abilities</strong> — 规模越过门槛后突然出现的新能力。<a href="chapter-20.html">→ 第 20 章</a></li>
-          <li id="g-selfsup"><strong>自监督 self-supervised</strong> — 答案从数据本身自动抠出(如遮词预测),不用人工标注。<a href="chapter-20.html">→ 第 20 章</a></li>
+          <li id="g-selfsup" data-aliases="自监督学习,self-supervised learning"><strong>自监督 self-supervised</strong> — 答案从数据本身自动抠出(如遮词预测),不用人工标注。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-pretrain"><strong>预训练 / 后训练</strong> — 海量文本上练底座 / SFT+RLHF+蒸馏调成好用的助手。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-llm-eval" data-aliases="大模型测评,模型评测,evaluation,benchmark,评测集,红队,上线门禁"><strong>大模型测评 / benchmark</strong> — 用固定题集、真实任务、人工规则和线上反馈做质量控制:预训练选 checkpoint、后训练看对齐效果、上线前做门禁、上线后抓回归。<a href="chapter-20.html#测评-贯穿训练和上线的质检系统">→ 第 20 章</a></li>
           <li id="g-rlhf" data-aliases="SFT,RLHF,DPO"><strong>RLHF / SFT / DPO</strong> — 按人类偏好对齐 / 用指令范文微调 / 直接用偏好对做对齐(跳过单独奖励模型)。<a href="chapter-20.html">→ 第 20 章</a> · <a href="chapter-12.html">RL → 第 12 章</a></li>
-          <li id="g-rl"><strong>强化学习 RL</strong> — 靠奖励试错学策略;MDP / Q-learning / PPO / AlphaZero。<a href="chapter-12.html">→ 第 12 章</a> · <a href="chapter-25.html">AlphaZero 实战 → 第 25 章</a></li>
-          <li id="g-alphazero" data-aliases="AlphaGo,AlphaGo Zero,AlphaZero,阿尔法狗"><strong>AlphaGo / AlphaZero</strong> — 用策略价值网络给搜索方向与局面分,再用 MCTS 访问分布反过来训练网络;AlphaZero 不用人类棋谱,只靠规则和自对弈。<a href="chapter-12.html#10-从-alphago-到-alphazero-让搜索教网络网络再教搜索">原理 → 第 12 章</a> · <a href="chapter-25.html">代码 → 第 25 章</a></li>
-          <li id="g-mcts" data-aliases="MCTS,PUCT,蒙特卡洛树搜索"><strong>MCTS / PUCT</strong> — 反复选择、扩展、评估、回传的树搜索;PUCT 用网络先验 P 帮未充分搜索的好动作获得探索机会。<a href="chapter-25.html#4-mcts-puct-如何把直觉变成算过">→ 第 25 章 §4</a></li>
-          <li id="g-selfplay" data-aliases="self-play,自对弈"><strong>自对弈 self-play</strong> — 智能体和自己的当前/历史版本比赛,自动产生轨迹和最终胜负信号;AlphaZero 用 MCTS 根访问分布 π 和终局 z 训练策略价值网络。<a href="chapter-25.html">→ 第 25 章</a></li>
-          <li id="g-policy-value-net" data-aliases="策略网络,价值网络,policy network,value network,策略价值网络"><strong>策略网络 / 价值网络</strong> — 前者输出动作概率或 logits,后者估计局面长期回报;AlphaZero 用共享 trunk 的双头网络一次同时给出 p 与 v。<a href="chapter-25.html#3-策略价值-resnet-一个身体两个脑袋">→ 第 25 章 §3</a></li>
           <li id="g-align-tax"><strong>对齐税 alignment tax</strong> — RLHF 后更安全听话,但部分能力/创造性可能下降。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-forget"><strong>灾难性遗忘</strong> — 微调新任务时旧本领丢失;可用 LoRA/混训缓解。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-lora" data-aliases="LoRA,lora,PEFT,peft,参数高效微调,低秩,adapter"><strong>LoRA / PEFT</strong> — 参数高效微调:冻住底座大矩阵 <var>W</var>,只在旁边训练一对低秩小矩阵 <var>A</var>/<var>B</var>(<var>y</var>=<var>Wx</var>+<var>BAx</var>);可训练参数与显存省几十上百倍,产出的 adapter 才几 MB、可热插拔。<a href="chapter-20.html#②-指令微调sft-把博学调教成听话">→ 第 20 章</a></li>
@@ -155,7 +177,9 @@
           <li id="g-vram" data-aliases="显存,VRAM,vram,video memory"><strong>显存 VRAM</strong> — GPU 自带的高速内存,要同时装下参数 + 梯度 + 优化器状态 + 激活值;常是“放不下”这堵墙先于“算得慢”撞上,逼出量化与多卡切分。<a href="chapter-21.html#3-显存-第一堵墙">→ 第 21 章 §3</a></li>
           <li id="g-simt" data-aliases="SIMT,simt,单指令多线程,warp"><strong>SIMT 单指令多线程</strong> — GPU 省面积的关键:一组核心共享一套控制、齐步走同一条指令,只是各处理不同数据。省下控制电路能多塞 ALU,代价是<strong>最怕分支</strong>(遇 if-else 只能先全走 A 再全走 B)。矩阵乘法无分支,完美适配。<a href="chapter-29.html#121-gpu-的诀窍-一条指令很多数据一起走">→ 第 29 章 §12.1</a></li>
           <li id="g-kvcache" data-aliases="KV cache,kv cache,kv_cache"><strong>KV cache</strong> — 缓存已生成词的 Key/Value,避免重复计算,加速生成。<a href="chapter-21.html">→ 第 21 章</a></li>
+          <li id="g-continuous-batching" data-aliases="连续批处理,continuous batching,PagedAttention"><strong>连续批处理 / PagedAttention</strong> — 推理服务的两个提效手段:前者让新请求随时插队、完成的随时离场,把很多人的“下一个字”拼成一次大计算;后者像操作系统分页一样按块管理 KV cache,几乎消除显存碎片,还能让共享前缀共用同一批页。<a href="chapter-21.html#②-连续批处理-把很多人的下一个字拼成一次大计算">→ 第 21 章</a></li>
           <li id="g-parallel" data-aliases="数据并行,流水线并行,张量并行"><strong>分布式并行训练</strong> — 把训练切到多卡:数据并行 / 流水线并行 / 张量并行三种拆法。<a href="chapter-21.html">→ 第 21 章</a></li>
+          <li id="g-allreduce" data-aliases="AllReduce,AllGather"><strong>AllReduce / AllGather</strong> — 多卡之间的集合通信:AllReduce 把每张卡的梯度汇总平均后同步回所有卡,数据并行每步都要做;AllGather 把各卡的分片拼成完整一份发给所有卡,常见于 ZeRO/FSDP 这类参数分片方案。<a href="chapter-21.html#①-数据并行-人手一份模型各看一部分数据">→ 第 21 章</a></li>
           <li id="g-moe"><strong>MoE 混合专家</strong> — N 个并列 FFN 专家 + 路由器 top-k 门控;与专家端到端同训;总参多、算得少。<a href="chapter-21.html#8-moe-不是每次都动用全部参数">→ 第 21 章</a></li>
           <li id="g-dense-sparse" data-aliases="稠密模型,稀疏模型,Dense,Sparse,dense model,sparse model"><strong>稠密 / 稀疏模型</strong> — 按“每个 token 是否过全部参数”分:稠密模型全体参数都参与;稀疏模型(MoE)只激活 k 个专家,总参数 ≫ 激活参数。<a href="chapter-21.html#8-moe-不是每次都动用全部参数">→ 第 21 章</a></li>
           <li id="g-sparseattn"><strong>稀疏注意力</strong> — 只算部分 token 对,把 O(n²) 降下来。<a href="chapter-21.html">→ 第 21 章</a></li>
@@ -164,6 +188,7 @@
           <li id="g-mtp" data-aliases="MTP,Multi-Token Prediction,多token预测,多 token 预测,推测解码,speculative decoding"><strong>MTP / 推测解码</strong> — 训练时让同一隐藏状态预测多个未来 token,增加前瞻训练信号;推理时草稿器先提案,主模型批量验证并接受连续通过的 token,但接受率低时不一定加速。<a href="chapter-21.html#7-推理提速-让它回答得快">→ 第 21 章</a></li>
           <li id="g-generate-verify" data-aliases="生成验证修复选择,verifier,refiner,ranker,MaxProof,test-time scaling"><strong>生成-验证-修复-选择</strong> — 复杂任务的推理系统范式:多候选搜索、验证器挑错、修复器改稿、排序器选最终答案。<a href="chapter-22.html#22-可靠回答-幻觉证据与验证">→ 第 22 章</a></li>
           <li id="g-prompt"><strong>提示工程 / 思维链</strong> — 把话说清楚 / 让它“一步步想”提升推理。<a href="chapter-22.html">→ 第 22 章</a></li>
+          <li id="g-icl" data-aliases="上下文学习,in-context learning"><strong>上下文学习 in-context learning</strong> — 不改一个参数,只在提示里给说明或几个示例,模型就能临场学会做某件事;few-shot 提示靠的就是它。<a href="chapter-22.html#1-prompt-engineering-把话说清楚">→ 第 22 章</a></li>
           <li id="g-rag"><strong>RAG 检索增强</strong> — 先检索资料再让模型基于资料回答,治幻觉、补新知。<a href="chapter-22.html">→ 第 22 章</a></li>
           <li id="g-agent"><strong>function calling / Agent</strong> — 让模型调用工具、多步做事,从“会聊”变“能办”。<a href="chapter-22.html#25-agent-从回答问题到循环做事">→ 第 22 章</a></li>
           <li id="g-context-engineering" data-aliases="上下文工程,context engineering,context rot,compaction,memory,agent memory,上下文压缩"><strong>上下文工程</strong> — 每步为 Agent 选择最小高信号上下文;靠动态压缩、外部 memory、经验手册和子 Agent 隔离噪声。<a href="chapter-22.html#2-context-engineering-让模型看见该看的">→ 第 22 章</a></li>
@@ -172,6 +197,7 @@
 
         <h2>无监督与经典机器学习</h2>
         <ul class="glossary">
+          <li id="g-unsupervised" data-aliases="无监督学习,unsupervised learning"><strong>无监督学习 unsupervised learning</strong> — 只有数据、没有标签,让模型自己找结构:聚类、降维、自编码器都走这一路。<a href="chapter-27.html#1-没有标签能学什么">→ 第 27 章</a></li>
           <li id="g-clustering" data-aliases="聚类,clustering"><strong>聚类 clustering</strong> — 无标签时把相似样本自动分成几群。<a href="chapter-27.html#2-聚类-让数据自己物以类聚">→ 第 27 章</a></li>
           <li id="g-kmeans" data-aliases="K-means,kmeans,k-means"><strong>K-means</strong> — 最经典的聚类:交替做“归队”和“挪中心”直到稳定。<a href="chapter-27.html#21-k-means-最经典的聚类">→ 第 27 章</a></li>
           <li id="g-pca" data-aliases="PCA,主成分分析,principal component analysis"><strong>PCA 主成分分析</strong> — 找方差最大的方向,把高维数据压到更少维还尽量保信息。<a href="chapter-27.html#31-pca-找到数据最舒展的方向">→ 第 27 章</a></li>
@@ -179,6 +205,7 @@
           <li id="g-gini" data-aliases="基尼不纯度,Gini impurity,基尼"><strong>基尼不纯度 Gini</strong> — 衡量节点“有多杂”;越纯越接近 0,用来给候选切分打分。<a href="chapter-28.html#21-怎么选该问哪个问题-基尼与信息增益">→ 第 28 章</a></li>
           <li id="g-random-forest" data-aliases="随机森林,Random Forest,Bagging"><strong>随机森林 / Bagging</strong> — 多样本+多特征随机种许多树再投票,主要降方差。<a href="chapter-28.html#3-随机森林-三个臭皮匠顶个诸葛亮">→ 第 28 章</a></li>
           <li id="g-gbdt" data-aliases="GBDT,梯度提升树,Boosting,XGBoost,LightGBM"><strong>GBDT / Boosting</strong> — 串行种树,每棵专门拟合前面的残差,主要降偏差。<a href="chapter-28.html#4-梯度提升树-一棵接一棵地纠错">→ 第 28 章</a></li>
+          <li id="g-knn" data-aliases="k 近邻,k-Nearest Neighbors"><strong>kNN k 近邻</strong> — 不训练、只把样本存起来(惰性学习);预测时找最近的 k 个老样本少数服从多数。简单直观,但预测慢、怕维度灾难。<a href="chapter-28.html#5-knn-一个不训练的模型">→ 第 28 章 §5</a></li>
         </ul>
 
         <p class="muted">
