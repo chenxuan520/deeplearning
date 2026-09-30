@@ -19,7 +19,8 @@
           <strong>真能训练成功</strong>的模型,中间还隔着一整套工程技巧。
           这一章我们把<strong>现代训练栈</strong>拼齐:从<strong>初始化</strong>起步,
           接上<a class="xref" href="chapter-08.html">第 8 章</a>选好的<strong>优化器</strong>,
-          再配<strong>学习率调度</strong>和<strong>梯度裁剪</strong>,最后看清它们在一个 minibatch 里怎么串起来。
+          再配<strong>学习率调度</strong>和<strong>梯度裁剪</strong>,看清它们在一个 minibatch 里怎么串起来,
+          最后认识深层网络的“稳定器”——<strong>批归一化</strong>。
         </p>
 
         <section class="objectives reveal">
@@ -28,7 +29,8 @@
             <li>He / Xavier 初始化各解决什么、配什么激活,以及为什么要设随机种子;</li>
             <li>梯度<strong>消失</strong>和<strong>爆炸</strong>分别是什么、本章哪些零件在对症下药;</li>
             <li>梯度裁剪的两种模式、学习率调度器家族,以及 warmup + cosine 为什么常用;</li>
-            <li>一个 minibatch 在 <code>Train</code> 里逐步发生什么,以及训练不稳时先拧哪几个旋钮。</li>
+            <li>一个 minibatch 在 <code>Train</code> 里逐步发生什么;</li>
+            <li>批归一化(BatchNorm)怎么用一批数据的均值、方差稳住每层输入,为什么训练和推理要区别对待,以及训练不稳时先拧哪几个旋钮。</li>
           </ul>
         </section>
 
@@ -180,7 +182,7 @@ net.optimizer_function()-&gt;set_weight_decay(1e-4); <b class="cw-tag">2</b></co
               <li><strong>激活函数饱和</strong>:Sigmoid 的导数最大也只有 0.25,两端更趋近 0;Tanh 类似。于是每层先天带一个 ≤0.25 的乘数,层一多必然归零。(<a class="xref" href="chapter-07.html#2-怎么读一张激活函数图">第 7 章:斜率≈0 就断流</a>)</li>
               <li><strong>权重初始化太小</strong>:<var>w</var> 本身就小于 1,再和小小的 <var>f</var>′ 相乘,因子雪上加霜。</li>
               <li><strong>网络太深</strong>:哪怕每层因子有 0.9,30 层后也只剩约 4%——深度本身就是放大器。</li>
-              <li><strong>怎么救</strong>:好初始化(把因子拉回 ≈1,见<a class="xref" href="chapter-09.html#1-起点很重要-参数初始化">本章 §1 的 Xavier/He</a>)、换 ReLU/GELU(正区间导数=1,不衰减)、残差连接(给梯度留一条 +1 的直通车道,<a class="xref" href="chapter-18.html">第 18 章</a>)。</li>
+              <li><strong>怎么救</strong>:好初始化(把因子拉回 ≈1,见<a class="xref" href="chapter-09.html#1-起点很重要-参数初始化">本章 §1 的 Xavier/He</a>)、换 ReLU/GELU(正区间导数=1,不衰减)、残差连接(给梯度留一条 +1 的直通车道,<a class="xref" href="chapter-18.html">第 18 章</a>);深层网络还可以加<a class="xref" href="chapter-09.html#7-批归一化-batchnorm-用这一批的统计量稳住每层输入">批归一化</a>(§7),把每层输入拉回稳定尺度。</li>
             </ul>
           </li>
           <li>
@@ -501,7 +503,112 @@ ApplyGradient(B);                                      <b class="cw-tag">5</b></
           </ol>
         </figure>
 
-        <h2>7. 把它们拼成一个“现代训练循环”</h2>
+        <h2>7. 批归一化 BatchNorm:用这一批的统计量稳住每层输入</h2>
+        <p>
+          <a class="xref" href="chapter-09.html#3-梯度消失与梯度爆炸">§3</a> 说过,梯度能稳稳穿过很多层,靠的是每层那个连乘因子 <var>r</var> ≈ 1。
+          好初始化只能保证<strong>开局</strong>时尺度合适;训练一开始,前面层的权重每步都在变,后面层收到的输入尺度也跟着漂——
+          可能越来越大,把激活推进饱和区;也可能越缩越小。网络越深,这种漂移层层叠加得越明显。
+        </p>
+        <p>
+          既然<a class="xref" href="chapter-09.html#6-一个-minibatch-里发生什么">上一节</a>看到每一步手里都有<strong>一整批</strong>样本,
+          就可以顺手用这批样本的统计量,在每层把数值<strong>重新拉回</strong>“均值 0、方差 1”——这就是
+          <span class="term">批归一化(BatchNorm,BN)</span>。它通常夹在“线性变换(或卷积)”和“激活函数”之间:
+          <code>net → BN → 激活</code>。
+        </p>
+        <div class="callout callout--analogy reveal">
+          <span class="callout__title">类比:按全班成绩换算“标准分”</span>
+          <p>
+            这次卷子出难了,全班都考 40 来分;下次出简单了,全班都 90 多。只看原始分,很难判断谁学得好。
+            老师的办法是换算标准分:<strong>减去本班平均分、再除以本班标准差</strong>——不管卷子难易,分数都落在同一把尺子上。
+            BN 对每个神经元做的就是这件事,“本班”就是当前这个 minibatch。
+          </p>
+        </div>
+        <p>对<strong>某一个神经元</strong>,设这一批 <var>B</var> 个样本在它这里的输入是 <var>x</var><sub>1</sub> … <var>x</var><sub><var>B</var></sub>:</p>
+        <div class="mathblock reveal">
+          μ<sub>B</sub> = <span class="frac"><span>1</span><span><var>B</var></span></span> Σ <var>x</var><sub><var>i</var></sub><br />
+          σ<sub>B</sub><sup>2</sup> = <span class="frac"><span>1</span><span><var>B</var></span></span> Σ (<var>x</var><sub><var>i</var></sub> − μ<sub>B</sub>)<sup>2</sup><br />
+          <var>y</var><sub><var>i</var></sub> = <var>γ</var> · <span class="frac"><span><var>x</var><sub><var>i</var></sub> − μ<sub>B</sub></span><span>√(σ<sub>B</sub><sup>2</sup> + ε)</span></span> + <var>β</var>
+          <span class="label">μ<sub>B</sub>、σ<sub>B</sub><sup>2</sup> 是<strong>这一批</strong>在该神经元上的均值和方差;ε 防止除以 0;<var>γ</var>、<var>β</var> 每个神经元一对,和权重一起训练</span>
+        </div>
+        <p>
+          关键是统计的<strong>方向</strong>。把一批数据排成“样本 × 特征”的表,BN 是<strong>竖着</strong>算的:
+          同一个特征(同一个神经元),跨这一批所有样本求均值和方差。
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead><tr><th>这一批</th><th>特征 1</th><th>特征 2</th><th>特征 3</th></tr></thead>
+            <tbody>
+              <tr><td>样本 1</td><td class="is-hot">12</td><td>0.3</td><td>5</td></tr>
+              <tr><td>样本 2</td><td class="is-hot">14</td><td>−0.1</td><td>3</td></tr>
+              <tr><td>样本 3</td><td class="is-hot">14</td><td>0.5</td><td>4</td></tr>
+              <tr><td>样本 4</td><td class="is-hot">16</td><td>0.1</td><td>6</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">BN 拿高亮的这一<strong>列</strong>(特征 1 在 4 个样本上的值)算统计量,每一列各算各的;<a class="xref" href="chapter-18.html#2-layernorm-把每个词的特征拉回正常范围">第 18 章的 LayerNorm</a> 则是横着拿<strong>一行</strong>(一个样本自己的所有特征)来算。</p>
+        </div>
+        <p>把特征 1 这一列手算一遍(先设 <var>γ</var>=1、<var>β</var>=0,忽略极小的 ε):</p>
+        <div class="table-wrap reveal">
+          <table class="calc-table">
+            <thead><tr><th>步骤</th><th>算式</th><th>结果</th></tr></thead>
+            <tbody>
+              <tr><td>① 批均值 μ<sub>B</sub></td><td>(12 + 14 + 14 + 16) / 4</td><td>14</td></tr>
+              <tr><td>② 批方差 σ<sub>B</sub><sup>2</sup></td><td>[(−2)² + 0² + 0² + 2²] / 4</td><td>2</td></tr>
+              <tr><td>③ 标准差</td><td>√2</td><td>≈ 1.41</td></tr>
+              <tr><td>④ 标准化</td><td>(<var>x</var> − 14) / 1.41</td><td>[−1.41, 0, 0, 1.41]</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">原来整体偏在 14 附近的一列数,被拉回以 0 为中心、方差为 1 的范围,后面的激活函数就不会一直工作在同一个偏离的区间里。</p>
+        </div>
+        <p>
+          那 <var>γ</var>、<var>β</var> 干什么用?强行把每层都压成“均值 0、方差 1”未必最好,有时网络就需要偏大的均值或更宽的分布。
+          有了这两个可学习参数,网络可以自己决定要不要“撤销”归一化:比如把 <var>γ</var> 学成 √2、<var>β</var> 学成 14,
+          √2 × [−1.41, 0, 0, 1.41] + 14 就又回到了 [12, 14, 14, 16]。顺带一提,<var>β</var> 已经承担了“平移”的作用,
+          所以紧挨在 BN 前面的那层通常不再需要自己的偏置——<a class="xref" href="chapter-25.html#3-策略价值-resnet-一个身体两个脑袋">第 25 章</a>的 AlphaZero 网络里,所有卷积都设了 <code>use_bias=false</code>,就是这个原因。
+        </p>
+        <p>为什么这一招管用?</p>
+        <ul>
+          <li><strong>尺度稳住了</strong>:每层输入都被拉回相近的范围,激活函数不容易掉进饱和区,连乘因子更容易维持在 <var>r</var> ≈ 1 附近,梯度消失和爆炸都得到缓解;</li>
+          <li><strong>敢用更大的学习率</strong>:对初始化没那么敏感,深网络收敛更快——BN 和残差连接一起,是几十上百层的 CNN 能训起来的两大功臣;</li>
+          <li><strong>附带一点正则效果</strong>:每个样本的归一化结果会受同批其他样本影响,相当于给训练加了一点噪声,但它<strong>不能替代</strong><a class="xref" href="chapter-10.html">第 10 章</a>的正则化手段。</li>
+        </ul>
+        <p class="muted">
+          原论文把它的作用解释为减少“内部协变量偏移”(internal covariate shift:前面层一更新,后面层的输入分布就跟着变);
+          后来的研究认为,更主要的原因可能是它让损失曲面更平滑、梯度更可预测。解释还有争论,效果却是公认的。
+        </p>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">训练和推理,BN 的行为不一样</span>
+          <p>
+            推理时往往一次只来<strong>一个</strong>样本,根本凑不出“一批”来算均值方差;就算凑得出,一张图的预测结果也不该取决于它和谁分在一批。
+            所以训练时 BN 会顺手记一份<strong>滑动平均</strong>(running mean / running variance),常见写法是
+            <code>running_μ ← 0.9 × running_μ + 0.1 × μ_B</code>;推理时改用这份固定的统计量,不再看当前 batch。
+          </p>
+          <p>
+            这带来两个常见的坑:一是<strong>忘了切到推理模式</strong>,预测结果会随 batch 组成而飘;二是复制或保存模型时<strong>只复制了可训练参数</strong>,漏了 running 统计量——
+            <a class="xref" href="chapter-25.html#9-七个真坑-为什么能运行离能学会很远">第 25 章</a>的 AlphaZero 训练就真踩过这个坑,并行线程里的网络副本输出整体漂移。
+            另外 batch 太小(比如只有 2、4 个样本)时,批统计量本身噪声很大,BN 的效果会明显变差。
+          </p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>对比项</th><th>BatchNorm</th><th>LayerNorm</th></tr></thead>
+            <tbody>
+              <tr><td><strong>统计方向</strong></td><td>同一特征,跨一批样本(竖着)</td><td>同一样本,跨它的所有特征(横着)</td></tr>
+              <tr><td><strong>依赖 batch 大小</strong></td><td>依赖;batch 太小统计不准</td><td>不依赖</td></tr>
+              <tr><td><strong>训练 / 推理</strong></td><td>不一致:推理改用 running 统计量</td><td>一致:始终只看自己</td></tr>
+              <tr><td><strong>典型用途</strong></td><td>CNN、图像;<a class="xref" href="chapter-25.html#3-策略价值-resnet-一个身体两个脑袋">第 25 章</a>的 ResNet 每个卷积后都跟一个 BN</td><td>Transformer、序列;<a class="xref" href="chapter-18.html#2-layernorm-把每个词的特征拉回正常范围">第 18 章</a>的每个 block 里都有</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">在卷积网络里,BN 按<strong>通道</strong>统计:同一通道在整批所有图片、所有像素位置上的值一起算均值方差,每个通道一对 <var>γ</var>/<var>β</var>。</p>
+        </div>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">本仓库的 MLP 为什么没有 BN</span>
+          <p>
+            <code>NeuralNetwork</code> 里没有实现 BatchNorm:MNIST 那种三层小网络,配 He 初始化 + Adam + warmup 已经足够稳。
+            BN 真正的主场是<strong>很深的卷积网络</strong>;想看它在真实 C++ 代码里怎么用、running 统计量怎么存盘,去读<a class="xref" href="chapter-25.html#推理时-bn-为什么可以折进卷积">第 25 章</a>。
+          </p>
+        </div>
+
+        <h2>8. 把它们拼成一个“现代训练循环”</h2>
         <div class="callout callout--warn reveal">
           <span class="callout__title">训练栈第 0 步:先把数据摆正</span>
           <p>
@@ -528,7 +635,7 @@ net.Train(data, target, callback, 10000, 64);</code></pre>
           </ol>
         </figure>
 
-        <h2>8. 训练不稳?先拧本章这几个旋钮</h2>
+        <h2>9. 训练不稳?先拧本章这几个旋钮</h2>
         <p>
           真上手训练十有八九会“不对劲”。完整排查见<a class="xref" href="chapter-11.html#6-训练不动一份排查清单">第 11 章清单</a>;
           下面这张<strong>迷你表</strong>只列本章能直接动的开关,按顺序试往往就够:
@@ -547,7 +654,7 @@ net.Train(data, target, callback, 10000, 64);</code></pre>
               <tr>
                 <td>损失几乎不降</td>
                 <td>查数据是否归一化;换 He 初始化;学习率 ×2 或 ×5 试</td>
-                <td>§1 初始化 · §7 数据尺度</td>
+                <td>§1 初始化 · §8 数据尺度</td>
               </tr>
               <tr>
                 <td>开头几步就炸</td>
@@ -558,6 +665,11 @@ net.Train(data, target, callback, 10000, 64);</code></pre>
                 <td>后期 loss 震荡不降</td>
                 <td>换 cosine 退火;略降 <code>base_lr</code></td>
                 <td>§5 调度</td>
+              </tr>
+              <tr>
+                <td>网络一加深就训不动、收敛很慢</td>
+                <td>在线性/卷积层和激活之间加 BatchNorm(batch 别太小);或加残差连接</td>
+                <td>§7 批归一化</td>
               </tr>
               <tr>
                 <td>训练降、验证不降</td>
@@ -582,7 +694,8 @@ net.Train(data, target, callback, 10000, 64);</code></pre>
             <li><strong>优化器</strong>:演进见<a class="xref" href="chapter-08.html">第 8 章</a>;训练栈默认 AdamW + <code>weight_decay</code>。</li>
             <li><strong>梯度病</strong>:消失靠好 init/激活;爆炸靠 clip + warmup + 归一化。</li>
             <li><strong><a class="xref" href="chapter-09.html#5-学习率不必一成不变-调度器">学习率调度</a></strong>:一族调度器,warmup+cosine 是 MNIST / 大模型的常见默认。</li>
-            <li><strong>一步训练</strong>:打乱 → GetLR → 前向 → 反向 → (clip) → 优化器更新;§8 表列了不稳时先拧的旋钮。</li>
+            <li><strong>一步训练</strong>:打乱 → GetLR → 前向 → 反向 → (clip) → 优化器更新;§9 表列了不稳时先拧的旋钮。</li>
+            <li><strong>批归一化</strong>:用当前 batch 的均值、方差把每层输入拉回稳定尺度,<var>γ</var>/<var>β</var> 可学;推理时改用 running 统计量;序列模型改用 LayerNorm。</li>
           </ul>
         </section>
 
@@ -604,6 +717,12 @@ net.Train(data, target, callback, 10000, 64);</code></pre>
             <summary class="quiz__q">问题 3:<code>Train</code> 里 scheduler、clip、优化器分别在什么时机介入?</summary>
             <div class="quiz__a">
               <p>每步开头 <code>GetLR</code> 更新学习率;前向/反向算完梯度后、<code>ApplyGradient</code> 前做裁剪;最后由优化器的 <code>BeforeStep</code> + <code>CalcChangeValue</code> 真正改参数。初始化只在建网时做一次。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:BatchNorm 训练时用当前 batch 的均值和方差,推理时为什么不能照做?它改用什么?</summary>
+            <div class="quiz__a">
+              <p>推理时常常一次只有一个样本,凑不出批统计量;而且一个样本的预测不该取决于它和谁分在一批。所以训练时 BN 顺手维护 running mean / running variance 这份滑动平均,推理时改用它。复制或保存模型时也要带上这份统计量,否则输出会整体漂移。</p>
             </div>
           </details>
         </div>
