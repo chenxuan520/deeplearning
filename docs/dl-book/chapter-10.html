@@ -368,6 +368,46 @@ rm -f demo/mnist/mnist/demo.v2.param   # 清掉缓存, 冷启动基线
           </ul>
         </section>
 
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:本章 4000 张图 × 30 epochs 的基线,训练准确率 100%、测试只有 93.62%。这是过拟合还是欠拟合?early stopping 会在哪里收手?</summary>
+            <div class="quiz__a">
+              <p>是<strong>过拟合</strong>:训练集已经背完,测试却差了 6.38 个点(100 − 93.62),两者裂开一道大口子;欠拟合则是训练、测试<strong>都差</strong>。在曲线上,它的信号是训练损失一路降、验证损失降到最低点后反而回升;early stopping 就在验证损失连续几轮不再改善时停下,并回退到验证表现最好的那个存档——正好卡在开始背题之前。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:为什么说正则化是“用一点偏差换方差”?</summary>
+            <div class="quiz__a">
+              <p>总误差 ≈ 偏差<sup>2</sup> + 方差 + 不可约噪声,随模型复杂度变化是一条 U 形曲线。过拟合的模型落在 U 形右侧:偏差已经很小,方差却很大;正则化给它加约束,偏差略升、方差大降,总误差就往谷底的“甜区”挪。所以它专治高方差,对本来就欠拟合(高偏差)的模型,再加约束只会雪上加霜。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:L2 和 L1 正则都在惩罚大权重,它们的“性格”有什么不同?深度学习里默认用哪个?</summary>
+            <div class="quiz__a">
+              <p>L2 惩罚权重平方和(<var>λ</var>·Σ权重<sup>2</sup>),把权重均匀地往 0 挤,得到一堆“都挺小但都不为 0”的权重,模型更平滑;L1 惩罚绝对值之和(<var>λ</var>·Σ|权重|),倾向于把一部分权重直接压成 0,得到<strong>稀疏</strong>模型,相当于自动做特征筛选。深度学习默认用 L2,也就是 weight decay,在仓库里对应优化器的 <code>set_weight_decay(wd)</code>,只衰减 weight、不动 bias。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:隐藏层开了 <code>set_dropout_rate(0.2)</code>。训练时一个没被丢掉的神经元激活值是 1.5,它实际喂给下一层的是多少?测试时呢?</summary>
+            <div class="quiz__a">
+              <p>保留比例 <var>p</var> = 1 − 0.2 = 0.8,幸存者要除以 0.8,也就是乘 1.25,所以训练时送出 1.5 × 1.25 = <strong>1.875</strong>(被丢掉就送 0);测试时 Dropout 关闭,原样送 <strong>1.5</strong>。平均一下,训练时的期望是 0.8 × 1.875 + 0.2 × 0 = 1.5,正好和测试时对齐,所以推理时什么都不用改。仓库里掩码填的就是 0 或 1/keep = 1.25,而且只有 <code>Train</code> 会采样掩码,<code>Predict</code> / <code>CalcLoss</code> 根本不碰它。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 5(动手):用 mnist demo 复现 4000 张图 × 30 epochs 的对照实验。为什么 dropout 0.2 提了分,0.5 反而掉分?</summary>
+            <div class="quiz__a">
+              <p>在 <code>src/</code> 下分别跑 <code>./bin/mnist --train-limit 4000 --epochs 30</code> 和加上 <code>--dropout 0.2</code>、<code>--dropout 0.5</code> 的两组;demo 会加载已有存档续训、训完总会存盘,所以<strong>每组跑之前</strong>都先 <code>rm -f demo/mnist/mnist/demo.v2.param demo/mnist/mnist/demo.dropout.param</code> 保证冷启动。基线把训练集背到 100%,裂口很大,0.2 这剂量刚好:test 从 93.62% 升到 94.21%,test loss 从 0.0410 降到 0.0362(低了约 12%)。0.5 丢得太多,模型学不动(train 只有 98.38%),滑向欠拟合,test 掉到 92.91%——正则化的剂量要刚刚好,过量反而伤模型。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 6:为什么说“更多数据”是最强的正则?它和大模型预训练里 Dropout 基本退场有什么关系?</summary>
+            <div class="quiz__a">
+              <p>数据越多越杂,模型越没法靠背,只能去学通用规律;数据增强用不改变含义的小变换(裁剪、翻转、旋转)凭空多造样本,是同一个思路。大模型预训练数据多到万亿级 token、基本只过约 1 遍,连背题的机会都没有,主矛盾翻成了欠拟合,Dropout 这种防背题的招就退场了;留下的是 AdamW 的 weight decay(如 0.1,更多是为了<a class="xref" href="chapter-08.html#6-adamw-把-weight-decay-解耦">训练更稳</a>)和对数据的清洗、去重、配比。不过微调时数据小得多,过拟合会回归,weight decay、early stopping 又得捡起来。</p>
+            </div>
+          </details>
+        </div>
+
         <p class="muted">
           我们一直在说“训练集、验证集、测试集”“看验证损失”——可这些到底该怎么<strong>分、怎么读指标</strong>?
           下一章我们就把<strong>评估与数据</strong>这件事讲透:数据集划分、准确率/精确率/召回、混淆矩阵、预处理与调试。

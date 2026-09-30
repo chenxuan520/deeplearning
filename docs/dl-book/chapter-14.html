@@ -844,6 +844,52 @@ for (int t = 0; t &lt; input_sequence.size(); t++) {
           </ul>
         </section>
 
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:一维 tanh RNN,取 <var>W</var><sub>x</sub>=1、<var>W</var><sub>h</sub>=0.5、<var>b</var>=0、<var>h</var><sub>0</sub>=0,依次读入 <var>x</var>=1、0、0。三步的 <var>h</var> 各是多少?说明了什么?</summary>
+            <div class="quiz__a">
+              <p><var>h</var><sub>1</sub> = tanh(1) ≈ 0.76;<var>h</var><sub>2</sub> = tanh(0.5×0.76) = tanh(0.38) ≈ 0.36;<var>h</var><sub>3</sub> = tanh(0.5×0.36) ≈ 0.18。后两步输入明明是 0,<var>h</var> 却不是 0——第 1 步读到的东西正是靠 <var>W</var><sub>h</sub>·<var>h</var><sub>t−1</sub> 这条“记忆连线”带下去的,这就是<strong>隐藏状态</strong>的作用。但它每步大约减半、越传越淡,普通 RNN 的旧信息就是这样在反复乘矩阵、过激活中被“磨没”的。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:为什么说 RNN 的参数量和句子长度无关?这对 BPTT 算梯度提出了什么要求?</summary>
+            <div class="quiz__a">
+              <p>展开图里的 <var>T</var> 个方块用的都是<strong>同一套</strong> <var>W</var><sub>x</sub>、<var>W</var><sub>h</sub>、<var>b</var>,大小只由输入维度和隐藏维度决定,读 5 个词和读 500 个词复用的是同一套矩阵,所以才吃得下任意长度的句子。代价是反传时同一块参数被用了几次,就得把几份梯度<strong>加起来</strong>:∂<var>L</var>/∂<var>W</var><sub>h</sub> = Σ<sub>t</sub> ∂<var>L</var><sub>t</sub>/∂<var>W</var><sub>h</sub>。落到 <code>SimpleRNN::Backward</code> 里,就是 <code>grad_hidden_weight_</code> 等梯度都用 <code>+=</code> 累加;写成 <code>=</code> 的话,其余时间步的贡献全被覆盖掉了。见<a class="xref" href="chapter-14.html#⑤-反向-bptt-与同一套权重梯度要相加">§3 ⑤</a>。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:训练第 2 步时,输入用的是数据里真实的「喜欢」,而不是模型第 1 步猜出来的词。这叫什么?为什么推理时 RNN 容易“越写越偏”?</summary>
+            <div class="quiz__a">
+              <p>这叫 <strong>teacher forcing(教师强制)</strong>:训练时每一步都喂正确前文,网络能专心学“给定正确前文时怎么猜下一个”。推理时没有答案可抄,只能看最后一步的输出挑一个词、接回输入末尾再跑;一旦前面接错一个词,后面就是在错误的前文上接着猜,误差一步步累积。见<a class="xref" href="chapter-14.html#⑦-推理-只看最后一步再把输出接回去">§3 ⑦</a>。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:BPTT 时误差每往回传一步,都要乘一次 <var>W</var><sub>h</sub> 和 tanh 的导数。假设每步合起来相当于乘 0.9,传回 50 步还剩多少?换成 1.1 呢?各该怎么办?</summary>
+            <div class="quiz__a">
+              <p>0.9<sup>50</sup> ≈ 0.005,只剩约千分之五,这是<strong>梯度消失</strong>:50 步外的词几乎收不到纠错信号。1.1<sup>50</sup> ≈ 117,放大了一百多倍,这是<strong>梯度爆炸</strong>:一步更新就可能把权重炸飞。爆炸靠<a class="xref" href="chapter-09.html#4-防止训练踩空-梯度裁剪">梯度裁剪</a>兜底(全局范数超过阈值就整体缩放);消失靠裁剪救不了,得像 LSTM 那样从结构上改。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 5:LSTM 细胞状态某一维 <var>c</var>=0.90,接下来 10 步这一维的遗忘门都是 <var>f</var>=1、输入门都是 <var>i</var>=0。10 步后 <var>c</var> 是多少?这和普通 RNN 有什么不同?</summary>
+            <div class="quiz__a">
+              <p>还是 <strong>0.90</strong>:每步 <var>c</var><sub>t</sub> = 1×<var>c</var><sub>t−1</sub> + 0×<var>g</var><sub>t</sub>,原样直通。普通 RNN 每步都要把 <var>h</var> 乘矩阵、过 tanh 整块重写(问题 1 里两步就从 0.76 掉到 0.18),LSTM 的细胞状态却是<strong>加法更新</strong>,门说“别动”就能一路搭直通车,反传时梯度也更容易顺着这条线回来。这期间输出门 <var>o</var> 可以很小:记忆先存在“仓库” <var>c</var> 里不往外露,等用得着时再打开。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 6:LSTM 已经缓解了“失忆”,为什么最后还是被 Transformer 取代?</summary>
+            <div class="quiz__a">
+              <p>因为另一条硬伤<strong>串行</strong>没治好:算第 5 个词的隐藏状态必须先等第 4 个算完,再怎么改门也得一步步顺着读,没法把整条序列切开丢给 GPU 同时算,数据和模型一放大就慢得受不了。注意力让<strong>每个词直接看全序列</strong>:长依赖一步直达,所有位置还能同时算,两条硬伤一起解决。带着这两点去读<a class="xref" href="chapter-16.html#4-注意力的核心想法">第 16 章</a>。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 7:动手:在 <code>src/</code> 下跑 <code>./bin/rnn_char --corpus aabaabaabaabaabaabaabaab --prompt aab --context-size 1</code>,再把 <code>--context-size</code> 换成 3。loss 和生成结果差在哪?为什么 1 学不会?</summary>
+            <div class="quiz__a">
+              <p><code>--context-size</code> 就是每条训练样本的长度 <var>T</var>,也是 BPTT 最远能往回走的步数。设成 1 时,模型每次只看见一个字、从全 0 的 <var>h</var><sub>0</sub> 起步,分不清眼前的 a 是 aab 里的第 1 个还是第 2 个,下一个是 a 还是 b 只能五五开,loss 卡在约 0.48 下不去,生成也会走样。换成 3 后隐藏状态记得住前两个字,loss 降到约 0.15(剩下的来自每条样本第 1 步只看得到一个字),默认种子下生成 <code>aabaabaabaab</code>——这就是“序列需要记忆”最直接的演示。</p>
+            </div>
+          </details>
+        </div>
+
         <p class="muted">
           RNN 也好、注意力也好,处理文字前都得先把<strong>词变成向量</strong>。可“词”本是离散符号,
           怎么变成有含义的数字?下一章讲<strong>词嵌入与 word2vec</strong>——让词第一次拥有“语义坐标”。

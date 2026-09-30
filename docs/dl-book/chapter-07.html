@@ -336,6 +336,46 @@ class ActivateFunction {
           </ul>
         </section>
 
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:为什么说去掉激活函数后,堆 100 层也只相当于 1 层?</summary>
+            <div class="quiz__a">
+              <p>因为线性套线性还是线性。拿两层一维的例子算一下:第一层 <var>y</var> = 2<var>x</var> + 1,第二层 <var>z</var> = 3<var>y</var> − 4,代进去得 <var>z</var> = 3(2<var>x</var> + 1) − 4 = 6<var>x</var> − 1,还是一条直线。层数再多也能这样一路合并成一个仿射变换,分类边界依旧是直线 / 超平面;激活函数塞进来的那道“弯”,才让深度真正有用。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:Sigmoid 的导数最大只有 0.25。只看激活导数这一项,梯度穿过 10 层 Sigmoid 最多还剩多少?换成 ReLU 的正区呢?</summary>
+            <div class="quiz__a">
+              <p>就算每层都取最好情况,也只剩 0.25<sup>10</sup> = 1/4<sup>10</sup> = 1/1048576 ≈ 9.5×10<sup>−7</sup>,不到原来的百万分之一——前几层几乎收不到梯度,这就是<a class="xref" href="chapter-09.html#3-梯度消失与梯度爆炸">梯度消失</a>。ReLU 正区导数恒为 1,1<sup>10</sup> = 1,一点不打折。可以在本章实验台里亲眼看:Sigmoid 在 <var>x</var> = 0 处 f′ = 0.250,拖到 <var>x</var> = 4 只剩 0.018。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:“死亡 ReLU”是怎么死的?LeakyReLU 又是怎么把它救回来的?</summary>
+            <div class="quiz__a">
+              <p>如果某个神经元的输入 <var>z</var> 长期落在负区(学习率过大时容易被一步推过去),ReLU 的输出恒为 0、导数也恒为 0;反向传播要乘上这个 0,它自己那组权重的梯度就一直是 0,再也不会更新。LeakyReLU 把负区改成 0.01<var>x</var>(本仓库默认斜率也是 0.01),导数变成 0.01:梯度虽小但不为 0,神经元还有机会被慢慢拉回来。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:SwiGLU 比“升维 → GELU → 降维”的普通 FFN 多了什么?为什么本仓库不把它写成一个 <code>ActivateFunction</code> 子类?</summary>
+            <div class="quiz__a">
+              <p>它把升维拆成两路:内容 <var>u</var> = <var>x</var> <var>W</var><sub>up</sub>,门控 <var>g</var> = SiLU(<var>x</var> <var>W</var><sub>gate</sub>),逐元素相乘 <var>g</var> ⊙ <var>u</var> 后再用 <var>W</var><sub>down</sub> 降维——多出来的是一层<strong>可学习的开关</strong>,决定每一维放行多少。而 <code>ActivateFunction</code> 只管“一个数进、一个数出”,SwiGLU 自带两路线性投影和逐元素相乘,更适合放进 Transformer 的 FFN 模块。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 5:按 Kimi K3 的 <var>β</var><sub>1</sub> = 4、<var>β</var><sub>2</sub> = 25,某个分量门控路 <var>a</var> = 8、内容路 <var>u</var> = 50,SwiGLU 和 SiTU-GLU 分别输出多少?</summary>
+            <div class="quiz__a">
+              <p>SwiGLU:SiLU(8) × 50 = 8 × sigmoid(8) × 50 ≈ 8 × 0.9997 × 50 ≈ 400。SiTU-GLU:门控路 softcap(8, 4) × sigmoid(8) = 4 · tanh(2) × 0.9997 ≈ 3.855,内容路 softcap(50, 25) = 25 · tanh(2) ≈ 24.10,相乘 ≈ 92.9,稳稳压在 4 × 25 = 100 以内。反过来,<var>z</var> 很小时 tanh(<var>z</var>/<var>β</var>) ≈ <var>z</var>/<var>β</var>,softcap(<var>z</var>, <var>β</var>) ≈ <var>z</var>,所以正常区间它和 SwiGLU 几乎一样,只在极端值处平滑地“封顶”。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 6:想照本仓库的模式动手加一个 SiLU 激活,要改哪几处?它的导数该写进 1 参还是 2 参的 <code>DerivActivate</code>?</summary>
+            <div class="quiz__a">
+              <p>三处:在 <code>activate_base.h</code> 的 <code>ActivateType</code> 枚举里加一个值(比如叫 <code>ACTIVATE_SILU</code>);新写一个 <code>ActivateFunction</code> 子类,<code>Activate</code> 返回 <var>x</var> · sigmoid(<var>x</var>),<code>GetActivateType</code> 返回新枚举;再到 <code>ActivateFactory::Create</code> 的 switch 里注册它。导数要重载 <strong>2 参版本</strong>:SiLU′(<var>z</var>) = sigmoid(<var>z</var>) · (1 + <var>z</var> · (1 − sigmoid(<var>z</var>))) 本身就要用到 <var>z</var>;而且它和 GELU 一样在负区先往下弯再回到 0(最低约 −0.28),同一个负输出可能对应两个不同的 <var>z</var>,光看输出算不准。</p>
+            </div>
+          </details>
+        </div>
+
         <p class="muted">
           有了激活函数,前向和反向都能顺畅跑了。可参数到底该<strong>怎么更新</strong>才又快又稳?
           下一章我们把优化器家族——从最朴素的 <strong>SGD</strong> 一路讲到 <strong>Adam</strong>——排成一条进化线。

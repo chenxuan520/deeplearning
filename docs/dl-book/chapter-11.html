@@ -373,6 +373,46 @@ pixel_value = raw_pixel / 255.0;                <b class="cw-tag">1</b></code></
           </ul>
         </section>
 
+        <h2>动手与思考</h2>
+        <div class="quiz reveal">
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 1:验证集和测试集都不参与反向传播,为什么还要分成两份?只留一份行不行?</summary>
+            <div class="quiz__a">
+              <p>不行。验证集是要拿来<strong>做决定</strong>的:选学习率、挑层数、决定何时 early stop;照着它的分数反复调,模型就会偷偷适应这份数据,它的分数也就偏乐观了。要是只留一份,你最后报的正是调参时一直盯着的那个分数,等于提前看了考题。所以才专门牺牲一份 val 来挨这个污染,把 test 全程锁起来、只在最后考一次。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 2:数据只有几百条、阳性样本又很少,怎么评估才稳?要付出什么代价?</summary>
+            <div class="quiz__a">
+              <p>用<strong>分层 K 折交叉验证</strong>:把数据平分成 K 份,轮流拿 1 份当验证、其余 K−1 份训练,K 次成绩取平均,每条数据都当过一次考题;“分层”保证每折的类别比例和整体一致,免得某一折恰好一个阳性都没有。代价是要训 K 次,拿算力换可靠。如果是时间序列,就不能随机分折,要按时间滚动着切。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 3:一个查癌症模型在 200 人上测试:实际患病的 20 人里抓到 15 个、漏了 5 个;180 个健康人里误报 10 个、其余 170 个判对。算出准确率、精确率、召回率和 F1,再和“全判健康”的笨基线比一比。</summary>
+            <div class="quiz__a">
+              <p>四个格子是 TP=15、FN=5、FP=10、TN=170。准确率 = (15+170)/200 = <strong>92.5%</strong>;精确率 = 15/(15+10) = <strong>0.60</strong>;召回率 = 15/(15+5) = <strong>0.75</strong>;F1 = 2·(0.60·0.75)/(0.60+0.75) = 0.90/1.35 ≈ <strong>0.67</strong>。“全判健康”的笨基线准确率是 180/200 = <strong>90%</strong>,只比模型低 2.5 个点,可它的召回是 0,一个病人都没查出来——只看准确率,根本看不出两者差距有多大。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 4:把上题模型的判定门槛调高,精确率和召回率大致会怎么变?查癌症该往哪边调?想比较两个模型的整体能力又该看什么?</summary>
+            <div class="quiz__a">
+              <p>门槛调高,模型报得少而准:精确率↑、召回↓;调低则相反。查癌症宁可误报也别漏,重召回,门槛应该往低调,多几个人去复查也值。正因为精确率、召回随门槛滑动,比较整体能力要看 ROC 曲线下的 <strong>AUC</strong>(1.0 完美、0.5 等于瞎猜);类别不平衡时再配合看 PR 曲线。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 5:下面四种做法,哪几种会造成数据泄漏?①用训练 + 测试合在一起的均值、标准差做标准化;②先随机切分 train/test,再在各自内部去重;③同一个病人的多张片子被随机分到训练和测试两边;④缺失值用训练集均值填补,val/test 也填这同一个数。</summary>
+            <div class="quiz__a">
+              <p>①②③都会泄漏,只有④是对的。①让测试集的信息顺着 μ、σ 漏进了训练;②切分后才去重,跨在 train/test 两边的重复样本还在,测试等于在考原题,所以<strong>去重要在切分前做</strong>;③是同组串台,模型见过“张三的左手”再考“张三的右手”。④符合“统计量只从训练集算、再原样套到 val/test”的纪律。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 6(动手):训练损失几乎不降,你拿不准是代码有 bug 还是模型太弱,第一步该做什么?在本仓库怎么试?</summary>
+            <div class="quiz__a">
+              <p>先<strong>过拟合一小撮</strong>:拿极少的样本让模型死记到损失≈0;连这都背不下来,基本就是代码或数据管道有 bug,而不是模型不够强。在 <code>src/</code> 下先 <code>rm -f demo/mnist/mnist/demo.v2.param</code> 保证冷启动(否则 demo 会接着已训好的模型续训,训完还会覆盖它),再跑 <code>./bin/mnist --train-limit 100 --epochs 50</code>;demo 的 batch 固定是 64,所以 <code>--train-limit</code> 至少要给 64。实测 train_loss 从 0.31 左右降到约 0.005,<code>Final accuracy</code> 里 train 冲到 1.0000,test 却只有约 0.68:背得下来说明管道没问题,test 低正是小数据上的过拟合。</p>
+            </div>
+          </details>
+        </div>
+
         <p class="muted">
           到这里,监督学习“如何训练好一个网络”的完整功夫就齐了。但<strong>学习不止监督这一种</strong>——
           下一章我们认识一种很不一样的范式:<strong>强化学习</strong>,没有标准答案,只靠“奖励”在试错里学策略;
