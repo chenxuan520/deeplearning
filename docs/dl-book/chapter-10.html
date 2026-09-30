@@ -254,7 +254,7 @@ delta = sum * DerivActivate(pre, a) * m;</code></pre>
             mnist demo 自带开关,两条命令对比(同一个 seed=42,唯一变量就是 dropout):
           </p>
           <pre class="reveal">cd src
-rm -f demo/mnist/mnist/demo.v2.param   # 清掉缓存, 冷启动基线
+rm -f demo/mnist/mnist/demo.v2.param demo/mnist/mnist/demo.dropout.param   # 清掉两份缓存, 两组都冷启动
 ./bin/mnist                            # 基线: 隐藏层无 dropout
 ./bin/mnist --dropout 0.2              # 同一网络, 隐藏层丢 20%</pre>
           <p>
@@ -276,8 +276,12 @@ rm -f demo/mnist/mnist/demo.v2.param   # 清掉缓存, 冷启动基线
           <p>
             那什么场景它才提分?<strong>制造一个真的会过拟合的场景</strong>:只用 4000 张图、训 30 个 epoch——
           </p>
-          <pre class="reveal">./bin/mnist --train-limit 4000 --epochs 30                # 基线
+          <pre class="reveal"># demo 会加载已有存档续训, 所以每组之前都先删掉对应存档, 保证冷启动
+rm -f demo/mnist/mnist/demo.v2.param
+./bin/mnist --train-limit 4000 --epochs 30                # 基线
+rm -f demo/mnist/mnist/demo.dropout.param
 ./bin/mnist --train-limit 4000 --epochs 30 --dropout 0.2  # + dropout 0.2
+rm -f demo/mnist/mnist/demo.dropout.param
 ./bin/mnist --train-limit 4000 --epochs 30 --dropout 0.5  # + dropout 0.5</pre>
           <div class="table-wrap reveal">
             <table class="calc-table calc-table--wrap">
