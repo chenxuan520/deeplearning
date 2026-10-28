@@ -1898,3 +1898,51 @@ mark.hl-query {
     border-radius: 0;
   }
 }
+
+/* 三国演义 LM:模式切换 + 工具栏整排(第 24 章) */
+.sanguo-lm__modes {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.sanguo-lm__mode {
+  font: inherit;
+  padding: 0.35rem 1rem;
+  background: transparent;
+  color: var(--text-dim);
+  border: 0;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.sanguo-lm__mode + .sanguo-lm__mode {
+  border-left: 1px solid var(--line);
+}
+
+.sanguo-lm__mode.is-active {
+  background: linear-gradient(120deg, var(--primary), var(--primary-strong));
+  color: #06101f;
+}
+
+.sanguo-lm__params {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.sanguo-lm__actions {
+  display: inline-flex;
+  gap: 0.7rem;
+  align-items: center;
+  margin-left: auto;
+}
+
+@media (max-width: 640px) {
+  .sanguo-lm__actions {
+    margin-left: 0;
+  }
+}

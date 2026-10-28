@@ -1632,13 +1632,21 @@
     '<div class="lab lab--demo">' +
     '  <div class="lab__controls lab__controls--demo">' +
     '    <div class="demo-toolbar">' +
-    '      <label>字数 <input type="number" min="1" max="500" value="60" data-sanguo="num" /></label>' +
-    '      <label>温度 <input type="number" min="0.1" max="2" step="0.1" value="0.8" data-sanguo="temperature" /></label>' +
-    '      <label>top-k <input type="number" min="0" max="50" value="10" data-sanguo="topk" /></label>' +
-    '      <label class="sanguo-lm__check"><input type="checkbox" data-sanguo="greedy" /> 贪心</label>' +
-    '      <button type="button" class="button button--primary" data-sanguo-act="go">生成</button>' +
-    '      <button type="button" class="button button--ghost" data-sanguo-act="stop" disabled>停止</button>' +
-    '      <a class="button button--ghost" href="https://minilm.011203.xyz" target="_blank" rel="noopener">独立页面 ↗</a>' +
+    '      <div class="sanguo-lm__modes" role="tablist" aria-label="模型模式">' +
+    '        <button type="button" class="sanguo-lm__mode is-active" data-sanguo-mode="continue">续写</button>' +
+    '        <button type="button" class="sanguo-lm__mode" data-sanguo-mode="qa">问答 SFT</button>' +
+    '      </div>' +
+    '      <div class="sanguo-lm__params">' +
+    '        <label>字数 <input type="number" min="1" max="500" value="60" data-sanguo="num" /></label>' +
+    '        <label>温度 <input type="number" min="0.1" max="2" step="0.1" value="0.8" data-sanguo="temperature" /></label>' +
+    '        <label>top-k <input type="number" min="0" max="50" value="10" data-sanguo="topk" /></label>' +
+    '        <label class="sanguo-lm__check"><input type="checkbox" data-sanguo="greedy" /> 贪心</label>' +
+    '      </div>' +
+    '      <div class="sanguo-lm__actions">' +
+    '        <button type="button" class="button button--primary" data-sanguo-act="go">生成</button>' +
+    '        <button type="button" class="button button--ghost" data-sanguo-act="stop" disabled>停止</button>' +
+    '        <a class="button button--ghost" href="https://minilm.011203.xyz" target="_blank" rel="noopener">独立页面 ↗</a>' +
+    '      </div>' +
     '    </div>' +
     '    <p class="explain" data-sanguo-status>输入开头点生成;首次生成会下载约 7MB 权重,之后留在你浏览器里本地计算。</p>' +
     '  </div>' +
@@ -1649,7 +1657,7 @@
     '      <p class="explain">建议“话说天下大势”“孔明曰”这类三国味儿开头;词表只含汉字与逗号句号。</p>' +
     '    </div>' +
     '    <div class="formula-card">' +
-    '      <h3>模型续写</h3>' +
+    '      <h3 data-sanguo-outtitle>模型续写</h3>' +
     '      <div class="sanguo-lm__output" data-sanguo-output><span class="sanguo-lm__placeholder">(生成结果逐字显示在这里)</span></div>' +
     '      <p class="explain" data-sanguo-meta></p>' +
     '    </div>' +
@@ -1670,11 +1678,14 @@
       stop: root.querySelector('[data-sanguo-act="stop"]'),
       status: root.querySelector("[data-sanguo-status]"),
       out: root.querySelector("[data-sanguo-output]"),
-      meta: root.querySelector("[data-sanguo-meta]")
+      meta: root.querySelector("[data-sanguo-meta]"),
+      modeBtns: root.querySelectorAll("[data-sanguo-mode]"),
+      outTitle: root.querySelector("[data-sanguo-outtitle]")
     };
     var abort = null;       // AbortController(在线流)/旗标(本地)
-    var localModel = null;  // 本地推理的懒加载模型
-    var loadingPromise = null;
+    var localModels = {};     // 本地推理的懒加载模型,按变体缓存('' 基座 / 'sft' 问答)
+    var loadingPromises = {};
+    var mode = "continue";   // continue 续写 / qa 问答(SFT)
 
     function setBusy(busy) {
       ui.go.disabled = busy;
@@ -1712,7 +1723,7 @@
       }
       abort = new AbortController();
       ui.status.textContent = "在线推理中(Cloudflare Workers)…";
-      fetch(API + "/v1/chat/completions", {
+      fetch(API + (mode === "qa" ? "/sft" : "") + "/v1/chat/completions", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -1760,15 +1771,16 @@
     }
 
     /* ---- 路径二:浏览器本地推理(懒加载权重) ---- */
-    function loadLocal(progress) {
-      if (localModel) return Promise.resolve(localModel);
-      if (loadingPromise) return loadingPromise;
-      loadingPromise = Promise.all([
-        fetch(API + "/manifest.json").then(function (r) {
+    function loadLocal(variant, progress) {
+      if (localModels[variant]) return Promise.resolve(localModels[variant]);
+      if (loadingPromises[variant]) return loadingPromises[variant];
+      var basePath = variant === "sft" ? "/sft" : "";
+      loadingPromises[variant] = Promise.all([
+        fetch(API + basePath + "/manifest.json").then(function (r) {
           if (!r.ok) throw new Error("HTTP " + r.status);
           return r.json();
         }),
-        fetch(API + "/weights.bin").then(function (r) {
+        fetch(API + basePath + "/weights.bin").then(function (r) {
           if (!r.ok || !r.body) throw new Error("HTTP " + r.status);
           var total = +r.headers.get("content-length") || 0;
           var reader = r.body.getReader();
@@ -1798,10 +1810,10 @@
         });
         var charToId = new Map();
         manifest.vocabulary.forEach(function (ch, i) { charToId.set(ch, i); });
-        localModel = { cfg: manifest.config, vocab: manifest.vocabulary, charToId: charToId, t: tensors };
-        return localModel;
+        localModels[variant] = { cfg: manifest.config, vocab: manifest.vocabulary, charToId: charToId, t: tensors };
+        return localModels[variant];
       });
-      return loadingPromise;
+      return loadingPromises[variant];
     }
 
     function lnRow(x, out, s, b, eps) {
@@ -1935,11 +1947,14 @@
     }
 
     function localGenerate(done) {
-      loadLocal(function (p) {
-        ui.status.textContent = "权重下载中 " + Math.round(p * 100) + "%…";
+      var variant = mode === "qa" ? "sft" : "";
+      loadLocal(variant, function (p) {
+        ui.status.textContent = (variant === "sft" ? "SFT " : "") + "权重下载中 " + Math.round(p * 100) + "%…";
       }).then(function (model) {
         ui.status.textContent = "本地推理中(约 0.2-0.6 秒/字)…";
-        var cur = encodeLocal(model, ui.prompt.value);
+        var promptText = ui.prompt.value;
+        if (mode === "qa") promptText = "问" + promptText + "\n答";
+        var cur = encodeLocal(model, promptText);
         if (cur.length === 0) {
           ui.status.textContent = "开头里没有词表内的字(模型只识汉字与逗号句号)。";
           done(true);
@@ -1956,6 +1971,11 @@
           if (i >= total) { ui.status.textContent = "完成(浏览器本地推理)。"; done(true); return; }
           var logits = forwardLocal(model, cur);
           var next = greedy ? greedyLocal(logits) : sampleLocal(logits, temperature, topk);
+          if (mode === "qa" && model.vocab[next] === "\n") {
+            ui.status.textContent = "完成(浏览器本地推理,问答到换行即停)。";
+            done(true);
+            return;
+          }
           cur.push(next);
           appendText(model.vocab[next]);
           i++;
@@ -1977,7 +1997,8 @@
       ui.meta.textContent = "";
       setBusy(true);
       // 权重还没下完先用在线接口,下完之后固定走本地
-      if (localModel) {
+      var variant = mode === "qa" ? "sft" : "";
+      if (localModels[variant]) {
         localGenerate(function () { setBusy(false); abort = null; });
       } else {
         tryApiGenerate(function () { setBusy(false); abort = null; });
@@ -1988,10 +2009,27 @@
       else if (abort) abort.aborted = true;            // 本地循环
     });
 
-    // 后台预下载权重:页面一打开就开始,下完自动切本地
+    // 模式切换:续写 <-> 问答(SFT)
+    Array.prototype.forEach.call(ui.modeBtns, function (btn) {
+      btn.addEventListener("click", function () {
+        var next = btn.getAttribute("data-sanguo-mode");
+        if (next === mode) return;
+        mode = next;
+        Array.prototype.forEach.call(ui.modeBtns, function (b) {
+          b.classList.toggle("is-active", b === btn);
+        });
+        ui.outTitle.textContent = mode === "qa" ? "模型作答" : "模型续写";
+        if (!ui.prompt.value.trim()) ui.prompt.value = mode === "qa" ? "孔明字何" : "却说曹操";
+        ui.status.textContent = mode === "qa"
+          ? "问答模式:用 221 条三国问答 SFT 微调过的同款小模型,回答到换行即停。"
+          : "续写模式:原版基座模型,接给你的开头往下写。";
+      });
+    });
+
+    // 后台预下载基座权重:页面一打开就开始,下完自动切本地(SFT 权重懒加载)
     ui.status.textContent = "权重后台下载中(约 7MB);就绪前点生成会临时走在线接口。";
     setTimeout(function () {
-      loadLocal(function () {}).then(function () {
+      loadLocal("", function () {}).then(function () {
         if (!abort) ui.status.textContent = "权重已就绪,后续生成都在你本机进行。";
       }).catch(function () {
         if (!abort) ui.status.textContent = "权重暂时没下来,生成会走在线接口。";
