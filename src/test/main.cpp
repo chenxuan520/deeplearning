@@ -14,6 +14,7 @@
 #include "rnn/rnn_test.h"
 #include "softmax/std_softmax_test.h"
 #include "test.h"
+#include "transformer/gradient_check_test.h"
 #include "transformer/transformer_test.h"
 
 ARGC_FUNC {
