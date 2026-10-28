@@ -67,13 +67,20 @@ std::vector<double> SoftmaxWithTemperature(const std::vector<double> &logits,
   return Softmax(scaled_logits);
 }
 
+// Positions whose target equals kIgnoreTarget are excluded from both the
+// loss and the gradient (answer-only SFT: the prompt prefix is ignored).
+constexpr int kIgnoreTarget = -1;
+
 std::vector<int> BuildPositionTargets(const std::vector<int> &sample,
-                                      int target_token) {
+                                      int target_token, int ignore_prefix) {
   std::vector<int> position_targets(sample.size());
   for (int i = 0; i + 1 < static_cast<int>(sample.size()); i++) {
     position_targets[i] = sample[i + 1];
   }
   position_targets.back() = target_token;
+  for (int i = 0; i < ignore_prefix; i++) {
+    position_targets[i] = kIgnoreTarget;
+  }
   return position_targets;
 }
 
@@ -519,12 +526,14 @@ MiniTransformerLM::RC MiniTransformerLM::GenerateSample(
 
 MiniTransformerLM::RC MiniTransformerLM::CalcNextTokenLoss(
     const std::vector<std::vector<int>> &input_samples,
-    const std::vector<int> &target_tokens, double &average_loss) {
+    const std::vector<int> &target_tokens, double &average_loss,
+    const std::vector<int> &ignore_prefix) {
   if (!is_init_) {
     err_msg_ = "[MiniTransformerLM::CalcNextTokenLoss] MiniTransformerLM not init";
     return NOT_INIT;
   }
-  if (input_samples.empty() || input_samples.size() != target_tokens.size()) {
+  if (input_samples.empty() || input_samples.size() != target_tokens.size() ||
+      (!ignore_prefix.empty() && ignore_prefix.size() != input_samples.size())) {
     err_msg_ = "[MiniTransformerLM::CalcNextTokenLoss] Invalid input";
     return INVALID_DATA;
   }
@@ -536,6 +545,13 @@ MiniTransformerLM::RC MiniTransformerLM::CalcNextTokenLoss(
     const auto &sample = input_samples[sample_idx];
     if (sample.empty()) {
       err_msg_ = "[MiniTransformerLM::CalcNextTokenLoss] Empty sample";
+      return INVALID_DATA;
+    }
+    const int prefix =
+        ignore_prefix.empty() ? 0 : ignore_prefix[sample_idx];
+    if (prefix < 0 || prefix >= static_cast<int>(sample.size())) {
+      err_msg_ = "[MiniTransformerLM::CalcNextTokenLoss] Invalid ignore "
+                 "prefix (must leave at least one counted position)";
       return INVALID_DATA;
     }
     if (target_tokens[sample_idx] < 0 || target_tokens[sample_idx] >= vocab_size_) {
@@ -554,8 +570,11 @@ MiniTransformerLM::RC MiniTransformerLM::CalcNextTokenLoss(
     }
 
     const auto position_targets =
-        BuildPositionTargets(sample, target_tokens[sample_idx]);
+        BuildPositionTargets(sample, target_tokens[sample_idx], prefix);
     for (int pos = 0; pos < static_cast<int>(logits.size()); pos++) {
+      if (position_targets[pos] == kIgnoreTarget) {
+        continue;
+      }
       auto probs = Softmax(logits[pos]);
       loss_sum += -std::log(std::max(probs[position_targets[pos]], 1e-12));
       loss_count++;
@@ -568,9 +587,11 @@ MiniTransformerLM::RC MiniTransformerLM::CalcNextTokenLoss(
 
 MiniTransformerLM::RC MiniTransformerLM::CalcPerplexity(
     const std::vector<std::vector<int>> &input_samples,
-    const std::vector<int> &target_tokens, double &perplexity) {
+    const std::vector<int> &target_tokens, double &perplexity,
+    const std::vector<int> &ignore_prefix) {
   double average_loss = 0;
-  auto rc = CalcNextTokenLoss(input_samples, target_tokens, average_loss);
+  auto rc = CalcNextTokenLoss(input_samples, target_tokens, average_loss,
+                              ignore_prefix);
   if (rc != SUCCESS) {
     return rc;
   }
@@ -608,13 +629,15 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextToken(
     int epoch_num, double learning_rate, LRScheduler *lr_scheduler,
     std::function<void(int epoch_num, int finished_sample_num, int sample_num,
                        double average_loss, bool &early_stop)>
-        each_sample_call) {
+        each_sample_call,
+    const std::vector<int> &ignore_prefix) {
   if (!is_init_) {
     err_msg_ = "[MiniTransformerLM::TrainNextToken] MiniTransformerLM not init";
     return NOT_INIT;
   }
   if (input_samples.empty() || input_samples.size() != target_tokens.size() ||
-      epoch_num <= 0 || learning_rate <= 0) {
+      epoch_num <= 0 || learning_rate <= 0 ||
+      (!ignore_prefix.empty() && ignore_prefix.size() != input_samples.size())) {
     err_msg_ = "[MiniTransformerLM::TrainNextToken] Invalid training input";
     return INVALID_DATA;
   }
@@ -639,7 +662,9 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextToken(
          order_pos++) {
       const int sample_idx = order[order_pos];
       const auto &sample = input_samples[sample_idx];
-      auto rc = BackwardSample(sample, target_tokens[sample_idx],
+      const int prefix =
+          ignore_prefix.empty() ? 0 : ignore_prefix[sample_idx];
+      auto rc = BackwardSample(sample, target_tokens[sample_idx], prefix,
                                epoch_learning_rate, block_learning_rate, false,
                                loss_sum, loss_count);
       if (rc != SUCCESS) {
@@ -676,21 +701,23 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextTokenBatch(
     int epoch_num, double learning_rate, LRScheduler *lr_scheduler,
     std::function<void(int epoch_num, int finished_sample_num, int sample_num,
                        double average_loss, bool &early_stop)>
-        each_sample_call) {
+        each_sample_call,
+    const std::vector<int> &ignore_prefix) {
   if (!is_init_) {
     err_msg_ =
         "[MiniTransformerLM::TrainNextTokenBatch] MiniTransformerLM not init";
     return NOT_INIT;
   }
   if (input_samples.empty() || input_samples.size() != target_tokens.size() ||
-      epoch_num <= 0 || learning_rate <= 0 || batch_size <= 0) {
+      epoch_num <= 0 || learning_rate <= 0 || batch_size <= 0 ||
+      (!ignore_prefix.empty() && ignore_prefix.size() != input_samples.size())) {
     err_msg_ = "[MiniTransformerLM::TrainNextTokenBatch] Invalid training input";
     return INVALID_DATA;
   }
   if (batch_size == 1) {
     return TrainNextToken(input_samples, target_tokens, each_epoch_call,
                           epoch_num, learning_rate, lr_scheduler,
-                          each_sample_call);
+                          each_sample_call, ignore_prefix);
   }
 
   std::vector<int> order(input_samples.size(), 0);
@@ -714,8 +741,11 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextTokenBatch(
     for (int order_pos = 0; order_pos < static_cast<int>(order.size());
          order_pos++) {
       const int sample_idx = order[order_pos];
+      const int prefix =
+          ignore_prefix.empty() ? 0 : ignore_prefix[sample_idx];
       auto rc = BackwardSample(input_samples[sample_idx],
-                               target_tokens[sample_idx], epoch_learning_rate,
+                               target_tokens[sample_idx], prefix,
+                               epoch_learning_rate,
                                block_learning_rate, true, loss_sum, loss_count);
       if (rc != SUCCESS) {
         ClearAccumulatedGradients();
@@ -767,7 +797,8 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextTokenBatchParallel(
     int epoch_num, double learning_rate, LRScheduler *lr_scheduler,
     std::function<void(int epoch_num, int finished_sample_num, int sample_num,
                        double average_loss, bool &early_stop)>
-        each_sample_call) {
+        each_sample_call,
+    const std::vector<int> &ignore_prefix) {
   if (!is_init_) {
     err_msg_ =
         "[MiniTransformerLM::TrainNextTokenBatchParallel] MiniTransformerLM "
@@ -776,7 +807,8 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextTokenBatchParallel(
   }
   if (input_samples.empty() || input_samples.size() != target_tokens.size() ||
       epoch_num <= 0 || learning_rate <= 0 || batch_size <= 0 ||
-      thread_num <= 0) {
+      thread_num <= 0 ||
+      (!ignore_prefix.empty() && ignore_prefix.size() != input_samples.size())) {
     err_msg_ =
         "[MiniTransformerLM::TrainNextTokenBatchParallel] Invalid training "
         "input";
@@ -785,7 +817,7 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextTokenBatchParallel(
   if (thread_num == 1 || batch_size == 1) {
     return TrainNextTokenBatch(input_samples, target_tokens, batch_size,
                                each_epoch_call, epoch_num, learning_rate,
-                               lr_scheduler, each_sample_call);
+                               lr_scheduler, each_sample_call, ignore_prefix);
   }
 
   std::vector<int> order(input_samples.size(), 0);
@@ -813,7 +845,8 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextTokenBatchParallel(
       auto rc = BackwardBatchParallel(input_samples, target_tokens, order,
                                       batch_begin, batch_end, thread_num,
                                       epoch_learning_rate, block_learning_rate,
-                                      batch_loss_sum, batch_loss_count);
+                                      batch_loss_sum, batch_loss_count,
+                                      ignore_prefix);
       if (rc != SUCCESS) {
         ClearAccumulatedGradients();
         return rc;
@@ -848,7 +881,8 @@ MiniTransformerLM::RC MiniTransformerLM::TrainNextTokenBatchParallel(
 
 MiniTransformerLM::RC
 MiniTransformerLM::BackwardSample(const std::vector<int> &sample,
-                                  int target_token, double learning_rate,
+                                  int target_token, int ignore_prefix,
+                                  double learning_rate,
                                   double block_learning_rate,
                                   bool accumulate_gradient, double &loss_sum,
                                   long long &loss_count) {
@@ -860,8 +894,14 @@ MiniTransformerLM::BackwardSample(const std::vector<int> &sample,
     err_msg_ = "[MiniTransformerLM::BackwardSample] Invalid target token";
     return INVALID_DATA;
   }
+  if (ignore_prefix < 0 || ignore_prefix >= static_cast<int>(sample.size())) {
+    err_msg_ = "[MiniTransformerLM::BackwardSample] Invalid ignore prefix "
+               "(must leave at least one counted position)";
+    return INVALID_DATA;
+  }
 
-  const auto position_targets = BuildPositionTargets(sample, target_token);
+  const auto position_targets =
+      BuildPositionTargets(sample, target_token, ignore_prefix);
   Matrix encoded;
   auto rc = EncodeSequence(sample, encoded, true);
   if (rc != SUCCESS) {
@@ -869,7 +909,11 @@ MiniTransformerLM::BackwardSample(const std::vector<int> &sample,
   }
 
   const int seq_len = static_cast<int>(encoded.size());
-  const double inv_seq_len = 1.0 / seq_len;
+  // Gradients are averaged over the counted (unmasked) positions so the
+  // update matches a mean cross-entropy over those positions regardless of
+  // sequence length or mask size.
+  const int counted_len = seq_len - ignore_prefix;
+  const double inv_counted_len = 1.0 / counted_len;
   const double embedding_scale =
       scale_embedding_ ? std::sqrt(static_cast<double>(model_dim_)) : 1.0;
   Matrix grad_encoded(seq_len, std::vector<double>(model_dim_, 0));
@@ -877,6 +921,10 @@ MiniTransformerLM::BackwardSample(const std::vector<int> &sample,
   std::vector<double> grad_output_bias(vocab_size_, 0);
 
   for (int pos = 0; pos < seq_len; pos++) {
+    const int position_target = position_targets[pos];
+    if (position_target == kIgnoreTarget) {
+      continue;
+    }
     std::vector<double> logits(vocab_size_, 0);
     for (int token_id = 0; token_id < vocab_size_; token_id++) {
       logits[token_id] = output_bias_[token_id];
@@ -886,16 +934,13 @@ MiniTransformerLM::BackwardSample(const std::vector<int> &sample,
     }
 
     auto probs = Softmax(logits);
-    const int position_target = position_targets[pos];
     loss_sum += -std::log(std::max(probs[position_target], 1e-12));
     loss_count++;
 
-    // Average the per-position gradient so the update matches a mean
-    // cross-entropy loss over the sequence regardless of its length.
     std::vector<double> grad_logits = probs;
     grad_logits[position_target] -= 1.0;
     for (double &value : grad_logits) {
-      value *= inv_seq_len;
+      value *= inv_counted_len;
     }
 
     for (int token_id = 0; token_id < vocab_size_; token_id++) {
@@ -1013,7 +1058,8 @@ MiniTransformerLM::RC MiniTransformerLM::BackwardBatchParallel(
     const std::vector<std::vector<int>> &input_samples,
     const std::vector<int> &target_tokens, const std::vector<int> &order,
     int begin, int end, int thread_num, double learning_rate,
-    double block_learning_rate, double &loss_sum, long long &loss_count) {
+    double block_learning_rate, double &loss_sum, long long &loss_count,
+    const std::vector<int> &ignore_prefix) {
   ClearAccumulatedGradients();
 
   const int batch_sample_num = end - begin;
@@ -1036,8 +1082,10 @@ MiniTransformerLM::RC MiniTransformerLM::BackwardBatchParallel(
       for (int order_pos = begin + worker_idx; order_pos < end;
            order_pos += worker_num) {
         const int sample_idx = order[order_pos];
+        const int prefix =
+            ignore_prefix.empty() ? 0 : ignore_prefix[sample_idx];
         auto rc = workers[worker_idx].BackwardSample(
-            input_samples[sample_idx], target_tokens[sample_idx],
+            input_samples[sample_idx], target_tokens[sample_idx], prefix,
             learning_rate, block_learning_rate, true,
             worker_loss_sum[worker_idx], worker_loss_count[worker_idx]);
         if (rc != SUCCESS) {

@@ -109,6 +109,27 @@ Momentum / Adam / RMSProp 走 `L2-in-gradient` (`g += wd*w`); AdamW 走解耦的
 - `activate_test.h`: LeakyReLU / GELU 已知值断言, GELU 解析导数对比中心差分,
   factory 创建, 端到端收敛.
 
+#### 只对回答计 loss 的 SFT(ignore_prefix)
+- `MiniTransformerLM` 的 `TrainNextToken` / `TrainNextTokenBatch` /
+  `TrainNextTokenBatchParallel` / `CalcNextTokenLoss` / `CalcPerplexity`
+  新增可选参数 `ignore_prefix`(默认空,完全向后兼容):每条样本可指定
+  前 N 个位置不计 loss 也不计梯度,梯度按未掩位置数归一.
+- `mini_lm train` 新增 `--sft-file <path>`:问答 TSV(`问题<TAB>回答`),
+  逐行拼成「问<q>\n答<a>\n」,问句前缀被掩掉,只对回答字符与结尾换行计
+  loss;词表外字符或超出 context 的对自动跳过并打印统计.
+- 完整实战见模型仓库 `sanguo-mini-lm/sft/`(三国演义问答 SFT)及其 README.
+
+#### AlphaZero 式 policy-value ResNet(float CNN 基建,与现有 double 版 `cnn/` 并存)
+- `cnn/float_tensor.h` `cnn/batched_conv2d` `cnn/batch_norm2d`
+  `cnn/residual_block2d` — 多线程批量卷积 / BN / 残差块(float).
+- `cnn/single_residual_adapter2d` `cnn/paired_residual_adapter2d`
+  `cnn/float_linear` `cnn/policy_value_resnet` — policy+value 双头残差网络.
+- `loss/policy_value_loss` `loss/policy_value_wdl_loss` `cnn/wdl_value` —
+  policy 交叉熵 + value(win/draw/loss)分类损失.
+- `optimizer/float_sgd` `optimizer/float_adamw` — float 版优化器.
+- `util/thread_pool` — 固定大小线程池,供 CNN 层共享,避免每卷积建线程.
+- `src/test/cnn/cnn_test.h` 新增 ~1200 行定向测试(已知值前向/反向/收敛).
+
 ### 改动
 
 - `OptimizerFunction::CalcChangeValue` 多了一个 `param_value` 参数 (默认 0,

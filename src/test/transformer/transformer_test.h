@@ -399,6 +399,138 @@ TEST(MiniTransformerLM, CalcNextTokenLossUsesEveryPosition) {
             "loss should average every next-token position");
 }
 
+TEST(MiniTransformerLM, CalcNextTokenLossIgnoresPrefix) {
+  MiniTransformerLM model;
+  model.set_random_seed(0);
+  model.set_use_positional_encoding(false);
+  model.set_scale_embedding(false);
+  MUST_EQUAL(model.Init(3, 3, 1, 6, 0), MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(model.token_embedding().set_embedding_table(IdentityMatrix(3)),
+             TokenEmbedding::SUCCESS);
+  MUST_EQUAL(model.set_output_weight(IdentityMatrix(3)),
+             MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(model.set_output_bias({0.0, 1.0, 2.0}),
+             MiniTransformerLM::SUCCESS);
+
+  // Same setup as CalcNextTokenLossUsesEveryPosition: ignoring the first
+  // position must leave exactly the position-1 cross-entropy.
+  double masked_loss = 0.0;
+  MUST_EQUAL(model.CalcNextTokenLoss({{0, 1}}, {2}, masked_loss, {1}),
+             MiniTransformerLM::SUCCESS);
+  const double pos1_loss =
+      std::log(std::exp(0.0) + std::exp(2.0) + std::exp(2.0)) - 2.0;
+  MUST_TRUE(NearlyEqual(masked_loss, pos1_loss, 1e-9),
+            "masked loss should only count unmasked positions");
+
+  double explicit_zero_loss = 0.0;
+  MUST_EQUAL(model.CalcNextTokenLoss({{0, 1}}, {2}, explicit_zero_loss, {0}),
+             MiniTransformerLM::SUCCESS);
+  double default_loss = 0.0;
+  MUST_EQUAL(model.CalcNextTokenLoss({{0, 1}}, {2}, default_loss),
+             MiniTransformerLM::SUCCESS);
+  MUST_TRUE(NearlyEqual(explicit_zero_loss, default_loss, 1e-12),
+            "prefix 0 should match the unmasked default");
+}
+
+TEST(MiniTransformerLM, RejectInvalidIgnorePrefix) {
+  MiniTransformerLM model;
+  model.set_random_seed(0);
+  model.set_use_positional_encoding(false);
+  model.set_scale_embedding(false);
+  MUST_EQUAL(model.Init(3, 3, 1, 6, 0), MiniTransformerLM::SUCCESS);
+
+  double average_loss = 0.0;
+  MUST_EQUAL(model.CalcNextTokenLoss({{0, 1}}, {2}, average_loss, {1, 0}),
+             MiniTransformerLM::INVALID_DATA);
+  // prefix == sample length would leave no counted position.
+  MUST_EQUAL(model.CalcNextTokenLoss({{0, 1}}, {2}, average_loss, {2}),
+             MiniTransformerLM::INVALID_DATA);
+  MUST_EQUAL(model.TrainNextToken({{0, 1}}, {2}, nullptr, 1, 0.1, nullptr,
+                                  nullptr, {2}),
+             MiniTransformerLM::INVALID_DATA);
+}
+
+TEST(MiniTransformerLM, IgnoredPrefixContributesNoGradient) {
+  // A masked 2-token sample and a 1-token sample holding only the counted
+  // position must produce the same parameter update. With block_num == 0,
+  // identity embeddings and no positional encoding, position 1 of the first
+  // sample is exactly the single position of the second, so any gradient
+  // leaked from the masked position would desynchronize the two models.
+  MiniTransformerLM masked_model;
+  masked_model.set_random_seed(0);
+  masked_model.set_use_positional_encoding(false);
+  masked_model.set_scale_embedding(false);
+  MUST_EQUAL(masked_model.Init(3, 3, 1, 6, 0), MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(masked_model.token_embedding().set_embedding_table(
+                 IdentityMatrix(3)),
+             TokenEmbedding::SUCCESS);
+  MUST_EQUAL(masked_model.set_output_weight(IdentityMatrix(3)),
+             MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(masked_model.set_output_bias({0.0, 1.0, 2.0}),
+             MiniTransformerLM::SUCCESS);
+
+  MiniTransformerLM counted_model;
+  counted_model.set_random_seed(0);
+  counted_model.set_use_positional_encoding(false);
+  counted_model.set_scale_embedding(false);
+  MUST_EQUAL(counted_model.Init(3, 3, 1, 6, 0), MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(counted_model.token_embedding().set_embedding_table(
+                 IdentityMatrix(3)),
+             TokenEmbedding::SUCCESS);
+  MUST_EQUAL(counted_model.set_output_weight(IdentityMatrix(3)),
+             MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(counted_model.set_output_bias({0.0, 1.0, 2.0}),
+             MiniTransformerLM::SUCCESS);
+
+  MUST_EQUAL(masked_model.TrainNextToken({{0, 1}}, {2}, nullptr, 1, 0.1,
+                                         nullptr, nullptr, {1}),
+             MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(counted_model.TrainNextToken({{1}}, {2}, nullptr, 1, 0.1),
+             MiniTransformerLM::SUCCESS);
+
+  // Probe both models on a sample exercising the masked position's token;
+  // identical updates imply identical losses everywhere.
+  double masked_probe = 0.0;
+  double counted_probe = 0.0;
+  MUST_EQUAL(masked_model.CalcNextTokenLoss({{0, 1, 0}}, {1}, masked_probe),
+             MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(counted_model.CalcNextTokenLoss({{0, 1, 0}}, {1}, counted_probe),
+             MiniTransformerLM::SUCCESS);
+  MUST_TRUE(NearlyEqual(masked_probe, counted_probe, 1e-9),
+            "ignored prefix should contribute no gradient to the update");
+}
+
+TEST(MiniTransformerLM, TrainReportsMaskedLoss) {
+  MiniTransformerLM model;
+  model.set_random_seed(0);
+  model.set_use_positional_encoding(false);
+  model.set_scale_embedding(false);
+  MUST_EQUAL(model.Init(3, 3, 1, 6, 0), MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(model.token_embedding().set_embedding_table(IdentityMatrix(3)),
+             TokenEmbedding::SUCCESS);
+  MUST_EQUAL(model.set_output_weight(IdentityMatrix(3)),
+             MiniTransformerLM::SUCCESS);
+  MUST_EQUAL(model.set_output_bias({0.0, 1.0, 2.0}),
+             MiniTransformerLM::SUCCESS);
+
+  // The first sample callback fires before any other update, so its reported
+  // average loss must equal the masked cross-entropy of the initial model.
+  double first_reported_loss = -1.0;
+  auto sample_call = [&](int, int finished, int, double average_loss,
+                         bool &) {
+    if (finished == 1) {
+      first_reported_loss = average_loss;
+    }
+  };
+  MUST_EQUAL(model.TrainNextToken({{0, 1}}, {2}, nullptr, 1, 0.001, nullptr,
+                                  sample_call, {1}),
+             MiniTransformerLM::SUCCESS);
+  const double pos1_loss =
+      std::log(std::exp(0.0) + std::exp(2.0) + std::exp(2.0)) - 2.0;
+  MUST_TRUE(NearlyEqual(first_reported_loss, pos1_loss, 1e-9),
+            "training should report the masked loss");
+}
+
 TEST(MiniTransformerLM, TrainAndReloadCharacterModel) {
   const string corpus = "abcabcabcabcabcabc";
   CharacterTokenizer tokenizer;

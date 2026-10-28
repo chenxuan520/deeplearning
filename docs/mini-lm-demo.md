@@ -164,6 +164,7 @@ said
 |------|------|------|
 | `--model <path>` | 要加载并更新的模型 | `mini_lm.param` |
 | `--corpus <text>` / `--corpus-file <path>` / `--corpus-dir <dir>` | 训练语料来源 | 内联占位串 |
+| `--sft-file <path>` | 问答 SFT 数据(TSV: `问题<TAB>回答`),只对回答部分计 loss;与 `--corpus-file/--corpus-dir` 互斥 | — |
 | `--epochs <int>` | 训练轮数 | 800 |
 | `--batch-size <int>` | mini-batch 大小；`1` 表示沿用单样本更新 | 1 |
 | `--thread-num <int>` | mini-batch 梯度计算线程数；`1` 表示单线程 | 1 |
@@ -200,6 +201,19 @@ checkpoint 由三份 sidecar 组成：
 `--epochs` 在恢复时表示“目标总 epoch 数”，不是“再额外训多少轮”。例如 `.train` 里 `completed_epoch=73`，命令传 `--epochs 200`，就会从 checkpoint 权重继续训到第 200 轮。Ctrl+C / SIGTERM 会在当前样本更新后尽量保存 checkpoint 并退出；如果刚好中断在 epoch 中途，元数据仍只记录已完整完成的 epoch，恢复时会从这个 epoch 重新开始，但权重已经包含中途学到的参数。
 
 注意：当前 checkpoint 保存的是模型权重、词表和训练进度，**不保存 Adam 的动量 / 二阶矩状态**。恢复后不会从零开始学，已训练出的权重都在；但优化器状态会冷启动，这对教学 demo 可接受，追求严格训练复现时需要扩展模型序列化格式。
+
+#### 问答 SFT(`--sft-file`)
+
+传入 SFT 文件后,训练数据不再来自语料滑窗,而是逐行读取 `问题<TAB>回答`(空行与 `#` 开头行跳过)。每条会拼成「问\<问题\>\n答\<回答\>\n」的完整序列,其中问句前缀(「问 …… \n」)被标记为忽略位置,**只有「答」后面的回答字符和结尾换行计入 loss**——这就是指令微调里"只对回答计 loss"的最小实现(库层对应 `MiniTransformerLM` 各 `TrainNextToken*` / `CalcNextTokenLoss` 的 `ignore_prefix` 参数)。含词表外字符或超出 `--context-size` 的对会被跳过并打印统计。
+
+```bash
+./bin/mini_lm train --model /tmp/alice_qa.param \
+  --sft-file qa.tsv --epochs 60 --learning-rate 1e-4 \
+  --batch-size 16 --thread-num 24
+```
+
+生成仍走 `generate`,提示词套同样的模板:「问<问题>\n答」,模型续写的就是回答,到换行为止。
+
 
 ### `generate` — 推理生成
 

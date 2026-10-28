@@ -58,6 +58,7 @@ struct Option {
   string corpus = "abcabcabcabcabcabc";
   string corpus_file;
   string corpus_dir;
+  string sft_file;
   string prompt = "ab";
   bool prompt_specified = false;
   int generate_num = 20;
@@ -142,6 +143,8 @@ void PrintCommandUsage(const char *prog, const string &verb) {
          << "  --corpus-file <path>        read training corpus from a file\n"
          << "  --corpus-dir <dir>          read training corpus from all files "
             "in a directory\n"
+         << "  --sft-file <path>           answer-only SFT: TSV of "
+            "\"question<TAB>answer\"; loss is computed on the answer only\n"
          << "  --epochs <int>\n"
          << "  --batch-size <int>          train with a minibatch size "
             "(default 1)\n"
@@ -202,6 +205,8 @@ bool ParseArgs(int argc, char **argv, int start, Option &option) {
       option.corpus_file = need_value("--corpus-file");
     } else if (arg == "--corpus-dir") {
       option.corpus_dir = need_value("--corpus-dir");
+    } else if (arg == "--sft-file") {
+      option.sft_file = need_value("--sft-file");
     } else if (arg == "--prompt") {
       option.prompt = need_value("--prompt");
       option.prompt_specified = true;
@@ -1012,6 +1017,102 @@ bool EncodePrompt(TokenizerBundle &tokenizer, const string &text,
   return true;
 }
 
+// Builds answer-only SFT samples from a TSV file ("question<TAB>answer" per
+// line). Each pair becomes the sequence 问<q>\n答<a>\n; positions up to and
+// including "\n" (the prompt prefix) are marked ignored so the loss is
+// computed on the answer characters and their terminating newline only.
+// Pairs with out-of-vocab characters or that exceed context_size are
+// skipped; blank lines and lines starting with '#' are ignored.
+bool BuildSftSamples(TokenizerBundle &tokenizer, const string &path,
+                     int context_size,
+                     vector<vector<int>> &input_samples,
+                     vector<int> &target_tokens, vector<int> &ignore_prefix,
+                     string &err) {
+  string content;
+  if (!ReadFileRaw(path, content)) {
+    err = "Read SFT file failed: " + path;
+    return false;
+  }
+
+  int kept = 0;
+  int skipped_invalid = 0;
+  int skipped_unknown = 0;
+  int skipped_too_long = 0;
+  std::istringstream lines(content);
+  string line;
+  while (std::getline(lines, line)) {
+    line = TrimLineEnd(line);
+    if (line.empty() || line[0] == '#') {
+      continue;
+    }
+    const size_t tab = line.find('\t');
+    if (tab == string::npos) {
+      skipped_invalid++;
+      continue;
+    }
+    const string question = line.substr(0, tab);
+    const string answer = line.substr(tab + 1);
+    if (question.empty() || answer.empty()) {
+      skipped_invalid++;
+      continue;
+    }
+
+    string encode_err;
+    vector<int> question_ids;
+    int question_unknown = 0;
+    if (!EncodeForTraining(tokenizer, question, question_ids,
+                           question_unknown, encode_err)) {
+      skipped_invalid++;
+      continue;
+    }
+    const string full_text = "问" + question + "\n答" + answer + "\n";
+    vector<int> full_ids;
+    int full_unknown = 0;
+    if (!EncodeForTraining(tokenizer, full_text, full_ids, full_unknown,
+                           encode_err)) {
+      skipped_invalid++;
+      continue;
+    }
+    if (question_unknown + full_unknown > 0) {
+      skipped_unknown++;
+      continue;
+    }
+    if (static_cast<int>(full_ids.size()) > context_size) {
+      skipped_too_long++;
+      continue;
+    }
+    // "问" + "\n" are single tokens, so positions predicting anything up to
+    // the first answer character number question token count + 2.
+    const int prefix = static_cast<int>(question_ids.size()) + 2;
+    if (prefix + 1 >= static_cast<int>(full_ids.size())) {
+      skipped_invalid++;
+      continue;
+    }
+    input_samples.emplace_back(full_ids.begin(), full_ids.end() - 1);
+    target_tokens.push_back(full_ids.back());
+    ignore_prefix.push_back(prefix);
+    kept++;
+  }
+
+  cout << "SFT file: kept " << kept << " pair(s)";
+  if (skipped_invalid > 0) {
+    cout << ", skipped " << skipped_invalid << " invalid";
+  }
+  if (skipped_unknown > 0) {
+    cout << ", skipped " << skipped_unknown << " with unknown characters";
+  }
+  if (skipped_too_long > 0) {
+    cout << ", skipped " << skipped_too_long << " longer than context";
+  }
+  cout << endl;
+
+  if (kept == 0) {
+    err = "No usable SFT pairs in " + path;
+    return false;
+  }
+  return true;
+}
+
 bool DecodeGenerated(TokenizerBundle &tokenizer, const vector<int> &token_ids,
                      string &text, string &err) {
   if (tokenizer.kind == TOKENIZER_WORD) {
@@ -1287,49 +1388,64 @@ int RunTrain(const Option &option) {
 
   string corpus;
   string source;
-  if (!CollectCorpus(option, corpus, source, err)) {
-    cout << err << endl;
-    return -1;
-  }
-
-  vector<int> corpus_token_ids;
-  int unknown_or_dropped = 0;
-  if (!EncodeForTraining(tokenizer, corpus, corpus_token_ids,
-                         unknown_or_dropped, err)) {
-    cout << err << endl;
-    return -1;
-  }
-  if (unknown_or_dropped > 0) {
-    if (tokenizer.kind == TOKENIZER_WORD) {
-      if (tokenizer.word_tokenizer.unknown_policy() ==
-          WordTokenizer::UNKNOWN_DROP) {
-        cout << "Warning: dropped " << unknown_or_dropped
-             << " words outside the model vocabulary" << endl;
-      } else {
-        cout << "Warning: mapped " << unknown_or_dropped
-             << " words outside the model vocabulary to <unk>" << endl;
-      }
-    } else {
-      cout << "Warning: skipped " << unknown_or_dropped
-           << " characters outside the model vocabulary" << endl;
-    }
-  }
-
-  CharacterDataset dataset;
-  if (dataset.Init(corpus_token_ids, context_size) !=
-      CharacterDataset::SUCCESS) {
-    cout << "Dataset init failed: " << dataset.err_msg()
-         << " (need more than " << context_size << " in-vocab tokens)"
-         << endl;
-    return -1;
-  }
-  dataset.set_sample_stride(option.sample_stride);
   vector<vector<int>> input_samples;
   vector<int> target_tokens;
-  if (dataset.BuildNextTokenSamples(input_samples, target_tokens) !=
-      CharacterDataset::SUCCESS) {
-    cout << "BuildNextTokenSamples failed: " << dataset.err_msg() << endl;
-    return -1;
+  vector<int> ignore_prefix;
+  if (!option.sft_file.empty()) {
+    if (!option.corpus_file.empty() || !option.corpus_dir.empty()) {
+      cout << "--sft-file cannot be combined with --corpus-file/--corpus-dir"
+           << endl;
+      return -1;
+    }
+    if (!BuildSftSamples(tokenizer, option.sft_file, context_size,
+                         input_samples, target_tokens, ignore_prefix, err)) {
+      cout << err << endl;
+      return -1;
+    }
+    source = "sft:" + option.sft_file;
+  } else {
+    if (!CollectCorpus(option, corpus, source, err)) {
+      cout << err << endl;
+      return -1;
+    }
+
+    vector<int> corpus_token_ids;
+    int unknown_or_dropped = 0;
+    if (!EncodeForTraining(tokenizer, corpus, corpus_token_ids,
+                           unknown_or_dropped, err)) {
+      cout << err << endl;
+      return -1;
+    }
+    if (unknown_or_dropped > 0) {
+      if (tokenizer.kind == TOKENIZER_WORD) {
+        if (tokenizer.word_tokenizer.unknown_policy() ==
+            WordTokenizer::UNKNOWN_DROP) {
+          cout << "Warning: dropped " << unknown_or_dropped
+               << " words outside the model vocabulary" << endl;
+        } else {
+          cout << "Warning: mapped " << unknown_or_dropped
+               << " words outside the model vocabulary to <unk>" << endl;
+        }
+      } else {
+        cout << "Warning: skipped " << unknown_or_dropped
+             << " characters outside the model vocabulary" << endl;
+      }
+    }
+
+    CharacterDataset dataset;
+    if (dataset.Init(corpus_token_ids, context_size) !=
+        CharacterDataset::SUCCESS) {
+      cout << "Dataset init failed: " << dataset.err_msg()
+           << " (need more than " << context_size << " in-vocab tokens)"
+           << endl;
+      return -1;
+    }
+    dataset.set_sample_stride(option.sample_stride);
+    if (dataset.BuildNextTokenSamples(input_samples, target_tokens) !=
+        CharacterDataset::SUCCESS) {
+      cout << "BuildNextTokenSamples failed: " << dataset.err_msg() << endl;
+      return -1;
+    }
   }
 
   int warmup_epochs = std::max(1, option.epoch_num / 20);
@@ -1444,15 +1560,16 @@ int RunTrain(const Option &option) {
     if (option.batch_size > 1 && option.thread_num > 1) {
       train_rc = model.TrainNextTokenBatchParallel(
           input_samples, target_tokens, option.batch_size, option.thread_num,
-          epoch_callback, 1, current_lr, nullptr, sample_callback);
+          epoch_callback, 1, current_lr, nullptr, sample_callback,
+          ignore_prefix);
     } else if (option.batch_size > 1) {
       train_rc = model.TrainNextTokenBatch(
           input_samples, target_tokens, option.batch_size, epoch_callback, 1,
-          current_lr, nullptr, sample_callback);
+          current_lr, nullptr, sample_callback, ignore_prefix);
     } else {
       train_rc = model.TrainNextToken(input_samples, target_tokens,
                                       epoch_callback, 1, current_lr, nullptr,
-                                      sample_callback);
+                                      sample_callback, ignore_prefix);
     }
     if (train_rc != MiniTransformerLM::SUCCESS) {
       cout << "Train failed: " << model.err_msg() << endl;
@@ -1525,7 +1642,8 @@ int RunTrain(const Option &option) {
   double average_loss = last_loss;
   double perplexity = std::exp(average_loss);
   if (!option.skip_final_eval) {
-    if (model.CalcNextTokenLoss(input_samples, target_tokens, average_loss) !=
+    if (model.CalcNextTokenLoss(input_samples, target_tokens, average_loss,
+                                ignore_prefix) !=
         MiniTransformerLM::SUCCESS) {
       cout << "Evaluate failed: " << model.err_msg() << endl;
       return -1;

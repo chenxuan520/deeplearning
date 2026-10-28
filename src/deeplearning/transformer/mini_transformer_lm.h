@@ -81,15 +81,24 @@ public:
                     std::vector<int> &generated_token_ids,
                     const SamplingOption &option,
                     bool use_causal_mask = true);
+  // ignore_prefix (optional) holds one entry per sample: the first
+  // ignore_prefix[i] positions of sample i contribute neither loss nor
+  // gradient (used for answer-only SFT). An empty vector keeps the default
+  // behavior where every position is counted.
   RC CalcNextTokenLoss(const std::vector<std::vector<int>> &input_samples,
                        const std::vector<int> &target_tokens,
-                       double &average_loss);
+                       double &average_loss,
+                       const std::vector<int> &ignore_prefix = {});
   RC CalcPerplexity(const std::vector<std::vector<int>> &input_samples,
                     const std::vector<int> &target_tokens,
-                    double &perplexity);
+                    double &perplexity,
+                    const std::vector<int> &ignore_prefix = {});
   // Trains the model with per-position next-token cross-entropy using Adam
   // (shared with the MLP path). When lr_scheduler != nullptr the base learning
   // rate is taken from lr_scheduler->GetLR(epoch) at the start of each epoch.
+  // ignore_prefix (optional): one entry per sample, the first ignore_prefix[i]
+  // positions contribute neither loss nor gradient; the remaining positions
+  // are averaged (answer-only SFT). Empty vector counts every position.
   RC TrainNextToken(
       const std::vector<std::vector<int>> &input_samples,
       const std::vector<int> &target_tokens,
@@ -100,7 +109,8 @@ public:
       std::function<void(int epoch_num, int finished_sample_num,
                          int sample_num, double average_loss,
                          bool &early_stop)>
-          each_sample_call = nullptr);
+          each_sample_call = nullptr,
+      const std::vector<int> &ignore_prefix = {});
   RC TrainNextTokenBatch(
       const std::vector<std::vector<int>> &input_samples,
       const std::vector<int> &target_tokens, int batch_size,
@@ -111,7 +121,8 @@ public:
       std::function<void(int epoch_num, int finished_sample_num,
                          int sample_num, double average_loss,
                          bool &early_stop)>
-          each_sample_call = nullptr);
+          each_sample_call = nullptr,
+      const std::vector<int> &ignore_prefix = {});
   RC TrainNextTokenBatchParallel(
       const std::vector<std::vector<int>> &input_samples,
       const std::vector<int> &target_tokens, int batch_size, int thread_num,
@@ -122,7 +133,8 @@ public:
       std::function<void(int epoch_num, int finished_sample_num,
                          int sample_num, double average_loss,
                          bool &early_stop)>
-          each_sample_call = nullptr);
+          each_sample_call = nullptr,
+      const std::vector<int> &ignore_prefix = {});
 
   void set_random_seed(int seed);
   void set_backbone_type(BackboneType backbone_type);
@@ -163,7 +175,8 @@ private:
                          bool use_causal_mask = true);
   RC ValidateOutputWeight(const Matrix &weight, const char *func_name);
   RC BackwardSample(const std::vector<int> &sample, int target_token,
-                    double learning_rate, double block_learning_rate,
+                    int ignore_prefix, double learning_rate,
+                    double block_learning_rate,
                     bool accumulate_gradient, double &loss_sum,
                     long long &loss_count);
   void ApplyAccumulatedGradients(double learning_rate,
@@ -176,7 +189,8 @@ private:
                            const std::vector<int> &order, int begin, int end,
                            int thread_num, double learning_rate,
                            double block_learning_rate, double &loss_sum,
-                           long long &loss_count);
+                           long long &loss_count,
+                           const std::vector<int> &ignore_prefix);
 
 private:
   int vocab_size_ = 0;

@@ -24,7 +24,7 @@
   - `rl_tictactoe`：井字棋 Q-learning 示例（表格式 TD 学习 / ε-greedy / 对战随机或最优对手）
   - `word2vec`：skip-gram / CBOW + 负采样词向量训练，见 `docs/word2vec-demo.md`
   - `transformer_char`：最小字符级语言模型示例
-  - `mini_lm`：小型基座模型 CLI（默认字符级，也支持 `--tokenizer word` 词级续写；`init`/`train`/`generate`/`info` 四段式），见 `docs/mini-lm-demo.md`
+  - `mini_lm`：小型基座模型 CLI（默认字符级，也支持 `--tokenizer word` 词级续写；`init`/`train`/`generate`/`info` 四段式；`train` 还支持 `--sft-file` 问答 SFT，只对回答计 loss），见 `docs/mini-lm-demo.md`
   - `optimizer_bench`：不同 optimizer 在 MNIST 上的对比 benchmark
     （SGD / Momentum / Adam / AdamW / RMSProp / Adam+CosineLR）
 - 测试位于 `src/test/` 下。
@@ -111,6 +111,8 @@
   - `block_num == 0/1/2` 的训练和生成测试路径
   - greedy 生成与 `temperature/top-k/top-p` 采样生成
   - next-token loss / perplexity 评估
+  - `TrainNextToken*` / `CalcNextTokenLoss` / `CalcPerplexity` 支持 `ignore_prefix`
+    (每个样本前 N 个位置不计 loss 与梯度, 按未掩位置数归一, 用于只对回答计 loss 的 SFT)
   - 模型保存/加载
   - `MiniTransformerLM::Config` 统一描述模型结构与主干配置
   - demo 可导出真实 attention 权重 JSON 供电子书第 19 章「真实权重回放」观察
