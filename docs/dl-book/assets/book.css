@@ -461,6 +461,18 @@ sup.cite a.xref:hover {
   border-bottom-style: solid;
 }
 
+/* 正文里的普通 <pre>(不在 code-walk 里)保留排版、不自动换行;
+   超宽时在块内横向滚动,别把整页撑宽(否则手机上整页可左右拖动)。 */
+.chapter__inner pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* 正文行内代码里的长网址/长标识符没有断点,窄屏下允许在任意处折行。 */
+.chapter__inner :not(pre) > code {
+  overflow-wrap: anywhere;
+}
+
 code .term--glossary,
 pre .term--glossary {
   font-family: var(--font-mono);
