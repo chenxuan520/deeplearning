@@ -38,6 +38,7 @@
             <li>为什么前向时要存下每层的 <var>z</var>(<a class="xref" href="chapter-03.html#5-逐行读懂前向传播">第 3 章那个伏笔</a>);</li>
             <li>逐行读懂真实的反向传播实现;</li>
             <li><strong>矩阵怎么求导</strong>:为什么 <code>∂L/∂W = Xᵀ·G</code>,以及它凭什么等于“一堆 MNIST 式标量求导打包成一次矩阵乘”——这是大模型梯度不爆炸的关键。</li>
+            <li><strong>怎么证明自己的反向传播没算错</strong>:用梯度检验拿“笨办法”数值梯度去对账,以及 autograd 和你手写的反向传播到底是什么关系。</li>
           </ul>
         </section>
 
@@ -693,6 +694,23 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
           真实框架里这套“记住前向每一步、反向自动套用局部公式”的机制叫 <span class="term">自动微分(autograd)</span>,所以工程师<strong>只写前向,从不手推</strong>几十亿参数的梯度。
           (<a class="xref" href="chapter-20.html">第 20 章</a>那个 <code>FLOPs ≈ 6 × 参数 × token</code> 的“6”,拆开就是前向 2 + 反向 4——反向按算力算比前向再贵一点,但仍是<strong>常数倍</strong>,不随参数量膨胀。)
         </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">延伸:autograd 其实就是把你手写的反向传播“自动接线”</span>
+          <p>
+            本书的代码里,每个模块都自己写了一对 <code>Forward</code> / <code>Backward</code>:前向时顺手存下反向要用的东西(<var>z</var>、输入 <var>X</var>),反向时收到上游的 <code>G</code>,套本地公式算出参数梯度,再把输入梯度往前传。
+            <strong>autograd 做的事情一模一样,只是把“谁连着谁”交给程序自动记录</strong>:
+          </p>
+          <ul>
+            <li><strong>前向时记账</strong>:每做一次运算(乘法、加法、softmax……),就在一张<span class="term">计算图</span>上记下一个节点:输入是谁、输出是谁、本地导数公式是什么。</li>
+            <li><strong>反向时倒着走图</strong>:从 loss 出发,按和前向相反的顺序访问每个节点,调用它的本地公式——这正是上面 <code>for (l = last-1; l &gt;= 1; l--)</code> 那个倒序循环,只不过循环的对象从“层”变成了“图上任意节点”。</li>
+            <li><strong>一个值被用了多次,梯度就相加</strong>:比如<a class="xref" href="chapter-18.html#1-残差连接-给信息和梯度修一条高速公路">残差连接</a>里的 <var>x</var> 既走进子层、又直接加到输出上,两条路传回来的梯度要加在一起。手写时你得自己记得加,autograd 自动替你加。</li>
+          </ul>
+          <p>
+            所以手写反向传播 ≈ <strong>手工接好的计算图</strong>;PyTorch 里一句 <code>loss.backward()</code> ≈ <strong>自动接线</strong>。想亲手写一个最小版本,推荐读 Karpathy 的
+            <a href="https://github.com/karpathy/micrograd" target="_blank" rel="noopener">micrograd</a>:不到 200 行 Python,只支持标量,却把计算图 + 倒序传播讲得一清二楚。读完再回来看本章,会发现两者是同一件事。
+          </p>
+        </div>
+
         <div class="callout callout--warn reveal">
           <span class="callout__title">那大模型训练到底“爆”在哪?</span>
           <p>
@@ -706,6 +724,90 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
           <p>换句话说:原始算力本身当然是大头开销,但反向传播<strong>并没有在前向之外再叠一层新的算力爆炸</strong>;显存、数值稳定、多卡同步这三样,才是“反向”额外带来的头疼事。</p>
         </div>
 
+        <h2>7. 怎么证明反向传播没算错:梯度检验</h2>
+        <p>
+          手写反向传播有个很阴险的地方:<strong>算错了往往不报错</strong>。漏乘一个系数、转置放错一处,程序照样跑,loss 也照样往下掉——只是掉得慢一点、最后差一点。
+          你很难从训练曲线上看出“这里少了个 0.9”。所以要有一个<strong>独立于反向公式</strong>的办法来对账。
+        </p>
+        <p>
+          这个办法就藏在导数的定义里(<a class="xref" href="chapter-01.html">第 1 章</a>):导数就是“参数动一点点,输出变多少”。
+          那就<strong>真的动一下</strong>:把某个参数 <var>w</var> 往上推一点、往下推一点,各跑一次前向,看 loss 差多少。
+        </p>
+        <div class="mathblock reveal">
+          ∂<var>L</var>/∂<var>w</var> ≈ [ <var>L</var>(<var>w</var> + <var>ε</var>) − <var>L</var>(<var>w</var> − <var>ε</var>) ] / (2<var>ε</var>)
+          <span class="label">中心差分:两边各推 ε 再相减。误差是 ε² 量级,比只推一边的“单侧差分”(误差 ε 量级)准得多</span>
+        </div>
+        <p>
+          这个“数值梯度”<strong>只用到前向</strong>,完全不碰你推的反向公式——所以它和反向传播算出的“解析梯度”一旦对不上,就说明反向公式错了。
+          这就是<span class="term">梯度检验(gradient check)</span>。
+        </p>
+
+        <h3>对账规则:看相对误差</h3>
+        <p>
+          两个梯度的绝对大小可能差很多(有的 10⁻⁶,有的 10³),所以不看绝对差,看<strong>相对误差</strong>:
+        </p>
+        <div class="mathblock reveal">
+          相对误差 = |<var>g</var><sub>数值</sub> − <var>g</var><sub>解析</sub>| / ( |<var>g</var><sub>数值</sub>| + |<var>g</var><sub>解析</sub>| )
+          <span class="label">用 double 精度时:≈ 10⁻⁹ 说明公式完全正确;10⁻⁵ 左右值得怀疑;10⁻² 以上基本肯定写错了</span>
+        </div>
+        <p>
+          还有个小问题:Transformer 一层的输出是个<strong>矩阵</strong>,不是一个 loss 标量,怎么检验?窍门是<strong>随机造一个 loss</strong>:
+          取一个和输出同形状的随机矩阵 <var>R</var>,令 <var>L</var> = Σ <var>Y</var> ⊙ <var>R</var>(逐元素相乘再求和)。
+          这样 ∂<var>L</var>/∂<var>Y</var> 恰好就是 <var>R</var>,把它当作上游的 <code>G</code> 喂给 <code>Backward</code> 即可。
+          <var>R</var> 取随机数是为了让输出的<strong>每个方向</strong>都被检查到,而不是碰巧只测了某几格。
+        </p>
+
+        <h3>真实代码:本仓库就是这样给 Transformer 对账的</h3>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/test/transformer/gradient_check_test.h · MaxInputGradRelError(精简)</figcaption>
+          <pre class="code-walk__code"><code>forward(input, output);                         <b class="cw-tag">1</b>
+backward(projection, grad_input);               <b class="cw-tag">2</b>
+for (int i = 0; i &lt; seq_len; ++i)
+  for (int j = 0; j &lt; dim; ++j) {
+    auto plus = input, minus = input;
+    plus[i][j] += eps;  minus[i][j] -= eps;     <b class="cw-tag">3</b>
+    double numerical =
+        (loss(plus) - loss(minus)) / (2 * eps);
+    double analytic = grad_input[i][j];
+    max_rel_error = max(max_rel_error,
+        fabs(numerical - analytic) /
+        (fabs(numerical) + fabs(analytic)));    <b class="cw-tag">4</b>
+  }</code></pre>
+          <ol class="code-walk__notes">
+            <li>正常跑一次前向,存好反向要用的中间值。</li>
+            <li>把随机矩阵 <var>R</var>(代码里叫 <code>projection</code>)当作上游梯度,跑一次手写的反向传播,拿到解析梯度 <code>grad_input</code>。</li>
+            <li>对输入的<strong>每一个</strong>元素,往上、往下各推 <code>eps</code>(取 10⁻⁵),各跑一次前向。</li>
+            <li>算两者的相对误差,记下最大的那个;测试要求它小于 10⁻⁵。</li>
+          </ol>
+        </figure>
+        <p>
+          这套检验覆盖了自注意力(单头/多头 × 有无因果 mask)、LayerNorm、TransformerBlock 和两层叠起来的 Decoder,结果如下:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>情况</th><th>最大相对误差</th><th>结论</th></tr></thead>
+            <tbody>
+              <tr><td>SelfAttention / LayerNorm / TransformerBlock / Decoder(原样)</td><td>约 10⁻¹⁰ ~ 10⁻⁸</td><td>反向公式全部正确 ✓</td></tr>
+              <tr><td>故意把注意力反向里 Q 那一项乘 0.9(只错 10%)</td><td>0.06 ~ 0.57</td><td>相关测试立刻报警 ✗</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">第二行是“反向验证”:先故意改坏,确认检验真能抓住错误,再改回来。一个永远通过的测试,等于没有测试。</p>
+        </div>
+
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">梯度检验的几个坑</span>
+          <ul>
+            <li><strong>ε 不能太小也不能太大</strong>:太大,差分本身的近似误差变大;太小,两个几乎相等的数相减会被浮点舍入误差淹没。double 精度下 10⁻⁵ ~ 10⁻⁷ 比较稳妥,float 精度下几乎没法做精细检验。</li>
+            <li><strong>先关掉随机性</strong>:Dropout(<a class="xref" href="chapter-10.html">第 10 章</a>)每次前向的掩码不同,两次前向根本不是同一个函数,检验必然对不上。</li>
+            <li><strong>小心“拐点”</strong>:ReLU 在 0 处不可导。如果某个输入恰好落在拐点附近,推 ±ε 会跨过拐点,数值梯度就不可信——偶尔一两格对不上不一定是 bug。</li>
+            <li><strong>它很慢,只用在测试里</strong>:每个参数都要跑两次前向,参数有 N 个就是 2N 次前向。所以只拿很小的网络、在单元测试里做,<strong>训练时永远用反向传播</strong>。</li>
+          </ul>
+        </div>
+        <p>
+          PyTorch 自己也是这么给 autograd 做体检的(它内置了 <code>torch.autograd.gradcheck</code>)。
+          换句话说:<strong>反向传播负责快,梯度检验负责对</strong>——前者每一步训练都用,后者只在写完、改完反向公式时跑一遍,确认没有算错。
+        </p>
+
         <section class="summary reveal">
           <h2>小结</h2>
           <ul>
@@ -717,6 +819,7 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
             <li><strong>一层前向 = 一次矩阵乘</strong>:<var>w</var> 是每层一块矩阵(代码里的 <code>neuron_weight_[l]</code>),<var>net</var> = <var>W</var>·<var>out</var> + <var>b</var>;整张网络就是一串矩阵乘叠起来,一整批样本更是 <var>X</var>·<var>W</var><sup>T</sup> 的矩阵×矩阵。</li>
             <li><strong>矩阵求导 = 标量求导批发</strong>:<code>∂L/∂W</code> 和 <code>W</code> 同形状,每格是个标量偏导;线性层 <code>Y=X·W</code> 的梯度是 <code>∂L/∂W=Xᵀ·G</code>、<code>∂L/∂X=G·Wᵀ</code>,靠形状对齐就能记住。</li>
             <li>大模型算全部梯度只需约 <strong>2 倍前向</strong>(autograd 自动完成)——反向相对前向只是常数倍,不会额外爆炸;算力之外,<strong>显存(激活)、数值稳定、多卡同步</strong>才是反向额外带来的工程瓶颈。</li>
+            <li><strong>梯度检验</strong>:用中心差分 [<var>L</var>(<var>w</var>+<var>ε</var>) − <var>L</var>(<var>w</var>−<var>ε</var>)] / 2<var>ε</var> 算数值梯度,和反向传播的解析梯度比相对误差(double 下 ≈10⁻⁹ 才算对);它只用前向、很慢,只在测试里用。autograd 就是把手写反向传播“自动接线”到计算图上。</li>
             <li>前向 → 损失 → 反向 → 更新,四步一循环,反复多次即为训练。</li>
           </ul>
         </section>
@@ -751,6 +854,12 @@ neuron_delta_[last][b][o] = delta;                                       <b clas
             <summary class="quiz__q">问题 5:如果前向时没有保存每层的 <var>z</var>,反向传播会怎样?</summary>
             <div class="quiz__a">
               <p>很多激活函数(尤其 GELU)的导数需要原始的 <var>z</var> 才能算准,缺了它就只能用粗略近似,梯度不准、训练变差。所以前向时顺手把 <var>z</var> 存进 <code>neuron_preact_</code> 是必要的。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 6:手写反向传播里漏乘了一个系数,训练照样能跑、loss 也在降,怎么才能发现它?</summary>
+            <div class="quiz__a">
+              <p>做梯度检验:对每个参数(或输入)往上、往下各推一个很小的 ε,各跑一次前向,用 [<var>L</var>(<var>w</var>+<var>ε</var>) − <var>L</var>(<var>w</var>−<var>ε</var>)] / 2<var>ε</var> 得到数值梯度,再和反向传播算出的解析梯度比相对误差。数值梯度只用前向、不依赖反向公式,所以两者对不上就说明反向写错了。注意要关掉 Dropout 等随机性,而且它很慢,只在测试里跑。</p>
             </div>
           </details>
         </div>

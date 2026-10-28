@@ -51,6 +51,8 @@
           <li id="g-lr"><strong>学习率 learning rate</strong> — 每步挪多大;太大发散、太小太慢。<a href="chapter-05.html">→ 第 5 章</a></li>
           <li id="g-batch"><strong>batch / epoch / step</strong> — 一小撮样本 / 全数据过一遍 / 一次参数更新。<a href="chapter-05.html">→ 第 5 章</a></li>
           <li id="g-backprop"><strong>反向传播 backpropagation</strong> — 用链式法则把误差从输出反传回每个参数。<a href="chapter-06.html">→ 第 6 章</a></li>
+          <li id="g-autograd" data-aliases="自动微分,autograd"><strong>自动微分 autograd</strong> — 前向时把每步运算记成计算图,反向时沿图倒序调用各节点的本地导数公式、自动累加梯度;本质就是把手写反向传播“自动接线”。<a href="chapter-06.html#6-从一个数到一整块-矩阵是怎么求导的">→ 第 6 章</a></li>
+          <li id="g-gradcheck" data-aliases="梯度检验,gradient check,数值梯度"><strong>梯度检验 gradient check</strong> — 用中心差分 [L(w+ε) − L(w−ε)] / 2ε 算数值梯度,和反向传播的解析梯度比相对误差,验证反向公式没写错;只用于测试。<a href="chapter-06.html#7-怎么证明反向传播没算错-梯度检验">→ 第 6 章</a></li>
           <li id="g-activation"><strong>激活函数 activation</strong> — 给神经元加“非线性的弯”,没它深度就白搭。<a href="chapter-07.html">→ 第 7 章</a></li>
           <li id="g-relu"><strong>ReLU</strong> — 负数砍成 0、正数放行;最常用的默认激活。<a href="chapter-07.html">→ 第 7 章</a></li>
           <li id="g-gelu"><strong>GELU</strong> — 平滑版 ReLU,Transformer / GPT 常用。<a href="chapter-07.html">→ 第 7 章</a></li>
@@ -96,6 +98,7 @@
           <li id="g-qlearning" data-aliases="Q-learning,时序差分"><strong>Q-learning</strong> — 用一张 Q 表记“在某状态做某动作,长期能拿多少回报”;每走一步就朝“即时奖励 + 下一状态最大 Q”修正一点(时序差分),并用 ε-greedy 在探索和利用之间取舍。<a href="chapter-12.html#7-q-learning-用一张表把价值从终点倒灌回起点">→ 第 12 章 §7</a></li>
           <li id="g-dqn" data-aliases="Deep Q-Network"><strong>DQN 深度 Q 网络</strong> — 状态太多、Q 表装不下时,用神经网络输入状态、输出各动作的 Q 值;靠经验回放和目标网络稳住训练。<a href="chapter-12.html#8-状态太多怎么办-用神经网络近似dqn">→ 第 12 章 §8</a></li>
           <li id="g-ppo" data-aliases="近端策略优化,Proximal Policy Optimization"><strong>PPO 近端策略优化</strong> — 策略梯度的稳健版:新旧策略的概率比偏离 1 太远就裁剪掉,单次更新幅度受限,不会一步把学好的策略毁掉;RLHF 的经典算法。<a href="chapter-12.html#ppo-别一次更新迈太大">→ 第 12 章</a></li>
+          <li id="g-grpo" data-aliases="GRPO,组相对策略优化"><strong>GRPO 组相对策略优化</strong> — 同一题采样一组回答,用“分数减组内均值、除以组内标准差”当优势,再做 PPO 式裁剪更新;省掉了单独的价值网络,常用于数学、代码等可验证奖励的推理训练。<a href="chapter-20.html#grpo-不请评论家让同一题的几个答案互相比">→ 第 20 章</a></li>
           <li id="g-alphazero" data-aliases="AlphaGo,AlphaGo Zero,AlphaZero,阿尔法狗"><strong>AlphaGo / AlphaZero</strong> — 用策略价值网络给搜索方向与局面分,再用 MCTS 访问分布反过来训练网络;AlphaZero 不用人类棋谱,只靠规则和自对弈。<a href="chapter-12.html#10-从-alphago-到-alphazero-让搜索教网络网络再教搜索">原理 → 第 12 章</a> · <a href="chapter-25.html">代码 → 第 25 章</a></li>
           <li id="g-mcts" data-aliases="MCTS,PUCT,蒙特卡洛树搜索"><strong>MCTS / PUCT</strong> — 反复选择、扩展、评估、回传的树搜索;PUCT 用网络先验 P 帮未充分搜索的好动作获得探索机会。<a href="chapter-25.html#4-mcts-puct-如何把直觉变成算过">→ 第 25 章 §4</a></li>
           <li id="g-selfplay" data-aliases="self-play,自对弈"><strong>自对弈 self-play</strong> — 智能体和自己的当前/历史版本比赛,自动产生轨迹和最终胜负信号;AlphaZero 用 MCTS 根访问分布 π 和终局 z 训练策略价值网络。<a href="chapter-25.html">→ 第 25 章</a></li>

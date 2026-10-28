@@ -1360,6 +1360,54 @@ loss = Σ target_mask[t+1] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-t
           这也是为什么高 effort 往往更强但更慢、更贵,而且不是所有问题都会明显受益。
         </p>
 
+        <h3>GRPO:不请“评论家”,让同一题的几个答案互相比</h3>
+        <p>
+          上面说推理模型常用“可验证奖励”的强化学习来训。可如果直接套 RLHF 那套 PPO,会撞上一个很现实的问题:
+          PPO 是 <a class="xref" href="chapter-12.html#actor-critic-演员出招评论家打分">Actor-Critic</a> 结构,除了要训的大模型(Actor),还得再养一个<strong>差不多一样大的价值网络(Critic)</strong>来估计“这个状态大概能拿几分”,好算出优势 <var>A</var> = <var>G</var> − <var>V</var>(<var>s</var>)。
+          模型几百亿参数时,这等于<strong>显存和算力再翻一倍</strong>;而且对一长串推理来说,“写到第 300 个 token 时预计能拿几分”本身就很难估准。
+        </p>
+        <p>
+          DeepSeek 在 DeepSeekMath(2024)里提出、后来用在 DeepSeek-R1 上的 <span class="term">GRPO(组相对策略优化)</span>,换了个很朴素的思路:
+          <strong>不估“应该拿几分”,而是让同一道题的几个答案互相比。</strong>
+        </p>
+        <ol>
+          <li><strong>同题多答</strong>:对一道题,让当前模型采样出一组(比如 8 个或 16 个)完整回答。</li>
+          <li><strong>逐个打分</strong>:用可验证奖励给每个回答打分,比如最终答案对了得 1、错了得 0。</li>
+          <li><strong>组内标准化当优势</strong>:每个回答的优势 = 它的分数减去这组的平均分,再除以这组分数的标准差。比平均好的被鼓励,比平均差的被抑制。</li>
+          <li><strong>照 PPO 的方式更新</strong>:用这个优势做和 PPO 一样的“裁剪”更新,再挂一个 KL 约束,别离原来的模型太远。</li>
+        </ol>
+        <div class="mathblock reveal">
+          <var>A</var><sub><var>i</var></sub> = ( <var>r</var><sub><var>i</var></sub> − mean(<var>r</var><sub>1</sub>…<var>r</var><sub><var>G</var></sub>) ) / std(<var>r</var><sub>1</sub>…<var>r</var><sub><var>G</var></sub>)
+          <span class="label">第 i 个回答的优势:和同组兄弟比,而不是和一个价值网络的预测比</span>
+        </div>
+        <p>
+          对照<a class="xref" href="chapter-12.html#actor-critic-演员出招评论家打分">第 12 章</a>的 <var>A</var> = <var>G</var> − <var>V</var>(<var>s</var>) 就能看出:GRPO 只是把“基线” <var>V</var>(<var>s</var>) 从<strong>一个要单独训练的网络</strong>,换成了<strong>同一题几个答案的平均分</strong>。手算一组就明白了:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>同一道题的 4 个回答</th><th>奖励 <var>r</var></th><th>优势 <var>A</var>(均值 0.5,标准差 0.5)</th><th>这次更新怎么推</th></tr></thead>
+            <tbody>
+              <tr><td>回答 1</td><td>1(对)</td><td>+1</td><td>提高这条推理的概率</td></tr>
+              <tr><td>回答 2</td><td>0(错)</td><td>−1</td><td>降低</td></tr>
+              <tr><td>回答 3</td><td>0(错)</td><td>−1</td><td>降低</td></tr>
+              <tr><td>回答 4</td><td>1(对)</td><td>+1</td><td>提高</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">如果 4 个全对或全错,组内没有差别,优势全是 0,这道题就<strong>贡献不了任何学习信号</strong>——太简单和太难的题都白练。所以 GRPO 训练很依赖“难度刚好”的题目池。</p>
+        </div>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th></th><th>PPO(经典 RLHF)</th><th>GRPO</th></tr></thead>
+            <tbody>
+              <tr><td><strong>基线从哪来</strong></td><td>单独训练的价值网络 <var>V</var>(<var>s</var>)</td><td>同一题多个回答的平均分</td></tr>
+              <tr><td><strong>要训几个大网络</strong></td><td>策略 + 价值,两个</td><td>只有策略一个</td></tr>
+              <tr><td><strong>代价</strong></td><td>显存、算力更高</td><td>每题要多采样几个回答</td></tr>
+              <tr><td><strong>最适合</strong></td><td>奖励来自打分模型、通用对齐</td><td>数学、代码这类答案能自动判对错的任务</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">一句话:GRPO 用“多采样几次”换掉了“多养一个评论家”。</p>
+        </div>
+
         <h3>多模态:不只吃文字</h3>
         <p>
           <span class="term">多模态(multimodal)</span>模型(GPT-4V、Gemini、Qwen-VL 等)能同时处理图、音、视频和文字。
@@ -1662,6 +1710,7 @@ loss = Σ target_mask[t+1] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-t
             <li>大模型测评是训练和上线的质检系统:预训练中选 checkpoint,后训练中看指令/安全/幻觉是否改善,上线前做发布门禁,上线后用 A/B、人工抽检和日志发现真实问题;应用层还要把模型、prompt、RAG、工具和产品流程一起测。</li>
             <li>最近方向:推理模型、多模态(patch→ViT→投影→拼序列)、长上下文、MoE——内核仍是 token + Transformer。推理模型的“思考深度”由 effort 条件训练、外部预算、模型学到的停机策略和 runtime 硬限制共同决定;上下文窗口由<strong>位置编码 × 训练长度 × 算力显存</strong>三关中最紧的一关决定,且标称长度≠有效长度。</li>
             <li>降智/对齐税/遗忘等多半发生在<strong>后训练、蒸馏、量化、MoE 压 k、截断、产品护栏</strong>等环节,先定位链路再判断能力。小模型追上大模型通常靠专精、更长推理或砍掉多模态来换分数,不能只看 benchmark,还要看任务范围、延迟和通用性。</li>
+            <li>推理模型常用可验证奖励的强化学习训练;<strong>GRPO</strong> 对同一题采样一组回答,用“分数减组内均值、除以组内标准差”当优势,省掉了 PPO 里那个和大模型一样大的价值网络——代价是每题要多采样几次,且全对/全错的题不提供学习信号。</li>
             <li>它本质是概率预测器,所以会幻觉、有知识截止和偏见——要理性使用,并靠 RAG/工具补救。</li>
           </ul>
         </section>
