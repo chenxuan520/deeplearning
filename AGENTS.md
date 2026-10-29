@@ -401,6 +401,8 @@ git push origin master && git push github master
 自动部署工作流：`.github/workflows/dl-book-pages.yml`  
 触发条件：`master` 分支上 `docs/dl-book/**` 或该 workflow 文件有变更。
 
+**标签与 Release 边界（用户明确要求）**：通常的“提交、推送、上线、发布”仅指分支提交/推送和网页部署。未经用户明确要求创建 Git 标签或 GitHub Release，禁止创建、推送或移动标签，也禁止创建 Release；不得因为新增提交或修复构建而自行递增版本号。撤销操作只处理用户指定范围，保留原有版本和提交历史。
+
 ### 本地预览
 ```bash
 cd docs/dl-book && python3 -m http.server 8765
