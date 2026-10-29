@@ -171,7 +171,7 @@
           <li id="g-selfsup" data-aliases="自监督学习,self-supervised learning"><strong>自监督 self-supervised</strong> — 答案从数据本身自动抠出(如遮词预测),不用人工标注。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-pretrain"><strong>预训练 / 后训练</strong> — 海量文本上练底座 / SFT+RLHF+蒸馏调成好用的助手。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-llm-eval" data-aliases="大模型测评,模型评测,evaluation,benchmark,评测集,红队,上线门禁"><strong>大模型测评 / benchmark</strong> — 用固定题集、真实任务、人工规则和线上反馈做质量控制:预训练选 checkpoint、后训练看对齐效果、上线前做门禁、上线后抓回归。<a href="chapter-20.html#测评-贯穿训练和上线的质检系统">→ 第 20 章</a></li>
-          <li id="g-rlhf" data-aliases="SFT,RLHF,DPO"><strong>RLHF / SFT / DPO</strong> — 按人类偏好对齐 / 用指令范文微调 / 直接用偏好对做对齐(跳过单独奖励模型)。<a href="chapter-20.html">→ 第 20 章</a> · <a href="chapter-12.html">RL → 第 12 章</a></li>
+          <li id="g-rlhf" data-aliases="SFT,RLHF,DPO"><strong>RLHF / SFT / DPO</strong> — 按人类偏好对齐 / 用指令范文微调 / 直接用偏好对做对齐(跳过单独奖励模型)。<a href="chapter-20.html">→ 第 20 章</a> · <a href="chapter-24.html#7-第六步--后训练-用-221-条问答把续写模型调成问答模型">SFT 实战 → 第 24 章</a> · <a href="chapter-12.html">RL → 第 12 章</a></li>
           <li id="g-align-tax"><strong>对齐税 alignment tax</strong> — RLHF 后更安全听话,但部分能力/创造性可能下降。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-forget"><strong>灾难性遗忘</strong> — 微调新任务时旧本领丢失;可用 LoRA/混训缓解。<a href="chapter-20.html">→ 第 20 章</a></li>
           <li id="g-lora" data-aliases="LoRA,lora,PEFT,peft,参数高效微调,低秩,adapter"><strong>LoRA / PEFT</strong> — 参数高效微调:冻住底座大矩阵 <var>W</var>,只在旁边训练一对低秩小矩阵 <var>A</var>/<var>B</var>(<var>y</var>=<var>Wx</var>+<var>BAx</var>);可训练参数与显存省几十上百倍,产出的 adapter 才几 MB、可热插拔。<a href="chapter-20.html#②-指令微调sft-把博学调教成听话">→ 第 20 章</a></li>

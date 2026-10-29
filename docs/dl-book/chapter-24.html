@@ -4,11 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>第 24 章 · mini-LM 实战:把第四、五部分跑起来 | 从神经元到大模型</title>
-    <meta name="description" content="用《三国演义》完整训练 mini_lm:清洗→分词→建模→训练→评估→生成,并在线试玩真实权重。" />
+    <meta name="description" content="用《三国演义》完整训练 mini_lm:清洗→分词→建模→训练→评估→生成,再用 221 条问答做一次只对回答计 loss 的 SFT,并在线试玩真实权重。" />
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="从神经元到大模型" />
     <meta property="og:title" content="第 24 章 · mini-LM 实战:把第四、五部分跑起来" />
-    <meta property="og:description" content="用《三国演义》完整训练 mini_lm:清洗→分词→建模→训练→评估→生成,并在线试玩真实权重。" />
+    <meta property="og:description" content="用《三国演义》完整训练 mini_lm:清洗→分词→建模→训练→评估→生成,再用 221 条问答做一次只对回答计 loss 的 SFT,并在线试玩真实权重。" />
     <meta property="og:url" content="https://deeplearning.011203.xyz/chapter-24.html" />
     <meta property="og:image" content="https://deeplearning.011203.xyz/assets/book-cover-wide.png" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -37,7 +37,8 @@
             <li><code>MiniTransformerLM::Config</code> 里每个字段,对应第 17、18 章的哪个结构、对训练成本有什么影响;</li>
             <li>大语料下“逐字滑窗”为什么会被换掉,<strong>非重叠切块</strong>省在哪里;</li>
             <li>贪心与温度/top-k/top-p 采样在代码和命令行两个层面各长什么样;</li>
-            <li>loss 从 8.29 降到 3.62 的一夜发生了什么,以及这个迷你距离上千亿参数的大模型,隔着的正是第 20–22 章。</li>
+            <li>loss 从 8.29 降到 3.62 的一夜发生了什么,以及这个迷你距离上千亿参数的大模型,隔着的正是第 20–22 章;</li>
+            <li>怎样用 221 条问答做一次<strong>只对回答计 loss 的 SFT</strong>,把续写模型调成会一问一答、答完就停的模型,以及它为什么会流畅地答错。</li>
           </ul>
         </section>
 
@@ -414,13 +415,137 @@ for (i...) { cumulative += probs[order[i]];
           </ol>
         </figure>
 
-        <h2>7. 从这个迷你模型,到真正的大模型</h2>
+        <h2>7. 第六步 · 后训练:用 221 条问答,把续写模型调成问答模型</h2>
+        <p>
+          到这里,模型只会做一件事:<strong>顺着你的话往下写</strong>。问它“孔明字何”,它不会回答,而是把这四个字当成小说开头,接着编下去。
+          <a class="xref" href="chapter-20.html#②-指令微调sft-把博学调教成听话">第 20 章讲的指令微调(SFT)</a>,要解决的正是这件事。
+          这一节我们在训好的基座上真的做一次:不换模型、不加结构,只换一份训练数据,再改一处 loss 的算法。
+        </p>
+
+        <h3>数据:221 条问答,用字全部对齐语料</h3>
+        <p>
+          训练数据是一个 TSV 文件,每行 <code>问题&lt;TAB&gt;回答</code>,共 <strong>221 条</strong>,另留 <strong>20 条</strong>完全不参与训练,专门用来观察模型对没见过的问题表现如何:
+        </p>
+        <pre class="code-walk__code reveal" style="margin:0.8rem 0"><code>刘备字何	姓刘名备，字玄德，涿郡涿县人也。
+诸葛亮字何	诸葛亮字孔明，瑯琊阳都人也。
+温酒斩华雄者谁	关羽温酒未冷，已斩华雄也。</code></pre>
+        <p>
+          有两条硬约束,都来自前面几步:<strong>词表在 init 时已经冻结</strong>,所以问答里只能用语料里出现过的字(写“瑯琊”而不是“琅琊”),也用不了冒号、问号;
+          <strong>上下文只有 48 个字</strong>,所以每条问答拼起来不能超过这个长度。
+        </p>
+
+        <h3>只对回答计 loss:一个“前缀长度”就够了</h3>
+        <p>
+          每条问答会被拼成固定模板 <code>问&lt;问题&gt;⏎答&lt;回答&gt;⏎</code>,然后照常当成“上文 → 下一个字”的样本。
+          关键改动只有一处:<strong>问题部分不算 loss</strong>。以训练集第一条为例:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>位置</th><th>当前字</th><th>要预测的下一个字</th><th>计入 loss?</th></tr></thead>
+            <tbody>
+              <tr><td>0–4</td><td>问 刘 备 字 何</td><td>刘 备 字 何 ⏎</td><td>✗ 问题部分,不考</td></tr>
+              <tr><td>5</td><td>⏎</td><td>答</td><td>✗ 模板字,推理时由我们直接给出</td></tr>
+              <tr><td>6</td><td>答</td><td>姓</td><td>✓ 回答的第一个字</td></tr>
+              <tr><td>7 …</td><td>姓 刘 名 备 …</td><td>刘 名 备 … 也 。</td><td>✓</td></tr>
+              <tr><td>最后</td><td>。</td><td>⏎</td><td>✓ 学会“答完就换行”</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">前 6 个位置被忽略:问题有 4 个字,再加上「问」和换行,正好是“问题字数 + 2”。最后那个换行也计入 loss,模型才学得会在哪里停。</p>
+        </div>
+        <p>
+          为什么要掩掉问题?如果问题也算 loss,模型就会把一部分力气花在“学怎么出题”上,而我们要的只是“学怎么答”。
+          这正是真实大模型 SFT 的做法:<strong>只对 assistant 的回答部分计 loss</strong>。实现上不需要逐位置的掩码,一个“忽略前缀长度”就够了:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">src/demo/mini_lm/main.cpp · BuildSftSamples(精简)</figcaption>
+          <pre class="code-walk__code"><code>const string full_text = "问" + question + "\n答" + answer + "\n";  <b class="cw-tag">1</b>
+...
+const int prefix = question_ids.size() + 2;                        <b class="cw-tag">2</b>
+input_samples.emplace_back(full_ids.begin(), full_ids.end() - 1);
+target_tokens.push_back(full_ids.back());
+ignore_prefix.push_back(prefix);                                    <b class="cw-tag">3</b></code></pre>
+          <ol class="code-walk__notes">
+            <li>套上固定模板。推理时我们会把用户的问题包成「问&lt;问题&gt;⏎答」再交给模型,训练和推理用的必须是同一个模板。</li>
+            <li>需要忽略的位置数 = 问题字数 + 2(「问」和换行),也就是上表中被打 ✗ 的那几行。</li>
+            <li>样本本身和预训练完全一样,只是每条多带一个“前几个位置不算”的数字。含词表外字符或超过上下文长度的问答会被跳过,并打印统计。</li>
+          </ol>
+        </figure>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">mini_transformer_lm.cpp · BackwardSample 里的两处改动(精简)</figcaption>
+          <pre class="code-walk__code"><code>const int counted_len = seq_len - ignore_prefix;
+const double inv_counted_len = 1.0 / counted_len;                  <b class="cw-tag">1</b>
+for (int pos = 0; pos &lt; seq_len; pos++) {
+  if (position_targets[pos] == kIgnoreTarget) continue;            <b class="cw-tag">2</b>
+  // 以下照旧:logits → softmax → 交叉熵 → grad_logits *= inv_counted_len
+}</code></pre>
+          <ol class="code-walk__notes">
+            <li>loss 按<strong>参与计算的位置数</strong>取平均,而不是整个窗口长度,这样回答长短不同的样本,每个回答字的权重是一致的。</li>
+            <li>被忽略的位置直接跳过:不算 loss,也不从这里出发回传梯度。注意问题里的字<strong>照样参与前向</strong>,回答位置的梯度会经过注意力传回它们——模型仍然要学会“读题”,被免掉的只是“预测题目的下一个字”这道考题。</li>
+          </ol>
+        </figure>
+
+        <h3>训练与效果:同一个问题,两种回答</h3>
+        <p>
+          从第 5 节那个 12 轮的基座出发,学习率取 1e-4(预训练起步学习率的十分之一),batch 16,分三次共训了 <strong>80 个 epoch</strong>,纯 CPU 约 54 分钟,
+          回答部分的 loss 最后降到 <strong>0.091</strong>:
+        </p>
+        <figure class="code-walk reveal">
+          <figcaption class="code-walk__file">命令行(真实):在基座的副本上做 SFT</figcaption>
+          <pre class="code-walk__code"><code>./bin/mini_lm train --model sanguo_sft.param \
+  --sft-file sanguo_sft_train.tsv \                                <b class="cw-tag">1</b>
+  --epochs 60 --batch-size 16 --thread-num 24 \
+  --learning-rate 1e-4 --no-checkpoint</code></pre>
+          <ol class="code-walk__notes">
+            <li>换掉 <code>--corpus-file</code>,改用 <code>--sft-file</code>,其余还是同一个 <code>train</code> 命令。<code>sanguo_sft.param</code> 是基座的副本(连同 <code>.vocab</code> 一起复制),免得覆盖原来的续写模型。</li>
+          </ol>
+        </figure>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>问题</th><th>基座(续写模型)</th><th>SFT 之后</th></tr></thead>
+            <tbody>
+              <tr><td>孔明字何</td><td>「曰此人乃汉室宗亲，乃汉室宗亲，……」没完没了地续写</td><td>「诸葛亮字孔明，瑯琊阳都人也。」写完换行即停</td></tr>
+              <tr><td>温酒斩华雄者谁</td><td>「曰吾乃西川之人也。遂令张郃为先锋……」</td><td>「关羽温酒未冷，已斩华雄也。」</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">温度 0.05,同一个问题对照。同一套参数、同一个结构,只多训了 221 条问答,行为就从“接着写”变成了“一问一答,答完就停”。顺带一提,训练集里写的是“诸葛亮字何”,“孔明字何”这个问法它没见过,也答对了。</p>
+        </div>
+
+        <h3>没见过的问题:格式学会了,事实没学会</h3>
+        <p>
+          在训练集里抽查,答案都对、也都会自动停下。真正有意思的是那 20 条留出的问题:<strong>格式全学会了</strong>——都以回答的口吻作答,答完就换行;
+          <strong>事实却经常答错</strong>。比如问庞德的字,它把“庞统字士元”套到了庞德头上。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">SFT 教的是“怎么答”,不是“知道什么”</span>
+          <p>
+            这和<a class="xref" href="chapter-20.html#②-指令微调sft-把博学调教成听话">第 20 章</a>说的完全一致:SFT 的数据量很小,它改变的是模型的<strong>行为模式</strong>,而不是往里灌新知识。
+            一个只有 182 万参数的模型,没从语料里真正学会的事实,SFT 之后照样不会;但它已经学会了“用肯定的语气、答得像模像样”。
+            <strong>流畅地答错,就是幻觉最朴素的样子</strong>——在这么小的模型上,你能亲眼看到它是怎么来的。
+          </p>
+        </div>
+
+        <h3>代价:续写能力被“带偏”了</h3>
+        <p>
+          SFT 之后再让它续写小说,仍然写得出来,但文风明显被问答数据带偏了,比如会冒出“……之心也”式的收尾。原因不难猜:
+          221 条回答里有 <strong>214 条以“也。”结尾</strong>,反复训练 80 轮后,这种口吻渗进了续写。
+          这就是第 20 章提到的<strong>遗忘</strong>与对齐税的迷你版:后训练在教会新行为的同时,会改写模型原有的倾向。
+          真实的后训练会让数据风格更多样,或者混入一部分预训练数据一起训,来减轻这种副作用。
+        </p>
+        <div class="callout callout--tip reveal">
+          <span class="callout__title">自己试一试</span>
+          <p>
+            回到<a class="xref" href="#1-任务与全景-先玩再看代码">第 1 节的实验台</a>,切到「问答 SFT」模式,输入“刘备字何”这类训练里有的问题,再换一个训练里没有的人物问问看。
+            线上接口也同时提供两个版本:原来的续写模型在 <code>/v1/chat/completions</code>,SFT 模型在 <code>/sft/v1/chat/completions</code>,后者会自动套上问答模板,答到换行就停。
+          </p>
+        </div>
+
+        <h2>8. 从这个迷你模型,到真正的大模型</h2>
         <p>
           你手里这个 182 万参数、一夜训完的小模型,和 GPT 的<strong>骨架完全相同</strong>。差距不在“原理”,而在第 20–22 章讲的那些事:
         </p>
         <ul>
           <li><strong>放大(<a class="xref" href="chapter-20.html">第 20 章</a>)</strong>:把 <code>model_dim / block_num / head_num</code> 调大,语料换成整个互联网,靠 Scaling Law 换来质变与涌现;</li>
-          <li><strong>后训练(<a class="xref" href="chapter-20.html">第 20 章</a>)</strong>:预训练之后再做 SFT、RLHF/DPO,把“会接话”调成“听话、有用、无害”的助手;</li>
+          <li><strong>后训练(<a class="xref" href="chapter-20.html">第 20 章</a>)</strong>:预训练之后再做 SFT、RLHF/DPO,把“会接话”调成“听话、有用、无害”的助手。第 7 节已经亲手做了其中最小的一步 SFT,真实的后训练在数据规模、多轮对话和偏好对齐上要复杂得多;</li>
           <li><strong>工程(<a class="xref" href="chapter-21.html">第 21 章</a>)</strong>:上千张 GPU、显存优化、数据/张量/流水线并行、KV cache,才跑得起来;</li>
           <li><strong>用好(<a class="xref" href="chapter-22.html">第 22 章</a>)</strong>:Prompt、Context、Harness、Agent,把它接到真实世界里干活。</li>
         </ul>
@@ -442,6 +567,7 @@ for (i...) { cumulative += probs[order[i]];
             <li>大语料记得非重叠切块(<code>--sample-stride</code>);batch 决定每轮梯度步数,别和小语料一个改法。</li>
             <li>checkpoint + resume 让一夜的长训练可中断;loss 8.29 → 3.62 走的是 warmup+余弦退火。</li>
             <li>生成 = 自回归循环(贪心确定 / 温度+top-k+top-p 采样);流式输出就是"算一字打一字"。</li>
+            <li>SFT = 换一份问答数据 + 只对回答计 loss(忽略问题前缀,按回答位置数取平均)。它教会模型“怎么答、何时停”,却教不会没学过的事实,还会带偏原有的文风。</li>
             <li>放大这个骨架 + 后训练 + 工程 + 会用,就是第 20–22 章讲的“大模型”。</li>
           </ul>
         </section>
@@ -482,6 +608,18 @@ for (i...) { cumulative += probs[order[i]];
             <summary class="quiz__q">问题 6:这个迷你模型和真正的大模型,本质差别在哪?</summary>
             <div class="quiz__a">
               <p>骨架(Embedding + Transformer + 预测下一个 token + 自回归生成)完全一样。差别在规模(参数/数据/算力,<a class="xref" href="chapter-20.html">第 20 章</a>)、后训练(SFT/RLHF)、工程基础设施(<a class="xref" href="chapter-21.html">第 21 章</a>)和使用方式(<a class="xref" href="chapter-22.html">第 22 章</a>),而不在原理。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 7:做 SFT 时,为什么要把问题部分从 loss 里去掉?去掉以后,问题里的字还会影响训练吗?</summary>
+            <div class="quiz__a">
+              <p>因为我们要模型学的是“怎么回答”,而不是“怎么出题”;问题也算 loss,就会分走一部分学习信号,让模型去模仿提问。去掉的只是“预测问题的下一个字”这项考题:问题里的字照样参与前向,回答位置的梯度也会通过注意力传回它们,模型依然要学会读题。</p>
+            </div>
+          </details>
+          <details class="quiz__item">
+            <summary class="quiz__q">问题 8:SFT 之后,模型对没见过的问题“格式全对、事实答错”。这说明了什么?</summary>
+            <div class="quiz__a">
+              <p>说明 SFT 主要改变的是行为模式(用什么口吻答、答到哪里停),而不是给模型灌输新知识。模型没从预训练里真正学会的事实,SFT 之后照样不会,却会用很肯定的语气编出一个像样的答案——这就是幻觉最朴素的来源(<a class="xref" href="chapter-20.html#②-指令微调sft-把博学调教成听话">第 20 章</a>)。</p>
             </div>
           </details>
         </div>
