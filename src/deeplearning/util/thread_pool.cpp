@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
+#include <string>
 
 namespace deeplearning {
 
