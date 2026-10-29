@@ -85,6 +85,7 @@ deeplearning/
 | `word2vec` | skip-gram/CBOW + 负采样词向量训练，见 [`docs/word2vec-demo.md`](./docs/word2vec-demo.md) |
 | `mini_lm` | 小型基座模型 CLI：默认字符级，也支持 `--tokenizer utf8-char` / `--tokenizer word`；init/train/generate/info 四段式，见 [`docs/mini-lm-demo.md`](./docs/mini-lm-demo.md) |
 | `web_model_export` | 把 `.param` 模型导出成浏览器更容易加载的 JSON（支持 MLP / mini-LM） |
+| `kv_sharing` / `speculative_decode` | 第 19/21 章配套实验：跨层缓存共享、推测解码及正确性自检，见 [`inference_lab`](./src/demo/inference_lab/README.md) |
 
 ---
 

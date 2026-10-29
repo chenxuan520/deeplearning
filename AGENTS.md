@@ -27,6 +27,7 @@
   - `mini_lm`：小型基座模型 CLI（默认字符级，也支持 `--tokenizer word` 词级续写；`init`/`train`/`generate`/`info` 四段式；`train` 还支持 `--sft-file` 问答 SFT，只对回答计 loss），见 `docs/mini-lm-demo.md`
   - `optimizer_bench`：不同 optimizer 在 MNIST 上的对比 benchmark
     （SGD / Momentum / Adam / AdamW / RMSProp / Adam+CosineLR）
+  - `kv_sharing` / `speculative_decode`：第 19/21 章配套标准库实验，见 `src/demo/inference_lab/README.md`；运行包含数值与概率正确性自检。
 - 测试位于 `src/test/` 下。
 
 ### 核心架构

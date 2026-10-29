@@ -661,10 +661,10 @@ for (int i = 0; i &lt; generate_num; i++) {
           再用得到的权重去加权<strong>前面所有词的 <var>v</var></strong>。
         </p>
         <p>
-          关键在于:第 <var>i</var> 个词的 <var>k</var><sub>i</sub>、<var>v</var><sub>i</sub> <strong>只由第 <var>i</var> 个词自己算出</strong>
+          关键在于:某一层里第 <var>i</var> 个位置的 <var>k</var><sub>i</sub>、<var>v</var><sub>i</sub> <strong>由这个位置进入该层时的表示算出</strong>
           (<var>k</var><sub>i</sub> = <var>x</var><sub>i</sub><var>W</var><sub>K</sub>,<var>v</var><sub>i</sub> = <var>x</var><sub>i</sub><var>W</var><sub>V</sub>),
-          <strong>一旦算出来就不会再变</strong>。这正是<a class="xref" href="chapter-17.html#7-不能偷看未来-causal-mask">第 17 章 causal mask</a>那张下三角图的直接推论——
-          后面新增的词落在下三角的右侧,对前面的词毫无影响。
+          这个表示可以包含前文信息。在权重、前缀和位置编码固定的因果推理中,<strong>追加未来 token 不会改变已有位置的 K/V</strong>。
+          这正是<a class="xref" href="chapter-17.html#7-不能偷看未来-causal-mask">第 17 章 causal mask</a>那张下三角图的直接推论。
         </p>
         <div class="callout callout--note reveal">
           <span class="callout__title">那为什么不缓存 Q?</span>
@@ -718,7 +718,8 @@ for (int i = 0; i &lt; generate_num; i++) {
         </div>
         <p>
           所以 KV cache 的做法一句话:<strong>每生成一个新词,就把它的 <var>k</var>、<var>v</var> 追加到缓存末尾;
-          下一步直接复用缓存里全部历史 K/V,只为最新的词算一次投影</strong>。前文再长,每步的新增计算都是固定的一小份。
+          下一步直接复用缓存里全部历史 K/V,只为最新的词算一次投影</strong>。每步新增的 K/V 投影量固定,
+          但新 Query 与历史 K/V 的注意力计算仍会随前文增长。
         </p>
 
         <h3>9.3 它到底存成什么样、占多大</h3>
@@ -745,6 +746,42 @@ for (int i = 0; i &lt; generate_num; i++) {
             如果你想动手,把生成循环改成“维护 K/V 缓存、每步只投影新 token”会是一个很好的练习。
           </p>
         </div>
+
+        <h3>9.4 跨层 KV 共享:几层共用一份历史</h3>
+        <p>
+          上面是<strong>下一步复用上一步</strong>的缓存。还可以沿另一维省:
+          <span class="term">跨层 KV 共享</span>让若干层读取同一来源产生的 K/V。
+          想象四个人查同一份资料,各自提出不同问题——每层仍用自己的输入和 W<sub>Q</sub> 算 Query,
+          所以共享 K/V 并不意味着四层输出一样。
+        </p>
+        <pre class="code-walk__code reveal"><code>每层独立: 第 0 / 1 / 2 / 3 层 → 各自的 K/V
+跨层共享: 第 0 层产生 K/V → 四层分别带着自己的 Q 来读
+分组共享: 第 0、1 层共用一份;第 2、3 层共用另一份</code></pre>
+        <p>
+          代码里可以用 <code>owner = {0, 0, 0, 0}</code> 表示四层都读第 0 层的缓存。
+          <strong>只有来源层追加新 K/V,消费者取引用读取</strong>,避免重复写入或复制。
+          普通缓存公式中的“层数 L”因而换成“独立来源数 S”:四层共用一份时,K/V 数据量是原来的四分之一;
+          两层一组则是二分之一。Query、注意力打分和其他计算仍然要做。
+        </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">共享是结构选择,需要相应地训练</span>
+          <p>
+            不同层原本的 K/V 通常不同,不能直接删掉预训练模型的几份缓存就假定效果不变。
+            实现时应比较<strong>同一共享结构</strong>的增量计算与整段重算是否一致;语言能力是否保持,还要训练和评测。
+            省掉四分之三的 K/V 数据,也不等于整个模型省掉四分之三的内存。
+          </p>
+        </div>
+        <p>
+          这类思想早已存在。2026 年 10 月公开的
+          <a class="xref" href="https://github.com/deepseek-ai/DeepInfer/blob/553741557a57df44a46fb3ab72b6aafeaf945337/deepinfer/model_executor/models/v4_modules/cross_layer.py">DeepInfer 跨层共享实现</a>
+          是近期阅读案例:可以沿着来源层与消费者的关系看缓存如何复用,再理解它与压缩、滑窗等机制怎样组合。
+        </p>
+
+        <p>
+          配套 C++ 示例 <a class="xref" href="https://github.com/chenxuan520/deeplearning/blob/master/src/demo/inference_lab/kv_sharing.cpp">kv_sharing.cpp</a>
+          会打印四层独立/共享的缓存占用,并自动检查增量与重算结果、因果遮罩和分组共享。
+          <a class="xref" href="https://github.com/chenxuan520/deeplearning/blob/master/src/demo/inference_lab/README.md">编译命令与结果说明</a>放在示例目录,只需 C++17 编译器。
+        </p>
 
         <h2>10. 它学得好不好?用困惑度衡量</h2>
         <p>
@@ -797,7 +834,7 @@ perplexity = std::exp(average_loss);                     <b class="cw-tag">2</b>
             <li>训练:滑动窗口造“输入 → 下一字”样本(自监督);交叉熵损失反向传播,一路更新到<a class="xref" href="chapter-17.html">第 17 章</a>的 Q/K/V 矩阵和词嵌入。</li>
             <li>挑字:greedy(取最高)稳定但死板;采样(temperature / top-k / top-p)更自然有变化。参数固定只固定概率分布,不固定采样结果。</li>
             <li>自回归:把生成的字接回输入,循环往下写——这就是大模型逐字输出的原理。</li>
-            <li><strong>KV cache</strong>:每个词的 K/V 只由它自己决定、算出就不变,于是缓存历史 K/V、每步只算新词,把 n² 的重复计算降到 n;代价是显存驻留(长上下文/高并发的开销来源)。</li>
+            <li><strong>KV cache</strong>:因果推理中追加未来 token 不改变已有位置的 K/V,所以可缓存历史、只投影新位置。累计 K/V 投影从 n² 量级降到 n,注意力打分仍需读取历史;代价是缓存驻留内存。</li>
             <li>“停下来”通常也是预测出来的:模型学会输出一个结束 token;推理程序看到它就停止生成。</li>
             <li>困惑度 = e^(平均交叉熵),衡量模型“平均在几个选项里纠结”,越低越好。</li>
           </ul>
