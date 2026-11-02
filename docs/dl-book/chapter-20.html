@@ -1434,11 +1434,23 @@ loss = Σ target_mask[t+1] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-t
         <p>
           <a class="xref" href="chapter-17.html">自注意力</a>让“猫”这类文字 token 直接关注猫所在的 patch——<strong>跨模态对齐靠统一注意力</strong>,不必硬接两套系统。
         </p>
+        <div class="callout callout--note reveal">
+          <span class="callout__title">为什么拼进去就能“读”:Transformer 只认向量</span>
+          <p>
+            回想<a class="xref" href="chapter-24.html">第 24 章</a>的 mini-LM:每个字先查 embedding 表变成一个向量,之后所有 Transformer 层只处理这一串向量,
+            根本不知道、也不关心它原来是哪个字。图片走的是同一条路,只是<strong>跳过了查表</strong>:视觉编码器加投影层直接产出“和词向量同样维度”的向量,
+            塞进序列里,后面的层就把它当成一串特殊的“词”来处理。所以读图不需要扩散模型——输出端仍然是预测下一个文字 token。
+          </p>
+          <p>
+            顺便算一下它有多“占地方”:LLaVA-1.5 用的 CLIP ViT-L/14 把图缩放到 336×336,每 14×14 像素切一块,
+            得到 24×24 = <strong>576 个图片 token</strong>。一张图就吃掉几百个上下文位置,这也是多图、长视频特别费上下文和算力的原因。
+          </p>
+        </div>
         <h4>③ 训练通常分阶段</h4>
         <ol>
           <li><strong>CLIP 式对齐</strong>:成对“图+配文”,用<a class="xref" href="chapter-01.html#3-点积-两个向量有多合拍">点积/余弦</a>把配对拉近、非配对推远。</li>
-          <li><strong>接 LLM + 训投影</strong>:冻住或轻微微调语言模型,用“图→描述”学连接器。</li>
-          <li><strong>多模态指令微调</strong>:图+问答三元组(VQA 等),类似 SFT。</li>
+          <li><strong>接 LLM + 训投影</strong>:以 LLaVA 为代表的经典做法会把视觉编码器和语言模型<strong>都冻住,只训中间那个小小的投影层</strong>,数据是“图→描述”,目标仍是预测下一个字。投影层很快学会把视觉向量“翻译”成语言模型读得懂的样子。</li>
+          <li><strong>多模态指令微调</strong>:图+问答三元组(VQA 等),通常解冻语言模型一起训。做法和<a class="xref" href="chapter-24.html#7-第六步--后训练-用-221-条问答把续写模型调成问答模型">第 24 章亲手做的 SFT</a> 完全一样——只对回答计 loss,区别只是被忽略的前缀里多了一段图片 token。</li>
           <li><strong>(可选) RLHF</strong>:按人类偏好再对齐(<a class="xref" href="chapter-12.html">第 12 章</a>)。</li>
         </ol>
         <div class="callout callout--note reveal">
@@ -1457,6 +1469,15 @@ loss = Σ target_mask[t+1] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-t
             训练时,一张“猫坐在沙发上”的图片应该靠近文字 <code>a cat sitting on a sofa</code>,
             远离 <code>a red sports car</code>。久而久之,图片和文字就被放进同一个语义坐标系里:
             <strong>意思相近的图和句子,向量也相近。</strong> 所以“CLIP 式对齐”说的就是这件事。
+          </p>
+        </div>
+        <div class="callout callout--warn reveal">
+          <span class="callout__title">它“看”得没有你想的那么细</span>
+          <p>
+            图片先被切成固定大小的块、再压成向量,细节在这一步就已经损失了一部分。所以多模态模型的常见弱点是:
+            <strong>数清楚有几个物体、读很小的字、判断精确的位置和距离</strong>。
+            现在的模型常用<strong>动态分辨率</strong>缓解:把大图切成几张小图分别编码,再加一张缩略图看全局——代价是图片 token 成倍增加。
+            更新的做法则是<strong>原生多模态</strong>:不再“先训好语言模型再接上眼睛”,而是从预训练开始就把图文混在一起训。
           </p>
         </div>
         <div class="callout callout--tip reveal">
