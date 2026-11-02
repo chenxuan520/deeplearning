@@ -1471,6 +1471,54 @@ loss = Σ target_mask[t+1] * CrossEntropy(logits[t], tokens[t+1]) <b class="cw-t
             <strong>意思相近的图和句子,向量也相近。</strong> 所以“CLIP 式对齐”说的就是这件事。
           </p>
         </div>
+        <h4>④ 一条训练样本长什么样(以 LLaVA-1.5 为例)</h4>
+        <p>
+          前面说多模态指令微调“和 SFT 一样”,这里把一条样本摊开来看。训练数据里,文字中只放一个占位符 <code>&lt;image&gt;</code>;
+          真正喂给模型时,这个占位符会被替换成投影层输出的 576 个向量。一条看图问答拼起来是这样的(模板为示意):
+        </p>
+        <pre class="code-walk__code reveal" style="margin:0.8rem 0"><code>[系统提示] USER: [图片向量 ×576] 图里的人在做什么? ASSISTANT: 他在骑自行车。[结束符]</code></pre>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th>片段</th><th>从哪来</th><th>位置数</th><th>计入 loss?</th></tr></thead>
+            <tbody>
+              <tr><td>系统提示、<code>USER:</code></td><td>词表查表</td><td>几十</td><td>✗ 固定模板</td></tr>
+              <tr><td>图片向量</td><td>视觉编码器 + 投影层直接产出</td><td>576</td><td>✗ <strong>也没法计</strong>:它们不在词表里,不存在“正确的下一个图片 token”</td></tr>
+              <tr><td>问题、<code>ASSISTANT:</code></td><td>词表查表</td><td>十几</td><td>✗ 和第 24 章一样,不考出题</td></tr>
+              <tr><td>回答</td><td>词表查表</td><td>几个到几百</td><td>✓</td></tr>
+              <tr><td>结束符</td><td>词表查表</td><td>1</td><td>✓ 学会答完就停</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">和<a class="xref" href="chapter-24.html#7-第六步--后训练-用-221-条问答把续写模型调成问答模型">第 24 章的逐位置表</a>对照:结构完全一样,只是被忽略的前缀里多了 576 个图片位置。一条样本里大部分位置都不计 loss。</p>
+        </div>
+        <p>
+          两个阶段用的样本格式相同,区别在于<strong>数据是什么、哪些参数在动</strong>:
+        </p>
+        <div class="table-wrap reveal">
+          <table class="calc-table calc-table--wrap">
+            <thead><tr><th></th><th>第 1 阶段:对齐投影层</th><th>第 2 阶段:视觉指令微调</th></tr></thead>
+            <tbody>
+              <tr><td><strong>数据</strong></td><td>约 55.8 万对“图 + 一句描述”;回答就是描述本身</td><td>约 66.5 万条混合数据:看图对话、视觉问答等,还混入一部分<strong>纯文字</strong>对话</td></tr>
+              <tr><td><strong>视觉编码器(CLIP ViT)</strong></td><td>冻结</td><td>冻结</td></tr>
+              <tr><td><strong>投影层(两层 MLP)</strong></td><td>训练——<strong>唯一在动的部分</strong></td><td>训练</td></tr>
+              <tr><td><strong>语言模型</strong></td><td>冻结</td><td>训练</td></tr>
+              <tr><td><strong>loss</strong></td><td colspan="2">都是预测下一个 token 的交叉熵,只算回答部分(<a class="xref" href="chapter-04.html">第 4 章</a>)</td></tr>
+            </tbody>
+          </table>
+          <p class="calc-table__cap">数字取自 LLaVA-1.5 的公开配置。对比第 24 章的 221 条问答,规模差了三个多数量级,但做法没有本质区别。</p>
+        </div>
+        <p>为什么要这样分两步、这样冻结?有三个值得想清楚的点:</p>
+        <ul>
+          <li><strong>先只训投影层,是为了保护语言模型。</strong>刚开始投影层是随机初始化的,它产出的“图片向量”对语言模型来说就是一堆乱码。
+            如果这时就解冻语言模型,它会为了迁就这些乱码而改动自己的权重,把原有的语言能力训坏。先冻住两头、只训中间这个小小的“翻译层”,成本很低,也安全。</li>
+          <li><strong>冻结不等于梯度不经过。</strong>第 1 阶段只有投影层在更新,可 loss 是在回答位置算出来的。梯度要先穿过整个冻结的语言模型,
+            经由注意力回到图片位置,再传进投影层(<a class="xref" href="chapter-06.html">第 6 章</a>的链式法则一层层往回传)。“冻结”的意思只是这些参数不更新,不是把梯度挡住。</li>
+          <li><strong>第 2 阶段混入纯文字数据,是在对抗遗忘。</strong>只用看图问答去训,语言模型的纯文字能力会退化——
+            正是第 24 章 SFT 之后续写文风被带偏的那种现象。混入一部分纯文字对话,就是那一节提到的“混入原有数据一起训”的做法。</li>
+        </ul>
+        <p>
+          训练好之后,推理时走的是同一个模板:图片经过视觉编码器和投影层,变成 576 个向量,替换掉 <code>&lt;image&gt;</code> 占位符,
+          后面接上用户的问题和 <code>ASSISTANT:</code>,模型从这里开始一个字一个字地生成,直到吐出结束符为止。
+        </p>
         <div class="callout callout--warn reveal">
           <span class="callout__title">它“看”得没有你想的那么细</span>
           <p>
