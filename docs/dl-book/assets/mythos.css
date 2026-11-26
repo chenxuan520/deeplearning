@@ -521,6 +521,31 @@ body[data-act="act-7"] { --theme-accent: var(--dawn); }
 .hero__title .accent { color: var(--amber); font-style: italic; }
 .finale__note { font-size: 0.96rem; line-height: 1.85; color: var(--paper-faint); max-width: 40rem; margin: 0 auto; }
 .finale__note strong { color: var(--paper); }
+.slide.act-6.slide--riemann {
+  background:
+    radial-gradient(88% 72% at 50% 40%, rgba(154,139,255,0.22), transparent 58%),
+    radial-gradient(66% 68% at 50% 62%, rgba(230,169,92,0.14), transparent 62%),
+    linear-gradient(180deg, #090814, #06060d);
+  background-attachment: fixed;
+}
+.slide--riemann .slide__lead { max-width: 42rem; text-wrap: pretty; }
+.slide--riemann .finale__note { max-width: 40rem; text-wrap: pretty; }
+.riemann__line {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 1.45rem auto 1.55rem;
+  max-width: 24rem;
+}
+.riemann__line svg { display: block; width: 100%; height: auto; }
+.riemann__axis {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
+  color: var(--paper-faint);
+  opacity: 0.72;
+}
 .mythos-note { position: relative; display: inline-block; }
 .mythos-note__mark {
   background: none; border: 0; cursor: pointer; padding: 0 0.1em; margin: 0;
